@@ -38,10 +38,10 @@ if uploaded is None:
     st.stop()
 
 df_raw = pd.read_csv(uploaded)
-st.subheader("📊 Preview")
+st.subheader(" Preview")
 st.dataframe(df_raw.head(), use_container_width=True)
 
-tabs = st.tabs(["🧹 Clean & Visualize", "🤖 Predict (Linear Regression)"])
+tabs = st.tabs([" Clean & Visualize", " Predict (Linear Regression)"])
 
 # =================== Tab 1: Clean & Visualize ===================
 with tabs[0]:
@@ -134,12 +134,12 @@ with tabs[1]:
         r2   = metrics.r2_score(y_test, y_pred)
 
 
-        st.markdown("### 📈 Metrics")
+        st.markdown("### Metrics")
         st.write(f"- **MAE**: {mae:.4f}")
         st.write(f"- **RMSE**: {rmse:.4f}")
         st.write(f"- **R²**: {r2:.4f}")
 
-        st.markdown("### 🔍 Pred vs. Actual")
+        st.markdown("### Pred vs. Actual")
         fig2, ax2 = plt.subplots(figsize=(6,4))
         ax2.scatter(y_test, y_pred)
         # 45° reference line
