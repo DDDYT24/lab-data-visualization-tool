@@ -1,4 +1,18 @@
 import io
+import pandas as pd
+
+def load_csv_bytes(data: bytes) -> pd.DataFrame:
+    """
+    Read CSV from raw bytes into a DataFrame.
+
+    Raises:
+        ValueError: if data is None or empty.
+        pandas.errors.ParserError: if the CSV cannot be parsed.
+    """
+    if data is None or len(data) == 0:
+        raise ValueError("No CSV bytes provided")
+    return pd.read_csv(io.BytesIO(data))
+
 import os
 from typing import Iterable, List, Optional, Union
 
