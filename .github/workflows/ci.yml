@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -19,38 +20,19 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install runtime deps
+      - name: Install dependencies
         run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-      - name: Install dev/test deps (pytest etc.)
-        run: |
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+      # 如未在 requirements-dev.txt 安装 ruff/mypy，可删除下面两步
+      - name: Lint (ruff)
+        run: ruff check .
 
-      - name: Show installed key packages (debug)
-        run: |
-          python -c "import sys, pkgutil; print(sys.version)"
-          python -c "import importlib; print('pytest:', importlib.import_module('pytest').__version__); print('pytest-cov:', importlib.import_module('pytest_cov').__version__)"
+      - name: Type check (mypy)
+        run: mypy .
 
       - name: Run tests
         run: |
           python -m pytest --maxfail=1 --disable-warnings -q --cov=. --cov-report=term-missing
-
-      - name: Upload coverage report (optional)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-text
-          path: ./.coverage
-          if-no-files-found: ignore
