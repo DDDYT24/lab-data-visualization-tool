@@ -1,144 +1,157 @@
+from __future__ import annotations
+
 import io
+from typing import Iterable, List, Optional
+
 import pandas as pd
+
 
 def load_csv_bytes(data: bytes) -> pd.DataFrame:
     """
-    Read CSV from raw bytes into a DataFrame.
-
-    Raises:
-        ValueError: if data is None or empty.
-        pandas.errors.ParserError: if the CSV cannot be parsed.
+    将原始 CSV 字节读取为 DataFrame。
+    若 data 为空或 None，抛 ValueError。
     """
     if data is None or len(data) == 0:
         raise ValueError("No CSV bytes provided")
     return pd.read_csv(io.BytesIO(data))
 
-import os
-from typing import Iterable, List, Optional, Union
 
-import matplotlib.pyplot as plt
-import pandas as pd
-import streamlit as st
-
-
-def validate_columns_exist(df: pd.DataFrame, required_cols: Iterable[str]) -> bool:
-    required = set(required_cols)
-    present = set(df.columns)
-    missing = required - present
+def validate_columns_exist(df: pd.DataFrame, required: Iterable[str]) -> None:
+    """
+    校验 df 是否包含 required 中的所有列。
+    若缺少则抛 ValueError，并给出缺失列表。
+    """
+    required_list = list(required)
+    missing = [c for c in required_list if c not in df.columns]
     if missing:
-        raise ValueError(f"Missing columns: {sorted(missing)}")
-    return True
+        raise ValueError(f"Missing required columns: {missing}")
 
 
 def clean_dataframe(df: pd.DataFrame, dropna: bool = True) -> pd.DataFrame:
-    out = df.dropna(axis=1, how="all")
+    """
+    基础清洗：去重 + 可选丢弃 NA。
+    始终返回一个新 DataFrame，不在原地修改。
+    """
+    out = df.copy()
+    out = out.drop_duplicates()
     if dropna:
-        out = out.dropna().reset_index(drop=True)
-    else:
-        out = out.reset_index(drop=True)
+        out = out.dropna()
     return out
 
-
-def _read_csv_flexible(
-    source: Union[str, os.PathLike, bytes, io.BytesIO, io.StringIO, "st.runtime.uploaded_file_manager.UploadedFile"]
-) -> pd.DataFrame:
-    if source is None:
-        raise ValueError("No CSV source provided")
-    if hasattr(source, "read"):
-        return pd.read_csv(source)
-    if isinstance(source, (bytes, bytearray)):
-        return pd.read_csv(io.BytesIO(source))
-    return pd.read_csv(source)
-
-
-def _make_plot(
+def _try_plot(
     df: pd.DataFrame,
-    x_col: str,
+    kind: str,
+    x: Optional[str],
     y_cols: List[str],
-    kind: str = "line",
-    title: Optional[str] = None,
-):
+    title: str = "",
+) -> None:
+    """在 Streamlit 环境下绘图（延迟导入以避免导入时的 UI 执行）"""
+    import streamlit as st
+    import matplotlib.pyplot as plt
+
+    if df.empty or not y_cols:
+        st.info("请选择要绘制的列。")
+        return
+
+    # 处理 X 轴
+    x_axis = None
+    if x and x in df.columns:
+        x_axis = df[x]
+    else:
+        x_axis = df.index
+
     fig, ax = plt.subplots()
-    if kind == "line":
-        for y in y_cols:
-            ax.plot(df[x_col], df[y], label=y)
-    elif kind == "scatter":
-        for y in y_cols:
-            ax.scatter(df[x_col], df[y], label=y)
-    elif kind == "bar":
-        if len(y_cols) == 1:
-            ax.bar(df[x_col], df[y_cols[0]])
-        else:
-            width = 0.8 / len(y_cols)
-            x_vals = pd.Series(range(len(df[x_col])))
-            for i, y in enumerate(y_cols):
-                ax.bar(x_vals + i * width, df[y], width=width, label=y)
-            ax.set_xticks(x_vals + (len(y_cols) - 1) * width / 2)
-            ax.set_xticklabels(df[x_col])
-    if title:
-        ax.set_title(title)
-    ax.set_xlabel(x_col)
+    for col in y_cols:
+        if col not in df.columns:
+            continue
+        if kind == "line":
+            ax.plot(x_axis, df[col], label=col)
+        elif kind == "scatter":
+            ax.scatter(x_axis, df[col], label=col)
+        elif kind == "bar":
+            ax.bar(x_axis, df[col], label=col)
+
+    ax.set_title(title or "Plot")
     ax.legend(loc="best")
-    fig.tight_layout()
-    return fig
+    st.pyplot(fig)
 
 
-def main():
+
+def main() -> None:
+    import streamlit as st
+
     st.set_page_config(page_title="Lab Data Visualization Tool", layout="wide")
     st.title("Lab Data Visualization Tool")
-    st.caption("Upload → Clean → Visualize → (optional) Predict")
+    st.caption("Upload → Validate → Clean → Visualize / Download")
 
-    with st.sidebar:
-        st.header("Options")
+    st.subheader("1) Upload CSV")
+    up = st.file_uploader("Drag & drop or Browse… (CSV)", type=["csv"])
+    raw_df: Optional[pd.DataFrame] = None
 
-    uploaded = st.file_uploader("Upload CSV", type=["csv"])
-    if not uploaded:
-        st.info("Upload a CSV file to get started.")
-        return
+    if up is not None:
+        try:
+            raw_bytes = up.read()
+            raw_df = load_csv_bytes(raw_bytes)
+            st.success(f"Loaded CSV with shape: {raw_df.shape}")
+            with st.expander("Preview (head)"):
+                st.dataframe(raw_df.head(20), use_container_width=True)
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Failed to read CSV: {e}")
 
-    try:
-        df_raw = _read_csv_flexible(uploaded)
-    except Exception as e:
-        st.error(f"Failed to read CSV: {e}")
-        return
+    st.divider()
+    st.subheader("2) Validate required columns (optional)")
+    required_cols = st.text_input("Required columns (comma-separated)", value="time,temperature")
+    required_list = [c.strip() for c in required_cols.split(",") if c.strip()]
 
-    st.subheader("Preview")
-    st.dataframe(df_raw.head())
+    if st.button("Validate") and raw_df is not None:
+        try:
+            validate_columns_exist(raw_df, required_list)
+            st.success("All required columns exist ")
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Validation failed: {e}")
 
-    st.subheader("Cleaning")
-    dropna = st.checkbox("Drop rows with missing values", value=True)
-    try:
-        df_clean = clean_dataframe(df_raw, dropna=dropna)
-    except Exception as e:
-        st.error(f"Cleaning failed: {e}")
-        return
+    st.divider()
+    st.subheader("3) Clean data")
+    dropna = st.checkbox("Drop NA rows", value=True)
+    cleaned_df: Optional[pd.DataFrame] = None
+    if raw_df is not None:
+        try:
+            cleaned_df = clean_dataframe(raw_df, dropna=dropna)
+            st.success(f"Cleaned shape: {cleaned_df.shape}")
+            with st.expander("Cleaned Preview (head)"):
+                st.dataframe(cleaned_df.head(20), use_container_width=True)
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Clean failed: {e}")
 
-    st.write(f"Rows: {len(df_clean)}, Columns: {list(df_clean.columns)}")
+    st.divider()
+    st.subheader("4) Visualize")
+    if cleaned_df is not None and not cleaned_df.empty:
+        cols = list(cleaned_df.columns)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            x_col = st.selectbox("X axis", ["<index>"] + cols, index=0)
+            x_sel = None if x_col == "<index>" else x_col
+        with c2:
+            y_cols = st.multiselect("Y axis (one or more)", cols, default=[cols[1]] if len(cols) > 1 else cols[:1])
+        with c3:
+            kind = st.radio("Plot type", options=["line", "scatter", "bar"], horizontal=True, index=0)
 
-    buf = io.StringIO()
-    df_clean.to_csv(buf, index=False)
-    st.download_button(
-        "Download cleaned CSV",
-        data=buf.getvalue().encode("utf-8"),
-        file_name="cleaned.csv",
-        mime="text/csv",
-    )
-
-    if len(df_clean.columns) >= 2:
-        st.subheader("Visualization")
-        col1, col2 = st.columns(2)
-        with col1:
-            x_col = st.selectbox("X-axis", df_clean.columns, index=0)
-        with col2:
-            y_cols = st.multiselect("Y-axis (one or more)", df_clean.columns.difference([x_col]).tolist())
-        kind = st.radio("Plot type", options=["line", "scatter", "bar"], horizontal=True)
         title = st.text_input("Plot title", value="")
-        if st.button("Generate Plot") and y_cols:
-            fig = _make_plot(df_clean, x_col, y_cols, kind=kind, title=title or None)
-            st.pyplot(fig)
-    else:
-        st.info("Need at least two columns to plot.")
+        if st.button("Generate Plot"):
+            _try_plot(cleaned_df, kind, x_sel, y_cols, title)
+
+    st.divider()
+    st.subheader("5) Download cleaned CSV")
+    if cleaned_df is not None and not cleaned_df.empty:
+        csv_bytes = cleaned_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="Download cleaned.csv",
+            data=csv_bytes,
+            file_name="cleaned.csv",
+            mime="text/csv",
+        )
 
 
+# 仅在直接运行 `streamlit run app.py` 或 `python app.py` 时执行 UI
 if __name__ == "__main__":
     main()
