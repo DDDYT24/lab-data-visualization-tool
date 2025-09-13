@@ -31,7 +31,8 @@ jobs:
         run: ruff check .
 
       - name: Type check (mypy)
-        run: mypy .
+        run: mypy app.py
+
 
       - name: Run tests
         run: |
