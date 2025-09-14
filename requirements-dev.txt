@@ -1,12 +1,6 @@
 pytest==8.3.2
 pytest-cov==5.0.0
 pre-commit==3.8.0
-
-# Lint / Type check / Format
 ruff==0.6.9
 black==24.8.0
 mypy==1.11.2
-types-setuptools
-ruff==0.6.3
-
-pandas-stubs
