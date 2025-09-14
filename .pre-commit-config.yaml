@@ -1,9 +1,37 @@
+# .pre-commit-config.yaml
 repos:
+  # 一些通用检查（尾空格/换行/YAML/JSON/大文件）
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v4.6.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
+
+  # Ruff：Python 静态检查 + 自动修复
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.7
+    hooks:
+      - id: ruff
+        args: [--fix]   # 自动修复能修的
+      - id: ruff-format # 等价于 Black 的格式化
+
+  # Black（如果你更喜欢 Black 的格式化，保留；如果只用 ruff-format，也可以去掉本段）
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3
+
+  # mypy：只检查 app.py 和 main.py（避免 tests 报一堆未注解错误）
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        files: ^(app\.py|main\.py)$
+        exclude: ^(tests/|venv/|\.venv/|\.github/)
+        additional_dependencies:
+          - pandas-stubs
+          - types-PyYAML
