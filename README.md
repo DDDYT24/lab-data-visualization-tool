@@ -1,13 +1,11 @@
 Lab Data Visualization Tool
 
-(This is my first project. If there are any questions, I hope you can email me and I will modify it as soon as possible, Thank you so much !!!!)
+(This is my first project. If there are any questions, I hope you can email me and I will modify it as soon as possible. Thank you so much !!!!)
 
+![CI](https://github.com/DanielROG/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)
 
-![CI](https://github.com/<your-username>/<your-repo>/actions/workflows/ci.yml/badge.svg)
-[![codecov](https://codecov.io/gh/<your-username>/<your-repo>/branch/main/graph/badge.svg)](https://codecov.io/gh/<your-username>/<your-repo>)
+[![codecov](https://codecov.io/gh/DanielROG/lab-data-visualization-tool/branch/main/graph/badge.svg)](https://codecov.io/gh/DanielROG/lab-data-visualization-tool)
 
-[![CI](https://github.com/<your-username>/<your-repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-username>/<your-repo>/actions)
-[![codecov](https://codecov.io/gh/<your-username>/<your-repo>/branch/main/graph/badge.svg?token=${CODECOV_TOKEN})](https://codecov.io/gh/<your-username>/<your-repo>)
 
 A Python-based tool to ‘clean, visualize, and explore experimental datasets’,which is designed to support scientific research workflows.
 Using the 'Streamlit' for interactive dashboards and 'CLI' for fast data processing.
@@ -23,14 +21,12 @@ Features
 Installation
 
 1. Clone the repository:
-bash/
-git clone https://github.com/<your-username>/<your-repo>.git
-cd <your-repo>
+git clone https://github.com/DanielROG/lab-data-visualization-tool>.git
+cd lab-data-visualization-tool
 
-2.Create and activate a virtual environment:
+2. Create and activate a virtual environment:
 
 'Windows (PowerShell)':
-bash
 python -m venv venv
 venv\Scripts\activate
 
@@ -45,9 +41,11 @@ pip install -r requirements-dev.txt
 pytest -q  ###Testing
 
 ---
-Way to use
-python main.py --input data.csv --output result.png
-streamlit run app.py ###same as the upper one
+Run the Streamlit app:
+streamlit run app.py
+
+Run the CLI tool:
+python main.py --csv data.csv
 
 pytest -q
 pytest --cov=. --cov-report=term-missing
@@ -68,8 +66,8 @@ CI/CD 集成：支持 GitHub Actions 自动测试与 Codecov 覆盖率上传。
 安装步骤
 
 1. 克隆仓库
-git clone https://github.com/<your-username>/<your-repo>.git
-cd <your-repo>
+git clone https://github.com/DanielROG/lab-data-visualization-tool.git
+cd lab-data-visualization-tool
 
 2. 创建虚拟环境:
 Windows (PowerShell):
@@ -93,9 +91,11 @@ python main.py --input data.csv --output result.png
 
 或者 streamlit run app.py
 
+Run the CLI tool:
+python main.py --csv data.csv
+
 测试与覆盖率
 pytest -q
 
 生成覆盖率报告：
 pytest --cov=. --cov-report=term-missing
-"test codecov"
