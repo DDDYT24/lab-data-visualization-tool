@@ -98,3 +98,4 @@ pytest -q
 
 生成覆盖率报告：
 pytest --cov=. --cov-report=term-missing
+"test codecov"
