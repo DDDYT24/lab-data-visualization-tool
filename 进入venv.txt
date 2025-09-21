@@ -1,0 +1,31 @@
+进lab：
+
+cd %USERPROFILE%\Desktop\lab-data-visualization-tool
+
+进venv：
+
+venv\Scripts\activate
+
+检测前文件
+
+pre-commit run --all-files
+
+运行（3-5):
+
+python main.py
+
+运行（5-7）：
+
+streamlit run app.py
+
+Day 1–9：环境搭建、GitHub 仓库、数据可视化基础、基本测试。
+
+Day 10：加了 pytest + CI + pre-commit，目前 CI 已经能正确触发并执行
+
+Day 12：增加 Codecov 覆盖率上报 + 徽章
+
+Day 13：Docker 化（本地 & CI 构建镜像）
+
+Day 14：MkDocs 文档站 + GitHub Pages 自动发布
+
+Day 15：语义化版本/CHANGELOG（Release Drafter）
