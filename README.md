@@ -1,6 +1,7 @@
 Lab Data Visualization Tool
 
 (This is my first project. If there are any questions, I hope you can email me and I will modify it as soon as possible. Thank you so much !!!!)
+--- email: liyutao982@gmail.com
 
 ![CI](https://github.com/DanielROG/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)
 
