@@ -3,10 +3,8 @@ Lab Data Visualization Tool
 (This is my first project. If there are any questions, I hope you can email me and I will modify it as soon as possible. Thank you so much !!!!)
 --- email: liyutao982@gmail.com
 
-![CI](https://github.com/DanielROG/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)
-
-[![codecov](https://codecov.io/gh/DanielROG/lab-data-visualization-tool/branch/main/graph/badge.svg)](https://codecov.io/gh/DanielROG/lab-data-visualization-tool)
-
+[![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
+[![codecov](https://img.shields.io/codecov/c/github/DDDYT24/lab-data-visualization-tool/main?logo=codecov)](https://app.codecov.io/gh/DDDYT24/lab-data-visualization-tool)
 
 A Python-based tool to ‘clean, visualize, and explore experimental datasets’,which is designed to support scientific research workflows.
 Using the 'Streamlit' for interactive dashboards and 'CLI' for fast data processing.
@@ -22,7 +20,7 @@ Features
 Installation
 
 1. Clone the repository:
-git clone https://github.com/DanielROG/lab-data-visualization-tool>.git
+git clone https://github.com/DDDYT24//lab-data-visualization-tool>.git
 cd lab-data-visualization-tool
 
 2. Create and activate a virtual environment:
@@ -67,7 +65,7 @@ CI/CD 集成：支持 GitHub Actions 自动测试与 Codecov 覆盖率上传。
 安装步骤
 
 1. 克隆仓库
-git clone https://github.com/DanielROG/lab-data-visualization-tool.git
+git clone https://github.com/DDDYT24//lab-data-visualization-tool.git
 cd lab-data-visualization-tool
 
 2. 创建虚拟环境:
