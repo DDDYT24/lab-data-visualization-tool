@@ -26,7 +26,7 @@ def sample_dataframe(frame: pd.DataFrame, max_points: int = MAX_PLOT_POINTS) -> 
         raise ValueError("max_points must be at least 1.")
     if len(frame) <= max_points:
         return frame
-    positions = np.linspace(0, len(frame) - 1, num=max_points, dtype=int)
+    positions: np.ndarray = np.linspace(0, len(frame) - 1, num=max_points, dtype=int)
     return frame.iloc[positions]
 
 
