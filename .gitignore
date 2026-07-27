@@ -1,35 +1,34 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
 *.egg-info/
-.dist/
 build/
-.eggs/
-
-# venv
+dist/
 .venv/
 venv/
 ENV/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Streamlit
-.streamlit/
-
-# Coverage / test artifacts
+# Tool caches
 .coverage*
 htmlcov/
-.cache/
+.mypy_cache/
 .pytest_cache/
+.ruff_cache/
 
-# VSCode / IDE
+# Local application state
+.labviz/
+
+# User data and generated figures
+*.csv
+*.tsv
+*.xlsx
+*.png
+*.svg
+*.pdf
+
+# Editors and operating systems
+.streamlit/
 .vscode/
 .idea/
-
-# Data / outputs (按需保留)
-*.csv
-*.png
+.DS_Store
+Thumbs.db

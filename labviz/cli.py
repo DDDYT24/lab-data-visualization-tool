@@ -1,129 +1,110 @@
+"""Command-line interface and backwards-compatible helper functions."""
+
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
-from typing import Iterable, List, Optional
 
-import matplotlib
-import matplotlib.pyplot as plt
 import pandas as pd
 
-# 无显示环境下也能渲染图片
-matplotlib.use("Agg")
+from .core import (
+    clean_dataframe as clean_table,
+)
+from .core import (
+    load_data,
+    summarize_dataframe,
+    validate_columns_exist,
+)
+from .plotting import SUPPORTED_PLOTS, create_figure, save_figure
 
 
-# ---------------- Core helpers ----------------
 def load_csv(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"Input file not found: {path}")
-    try:
-        return pd.read_csv(path)
-    except Exception as e:  # noqa: BLE001
-        raise ValueError(f"Failed to read CSV: {path}") from e
-
-
-def validate_columns_exist(df: pd.DataFrame, required: Iterable[str]) -> None:
-    req = list(required)
-    missing = [c for c in req if c not in df.columns]
-    if missing:
-        have = list(map(str, df.columns.tolist()))
-        raise ValueError(f"Missing columns: {missing}; available: {have}")
+    return load_data(path)
 
 
 def clean_dataframe(
-    df: pd.DataFrame,
+    frame: pd.DataFrame,
     dropna: bool = True,
-    method: Optional[str] = None,  # "ffill" | "bfill" | None
+    method: str | None = None,
 ) -> pd.DataFrame:
-    out = df.copy()
-    out = out.drop_duplicates()
-    if method is not None:
-        if method not in {"ffill", "bfill"}:
-            raise ValueError("method must be one of: ffill, bfill, None")
-        if method == "ffill":
-            out = out.ffill()
-        else:
-            out = out.bfill()
-    if dropna:
-        out = out.dropna()
-    return out
+    missing = method or ("drop" if dropna else "keep")
+    cleaned = clean_table(frame, missing=missing)  # type: ignore[arg-type]
+    return cleaned.dropna().reset_index(drop=True) if method and dropna else cleaned
 
 
 def plot_df(
-    df: pd.DataFrame,
+    frame: pd.DataFrame,
     x: str,
-    ys: List[str],
+    ys: list[str],
     kind: str,
     outpath: Path,
     show: bool = False,
 ) -> Path:
-    kind = kind.lower()
-    if kind not in {"line", "scatter", "bar"}:
-        raise ValueError("kind must be one of: line, scatter, bar")
-
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for y in ys:
-        if kind == "line":
-            ax.plot(df[x], df[y], label=y)
-        elif kind == "scatter":
-            ax.scatter(df[x], df[y], label=y)
-        else:  # bar
-            ax.bar(df[x], df[y], label=y)
-
-    ax.set_xlabel(x)
-    ax.set_ylabel(", ".join(ys))
-    ax.legend()
-    fig.tight_layout()
-
-    # 自动补 .png 扩展名
-    if outpath.suffix == "":
-        outpath = outpath.with_suffix(".png")
-    outpath.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outpath, dpi=150)
-    if show:
-        plt.show()
-    plt.close(fig)
-    return outpath
+    del show  # Headless rendering is deliberate and reliable in scripts and CI.
+    figure = create_figure(frame, kind=kind, x=x, ys=ys)
+    target = save_figure(figure, outpath)
+    figure.clear()
+    return target
 
 
-# ---------------- CLI ----------------
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        prog="labviz",
-        description="Clean, validate and visualize lab CSV data.",
+    parser = argparse.ArgumentParser(
+        prog="labviz", description="Clean and visualize experimental tabular data."
     )
-    p.add_argument("-i", "--input", type=Path, required=True, help="Input CSV path")
-    p.add_argument("-x", "--x", type=str, required=True, help="X-axis column")
-    p.add_argument("-y", "--y", type=str, nargs="+", required=True, help="Y-axis column(s)")
-    p.add_argument("--type", choices=["line", "scatter", "bar"], default="line", help="Plot type")
-    p.add_argument("-o", "--out", type=Path, default=Path("plot.png"), help="Output image path")
-    p.add_argument(
-        "--method",
-        choices=["ffill", "bfill"],
-        default=None,
-        help="Fill method before dropping NaN (optional).",
+    parser.add_argument("-i", "--input", type=Path, required=True, help="Input data file")
+    parser.add_argument("-x", "--x", help="X-axis column")
+    parser.add_argument("-y", "--y", nargs="+", required=True, help="Value column(s)")
+    parser.add_argument("--type", choices=SUPPORTED_PLOTS, default="line", help="Chart type")
+    parser.add_argument("-o", "--out", type=Path, default=Path("plot.png"), help="PNG output")
+    parser.add_argument(
+        "--missing",
+        choices=["keep", "drop", "ffill", "bfill", "mean", "median"],
+        default="drop",
+        help="Missing-value strategy",
     )
-    p.add_argument(
-        "--dropna",
-        action="store_true",
-        help="Drop rows with NaN after fill (default off).",
+    parser.add_argument(
+        "--keep-duplicates", action="store_true", help="Do not remove duplicate rows"
     )
-    p.add_argument(
-        "--show", action="store_true", help="Show plot window (if environment supports)."
-    )
-    return p
+    parser.add_argument("--title", default="", help="Optional chart title")
+    parser.add_argument("--cleaned-out", type=Path, help="Also export the cleaned CSV")
+    parser.add_argument("--summary", action="store_true", help="Print a JSON quality summary")
+    return parser
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.type in {"line", "scatter", "bar", "surface3d"} and not args.x:
+        parser.error(f"--x is required for {args.type} plots")
+    frame = load_data(args.input)
+    cleaned = clean_table(
+        frame,
+        drop_duplicates=not args.keep_duplicates,
+        missing=args.missing,
+    )
 
-    df = load_csv(args.input)
-    validate_columns_exist(df, [args.x, *args.y])
+    required = [*args.y]
+    if args.x:
+        required.insert(0, args.x)
+    validate_columns_exist(cleaned, required)
 
-    cleaned = clean_dataframe(df, dropna=args.dropna, method=args.method)
-    plot_df(cleaned, x=args.x, ys=args.y, kind=args.type, outpath=args.out, show=args.show)
-    print(f"[OK] Saved figure -> {args.out if args.out.suffix else args.out.with_suffix('.png')}")
+    figure = create_figure(
+        cleaned,
+        kind=args.type,
+        x=args.x,
+        ys=args.y,
+        title=args.title,
+    )
+    target = save_figure(figure, args.out)
+    figure.clear()
+
+    if args.cleaned_out:
+        args.cleaned_out.parent.mkdir(parents=True, exist_ok=True)
+        cleaned.to_csv(args.cleaned_out, index=False)
+    if args.summary:
+        print(json.dumps(summarize_dataframe(cleaned).to_dict(), indent=2))
+    print(f"Saved figure: {target}")
     return 0
 
 
