@@ -1,9 +1,6 @@
-from __future__ import annotations
+"""Compatibility entry point for the LabViz command-line interface."""
 
-
-def main() -> None:
-    pass
-
+from labviz.cli import main
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
