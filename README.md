@@ -1,24 +1,75 @@
-# Lab Data Visualization Tool
+<div align="center">
+
+# 🧪 Lab Data Visualization Tool
+
+**Turn raw experiment tables into clear, exportable visuals — locally.**
+
+从导入、检查、清洗到 2D/3D 可视化与导出，一套面向实验数据的轻量工作流。
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
+![Release](https://img.shields.io/badge/release-V1.1-6f42c1)
+![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776ab?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.49%2B-ff4b4b?logo=streamlit&logoColor=white)
 
-A lightweight local tool for loading, checking, cleaning, visualizing, and exporting experimental data. It provides a Streamlit interface for researchers and a CLI for repeatable scripts. Raw experiment data is processed locally and is never written to the history database.
+[Quick Start](#-quick-start) · [Features](#-features) · [CLI](#-command-line) · [Development](#-development-and-verification) · [中文](#中文说明)
 
-Current release: **V1.1**
+</div>
 
-中文说明见 [中文](#中文).
+Lab Data Visualization Tool is a local-first application for loading, validating, cleaning, visualizing, and exporting experimental data. Researchers can use the Streamlit interface for interactive work or the CLI for repeatable scripts. Raw experiment data stays on the local machine and is never written to the history database.
 
-## Features
+> **Current release: V1.1** — supports CSV, TSV, delimited TXT, JSON, and XLSX data, with seven 2D/3D visualization types.
 
-- Import CSV, TSV, delimited TXT, JSON, and XLSX tables (up to 50 MB in the web app).
-- Inspect row/column counts, data types, missing cells, duplicates, unique values, and memory use.
-- Remove exact duplicates and keep, drop, forward-fill, backward-fill, mean-fill, or median-fill missing values.
-- Create line, scatter, bar, histogram, box, correlation heatmap, and 3D surface plots.
-- Export the complete cleaned table as CSV and the current figure as PNG.
-- Keep compact plot history in SQLite without storing raw table contents.
-- Sample large plots evenly while keeping previews and exports deterministic.
+## ⚡ Quick Start
 
-## Architecture
+Prerequisites: [Git](https://git-scm.com/downloads) and Python 3.12 or 3.13. Run the following commands from the folder where you want to download the project.
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
+Set-Location .\lab-data-visualization-tool
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+### macOS / Linux
+
+```bash
+git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
+cd lab-data-visualization-tool
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+Streamlit opens the application in the browser, normally at `http://localhost:8501`. Upload a table in the sidebar, choose cleaning rules, inspect data quality, generate a chart, and download the result.
+
+```text
+Load data  →  Inspect quality  →  Clean safely  →  Visualize  →  Export
+```
+
+## ✨ Features
+
+| Stage | Capabilities |
+| --- | --- |
+| Load | CSV, TSV, delimited TXT, JSON, and XLSX; up to 50 MB in the web app |
+| Inspect | Row and column counts, data types, missing cells, duplicates, unique values, and memory use |
+| Clean | Exact-duplicate removal; keep, drop, forward-fill, backward-fill, mean-fill, or median-fill missing values |
+| Visualize | Line, scatter, bar, histogram, box, correlation heatmap, and 3D surface plots |
+| Export | Complete cleaned table as CSV and the current figure as PNG |
+| Track | Compact SQLite plot history without storing raw table contents |
+| Scale | Deterministic preview limits and evenly spaced sampling for large plots |
+
+Large previews are limited to 200 rows. Plots above the selected threshold use an evenly spaced sample, while the cleaned CSV download always contains every remaining row.
+
+For a 3D surface, select three numeric columns representing X, Y, and Z. The points must span a surface rather than a single straight line.
+
+## 🧱 Architecture
 
 ```text
 app.py                  Streamlit front end
@@ -32,7 +83,7 @@ tests/                  Core, plotting, database, CLI, and UI smoke tests
 
 The SQLite file is created at `.labviz/history.db` on first launch and is ignored by Git. Set `LABVIZ_DB_PATH` to use another location. Only the filename, SHA-256 fingerprint, size, quality counts, and plot configuration are recorded.
 
-## Supported development environment
+## 🧰 Supported Development Environment
 
 | Area | Supported and verified environment |
 | --- | --- |
@@ -41,7 +92,7 @@ The SQLite file is created at `.labviz/history.db` on first launch and is ignore
 | Hardware | CPU-only; no GPU or external database server is required. |
 | Web runtime | A modern browser and local access to Streamlit's default port `8501`. |
 
-### Runtime dependencies
+### Runtime Dependencies
 
 Install these from `requirements.txt` when you only need to use the application:
 
@@ -55,7 +106,7 @@ Install these from `requirements.txt` when you only need to use the application:
 
 SQLite is provided by Python's standard library, so no database package or service is required.
 
-### Development and CI dependencies
+### Development and CI Dependencies
 
 Contributors should install both `requirements.txt` and `requirements-dev.txt`:
 
@@ -69,44 +120,7 @@ Contributors should install both `requirements.txt` and `requirements-dev.txt`:
 
 Runtime packages use bounded version ranges so compatible updates can be installed without silently crossing a major-version boundary. Upgrade a major version separately and run the complete validation suite before changing these bounds.
 
-## Installation
-
-```bash
-git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-cd lab-data-visualization-tool
-python -m venv .venv
-```
-
-Activate the environment:
-
-```powershell
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-```
-
-```bash
-# macOS / Linux
-source .venv/bin/activate
-```
-
-Install runtime dependencies:
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-## Web interface
-
-```bash
-streamlit run app.py
-```
-
-Upload a table in the sidebar, choose cleaning rules, inspect the data-quality tab, then generate and download a visualization. Large previews are limited to 200 rows, and plots above the selected threshold use an evenly spaced sample; the cleaned CSV export always contains every remaining row.
-
-For a 3D surface, select three numeric columns representing X, Y, and Z. The points must span a surface rather than a single straight line.
-
-## CLI
+## 💻 Command Line
 
 ```bash
 python main.py \
@@ -128,7 +142,49 @@ python main.py -i surface.csv -x x -y y z --type surface3d -o surface.png
 
 Run `python main.py --help` for every option.
 
-## Development and verification
+## 🛠 Troubleshooting
+
+### `No such file or directory: 'requirements.txt'`
+
+The command is running outside the repository. In PowerShell, enter the cloned project directory and confirm the file exists:
+
+```powershell
+Set-Location .\lab-data-visualization-tool
+Test-Path .\requirements.txt
+```
+
+`Test-Path` must return `True` before installing dependencies.
+
+### `streamlit` is not recognized
+
+This usually means dependency installation did not finish, or `streamlit` belongs to a different Python environment. From the repository directory, run:
+
+```powershell
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+Using `python -m streamlit` guarantees that Streamlit is started by the currently active Python environment.
+
+### `Cache entry deserialization failed, entry ignored`
+
+This is a pip cache warning, not the cause of a missing `requirements.txt`. Pip ignores that cache entry and continues. If it repeats frequently, clear only pip's download cache and retry:
+
+```powershell
+python -m pip cache purge
+python -m pip install -r requirements.txt
+```
+
+### PowerShell blocks environment activation
+
+Allow scripts only for the current PowerShell process, then activate the environment again:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+## 🧪 Development and Verification
 
 ```bash
 python -m pip install -r requirements.txt -r requirements-dev.txt
@@ -142,15 +198,50 @@ pytest -q --cov
 
 CI runs the same lint, format, type, and test checks on Python 3.12.
 
-## Design reference
+## 📚 Design References
 
-The large-file preview, data-quality summary, and numeric-column guidance were informed by [The-Schultz-Lab/plottle](https://github.com/The-Schultz-Lab/plottle) (MIT). This project keeps an intentionally smaller scope and contains an independent implementation; it does not include Plottle source code or its heavier plugin/format stack.
+- The large-file preview, data-quality summary, and numeric-column guidance were informed by [The-Schultz-Lab/plottle](https://github.com/The-Schultz-Lab/plottle) (MIT).
+- The README's strong project statement, visible status badges, and quick-start-first hierarchy were inspired by [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents).
 
-## 中文
+This project keeps an intentionally smaller scope and contains an independent implementation. It does not include source code or copied documentation from either reference project.
 
-这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。网页端使用 Streamlit，命令行端适合重复实验和批处理脚本。
+---
 
-### 核心能力
+## 中文说明
+
+这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。网页端使用 Streamlit，命令行端适合重复实验和批处理脚本；实验原始数据不会写入历史数据库。
+
+### 🚀 快速开始
+
+请先安装 [Git](https://git-scm.com/downloads) 和 Python 3.12 或 3.13，然后在准备存放项目的目录中执行完整命令。**克隆后必须先进入项目目录**，否则系统找不到 `requirements.txt` 和 `app.py`。
+
+#### Windows PowerShell
+
+```powershell
+git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
+Set-Location .\lab-data-visualization-tool
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+#### macOS / Linux
+
+```bash
+git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
+cd lab-data-visualization-tool
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+启动后浏览器通常会打开 `http://localhost:8501`。在侧边栏上传表格，选择清洗规则，在数据质量页检查结果，然后生成并下载图像。
+
+### ✨ 核心能力
 
 - 支持 CSV、TSV、分隔符 TXT、JSON 和 XLSX，网页端单文件上限为 50 MB。
 - 自动统计行列数、字段类型、缺失值、重复行、唯一值和内存占用。
@@ -160,7 +251,7 @@ The large-file preview, data-quality summary, and numeric-column guidance were i
 - SQLite 只记录绘图历史和数据质量摘要，不保存实验原始数据。
 - 大数据绘图使用等距抽样，避免浏览器卡顿；数据下载仍保留全部清洗结果。
 
-### 支持的开发环境
+### 🧰 支持的开发环境
 
 | 项目 | 支持与验证情况 |
 | --- | --- |
@@ -197,25 +288,35 @@ SQLite 来自 Python 标准库，因此不需要额外安装数据库软件或 P
 
 运行依赖采用带主版本上限的范围，能够获取兼容更新，同时避免自动跨越可能带来破坏性变更的主版本。升级主版本时应单独修改并运行完整验证。
 
-### 快速开始
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-streamlit run app.py
-```
-
-命令行示例：
+### 💻 命令行示例
 
 ```powershell
 python main.py -i experiment.csv -x time -y temperature --type line -o result.png --summary
 ```
 
-运行测试：
+运行 `python main.py --help` 可查看全部参数。
+
+### 🛠 常见问题
+
+- 出现 `No such file or directory: 'requirements.txt'`：当前不在项目目录中。先运行 `Set-Location .\lab-data-visualization-tool`，并用 `Test-Path .\requirements.txt` 确认返回 `True`。
+- 出现“无法识别 `streamlit`”：依赖没有成功安装或 Python 环境不一致。重新安装依赖后使用 `python -m streamlit run app.py`。
+- 出现 `Cache entry deserialization failed`：这是 pip 缓存警告，不是找不到项目文件的原因；通常可以忽略。
+- PowerShell 禁止运行激活脚本：先执行 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`，它只对当前窗口生效。
+
+### 🧪 运行测试
 
 ```powershell
 python -m pip install -r requirements.txt -r requirements-dev.txt
 pre-commit run --all-files
 pytest -q --cov
 ```
+
+---
+
+<div align="center">
+
+**From raw measurements to readable results.**
+
+[⭐ Star](https://github.com/DDDYT24/lab-data-visualization-tool) · [🐛 Report an issue](https://github.com/DDDYT24/lab-data-visualization-tool/issues) · [↩ Back to top](#-lab-data-visualization-tool)
+
+</div>
