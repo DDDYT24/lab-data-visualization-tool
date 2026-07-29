@@ -41,7 +41,8 @@ Next:
 - [ ] Approve the remaining production backend runtime, worker, hosting, and provider selections; the current FastAPI service remains a local API-contract reference implementation.
 - [ ] Implement versioned `ProjectSpec` v1 in frontend Zod and backend Pydantic, backed by immutable ProjectRevision records and cross-contract fixtures.
 - [ ] Add optional project/experiment description persistence and editing for shared-chart context without introducing speculative Experiment entities.
-- [ ] Add SQLAlchemy persistence boundaries and Alembic migrations for the production PostgreSQL schema.
+- [x] Add the phase 1 SQLAlchemy 2 persistence boundary, PostgreSQL development/test environment, provider-neutral object-storage interface, first nine core models, and reversible Alembic migration.
+- [ ] Add phase 2 repositories and dual-run migration services that write PostgreSQL/object storage without changing the `/api/v1` response contract.
 - [ ] Move reference-service SQLite authentication and project state to production-grade shared services before running multiple hosts.
 - [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.
 - [ ] Move saved cloud datasets and exports from SQLite blobs to managed object storage with a scheduled expiry worker.

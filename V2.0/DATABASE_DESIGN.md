@@ -1,7 +1,8 @@
 # LabViz V2.0 Database and Storage Design
 
-**Status:** Production data route and first business decisions confirmed; schema implementation pending
+**Status:** Production data route confirmed; phase 1 database foundation implemented, business cutover pending
 **Decision date:** 2026-07-29
+**Phase 1 implementation:** 2026-07-29
 **Product source of truth:** [`prd.md`](prd.md)
 **Architecture source of truth:** [`PROJECT_PLAN.md`](PROJECT_PLAN.md)
 **Design process:** [`DATABASE_PLAN.md`](DATABASE_PLAN.md)
@@ -21,6 +22,11 @@ The website production path uses:
 The existing FastAPI and SQLite service remains a contract and test reference. SQLite plus
 local files or Parquet is the intended direction for the deferred Windows local mode, not the
 production website database.
+
+The phase 1 implementation adds the PostgreSQL connection/session boundary, provider-neutral
+object-storage interface, the first nine metadata and lineage tables, and reversible Alembic
+migration `0001_core_foundation`. It intentionally does not route existing `/api/v1` business
+operations through PostgreSQL yet.
 
 TimescaleDB is not required because LabViz currently imports bounded tabular files rather than
 continuous time-series streams. DuckDB may later be used as an embedded analytical execution
