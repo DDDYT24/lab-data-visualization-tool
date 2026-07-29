@@ -1,0 +1,22 @@
+name: labviz-v2
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${LABVIZ_POSTGRES_USER:-labviz}
+      POSTGRES_PASSWORD: ${LABVIZ_POSTGRES_PASSWORD:-labviz-local}
+      POSTGRES_DB: ${LABVIZ_POSTGRES_DB:-labviz}
+    ports:
+      - "127.0.0.1:${LABVIZ_POSTGRES_PORT:-54329}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  postgres-data:

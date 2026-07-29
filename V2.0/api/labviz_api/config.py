@@ -31,6 +31,9 @@ class Settings:
     smtp_from: str = "LabViz <noreply@localhost>"
     smtp_starttls: bool = True
     cookie_secure: bool = False
+    postgres_url: str | None = None
+    postgres_echo: bool = False
+    object_storage_root: Path = Path(".labviz/objects")
 
     def __post_init__(self) -> None:
         if self.environment not in {"development", "test", "production"}:
@@ -78,4 +81,9 @@ class Settings:
             smtp_from=os.environ.get("LABVIZ_SMTP_FROM", "LabViz <noreply@localhost>"),
             smtp_starttls=_as_bool(os.environ.get("LABVIZ_SMTP_STARTTLS"), True),
             cookie_secure=_as_bool(os.environ.get("LABVIZ_COOKIE_SECURE")),
+            postgres_url=os.environ.get("LABVIZ_POSTGRES_URL"),
+            postgres_echo=_as_bool(os.environ.get("LABVIZ_POSTGRES_ECHO")),
+            object_storage_root=Path(
+                os.environ.get("LABVIZ_OBJECT_STORAGE_ROOT", root / ".labviz" / "objects")
+            ).expanduser(),
         )
