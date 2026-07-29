@@ -8,16 +8,26 @@
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
 ![Release](https://img.shields.io/badge/release-V1.1-6f42c1)
+![V2.0](https://img.shields.io/badge/V2.0-web%20%2B%20API%20alpha-0f766e)
 ![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776ab?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.49%2B-ff4b4b?logo=streamlit&logoColor=white)
 
-[Quick Start](#-quick-start) · [Features](#-features) · [CLI](#-command-line) · [Development](#-development-and-verification) · [中文](#中文说明)
+[Quick Start](#-quick-start) · [V2.0 PRD](V2.0/prd.md) · [V2.0 Plan](V2.0/PROJECT_PLAN.md) · [Features](#-features) · [Development](#-development-and-verification) · [中文](#中文说明)
 
 </div>
 
 Lab Data Visualization Tool is a local-first application for loading, validating, cleaning, visualizing, and exporting experimental data. Researchers can use the Streamlit interface for interactive work or the CLI for repeatable scripts. Raw experiment data stays on the local machine and is never written to the history database.
 
 > **Current release: V1.1** — supports CSV, TSV, delimited TXT, JSON, and XLSX data, with seven 2D/3D visualization types.
+
+## Repository Versions
+
+| Version | Status | Location |
+| --- | --- | --- |
+| V1.1 | Stable Streamlit/Python application | [`V1.1/`](V1.1/) |
+| V2.0 | Website-first Next.js and FastAPI alpha | [`V2.0/`](V2.0/) |
+
+Repository-wide automation and documentation remain at the root. Deferred V2.0 work is tracked in [`V2.0/TODO.md`](V2.0/TODO.md).
 
 ## ⚡ Quick Start
 
@@ -27,7 +37,7 @@ Prerequisites: [Git](https://git-scm.com/downloads) and Python 3.12 or 3.13. Run
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-Set-Location .\lab-data-visualization-tool
+Set-Location .\lab-data-visualization-tool\V1.1
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -39,7 +49,7 @@ python -m streamlit run app.py
 
 ```bash
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-cd lab-data-visualization-tool
+cd lab-data-visualization-tool/V1.1
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -52,6 +62,55 @@ Streamlit opens the application in the browser, normally at `http://localhost:85
 ```text
 Load data  →  Inspect quality  →  Clean safely  →  Visualize  →  Export
 ```
+
+### V2.0 Web + Contract API Alpha
+
+V2.0 includes a runnable FastAPI contract/reference service for frontend
+development and end-to-end testing. It accepts CSV, TSV, delimited
+TXT, JSON, and XLSX uploads; builds bounded previews and explained quality
+findings; records user cleaning decisions; renders PNG, SVG, and PDF figures;
+and supports temporary projects, email-code sign-in, saved history, and
+read-only share links. Raw uploaded bytes are processed in memory and are not
+written to the SQLite project database.
+
+This reference service is not a decision on the production backend framework.
+Production architecture, cloud storage, job execution, and the email provider
+will be selected separately after the frontend product workflow is approved.
+
+Prerequisites: Python 3.12 or 3.13 and Node.js 22.22.2 or newer. Python 3.12
+and Node.js 24 are used by CI and are the recommended development versions.
+
+Start the API in the first PowerShell window:
+
+```powershell
+Set-Location .\V2.0\api
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m uvicorn labviz_api.main:app --reload --port 8000
+```
+
+Start the website in a second PowerShell window:
+
+```powershell
+Set-Location .\V2.0\web
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000` and select **Try sample data**, or upload a real
+table. The Next.js development server proxies `/api/v1` to
+`http://127.0.0.1:8000` by default. API documentation is available at
+`http://localhost:8000/docs`.
+
+Local development uses console email delivery: request a sign-in code in the
+website, then copy the six-digit code printed in the API terminal. No email is
+sent in this mode. The reference service supports the documented
+`LABVIZ_SMTP_*` variables for integration testing, but a production provider
+has deliberately not been selected yet.
+For a separately hosted API, set `NEXT_PUBLIC_LABVIZ_API_URL` before starting
+Next.js and include the website origin in `LABVIZ_ALLOWED_ORIGINS`.
 
 ## ✨ Features
 
@@ -72,29 +131,35 @@ For a 3D surface, select three numeric columns representing X, Y, and Z. The poi
 ## 🧱 Architecture
 
 ```text
-app.py                  Streamlit front end
-main.py                 CLI compatibility entry point
-labviz/core.py          Loading, validation, cleaning, and profiling
-labviz/plotting.py      Validated 2D/3D rendering and bounded sampling
-labviz/database.py      SQLite metadata/history repository
-labviz/cli.py           Scriptable command-line workflow
-tests/                  Core, plotting, database, CLI, and UI smoke tests
+V1.1/app.py                  Streamlit front end
+V1.1/main.py                 CLI compatibility entry point
+V1.1/labviz/core.py          Loading, validation, cleaning, and profiling
+V1.1/labviz/plotting.py      Validated 2D/3D rendering and bounded sampling
+V1.1/labviz/database.py      SQLite metadata/history repository
+V1.1/labviz/cli.py           Scriptable command-line workflow
+V1.1/tests/                  Core, plotting, database, CLI, and UI smoke tests
+V2.0/prd.md                  Approved product and Figma prototype requirements
+V2.0/PROJECT_PLAN.md         Website-first architecture, boundaries, and phases
+V2.0/web/                    Next.js, TypeScript, MUI, and ECharts frontend
+V2.0/api/                    FastAPI, pandas, Matplotlib, and SQLite service
+V2.0/TODO.md                 Prototype checkpoints and explicitly deferred work
 ```
 
-The SQLite file is created at `.labviz/history.db` on first launch and is ignored by Git. Set `LABVIZ_DB_PATH` to use another location. Only the filename, SHA-256 fingerprint, size, quality counts, and plot configuration are recorded.
+When V1.1 is launched from its version directory, the SQLite file is created at `V1.1/.labviz/history.db` and is ignored by Git. Set `LABVIZ_DB_PATH` to use another location. Only the filename, SHA-256 fingerprint, size, quality counts, and plot configuration are recorded.
 
 ## 🧰 Supported Development Environment
 
 | Area | Supported and verified environment |
 | --- | --- |
 | Operating system | Designed for Windows, macOS, and Linux. CI verifies `ubuntu-latest`; V1.1 was also verified locally on Windows. |
-| Python | Python 3.12 is verified by CI and Python 3.13 was verified locally. Other versions are not part of the release checks. |
+| Python | Python 3.12 is verified by CI; Python 3.13 is supported. V2.0 intentionally excludes Python 3.14 until its scientific stack is verified. |
+| Node.js | Node.js 24 is verified by CI for the V2.0 frontend; minimum supported version is 22.22.2. |
 | Hardware | CPU-only; no GPU or external database server is required. |
-| Web runtime | A modern browser and local access to Streamlit's default port `8501`. |
+| Web runtime | A modern browser; V1.1 uses port `8501`; V2.0 uses website port `3000` and API port `8000`. |
 
 ### Runtime Dependencies
 
-Install these from `requirements.txt` when you only need to use the application:
+Install these from `V1.1/requirements.txt` when you only need to use the application:
 
 | Dependency | Supported range | Purpose |
 | --- | --- | --- |
@@ -108,7 +173,7 @@ SQLite is provided by Python's standard library, so no database package or servi
 
 ### Development and CI Dependencies
 
-Contributors should install both `requirements.txt` and `requirements-dev.txt`:
+Contributors should install both `V1.1/requirements.txt` and `V1.1/requirements-dev.txt`:
 
 | Dependency | Supported range | Purpose |
 | --- | --- | --- |
@@ -119,6 +184,39 @@ Contributors should install both `requirements.txt` and `requirements-dev.txt`:
 | Ruff | `==0.6.9` | Linting and formatting; pinned to match the pre-commit hook and CI |
 
 Runtime packages use bounded version ranges so compatible updates can be installed without silently crossing a major-version boundary. Upgrade a major version separately and run the complete validation suite before changing these bounds.
+
+### V2.0 Frontend Dependencies
+
+The frontend lockfile is authoritative. Its core stack is Next.js 16, React 19, TypeScript 5.9, Material UI 9, MUI X Data Grid Community, Apache ECharts 6, next-intl, Zustand, Zod, Vitest, and ESLint 9. ESLint intentionally remains on the latest compatible 9.x release because the React lint rules used by the current Next.js configuration are not yet compatible with ESLint 10.
+
+### V2.0 API Dependencies and Configuration
+
+Install `V2.0/api/requirements.txt` for runtime use. The service uses FastAPI,
+Uvicorn, Pydantic, pandas, NumPy, Matplotlib, openpyxl, and Python's built-in
+SQLite driver. Install `requirements-dev.txt` instead when running pytest,
+Ruff, and mypy. Dependency ranges are bounded at the next major version.
+
+The API defaults are suitable for one local development process: SQLite data
+is stored in `V2.0/api/.labviz/labviz-v2.db`, temporary projects and exports
+expire two hours after the last project operation, uploads are limited to 50
+MB, and email codes are printed only in the API terminal. Relevant variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LABVIZ_DATABASE_PATH` | `V2.0/api/.labviz/labviz-v2.db` | SQLite database location |
+| `LABVIZ_ALLOWED_ORIGINS` | localhost and 127.0.0.1 on port 3000 | Comma-separated CORS origins |
+| `LABVIZ_PUBLIC_WEB_URL` | `http://localhost:3000` | Base URL for generated share links |
+| `LABVIZ_MAX_UPLOAD_BYTES` | `52428800` | Cloud upload limit in bytes |
+| `LABVIZ_AUTH_MODE` | `console` | `console` for development or `smtp` for email delivery |
+| `LABVIZ_SMTP_HOST`, `LABVIZ_SMTP_PORT` | unset, `587` | SMTP connection |
+| `LABVIZ_SMTP_USERNAME`, `LABVIZ_SMTP_PASSWORD` | unset | Optional SMTP credentials |
+| `LABVIZ_SMTP_FROM` | `LabViz <noreply@localhost>` | Sender displayed in verification emails |
+| `LABVIZ_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
+
+Verification challenges, rate-limit records, and login sessions are persisted
+in the reference SQLite database with expiry. A production multi-host
+deployment must replace or formally validate this storage as part of the later
+backend architecture decision.
 
 ## 💻 Command Line
 
@@ -146,10 +244,10 @@ Run `python main.py --help` for every option.
 
 ### `No such file or directory: 'requirements.txt'`
 
-The command is running outside the repository. In PowerShell, enter the cloned project directory and confirm the file exists:
+The command is running outside the V1.1 application directory. In PowerShell, enter it and confirm the file exists:
 
 ```powershell
-Set-Location .\lab-data-visualization-tool
+Set-Location .\lab-data-visualization-tool\V1.1
 Test-Path .\requirements.txt
 ```
 
@@ -186,7 +284,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ## 🧪 Development and Verification
 
+Run these commands from the repository root:
+
 ```bash
+cd V1.1
 python -m pip install -r requirements.txt -r requirements-dev.txt
 pre-commit install
 pre-commit run --all-files
@@ -197,6 +298,33 @@ pytest -q --cov
 ```
 
 CI runs the same lint, format, type, and test checks on Python 3.12.
+
+Verify the V2.0 frontend separately:
+
+```bash
+cd V2.0/web
+npm ci
+npm run verify
+npm run test:e2e
+```
+
+The first command runs ESLint, strict TypeScript checking, Vitest, and a production Next.js build. The second runs the Playwright desktop and mobile product flows, approved-breakpoint screenshot regression, and serious/critical WCAG checks. CI repeats both on Node.js 24.
+
+Verify the V2.0 API from its own Python 3.12 environment:
+
+```bash
+cd V2.0/api
+python -m pip install -r requirements-dev.txt
+ruff check labviz_api tests
+ruff format --check labviz_api tests
+mypy labviz_api tests
+pytest
+```
+
+The API integration suite exercises real CSV processing, data-quality
+findings, cleaning decisions, PNG/SVG/PDF generation, email-code sessions,
+history, sharing permissions, and stable error responses. CI runs the same
+checks on Python 3.12.
 
 ## 📚 Design References
 
@@ -211,15 +339,20 @@ This project keeps an intentionally smaller scope and contains an independent im
 
 这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。网页端使用 Streamlit，命令行端适合重复实验和批处理脚本；实验原始数据不会写入历史数据库。
 
+V1.1 仍是当前稳定可用版本。V2.0 是 website-first 的 Next.js 前端开发版本，
+仓库内的 FastAPI 只作为 API Contract 参考服务和端到端测试工具，并不代表生产
+后端框架已经确定。当前已移除前端生成的预览行，工作区、历史、分享、登录和导出
+均使用真实 `/api/v1` 响应。原始上传文件只在处理期间保留于内存，不写入 SQLite。
+
 ### 🚀 快速开始
 
-请先安装 [Git](https://git-scm.com/downloads) 和 Python 3.12 或 3.13，然后在准备存放项目的目录中执行完整命令。**克隆后必须先进入项目目录**，否则系统找不到 `requirements.txt` 和 `app.py`。
+请先安装 [Git](https://git-scm.com/downloads) 和 Python 3.12 或 3.13，然后在准备存放项目的目录中执行完整命令。**克隆后必须进入 `V1.1` 应用目录**，否则系统找不到 `requirements.txt` 和 `app.py`。
 
 #### Windows PowerShell
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-Set-Location .\lab-data-visualization-tool
+Set-Location .\lab-data-visualization-tool\V1.1
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -231,7 +364,7 @@ python -m streamlit run app.py
 
 ```bash
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-cd lab-data-visualization-tool
+cd lab-data-visualization-tool/V1.1
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -240,6 +373,33 @@ python -m streamlit run app.py
 ```
 
 启动后浏览器通常会打开 `http://localhost:8501`。在侧边栏上传表格，选择清洗规则，在数据质量页检查结果，然后生成并下载图像。
+
+#### V2.0 网站与 API
+
+请安装 Python 3.12（也支持 3.13）以及 Node.js 22.22.2 或更新版本，推荐使用
+Node.js 24。先在第一个 PowerShell 窗口启动 API：
+
+```powershell
+Set-Location .\V2.0\api
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m uvicorn labviz_api.main:app --reload --port 8000
+```
+
+再在第二个 PowerShell 窗口启动网站：
+
+```powershell
+Set-Location .\V2.0\web
+npm install
+npm run dev
+```
+
+打开 `http://localhost:3000`。网站默认把 `/api/v1` 代理到
+`http://127.0.0.1:8000`，接口文档位于 `http://localhost:8000/docs`。点击
+“使用示例数据”会请求服务端明确提供的示例项目；也可以上传真实表格。开发模式
+下邮箱验证码会显示在 API 终端，接口响应不会返回验证码。
 
 ### ✨ 核心能力
 
@@ -256,13 +416,14 @@ python -m streamlit run app.py
 | 项目 | 支持与验证情况 |
 | --- | --- |
 | 操作系统 | 设计上支持 Windows、macOS 和 Linux；CI 验证 `ubuntu-latest`，V1.1 也已在 Windows 本地验证。 |
-| Python | CI 验证 Python 3.12，本地验证 Python 3.13；其他版本不属于当前发布检查范围。 |
+| Python | CI 验证 Python 3.12，同时支持 3.13；V2.0 暂不支持尚未完成科学计算依赖验证的 Python 3.14。 |
+| Node.js | V2.0 前端最低支持 22.22.2；CI 使用 Node.js 24。 |
 | 硬件 | 仅需 CPU，不需要 GPU，也不需要外部数据库服务器。 |
-| 网页运行 | 现代浏览器，并允许本机访问 Streamlit 默认端口 `8501`。 |
+| 网页运行 | 现代浏览器；V1.1 使用端口 `8501`；V2.0 网站使用 `3000`，API 使用 `8000`。 |
 
 #### 运行依赖
 
-普通用户只需要安装 `requirements.txt`：
+普通用户只需要安装 `V1.1/requirements.txt`：
 
 | 依赖 | 支持范围 | 用途 |
 | --- | --- | --- |
@@ -276,7 +437,7 @@ SQLite 来自 Python 标准库，因此不需要额外安装数据库软件或 P
 
 #### 开发与 CI 依赖
 
-开发者需要同时安装 `requirements.txt` 和 `requirements-dev.txt`：
+开发者需要同时安装 `V1.1/requirements.txt` 和 `V1.1/requirements-dev.txt`：
 
 | 依赖 | 支持范围 | 用途 |
 | --- | --- | --- |
@@ -288,6 +449,20 @@ SQLite 来自 Python 标准库，因此不需要额外安装数据库软件或 P
 
 运行依赖采用带主版本上限的范围，能够获取兼容更新，同时避免自动跨越可能带来破坏性变更的主版本。升级主版本时应单独修改并运行完整验证。
 
+#### V2.0 API 依赖与默认行为
+
+运行服务安装 `V2.0/api/requirements.txt`；开发和测试安装
+`V2.0/api/requirements-dev.txt`。核心依赖包括 FastAPI、Uvicorn、Pydantic、
+pandas、NumPy、Matplotlib 和 openpyxl，SQLite 由 Python 自带。
+
+本地默认数据库为 `V2.0/api/.labviz/labviz-v2.db`；临时项目和导出结果按最后
+一次项目操作保留 2 小时；网站上传上限为 50 MB；验证码使用终端输出模式。
+参考服务可设置 `LABVIZ_AUTH_MODE=smtp` 以及 `LABVIZ_SMTP_HOST`、端口、账号、
+密码和发件人变量来做集成测试；当前尚未选择正式邮件供应商，因此默认模式不会
+真正发送邮件。生产 HTTPS 环境还应设置 `LABVIZ_COOKIE_SECURE=true`。验证码挑战、
+频率限制记录和登录会话会带过期时间地保存在参考 SQLite 数据库；生产多主机部署
+仍需在后端架构阶段选择合适的共享存储。
+
 ### 💻 命令行示例
 
 ```powershell
@@ -298,17 +473,42 @@ python main.py -i experiment.csv -x time -y temperature --type line -o result.pn
 
 ### 🛠 常见问题
 
-- 出现 `No such file or directory: 'requirements.txt'`：当前不在项目目录中。先运行 `Set-Location .\lab-data-visualization-tool`，并用 `Test-Path .\requirements.txt` 确认返回 `True`。
+- 出现 `No such file or directory: 'requirements.txt'`：当前不在 V1.1 应用目录中。先运行 `Set-Location .\lab-data-visualization-tool\V1.1`，并用 `Test-Path .\requirements.txt` 确认返回 `True`。
 - 出现“无法识别 `streamlit`”：依赖没有成功安装或 Python 环境不一致。重新安装依赖后使用 `python -m streamlit run app.py`。
 - 出现 `Cache entry deserialization failed`：这是 pip 缓存警告，不是找不到项目文件的原因；通常可以忽略。
 - PowerShell 禁止运行激活脚本：先执行 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`，它只对当前窗口生效。
 
 ### 🧪 运行测试
 
+以下命令从仓库根目录开始执行：
+
 ```powershell
+Set-Location .\V1.1
 python -m pip install -r requirements.txt -r requirements-dev.txt
 pre-commit run --all-files
 pytest -q --cov
+```
+
+V2.0 前端验证命令：
+
+```powershell
+Set-Location .\V2.0\web
+npm ci
+npm run verify
+npm run test:e2e
+```
+
+浏览器测试同时覆盖桌面与移动端主流程、批准断点的截图回归，以及主要页面的严重/关键 WCAG 问题检查。
+
+V2.0 API 验证命令：
+
+```powershell
+Set-Location .\V2.0\api
+python -m pip install -r requirements-dev.txt
+ruff check labviz_api tests
+ruff format --check labviz_api tests
+mypy labviz_api tests
+pytest
 ```
 
 ---
