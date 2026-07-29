@@ -1,0 +1,28 @@
+[project]
+name = "labviz-api"
+version = "2.0.0a1"
+description = "FastAPI processing service for the LabViz V2.0 web application"
+requires-python = ">=3.12,<3.14"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"labviz_api/main.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["matplotlib.*", "numpy.*", "openpyxl.*", "pandas.*", "scipy.*"]
+ignore_missing_imports = true

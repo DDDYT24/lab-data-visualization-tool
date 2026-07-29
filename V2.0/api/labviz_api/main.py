@@ -1,0 +1,1121 @@
+"""FastAPI application implementing the LabViz V2 API contract."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import logging
+import secrets
+import time
+from contextlib import asynccontextmanager, suppress
+from pathlib import Path
+from typing import Any, cast
+from uuid import uuid4
+
+from fastapi import (
+    BackgroundTasks,
+    Cookie,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Request,
+    Response,
+    UploadFile,
+)
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
+
+from .auth import AuthError, AuthService, build_auth_service
+from .config import Settings
+from .models import (
+    AuthenticatedUser,
+    AuthState,
+    ChartAnalysis,
+    ChartRequest,
+    ChartSpec,
+    CleaningDecision,
+    CleaningDecisionsRequest,
+    CleaningDecisionsResponse,
+    CreateShareRequest,
+    DataPreview,
+    ExportJob,
+    HealthResponse,
+    ProcessingJob,
+    ProjectList,
+    ProjectSession,
+    ProjectSummary,
+    ProjectWorkspace,
+    QualityReport,
+    QualityRulesRequest,
+    RequestEmailCode,
+    RequestEmailCodeResponse,
+    SavedChartResponse,
+    SharedChart,
+    SharedDownloads,
+    ShareLink,
+    ShareSummary,
+    SourceFile,
+    UpdateShareRequest,
+    VerifyEmailCode,
+    VerifyEmailCodeResponse,
+)
+from .processing import (
+    ProcessingError,
+    analyze_chart,
+    apply_chart_decisions,
+    build_preview,
+    build_quality_report,
+    default_chart_spec,
+    deserialize_dataframe,
+    load_dataframe,
+    render_chart,
+    sample_csv_bytes,
+    serialize_dataframe,
+    validate_upload,
+)
+from .repository import ProjectRepository, expires_in
+
+LOGGER = logging.getLogger(__name__)
+SESSION_COOKIE = "labviz_session"
+GUEST_COOKIE = "labviz_guest"
+API_PREFIX = "/api/v1"
+
+
+class ApiProblem(Exception):
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
+def _model_json(value: Any) -> dict[str, Any]:
+    return cast(dict[str, Any], value.model_dump(mode="json", by_alias=True))
+
+
+def _guest_digest(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _guest_token(existing: str | None) -> str:
+    if existing and len(existing) >= 40:
+        return existing
+    return secrets.token_urlsafe(32)
+
+
+def _set_guest_cookie(response: Response, token: str, settings: Settings) -> None:
+    response.set_cookie(
+        key=GUEST_COOKIE,
+        value=token,
+        max_age=settings.session_ttl_seconds,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _job_from_row(row: dict[str, Any]) -> ProcessingJob:
+    return ProcessingJob(
+        id=row["id"],
+        project_id=row["project_id"],
+        stage=row["stage"],
+        progress=row["progress"],
+        message=row["message"],
+        error_code=row["error_code"],
+    )
+
+
+def _project_session(repository: ProjectRepository, project: dict[str, Any]) -> ProjectSession:
+    job_row = repository.get_job_for_project(project["id"])
+    return ProjectSession(
+        project_id=project["id"],
+        storage_mode=project["storage_mode"],
+        source=SourceFile.model_validate_json(project["source_json"]),
+        job=_job_from_row(job_row) if job_row else None,
+        expires_at=project["expires_at"],
+    )
+
+
+def _require_project(repository: ProjectRepository, project_id: str) -> dict[str, Any]:
+    project = repository.get_project(project_id)
+    if project is None:
+        raise ApiProblem(404, "project-not-found", "This project does not exist or has expired.")
+    return project
+
+
+def _require_ready_project(repository: ProjectRepository, project_id: str) -> dict[str, Any]:
+    project = _require_project(repository, project_id)
+    job = repository.get_job_for_project(project_id)
+    if job and job["stage"] == "failed":
+        raise ApiProblem(
+            422,
+            job["error_code"] or "processing-failed",
+            job["message"],
+        )
+    if not project["preview_json"] or not project["quality_json"] or not project["data_blob"]:
+        raise ApiProblem(409, "processing-not-ready", "The uploaded file is still being processed.")
+    return project
+
+
+def _require_project_access(
+    repository: ProjectRepository,
+    project_id: str,
+    user: dict[str, str] | None,
+    guest_token: str | None,
+    *,
+    ready: bool = False,
+) -> dict[str, Any]:
+    project = (
+        _require_ready_project(repository, project_id)
+        if ready
+        else _require_project(repository, project_id)
+    )
+    if project["storage_mode"] != "saved-cloud":
+        stored_digest = project.get("guest_token_digest")
+        if (
+            not guest_token
+            or not stored_digest
+            or not secrets.compare_digest(stored_digest, _guest_digest(guest_token))
+        ):
+            raise ApiProblem(
+                403,
+                "project-access-denied",
+                "This temporary project belongs to another browser session.",
+            )
+        return project
+    if user is None:
+        raise ApiProblem(401, "authentication-required", "Sign in to open this saved project.")
+    if project["owner_user_id"] != user["id"]:
+        raise ApiProblem(403, "project-access-denied", "This project belongs to another user.")
+    return project
+
+
+def _export_response(export: dict[str, Any]) -> Response:
+    formats = {
+        "png": ("image/png", "png"),
+        "svg": ("image/svg+xml", "svg"),
+        "pdf": ("application/pdf", "pdf"),
+    }
+    media_type, extension = formats[export["format"]]
+    return Response(
+        content=bytes(export["payload"]),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="labviz-{export["id"]}.{extension}"'
+        },
+    )
+
+
+def _shared_preview(preview: DataPreview, chart: ChartSpec) -> DataPreview:
+    fields = {chart.x_axis.field, chart.y_axis.field}
+    fields.update(item.field for item in chart.series)
+    if chart.uncertainty.error_field:
+        fields.add(chart.uncertainty.error_field)
+    if chart.secondary_y_axis.field:
+        fields.add(chart.secondary_y_axis.field)
+    columns = [column for column in preview.columns if column.field in fields]
+    rows = [
+        {key: value for key, value in row.items() if key == "rowId" or key in fields}
+        for row in preview.rows
+    ]
+    return DataPreview(
+        project_id=preview.project_id,
+        columns=columns,
+        rows=rows,
+        total_rows=preview.total_rows,
+        sampled=preview.sampled,
+        sample_strategy=preview.sample_strategy,
+    )
+
+
+def _process_project(
+    repository: ProjectRepository,
+    settings: Settings,
+    project_id: str,
+    job_id: str,
+    payload: bytes,
+    filename: str,
+    media_type: str,
+    requested_sheet_name: str | None = None,
+    header_row: int = 1,
+) -> None:
+    try:
+        repository.update_job(
+            job_id,
+            stage="uploading",
+            progress=15,
+            message="The upload is complete. Preparing the file.",
+        )
+        validate_upload(payload, filename, settings.max_upload_bytes)
+        repository.update_job(
+            job_id,
+            stage="parsing",
+            progress=45,
+            message="Reading the table and identifying columns.",
+        )
+        frame, sheet_name, available_sheets, resolved_header_row = load_dataframe(
+            payload,
+            filename,
+            requested_sheet_name=requested_sheet_name,
+            header_row=header_row,
+        )
+        repository.update_job(
+            job_id,
+            stage="profiling",
+            progress=75,
+            message="Checking data quality and preparing a safe preview.",
+        )
+        source = SourceFile(
+            name=filename,
+            size=len(payload),
+            media_type=media_type,
+            sheet_name=sheet_name,
+            available_sheets=available_sheets,
+            header_row=resolved_header_row,
+        )
+        preview = build_preview(project_id, frame)
+        quality = build_quality_report(project_id, frame)
+        chart = default_chart_spec(frame)
+        repository.complete_project(
+            project_id=project_id,
+            source=_model_json(source),
+            data_blob=serialize_dataframe(frame),
+            preview=preview,
+            quality=quality,
+            chart=chart,
+        )
+        repository.update_job(
+            job_id,
+            stage="ready",
+            progress=100,
+            message="Your data is ready to inspect.",
+        )
+    except ProcessingError as exc:
+        repository.update_job(
+            job_id,
+            stage="failed",
+            progress=100,
+            message=str(exc),
+            error_code=exc.code,
+        )
+    except Exception:
+        LOGGER.exception("Unexpected processing failure for project %s", project_id)
+        repository.update_job(
+            job_id,
+            stage="failed",
+            progress=100,
+            message="LabViz could not process this file safely.",
+            error_code="processing-failed",
+        )
+
+
+def create_app(
+    settings: Settings | None = None,
+    repository: ProjectRepository | None = None,
+    auth_service: AuthService | None = None,
+) -> FastAPI:
+    resolved_settings = settings or Settings.from_env()
+    resolved_repository = repository or ProjectRepository(
+        resolved_settings.database_path, resolved_settings.project_ttl_seconds
+    )
+    resolved_auth = auth_service or build_auth_service(resolved_settings, resolved_repository)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> Any:
+        resolved_repository.recover_stale_jobs()
+
+        async def maintain_temporary_data() -> None:
+            while True:
+                await asyncio.sleep(60)
+                await asyncio.to_thread(resolved_repository.cleanup_expired)
+                await asyncio.to_thread(resolved_repository.recover_stale_jobs)
+
+        maintenance = asyncio.create_task(maintain_temporary_data())
+        try:
+            yield
+        finally:
+            maintenance.cancel()
+            with suppress(asyncio.CancelledError):
+                await maintenance
+
+    app = FastAPI(
+        title="LabViz API",
+        version="2.0.0-alpha.1",
+        description="Processing, quality review, chart export, history, sharing, and auth.",
+        lifespan=lifespan,
+    )
+    app.state.settings = resolved_settings
+    app.state.repository = resolved_repository
+    app.state.auth_service = resolved_auth
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(resolved_settings.allowed_origins),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.middleware("http")
+    async def request_context(request: Request, call_next: Any) -> Response:
+        request_id = request.headers.get("X-Request-ID", uuid4().hex)
+        started = time.perf_counter()
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if request.url.path.startswith(API_PREFIX):
+            response.headers["Cache-Control"] = "no-store"
+        route = request.scope.get("route")
+        route_template = getattr(route, "path", "<unmatched>")
+        LOGGER.info(
+            "%s %s %s %.1fms request_id=%s",
+            request.method,
+            route_template,
+            response.status_code,
+            (time.perf_counter() - started) * 1000,
+            request_id,
+        )
+        return cast(Response, response)
+
+    @app.exception_handler(ApiProblem)
+    async def api_problem_handler(_request: Request, exc: ApiProblem) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"code": exc.code, "message": exc.message},
+        )
+
+    @app.exception_handler(AuthError)
+    async def auth_error_handler(_request: Request, exc: AuthError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"code": exc.code, "message": str(exc)},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        _request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        first = exc.errors()[0] if exc.errors() else None
+        message = (
+            first.get("msg", "The request is invalid.") if first else "The request is invalid."
+        )
+        return JSONResponse(
+            status_code=422,
+            content={"code": "validation-error", "message": message},
+        )
+
+    def get_repository() -> ProjectRepository:
+        return resolved_repository
+
+    def get_settings() -> Settings:
+        return resolved_settings
+
+    def get_auth() -> AuthService:
+        return resolved_auth
+
+    def optional_user(
+        session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+        auth: AuthService = Depends(get_auth),
+    ) -> dict[str, str] | None:
+        return auth.get_user(session_token)
+
+    def required_user(
+        user: dict[str, str] | None = Depends(optional_user),
+    ) -> dict[str, str]:
+        if user is None:
+            raise ApiProblem(401, "authentication-required", "Sign in to save and share projects.")
+        return user
+
+    @app.get("/health", response_model=HealthResponse)
+    @app.get(f"{API_PREFIX}/health", response_model=HealthResponse)
+    def health() -> HealthResponse:
+        return HealthResponse()
+
+    @app.get(f"{API_PREFIX}/ready", response_model=HealthResponse)
+    def readiness(repository: ProjectRepository = Depends(get_repository)) -> HealthResponse:
+        if not repository.ping():
+            raise ApiProblem(503, "database-unavailable", "The database is not ready.")
+        return HealthResponse()
+
+    @app.post(
+        f"{API_PREFIX}/projects",
+        response_model=ProjectSession,
+        status_code=202,
+    )
+    async def create_project(
+        background_tasks: BackgroundTasks,
+        response: Response,
+        file: UploadFile = File(...),
+        sheet_name: str | None = Form(default=None, alias="sheetName"),
+        header_row: int = Form(default=1, alias="headerRow", ge=1, le=1_000),
+        guest_cookie: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+        current_settings: Settings = Depends(get_settings),
+    ) -> ProjectSession:
+        filename = Path(file.filename or "uploaded-data").name
+        payload = await file.read(current_settings.max_upload_bytes + 1)
+        await file.close()
+        try:
+            validate_upload(payload, filename, current_settings.max_upload_bytes)
+        except ProcessingError as exc:
+            raise ApiProblem(422, exc.code, str(exc)) from exc
+
+        project_id = uuid4().hex
+        job_id = uuid4().hex
+        media_type = file.content_type or "application/octet-stream"
+        guest_token = _guest_token(guest_cookie)
+        _set_guest_cookie(response, guest_token, current_settings)
+        source = SourceFile(name=filename, size=len(payload), media_type=media_type)
+        repository.create_project(
+            project_id=project_id,
+            job_id=job_id,
+            title=Path(filename).stem or "Untitled project",
+            source=_model_json(source),
+            guest_token_digest=_guest_digest(guest_token),
+        )
+        background_tasks.add_task(
+            _process_project,
+            repository,
+            current_settings,
+            project_id,
+            job_id,
+            payload,
+            filename,
+            media_type,
+            sheet_name,
+            header_row,
+        )
+        project = _require_project(repository, project_id)
+        return _project_session(repository, project)
+
+    @app.post(
+        f"{API_PREFIX}/samples/thermal-response/projects",
+        response_model=ProjectSession,
+        status_code=202,
+    )
+    def create_sample_project(
+        background_tasks: BackgroundTasks,
+        response: Response,
+        guest_cookie: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+        current_settings: Settings = Depends(get_settings),
+    ) -> ProjectSession:
+        payload = sample_csv_bytes()
+        filename = "thermal-response-sample.csv"
+        project_id = uuid4().hex
+        job_id = uuid4().hex
+        media_type = "text/csv"
+        guest_token = _guest_token(guest_cookie)
+        _set_guest_cookie(response, guest_token, current_settings)
+        source = SourceFile(name=filename, size=len(payload), media_type=media_type)
+        repository.create_project(
+            project_id=project_id,
+            job_id=job_id,
+            title="Thermal response sample",
+            source=_model_json(source),
+            guest_token_digest=_guest_digest(guest_token),
+        )
+        background_tasks.add_task(
+            _process_project,
+            repository,
+            current_settings,
+            project_id,
+            job_id,
+            payload,
+            filename,
+            media_type,
+            None,
+            1,
+        )
+        project = _require_project(repository, project_id)
+        return _project_session(repository, project)
+
+    @app.get(f"{API_PREFIX}/projects/{{project_id}}", response_model=ProjectSession)
+    def get_project(
+        project_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> ProjectSession:
+        project = _require_project_access(repository, project_id, user, guest_token)
+        return _project_session(repository, project)
+
+    @app.get(f"{API_PREFIX}/jobs/{{job_id}}", response_model=ProcessingJob)
+    def get_job(
+        job_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> ProcessingJob:
+        row = repository.get_job(job_id)
+        if row is None:
+            raise ApiProblem(404, "job-not-found", "This processing job does not exist or expired.")
+        _require_project_access(repository, row["project_id"], user, guest_token)
+        return _job_from_row(row)
+
+    @app.post(f"{API_PREFIX}/projects/{{project_id}}/save", response_model=ProjectSession)
+    def save_project_to_cloud(
+        project_id: str,
+        user: dict[str, str] = Depends(required_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> ProjectSession:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        if project["owner_user_id"] and project["owner_user_id"] != user["id"]:
+            raise ApiProblem(403, "project-access-denied", "This project belongs to another user.")
+        repository.save_project(project_id, user["id"])
+        saved = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        return _project_session(repository, saved)
+
+    @app.post(
+        f"{API_PREFIX}/projects/{{project_id}}/duplicate",
+        response_model=ProjectSession,
+    )
+    def duplicate_project(
+        project_id: str,
+        user: dict[str, str] = Depends(required_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> ProjectSession:
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        copy_id = uuid4().hex
+        repository.duplicate_project(
+            source_project_id=project_id,
+            project_id=copy_id,
+            job_id=uuid4().hex,
+            owner_user_id=user["id"],
+        )
+        return _project_session(
+            repository,
+            _require_project_access(repository, copy_id, user, guest_token, ready=True),
+        )
+
+    @app.delete(f"{API_PREFIX}/projects/{{project_id}}", status_code=204)
+    def delete_project(
+        project_id: str,
+        user: dict[str, str] = Depends(required_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> Response:
+        _require_project_access(repository, project_id, user, guest_token)
+        repository.delete_project(project_id)
+        return Response(status_code=204)
+
+    @app.get(
+        f"{API_PREFIX}/projects/{{project_id}}/workspace",
+        response_model=ProjectWorkspace,
+    )
+    def get_project_workspace(
+        project_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+        current_settings: Settings = Depends(get_settings),
+    ) -> ProjectWorkspace:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        shares = [
+            ShareSummary(
+                token=row["token"],
+                url=f"{current_settings.public_web_url}/share/{row['token']}",
+                downloads_enabled=bool(row["downloads_enabled"]),
+                created_at=row["created_at"],
+            )
+            for row in repository.list_shares(project_id)
+        ]
+        return ProjectWorkspace(
+            session=_project_session(repository, project),
+            preview=DataPreview.model_validate_json(project["preview_json"]),
+            quality=QualityReport.model_validate_json(project["quality_json"]),
+            decisions=[
+                CleaningDecision.model_validate(item)
+                for item in repository.get_decisions(project_id)
+            ],
+            chart=ChartSpec.model_validate_json(project["chart_json"]),
+            shares=shares,
+        )
+
+    @app.get(f"{API_PREFIX}/projects/{{project_id}}/preview", response_model=DataPreview)
+    def get_preview(
+        project_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> DataPreview:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        return DataPreview.model_validate_json(project["preview_json"])
+
+    @app.get(f"{API_PREFIX}/projects/{{project_id}}/quality", response_model=QualityReport)
+    def get_quality(
+        project_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> QualityReport:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        return QualityReport.model_validate_json(project["quality_json"])
+
+    @app.put(
+        f"{API_PREFIX}/projects/{{project_id}}/quality-rules",
+        response_model=QualityReport,
+    )
+    def apply_quality_rules(
+        project_id: str,
+        body: QualityRulesRequest,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> QualityReport:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        frame = deserialize_dataframe(bytes(project["data_blob"]))
+        ranges = {rule.field: (rule.minimum, rule.maximum) for rule in body.ranges}
+        if len(ranges) != len(body.ranges):
+            raise ApiProblem(
+                422,
+                "duplicate-quality-rule",
+                "Each column can have only one valid range.",
+            )
+        try:
+            quality = build_quality_report(project_id, frame, ranges)
+        except ProcessingError as exc:
+            raise ApiProblem(422, exc.code, str(exc)) from exc
+        repository.replace_quality(project_id, quality)
+        return QualityReport.model_validate(quality)
+
+    @app.patch(
+        f"{API_PREFIX}/projects/{{project_id}}/cleaning-decisions",
+        response_model=CleaningDecisionsResponse,
+    )
+    def save_cleaning_decisions(
+        project_id: str,
+        body: CleaningDecisionsRequest,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> CleaningDecisionsResponse:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        quality = QualityReport.model_validate_json(project["quality_json"])
+        finding_ids = {item.id for item in quality.findings}
+        unknown = [item.finding_id for item in body.decisions if item.finding_id not in finding_ids]
+        if unknown:
+            raise ApiProblem(
+                422,
+                "unknown-quality-finding",
+                "One or more cleaning decisions refer to findings that do not exist.",
+            )
+        decisions = [_model_json(item) for item in body.decisions]
+        updated_at = repository.save_decisions(project_id, decisions)
+        return CleaningDecisionsResponse(
+            project_id=project_id,
+            decisions=[
+                CleaningDecision.model_validate(item)
+                for item in repository.get_decisions(project_id)
+            ],
+            updated_at=updated_at,
+        )
+
+    @app.put(
+        f"{API_PREFIX}/projects/{{project_id}}/chart",
+        response_model=SavedChartResponse,
+    )
+    def save_chart(
+        project_id: str,
+        body: ChartRequest,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> SavedChartResponse:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        preview = DataPreview.model_validate_json(project["preview_json"])
+        available_fields = {item.field for item in preview.columns}
+        selected_fields = {body.chart.x_axis.field, body.chart.y_axis.field}
+        selected_fields.update(item.field for item in body.chart.series)
+        if body.chart.uncertainty.error_field:
+            selected_fields.add(body.chart.uncertainty.error_field)
+        if body.chart.secondary_y_axis.field:
+            selected_fields.add(body.chart.secondary_y_axis.field)
+        if not selected_fields.issubset(available_fields):
+            raise ApiProblem(
+                422,
+                "invalid-chart-fields",
+                "The chart refers to one or more columns that are not in this project.",
+            )
+        column_kinds = {item.field: item.kind for item in preview.columns}
+        numeric_fields = {item.field for item in body.chart.series}
+        if (
+            body.chart.type == "surface3d"
+            or body.chart.fitting.model != "none"
+            or body.chart.uncertainty.mode != "none"
+        ):
+            numeric_fields.add(body.chart.x_axis.field)
+        if body.chart.uncertainty.error_field:
+            numeric_fields.add(body.chart.uncertainty.error_field)
+        if any(column_kinds.get(field) != "number" for field in numeric_fields):
+            raise ApiProblem(
+                422,
+                "invalid-chart-fields",
+                "The selected chart or analysis requires numeric columns.",
+            )
+        updated_at = repository.save_chart(project_id, _model_json(body.chart))
+        return SavedChartResponse(
+            project_id=project_id,
+            chart=body.chart,
+            updated_at=updated_at,
+        )
+
+    @app.get(f"{API_PREFIX}/projects", response_model=ProjectList)
+    def list_projects(
+        user: dict[str, str] | None = Depends(optional_user),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> ProjectList:
+        projects = []
+        for row in repository.list_projects(user["id"] if user else None):
+            chart = ChartSpec.model_validate_json(row["chart_json"])
+            source = SourceFile.model_validate_json(row["source_json"])
+            projects.append(
+                ProjectSummary(
+                    id=row["id"],
+                    title=row["title"],
+                    source_name=source.name,
+                    chart_type=chart.type,
+                    updated_at=row["updated_at"],
+                    storage_mode=row["storage_mode"],
+                    thumbnail_url=None,
+                )
+            )
+        return ProjectList(projects=projects)
+
+    @app.post(f"{API_PREFIX}/auth/email-code", response_model=RequestEmailCodeResponse)
+    def request_email_code(
+        body: RequestEmailCode,
+        request: Request,
+        auth: AuthService = Depends(get_auth),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> RequestEmailCodeResponse:
+        email = str(body.email).strip().lower()
+        client_key = request.client.host if request.client else "unknown"
+        if not repository.allow_auth_request(client_key=client_key, email=email):
+            raise ApiProblem(
+                429,
+                "email-rate-limited",
+                "Too many verification requests. Try again later.",
+            )
+        try:
+            challenge_id, expires_seconds, resend_seconds = auth.request_code(email)
+        except AuthError:
+            raise
+        except Exception as exc:
+            LOGGER.exception("Could not deliver a LabViz verification email")
+            raise ApiProblem(
+                503,
+                "email-delivery-failed",
+                "The verification email could not be sent. Try again later.",
+            ) from exc
+        return RequestEmailCodeResponse(
+            challenge_id=challenge_id,
+            expires_in_seconds=expires_seconds,
+            resend_after_seconds=resend_seconds,
+            delivery_mode=auth.delivery_mode,
+        )
+
+    @app.post(
+        f"{API_PREFIX}/auth/email-code/verify",
+        response_model=VerifyEmailCodeResponse,
+    )
+    def verify_email_code(
+        body: VerifyEmailCode,
+        response: Response,
+        auth: AuthService = Depends(get_auth),
+        current_settings: Settings = Depends(get_settings),
+    ) -> VerifyEmailCodeResponse:
+        user, token = auth.verify_code(body.challenge_id, body.code)
+        response.set_cookie(
+            key=SESSION_COOKIE,
+            value=token,
+            max_age=current_settings.session_ttl_seconds,
+            httponly=True,
+            secure=current_settings.cookie_secure,
+            samesite="lax",
+            path="/",
+        )
+        return VerifyEmailCodeResponse(
+            authenticated=True, user=AuthenticatedUser.model_validate(user)
+        )
+
+    @app.get(f"{API_PREFIX}/auth/me", response_model=AuthState)
+    def get_current_user(
+        user: dict[str, str] | None = Depends(optional_user),
+    ) -> AuthState:
+        return AuthState(
+            authenticated=user is not None,
+            user=AuthenticatedUser.model_validate(user) if user else None,
+        )
+
+    @app.post(f"{API_PREFIX}/auth/logout", response_model=AuthState)
+    def logout(
+        response: Response,
+        session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+        auth: AuthService = Depends(get_auth),
+    ) -> AuthState:
+        auth.logout(session_token)
+        response.delete_cookie(
+            key=SESSION_COOKIE,
+            path="/",
+            secure=resolved_settings.cookie_secure,
+            httponly=True,
+            samesite="lax",
+        )
+        return AuthState(authenticated=False, user=None)
+
+    @app.post(f"{API_PREFIX}/projects/{{project_id}}/shares", response_model=ShareLink)
+    def create_share(
+        project_id: str,
+        body: CreateShareRequest,
+        user: dict[str, str] = Depends(required_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+        current_settings: Settings = Depends(get_settings),
+    ) -> ShareLink:
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        token = secrets.token_urlsafe(18)
+        created_at = repository.create_share(
+            token=token,
+            project_id=project_id,
+            owner_user_id=user["id"],
+            downloads_enabled=body.downloads_enabled,
+        )
+        return ShareLink(
+            token=token,
+            url=f"{current_settings.public_web_url}/share/{token}",
+            downloads_enabled=body.downloads_enabled,
+            created_at=created_at,
+        )
+
+    @app.patch(
+        f"{API_PREFIX}/projects/{{project_id}}/shares/{{token}}",
+        response_model=ShareLink,
+    )
+    def update_share(
+        project_id: str,
+        token: str,
+        body: UpdateShareRequest,
+        user: dict[str, str] = Depends(required_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+        current_settings: Settings = Depends(get_settings),
+    ) -> ShareLink:
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        share = repository.get_share(token)
+        if share is None or share["project_id"] != project_id:
+            raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
+        repository.update_share(token, project_id, body.downloads_enabled)
+        return ShareLink(
+            token=token,
+            url=f"{current_settings.public_web_url}/share/{token}",
+            downloads_enabled=body.downloads_enabled,
+            created_at=share["created_at"],
+        )
+
+    @app.delete(
+        f"{API_PREFIX}/projects/{{project_id}}/shares/{{token}}",
+        status_code=204,
+    )
+    def revoke_share(
+        project_id: str,
+        token: str,
+        user: dict[str, str] = Depends(required_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> Response:
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        if not repository.revoke_share(token, project_id):
+            raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
+        return Response(status_code=204)
+
+    @app.get(f"{API_PREFIX}/shares/{{token}}", response_model=SharedChart)
+    def get_shared_chart(
+        token: str,
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> SharedChart:
+        share = repository.get_share(token)
+        if share is None:
+            raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
+        project = _require_ready_project(repository, share["project_id"])
+        downloads = SharedDownloads()
+        if bool(share["downloads_enabled"]):
+            export_ids = repository.latest_exports(project["id"])
+            downloads = SharedDownloads(
+                png=(f"{API_PREFIX}/shares/{token}/downloads/png" if "png" in export_ids else None),
+                svg=(f"{API_PREFIX}/shares/{token}/downloads/svg" if "svg" in export_ids else None),
+                pdf=(f"{API_PREFIX}/shares/{token}/downloads/pdf" if "pdf" in export_ids else None),
+            )
+        chart = ChartSpec.model_validate_json(project["chart_json"])
+        frame = apply_chart_decisions(
+            deserialize_dataframe(bytes(project["data_blob"])),
+            json.loads(project["quality_json"]),
+            repository.get_decisions(project["id"]),
+        )
+        derived = analyze_chart(frame, chart)
+        preview = DataPreview.model_validate(build_preview(project["id"], frame))
+        return SharedChart(
+            token=token,
+            title=project["title"],
+            description="A figure shared from LabViz.",
+            updated_at=project["updated_at"],
+            chart=chart,
+            preview=_shared_preview(preview, chart),
+            analysis=ChartAnalysis(
+                project_id=project["id"],
+                series=derived["series"],
+                preview=derived["preview"],
+            ),
+            downloads=downloads,
+        )
+
+    @app.post(
+        f"{API_PREFIX}/projects/{{project_id}}/exports",
+        response_model=ExportJob,
+    )
+    def create_export(
+        project_id: str,
+        body: ChartRequest,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+        current_settings: Settings = Depends(get_settings),
+    ) -> ExportJob:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        try:
+            frame = deserialize_dataframe(bytes(project["data_blob"]))
+            quality = json.loads(project["quality_json"])
+            frame = apply_chart_decisions(
+                frame,
+                quality,
+                repository.get_decisions(project_id),
+            )
+            payload = render_chart(frame, body.chart)
+        except (ProcessingError, ValidationError) as exc:
+            code = exc.code if isinstance(exc, ProcessingError) else "invalid-chart"
+            raise ApiProblem(422, code, str(exc)) from exc
+
+        export_id = uuid4().hex
+        expires_at = expires_in(current_settings.export_ttl_seconds)
+        repository.save_chart(project_id, _model_json(body.chart))
+        repository.save_export(
+            export_id=export_id,
+            project_id=project_id,
+            format_name=body.chart.export_settings.format,
+            payload=payload,
+            expires_at=expires_at,
+            message="Your publication-ready figure is ready to download.",
+        )
+        return ExportJob(
+            id=export_id,
+            project_id=project_id,
+            status="ready",
+            download_url=f"{API_PREFIX}/exports/{export_id}/download",
+            expires_at=expires_at,
+            message="Your publication-ready figure is ready to download.",
+        )
+
+    @app.post(
+        f"{API_PREFIX}/projects/{{project_id}}/chart-analysis",
+        response_model=ChartAnalysis,
+    )
+    def get_chart_analysis(
+        project_id: str,
+        body: ChartRequest,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> ChartAnalysis:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        try:
+            frame = deserialize_dataframe(bytes(project["data_blob"]))
+            frame = apply_chart_decisions(
+                frame,
+                json.loads(project["quality_json"]),
+                repository.get_decisions(project_id),
+            )
+            analysis = analyze_chart(frame, body.chart)
+        except (ProcessingError, ValidationError) as exc:
+            code = exc.code if isinstance(exc, ProcessingError) else "invalid-chart"
+            raise ApiProblem(422, code, str(exc)) from exc
+        return ChartAnalysis(
+            project_id=project_id,
+            series=analysis["series"],
+            preview=analysis["preview"],
+        )
+
+    @app.get(f"{API_PREFIX}/exports/{{export_id}}/download")
+    def download_export(
+        export_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> Response:
+        export = repository.get_export(export_id)
+        if export is None:
+            raise ApiProblem(404, "export-not-found", "This export does not exist or has expired.")
+        _require_project_access(repository, export["project_id"], user, guest_token)
+        return _export_response(export)
+
+    @app.get(f"{API_PREFIX}/projects/{{project_id}}/exports/cleaned-data.csv")
+    def download_cleaned_data(
+        project_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> Response:
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        frame = deserialize_dataframe(bytes(project["data_blob"]))
+        cleaned = apply_chart_decisions(
+            frame,
+            json.loads(project["quality_json"]),
+            repository.get_decisions(project_id),
+            actions={"remove"},
+        )
+        payload = cleaned.to_csv(index=False).encode("utf-8-sig")
+        safe_name = "".join(
+            character if character.isalnum() or character in {"-", "_"} else "-"
+            for character in str(project["title"])
+        ).strip("-")
+        filename = f"{safe_name or 'labviz'}-cleaned.csv"
+        return Response(
+            content=payload,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get(f"{API_PREFIX}/shares/{{token}}/downloads/{{format_name}}")
+    def download_shared_export(
+        token: str,
+        format_name: str,
+        repository: ProjectRepository = Depends(get_repository),
+    ) -> Response:
+        if format_name not in {"png", "svg", "pdf"}:
+            raise ApiProblem(404, "export-not-found", "This shared export is unavailable.")
+        share = repository.get_share(token)
+        if share is None:
+            raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
+        if not bool(share["downloads_enabled"]):
+            raise ApiProblem(
+                403,
+                "share-download-disabled",
+                "Downloads are disabled by the creator.",
+            )
+        export_id = repository.latest_exports(share["project_id"]).get(format_name)
+        export = repository.get_export(export_id) if export_id else None
+        if export is None:
+            raise ApiProblem(404, "export-not-found", "This shared export is unavailable.")
+        return _export_response(export)
+
+    return app
+
+
+app = create_app()

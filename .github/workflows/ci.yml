@@ -7,14 +7,20 @@ on:
     branches: ["main"]
 
 jobs:
-  test:
+  python:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: V1.1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: |
+            V1.1/requirements.txt
+            V1.1/requirements-dev.txt
       - name: Install dependencies
         run: python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Lint, format, and type-check
@@ -24,3 +30,47 @@ jobs:
           mypy app.py main.py labviz
       - name: Test
         run: pytest -q --cov --cov-report=term-missing
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: V2.0/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: V2.0/web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify frontend
+        run: npm run verify
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser flows
+        run: npm run test:e2e
+
+  v2-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: V2.0/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            V2.0/api/requirements.txt
+            V2.0/api/requirements-dev.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Verify API
+        run: |
+          ruff check labviz_api tests
+          ruff format --check labviz_api tests
+          mypy labviz_api tests
+          pytest
