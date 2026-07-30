@@ -51,6 +51,12 @@ CORE_TABLES = {
     "project_origins",
     "project_lifecycle_events",
     "idempotency_records",
+    "share_links",
+    "share_link_events",
+    "export_jobs",
+    "publication_exports",
+    "stored_object_write_intents",
+    "share_export_bindings",
 }
 
 

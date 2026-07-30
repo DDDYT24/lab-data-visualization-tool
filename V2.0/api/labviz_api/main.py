@@ -84,7 +84,7 @@ from .processing import (
     sample_csv_bytes,
     validate_upload,
 )
-from .repository import ProjectRepository, expires_in
+from .repository import ProjectRepository
 
 LOGGER = logging.getLogger(__name__)
 SESSION_COOKIE = "labviz_session"
@@ -390,7 +390,9 @@ def create_app(
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["Referrer-Policy"] = (
+            "no-referrer" if request.url.path.startswith(f"{API_PREFIX}/shares/") else "same-origin"
+        )
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         if request.url.path.startswith(API_PREFIX):
@@ -987,22 +989,26 @@ def create_app(
         body: CreateShareRequest,
         user: dict[str, str] = Depends(required_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
         current_settings: Settings = Depends(get_settings),
     ) -> ShareLink:
-        _require_project_access(repository, project_id, user, guest_token, ready=True)
-        token = secrets.token_urlsafe(18)
-        created_at = repository.create_share(
-            token=token,
+        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        if project["storage_mode"] != "saved-cloud":
+            repository.save_project(
+                project_id,
+                user["id"],
+                guest_token_digest=_guest_digest(guest_token) if guest_token else None,
+            )
+        share = repository.create_share(
             project_id=project_id,
             owner_user_id=user["id"],
             downloads_enabled=body.downloads_enabled,
         )
         return ShareLink(
-            token=token,
-            url=f"{current_settings.public_web_url}/share/{token}",
-            downloads_enabled=body.downloads_enabled,
-            created_at=created_at,
+            token=share["token"],
+            url=f"{current_settings.public_web_url}/share/{share['token']}",
+            downloads_enabled=share["downloads_enabled"],
+            created_at=share["created_at"],
         )
 
     @app.patch(
@@ -1015,18 +1021,22 @@ def create_app(
         body: UpdateShareRequest,
         user: dict[str, str] = Depends(required_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
         current_settings: Settings = Depends(get_settings),
     ) -> ShareLink:
         _require_project_access(repository, project_id, user, guest_token, ready=True)
-        share = repository.get_share(token)
-        if share is None or share["project_id"] != project_id:
-            raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
-        repository.update_share(token, project_id, body.downloads_enabled)
-        return ShareLink(
+        share = repository.update_share(
             token=token,
-            url=f"{current_settings.public_web_url}/share/{token}",
+            project_id=project_id,
+            owner_user_id=user["id"],
             downloads_enabled=body.downloads_enabled,
+        )
+        if share is None:
+            raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
+        return ShareLink(
+            token=share["token"],
+            url=f"{current_settings.public_web_url}/share/{share['token']}",
+            downloads_enabled=share["downloads_enabled"],
             created_at=share["created_at"],
         )
 
@@ -1039,47 +1049,49 @@ def create_app(
         token: str,
         user: dict[str, str] = Depends(required_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> Response:
         _require_project_access(repository, project_id, user, guest_token, ready=True)
-        if not repository.revoke_share(token, project_id):
+        if not repository.revoke_share(
+            token=token,
+            project_id=project_id,
+            owner_user_id=user["id"],
+        ):
             raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
         return Response(status_code=204)
 
     @app.get(f"{API_PREFIX}/shares/{{token}}", response_model=SharedChart)
     def get_shared_chart(
         token: str,
-        repository: ProjectRepository = Depends(get_repository),
+        response: Response,
+        repository: ProjectStore = Depends(get_project_store),
     ) -> SharedChart:
-        share = repository.get_share(token)
-        if share is None:
+        shared = repository.get_shared_project(token)
+        if shared is None:
             raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
-        project = _require_ready_project(repository, share["project_id"])
+        context, frame = shared
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store"
         downloads = SharedDownloads()
-        if bool(share["downloads_enabled"]):
-            export_ids = repository.latest_exports(project["id"])
+        if bool(context["downloads_enabled"]):
+            formats = set(context["download_formats"])
             downloads = SharedDownloads(
-                png=(f"{API_PREFIX}/shares/{token}/downloads/png" if "png" in export_ids else None),
-                svg=(f"{API_PREFIX}/shares/{token}/downloads/svg" if "svg" in export_ids else None),
-                pdf=(f"{API_PREFIX}/shares/{token}/downloads/pdf" if "pdf" in export_ids else None),
+                png=(f"{API_PREFIX}/shares/{token}/downloads/png" if "png" in formats else None),
+                svg=(f"{API_PREFIX}/shares/{token}/downloads/svg" if "svg" in formats else None),
+                pdf=(f"{API_PREFIX}/shares/{token}/downloads/pdf" if "pdf" in formats else None),
             )
-        chart = ChartSpec.model_validate_json(project["chart_json"])
-        frame = apply_chart_decisions(
-            deserialize_dataframe(bytes(project["data_blob"])),
-            json.loads(project["quality_json"]),
-            repository.get_decisions(project["id"]),
-        )
+        chart = ChartSpec.model_validate(context["chart"])
         derived = analyze_chart(frame, chart)
-        preview = DataPreview.model_validate(build_preview(project["id"], frame))
+        preview = DataPreview.model_validate(build_preview(context["project_id"], frame))
         return SharedChart(
             token=token,
-            title=project["title"],
-            description="A figure shared from LabViz.",
-            updated_at=project["updated_at"],
+            title=context["title"],
+            description=context["description"],
+            updated_at=context["updated_at"],
             chart=chart,
             preview=_shared_preview(preview, chart),
             analysis=ChartAnalysis(
-                project_id=project["id"],
+                project_id=context["project_id"],
                 series=derived["series"],
                 preview=derived["preview"],
             ),
@@ -1095,41 +1107,37 @@ def create_app(
         body: ChartRequest,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
-        current_settings: Settings = Depends(get_settings),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> ExportJob:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         try:
-            frame = deserialize_dataframe(bytes(project["data_blob"]))
-            quality = json.loads(project["quality_json"])
-            frame = apply_chart_decisions(
-                frame,
-                quality,
-                repository.get_decisions(project_id),
-            )
+            frame = repository.load_chart_dataframe(project_id)
             payload = render_chart(frame, body.chart)
         except (ProcessingError, ValidationError) as exc:
             code = exc.code if isinstance(exc, ProcessingError) else "invalid-chart"
             raise ApiProblem(422, code, str(exc)) from exc
 
-        export_id = uuid4().hex
-        expires_at = expires_in(current_settings.export_ttl_seconds)
-        repository.save_chart(project_id, _model_json(body.chart))
-        repository.save_export(
-            export_id=export_id,
+        export = repository.create_publication_export(
             project_id=project_id,
-            format_name=body.chart.export_settings.format,
+            expected_revision_id=project.get("current_revision_id"),
+            chart=_model_json(body.chart),
             payload=payload,
-            expires_at=expires_at,
-            message="Your publication-ready figure is ready to download.",
+            owner_user_id=user["id"] if user else None,
+            guest_token_digest=_guest_digest(guest_token) if guest_token else None,
+            idempotency_key=idempotency_key,
         )
         return ExportJob(
-            id=export_id,
+            id=export["id"],
             project_id=project_id,
-            status="ready",
-            download_url=f"{API_PREFIX}/exports/{export_id}/download",
-            expires_at=expires_at,
-            message="Your publication-ready figure is ready to download.",
+            status=export["status"],
+            download_url=(
+                f"{API_PREFIX}/exports/{export['id']}/download"
+                if export["status"] == "ready"
+                else None
+            ),
+            expires_at=export["expires_at"],
+            message=export["message"],
         )
 
     @app.post(
@@ -1166,12 +1174,15 @@ def create_app(
         export_id: str,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> Response:
+        metadata = repository.get_export_metadata(export_id)
+        if metadata is None:
+            raise ApiProblem(404, "export-not-found", "This export does not exist or has expired.")
+        _require_project_access(repository, metadata["project_id"], user, guest_token)
         export = repository.get_export(export_id)
         if export is None:
             raise ApiProblem(404, "export-not-found", "This export does not exist or has expired.")
-        _require_project_access(repository, export["project_id"], user, guest_token)
         return _export_response(export)
 
     @app.get(f"{API_PREFIX}/projects/{{project_id}}/exports/cleaned-data.csv")
@@ -1199,24 +1210,26 @@ def create_app(
     def download_shared_export(
         token: str,
         format_name: str,
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> Response:
         if format_name not in {"png", "svg", "pdf"}:
             raise ApiProblem(404, "export-not-found", "This shared export is unavailable.")
-        share = repository.get_share(token)
-        if share is None:
+        shared_export = repository.get_shared_export(token, format_name)
+        if shared_export is None:
             raise ApiProblem(404, "share-not-found", "This shared chart is unavailable.")
-        if not bool(share["downloads_enabled"]):
+        if not bool(shared_export["downloads_enabled"]):
             raise ApiProblem(
                 403,
                 "share-download-disabled",
                 "Downloads are disabled by the creator.",
             )
-        export_id = repository.latest_exports(share["project_id"]).get(format_name)
-        export = repository.get_export(export_id) if export_id else None
+        export = shared_export["export"]
         if export is None:
             raise ApiProblem(404, "export-not-found", "This shared export is unavailable.")
-        return _export_response(export)
+        result = _export_response(export)
+        result.headers["Referrer-Policy"] = "no-referrer"
+        result.headers["Cache-Control"] = "no-store"
+        return result
 
     return app
 

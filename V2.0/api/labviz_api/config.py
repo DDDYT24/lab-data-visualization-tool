@@ -6,11 +6,25 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+DEFAULT_SHARE_TOKEN_KEYS = ((1, "labviz-development-share-token-key-v1"),)
+
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _share_token_keys(value: str | None) -> tuple[tuple[int, str], ...]:
+    if not value:
+        return DEFAULT_SHARE_TOKEN_KEYS
+    pairs: list[tuple[int, str]] = []
+    for item in value.split(","):
+        version, separator, secret = item.strip().partition("=")
+        if not separator or not version.isdigit() or not secret:
+            raise ValueError("LABVIZ_SHARE_TOKEN_KEYS must use version=secret pairs.")
+        pairs.append((int(version), secret))
+    return tuple(pairs)
 
 
 @dataclass(frozen=True)
@@ -35,6 +49,8 @@ class Settings:
     postgres_echo: bool = False
     object_storage_root: Path = Path(".labviz/objects")
     persistence_backend: str = "sqlite"
+    share_token_key_version: int = 1
+    share_token_keys: tuple[tuple[int, str], ...] = DEFAULT_SHARE_TOKEN_KEYS
 
     def __post_init__(self) -> None:
         if self.environment not in {"development", "test", "production"}:
@@ -49,6 +65,17 @@ class Settings:
             raise ValueError("LABVIZ_PERSISTENCE_BACKEND must be 'sqlite' or 'postgresql'.")
         if self.persistence_backend == "postgresql" and not self.postgres_url:
             raise ValueError("LABVIZ_POSTGRES_URL is required for PostgreSQL persistence.")
+        versions = [version for version, _secret in self.share_token_keys]
+        if self.share_token_key_version not in versions:
+            raise ValueError(
+                "LABVIZ_SHARE_TOKEN_KEY_VERSION is missing from the configured key ring."
+            )
+        if len(set(versions)) != len(versions) or any(version < 1 for version in versions):
+            raise ValueError("Share token key versions must be unique positive integers.")
+        if any(len(secret.encode("utf-8")) < 32 for _version, secret in self.share_token_keys):
+            raise ValueError("Share token keys must contain at least 32 UTF-8 bytes.")
+        if self.environment == "production" and self.share_token_keys == DEFAULT_SHARE_TOKEN_KEYS:
+            raise ValueError("Production requires an explicit LABVIZ_SHARE_TOKEN_KEYS key ring.")
 
     @classmethod
     def from_env(cls, base_dir: Path | None = None) -> Settings:
@@ -94,4 +121,6 @@ class Settings:
             persistence_backend=os.environ.get("LABVIZ_PERSISTENCE_BACKEND", "sqlite")
             .strip()
             .lower(),
+            share_token_key_version=int(os.environ.get("LABVIZ_SHARE_TOKEN_KEY_VERSION", "1")),
+            share_token_keys=_share_token_keys(os.environ.get("LABVIZ_SHARE_TOKEN_KEYS")),
         )
