@@ -57,6 +57,7 @@ CORE_TABLES = {
     "publication_exports",
     "stored_object_write_intents",
     "share_export_bindings",
+    "worker_leases",
 }
 
 

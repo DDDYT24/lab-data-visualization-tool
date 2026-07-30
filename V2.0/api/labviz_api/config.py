@@ -51,6 +51,14 @@ class Settings:
     persistence_backend: str = "sqlite"
     share_token_key_version: int = 1
     share_token_keys: tuple[tuple[int, str], ...] = DEFAULT_SHARE_TOKEN_KEYS
+    worker_batch_size: int = 25
+    worker_lease_seconds: int = 60
+    worker_heartbeat_seconds: int = 20
+    worker_poll_seconds: int = 5
+    worker_backoff_base_seconds: int = 30
+    worker_backoff_max_seconds: int = 3_600
+    worker_max_retries: int = 5
+    worker_destructive_maintenance: bool = False
 
     def __post_init__(self) -> None:
         if self.environment not in {"development", "test", "production"}:
@@ -76,6 +84,19 @@ class Settings:
             raise ValueError("Share token keys must contain at least 32 UTF-8 bytes.")
         if self.environment == "production" and self.share_token_keys == DEFAULT_SHARE_TOKEN_KEYS:
             raise ValueError("Production requires an explicit LABVIZ_SHARE_TOKEN_KEYS key ring.")
+        if self.worker_batch_size < 1 or self.worker_poll_seconds < 1:
+            raise ValueError("Worker batch and poll settings must be positive.")
+        if self.worker_lease_seconds < 2:
+            raise ValueError("Worker lease must be at least two seconds.")
+        if not 0 < self.worker_heartbeat_seconds < self.worker_lease_seconds:
+            raise ValueError("Worker heartbeat must be positive and shorter than the lease.")
+        if self.worker_max_retries < 1:
+            raise ValueError("Worker retries must be at least one.")
+        if (
+            self.worker_backoff_base_seconds < 1
+            or self.worker_backoff_max_seconds < self.worker_backoff_base_seconds
+        ):
+            raise ValueError("Worker backoff settings must be positive and bounded.")
 
     @classmethod
     def from_env(cls, base_dir: Path | None = None) -> Settings:
@@ -123,4 +144,18 @@ class Settings:
             .lower(),
             share_token_key_version=int(os.environ.get("LABVIZ_SHARE_TOKEN_KEY_VERSION", "1")),
             share_token_keys=_share_token_keys(os.environ.get("LABVIZ_SHARE_TOKEN_KEYS")),
+            worker_batch_size=int(os.environ.get("LABVIZ_WORKER_BATCH_SIZE", "25")),
+            worker_lease_seconds=int(os.environ.get("LABVIZ_WORKER_LEASE_SECONDS", "60")),
+            worker_heartbeat_seconds=int(os.environ.get("LABVIZ_WORKER_HEARTBEAT_SECONDS", "20")),
+            worker_poll_seconds=int(os.environ.get("LABVIZ_WORKER_POLL_SECONDS", "5")),
+            worker_backoff_base_seconds=int(
+                os.environ.get("LABVIZ_WORKER_BACKOFF_BASE_SECONDS", "30")
+            ),
+            worker_backoff_max_seconds=int(
+                os.environ.get("LABVIZ_WORKER_BACKOFF_MAX_SECONDS", "3600")
+            ),
+            worker_max_retries=int(os.environ.get("LABVIZ_WORKER_MAX_RETRIES", "5")),
+            worker_destructive_maintenance=_as_bool(
+                os.environ.get("LABVIZ_WORKER_DESTRUCTIVE_MAINTENANCE")
+            ),
         )
