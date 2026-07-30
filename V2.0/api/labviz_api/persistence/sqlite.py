@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 
+from labviz_api.persistence.exceptions import PersistenceNotFound
 from labviz_api.processing import (
     apply_chart_decisions,
     deserialize_dataframe,
@@ -146,3 +147,75 @@ class SqliteProjectStore:
             json.loads(project["quality_json"]),
             self.get_decisions(project_id),
         )
+
+    def save_project(
+        self,
+        project_id: str,
+        owner_user_id: str,
+        *,
+        guest_token_digest: str | None,
+    ) -> str:
+        del guest_token_digest
+        return self.repository.save_project(project_id, owner_user_id)
+
+    def duplicate_project(
+        self,
+        *,
+        source_project_id: str,
+        project_id: str,
+        job_id: str,
+        owner_user_id: str,
+        guest_token_digest: str | None,
+        idempotency_key: str | None = None,
+    ) -> str:
+        del guest_token_digest, idempotency_key
+        self.repository.duplicate_project(
+            source_project_id=source_project_id,
+            project_id=project_id,
+            job_id=job_id,
+            owner_user_id=owner_user_id,
+        )
+        return project_id
+
+    def delete_project(
+        self,
+        project_id: str,
+        *,
+        owner_user_id: str,
+        guest_token_digest: str | None,
+    ) -> bool:
+        del owner_user_id, guest_token_digest
+        return self.repository.delete_project(project_id)
+
+    def restore_deleted_project(self, project_id: str, owner_user_id: str | None = None) -> str:
+        del project_id, owner_user_id
+        raise PersistenceNotFound("The SQLite reference repository has no recovery area.")
+
+    def restore_project_revision(
+        self,
+        project_id: str,
+        revision_number: int,
+        owner_user_id: str | None = None,
+    ) -> str:
+        del project_id, revision_number, owner_user_id
+        raise PersistenceNotFound("The SQLite reference repository has no immutable history.")
+
+    def list_projects(self, owner_user_id: str | None) -> list[dict[str, Any]]:
+        return self.repository.list_projects(owner_user_id)
+
+    def list_deleted_projects(self, owner_user_id: str) -> list[dict[str, Any]]:
+        del owner_user_id
+        return []
+
+    def get_workspace(self, project_id: str) -> dict[str, Any]:
+        project = self.repository.get_project(project_id, touch=False)
+        if project is None:
+            raise PersistenceNotFound("Project does not exist.")
+        return {
+            "project": project,
+            "preview": json.loads(project["preview_json"]),
+            "quality": json.loads(project["quality_json"]),
+            "decisions": self.repository.get_decisions(project_id),
+            "chart": json.loads(project["chart_json"]),
+            "shares": self.repository.list_shares(project_id),
+        }

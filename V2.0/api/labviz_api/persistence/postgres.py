@@ -5,29 +5,41 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import secrets
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from typing import Any
 from uuid import UUID, uuid4
 
 import pandas as pd
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from labviz_api.db.models import (
+    AuthChallenge,
+    AuthRequest,
+    AuthSession,
     ChartSpecRevision,
     CleaningDecisionRecord,
     CleaningDecisionSet,
     Dataset,
     DatasetVersion,
+    GuestSession,
+    IdempotencyRecord,
     ProcessingRun,
     Project,
+    ProjectClaim,
+    ProjectLifecycleEvent,
+    ProjectOrigin,
     ProjectRevision,
     QualityFindingRecord,
     QualityReportRecord,
     SourceFile,
     StoredObject,
+    User,
 )
 from labviz_api.db.session import Database
 from labviz_api.models import ChartSpec
@@ -55,6 +67,7 @@ QUALITY_PROFILER_VERSION = "1"
 QUALITY_ALGORITHM_VERSION = "quality-v1"
 CLEANING_ALGORITHM_VERSION = "cleaning-decisions-v1"
 PHASE3_CODE_VERSION = "v2-phase3"
+PHASE4_CODE_VERSION = "v2-phase4"
 MAX_PERSISTED_FINDING_REFS = 100
 
 
@@ -68,6 +81,15 @@ def _id(value: UUID) -> str:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _scope_storage_key(dedup_scope: str, sha256: str) -> str:
+    scope_hash = hashlib.sha256(dedup_scope.encode("utf-8")).hexdigest()[:32]
+    return f"datasets/parquet-v1/{scope_hash}/{sha256}.parquet"
 
 
 def _canonical_decisions(decisions: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -349,10 +371,13 @@ class PostgresProjectStore:
         database: Database,
         storage: ObjectStorage,
         project_ttl_seconds: int,
+        *,
+        guest_session_ttl_seconds: int = 604_800,
     ) -> None:
         self.database = database
         self.storage = storage
         self.project_ttl_seconds = project_ttl_seconds
+        self.guest_session_ttl_seconds = guest_session_ttl_seconds
 
     def _uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.database)
@@ -363,10 +388,395 @@ class PostgresProjectStore:
     def ping(self) -> bool:
         return self.database.health().ready
 
+    def allow_auth_request(
+        self,
+        *,
+        client_key: str,
+        email: str,
+        ip_limit: int = 30,
+        email_limit: int = 10,
+    ) -> bool:
+        now = _now()
+        cutoff = now - timedelta(hours=1)
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                ip_count = int(
+                    uow.session.scalar(
+                        select(func.count())
+                        .select_from(AuthRequest)
+                        .where(
+                            AuthRequest.client_key == client_key,
+                            AuthRequest.requested_at >= cutoff,
+                        )
+                    )
+                    or 0
+                )
+                email_count = int(
+                    uow.session.scalar(
+                        select(func.count())
+                        .select_from(AuthRequest)
+                        .where(
+                            AuthRequest.email == email,
+                            AuthRequest.requested_at >= cutoff,
+                        )
+                    )
+                    or 0
+                )
+                if ip_count >= ip_limit or email_count >= email_limit:
+                    uow.commit()
+                    return False
+                uow.session.add(
+                    AuthRequest(id=uuid4(), client_key=client_key, email=email, requested_at=now)
+                )
+                uow.commit()
+                return True
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def latest_auth_challenge(self, email: str) -> dict[str, Any] | None:
+        with self._uow() as uow:
+            assert uow.session is not None
+            challenge = uow.session.scalar(
+                select(AuthChallenge)
+                .where(AuthChallenge.email == email, AuthChallenge.expires_at > _now())
+                .order_by(AuthChallenge.created_at.desc())
+                .limit(1)
+            )
+            return self._auth_challenge_row(challenge) if challenge is not None else None
+
+    @staticmethod
+    def _auth_challenge_row(challenge: AuthChallenge) -> dict[str, Any]:
+        return {
+            "id": challenge.id.hex,
+            "email": challenge.email,
+            "salt": challenge.salt,
+            "code_digest": challenge.code_digest,
+            "expires_at": iso_at(challenge.expires_at),
+            "resend_at": iso_at(challenge.resend_at),
+            "failed_attempts": challenge.failed_attempts,
+            "created_at": iso_at(challenge.created_at),
+        }
+
+    def create_auth_challenge(
+        self,
+        *,
+        challenge_id: str,
+        email: str,
+        salt: str,
+        code_digest: str,
+        expires_at: str,
+        resend_at: str,
+    ) -> None:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                uow.session.add(
+                    AuthChallenge(
+                        id=_uuid(challenge_id),
+                        email=email,
+                        salt=salt,
+                        code_digest=code_digest,
+                        expires_at=_parse_iso(expires_at),
+                        resend_at=_parse_iso(resend_at),
+                        failed_attempts=0,
+                        created_at=_now(),
+                    )
+                )
+                uow.commit()
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def get_auth_challenge(self, challenge_id: str) -> dict[str, Any] | None:
+        with self._uow() as uow:
+            assert uow.session is not None
+            challenge = uow.session.get(AuthChallenge, _uuid(challenge_id))
+            if challenge is None or challenge.expires_at <= _now():
+                return None
+            return self._auth_challenge_row(challenge)
+
+    def increment_auth_challenge_attempts(self, challenge_id: str) -> None:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                challenge = uow.session.scalar(
+                    select(AuthChallenge)
+                    .where(AuthChallenge.id == _uuid(challenge_id))
+                    .with_for_update()
+                )
+                if challenge is not None:
+                    challenge.failed_attempts += 1
+                uow.commit()
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def delete_auth_challenge(self, challenge_id: str) -> None:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                uow.session.execute(
+                    sql_delete(AuthChallenge).where(AuthChallenge.id == _uuid(challenge_id))
+                )
+                uow.commit()
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def create_auth_session(
+        self,
+        *,
+        token_digest: str,
+        user_id: str,
+        email: str,
+        expires_at: str,
+    ) -> None:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                user = uow.session.scalar(select(User).where(User.email == email).with_for_update())
+                if user is None:
+                    user = User(
+                        id=_uuid(user_id),
+                        email=email,
+                        created_at=_now(),
+                        updated_at=_now(),
+                    )
+                    uow.session.add(user)
+                uow.session.add(
+                    AuthSession(
+                        token_digest=token_digest,
+                        user=user,
+                        expires_at=_parse_iso(expires_at),
+                        created_at=_now(),
+                    )
+                )
+                uow.commit()
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def get_auth_session(self, token_digest: str) -> dict[str, Any] | None:
+        with self._uow() as uow:
+            assert uow.session is not None
+            auth_session = uow.session.get(AuthSession, token_digest)
+            if auth_session is None or auth_session.expires_at <= _now():
+                return None
+            return {
+                "token_digest": auth_session.token_digest,
+                "user_id": auth_session.user_id.hex,
+                "email": auth_session.user.email,
+                "expires_at": iso_at(auth_session.expires_at),
+                "created_at": iso_at(auth_session.created_at),
+            }
+
+    def delete_auth_session(self, token_digest: str) -> None:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                uow.session.execute(
+                    sql_delete(AuthSession).where(AuthSession.token_digest == token_digest)
+                )
+                uow.commit()
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
     def cleanup_expired(self) -> None:
-        # Query boundaries already hide expired/deleted projects. Physical deletion and
-        # object cleanup remain a Phase 3 worker responsibility.
-        return None
+        now = _now()
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project_ids = list(
+                    uow.session.scalars(
+                        select(Project.id).where(
+                            or_(
+                                (
+                                    (Project.storage_mode == "temporary-cloud")
+                                    & (Project.expires_at <= now)
+                                ),
+                                (Project.deleted_at.is_not(None) & (Project.purge_after <= now)),
+                            )
+                        )
+                    )
+                )
+                uow.session.execute(
+                    sql_delete(AuthChallenge).where(AuthChallenge.expires_at <= now)
+                )
+                uow.session.execute(sql_delete(AuthSession).where(AuthSession.expires_at <= now))
+                uow.session.execute(
+                    sql_delete(AuthRequest).where(
+                        AuthRequest.requested_at < now - timedelta(hours=1)
+                    )
+                )
+                uow.commit()
+            for project_id in project_ids:
+                self._purge_project(project_id)
+            self._collect_garbage()
+            with self._uow() as uow:
+                assert uow.session is not None
+                expired_guests = list(
+                    uow.session.scalars(
+                        select(GuestSession).where(GuestSession.expires_at <= now).with_for_update()
+                    )
+                )
+                for guest in expired_guests:
+                    reference_count = int(
+                        uow.session.scalar(
+                            select(func.count())
+                            .select_from(Project)
+                            .where(Project.guest_session_id == guest.id)
+                        )
+                        or 0
+                    )
+                    if reference_count == 0:
+                        uow.session.delete(guest)
+                uow.commit()
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    @staticmethod
+    def _object_reference_count(session: Session, stored_object_id: UUID) -> int:
+        dataset_refs = int(
+            session.scalar(
+                select(func.count())
+                .select_from(DatasetVersion)
+                .where(DatasetVersion.stored_object_id == stored_object_id)
+            )
+            or 0
+        )
+        source_refs = int(
+            session.scalar(
+                select(func.count())
+                .select_from(SourceFile)
+                .where(SourceFile.stored_object_id == stored_object_id)
+            )
+            or 0
+        )
+        return dataset_refs + source_refs
+
+    def _mark_gc_candidates(self, stored_object_ids: list[UUID]) -> None:
+        if not stored_object_ids:
+            return
+        now = _now()
+        with self._uow() as uow:
+            assert uow.session is not None
+            objects = list(
+                uow.session.scalars(
+                    select(StoredObject)
+                    .where(StoredObject.id.in_(set(stored_object_ids)))
+                    .with_for_update()
+                )
+            )
+            for stored_object in objects:
+                if self._object_reference_count(uow.session, stored_object.id) == 0:
+                    stored_object.gc_candidate_at = now
+            uow.commit()
+
+    def _purge_project(self, project_id: UUID) -> None:
+        object_ids: list[UUID] = []
+        with self._uow() as uow:
+            assert uow.session is not None
+            project = uow.projects.get_project(
+                project_id.hex, for_update=True, include_deleted=True
+            )
+            now = _now()
+            if project is None:
+                uow.commit()
+                return
+            eligible = (
+                project.storage_mode == "temporary-cloud"
+                and project.expires_at is not None
+                and project.expires_at <= now
+            ) or (
+                project.deleted_at is not None
+                and project.purge_after is not None
+                and project.purge_after <= now
+            )
+            if not eligible:
+                uow.commit()
+                return
+            object_ids = list(
+                uow.session.scalars(
+                    select(DatasetVersion.stored_object_id).where(
+                        DatasetVersion.project_id == project.id
+                    )
+                )
+            )
+            uow.session.add(
+                ProjectLifecycleEvent(
+                    id=uuid4(),
+                    project_id=project.id,
+                    project_uuid_snapshot=project.id,
+                    actor_user_id=project.owner_user_id,
+                    event_type="purge",
+                    details={},
+                    created_at=now,
+                )
+            )
+            uow.session.delete(project)
+            uow.commit()
+        self._mark_gc_candidates(object_ids)
+
+    def _collect_garbage(self) -> int:
+        with self._uow() as uow:
+            assert uow.session is not None
+            candidate_ids = list(
+                uow.session.scalars(
+                    select(StoredObject.id).where(
+                        or_(
+                            StoredObject.gc_candidate_at.is_not(None),
+                            StoredObject.status == "deleting",
+                        )
+                    )
+                )
+            )
+        deleted = 0
+        for stored_object_id in candidate_ids:
+            object_key: str | None = None
+            with self._uow() as uow:
+                assert uow.session is not None
+                stored_object = uow.session.scalar(
+                    select(StoredObject)
+                    .where(StoredObject.id == stored_object_id)
+                    .with_for_update()
+                )
+                if stored_object is None or stored_object.status == "deleted":
+                    uow.commit()
+                    continue
+                if self._object_reference_count(uow.session, stored_object.id) != 0:
+                    stored_object.gc_candidate_at = None
+                    uow.commit()
+                    continue
+                if stored_object.status == "available":
+                    stored_object.status = "deleting"
+                    stored_object.updated_at = _now()
+                if stored_object.status != "deleting":
+                    uow.commit()
+                    continue
+                object_key = stored_object.object_key
+                uow.commit()
+            if object_key is None:
+                continue
+            try:
+                self.storage.delete(object_key)
+            except Exception:
+                continue
+            with self._uow() as uow:
+                assert uow.session is not None
+                stored_object = uow.session.scalar(
+                    select(StoredObject)
+                    .where(StoredObject.id == stored_object_id)
+                    .with_for_update()
+                )
+                if (
+                    stored_object is not None
+                    and stored_object.status == "deleting"
+                    and self._object_reference_count(uow.session, stored_object.id) == 0
+                ):
+                    stored_object.status = "deleted"
+                    stored_object.deleted_at = _now()
+                    stored_object.gc_candidate_at = None
+                    stored_object.updated_at = _now()
+                    deleted += 1
+                uow.commit()
+        return deleted
 
     def recover_stale_jobs(self, stale_after_seconds: int = 900) -> int:
         recovered = self.recover_pending_objects()
@@ -417,50 +827,70 @@ class PostgresProjectStore:
         guest_token_digest: str,
     ) -> None:
         now = _now()
-        project = Project(
-            id=_uuid(project_id),
-            storage_mode="temporary-cloud",
-            title=title,
-            description="",
-            guest_token_digest=guest_token_digest,
-            expires_at=now + timedelta(seconds=self.project_ttl_seconds),
-            last_activity_at=now,
-            created_at=now,
-            updated_at=now,
-        )
-        source_file = SourceFile(
-            id=uuid4(),
-            project=project,
-            original_name=str(source["name"]),
-            media_type=str(source["mediaType"]),
-            size_bytes=int(source["size"]),
-            sha256=source_sha256,
-            sheet_name=source.get("sheetName"),
-            available_sheets=list(source.get("availableSheets", [])),
-            header_row=source.get("headerRow"),
-            parser_name="pending",
-            parser_version="pending",
-            created_at=now,
-        )
-        run = ProcessingRun(
-            id=_uuid(job_id),
-            project=project,
-            operation="parse",
-            status="queued",
-            parameters={
-                "apiJob": _api_job(
-                    stage="queued",
-                    progress=0,
-                    message="Waiting to process the uploaded file.",
-                )
-            },
-            algorithm_version="pending",
-            code_version="v2-phase2",
-            created_at=now,
-        )
         try:
             with self._uow() as uow:
                 assert uow.session is not None
+                guest_session = uow.session.scalar(
+                    select(GuestSession)
+                    .where(GuestSession.token_digest == guest_token_digest)
+                    .with_for_update()
+                )
+                guest_expiry = now + timedelta(seconds=self.guest_session_ttl_seconds)
+                if guest_session is None:
+                    guest_session = GuestSession(
+                        id=uuid4(),
+                        token_digest=guest_token_digest,
+                        status="active",
+                        expires_at=guest_expiry,
+                        last_seen_at=now,
+                        created_at=now,
+                    )
+                else:
+                    guest_session.status = "active"
+                    guest_session.revoked_at = None
+                    guest_session.expires_at = guest_expiry
+                    guest_session.last_seen_at = now
+                project = Project(
+                    id=_uuid(project_id),
+                    guest_session=guest_session,
+                    storage_mode="temporary-cloud",
+                    title=title,
+                    description="",
+                    expires_at=now + timedelta(seconds=self.project_ttl_seconds),
+                    last_activity_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                source_file = SourceFile(
+                    id=uuid4(),
+                    project=project,
+                    original_name=str(source["name"]),
+                    media_type=str(source["mediaType"]),
+                    size_bytes=int(source["size"]),
+                    sha256=source_sha256,
+                    sheet_name=source.get("sheetName"),
+                    available_sheets=list(source.get("availableSheets", [])),
+                    header_row=source.get("headerRow"),
+                    parser_name="pending",
+                    parser_version="pending",
+                    created_at=now,
+                )
+                run = ProcessingRun(
+                    id=_uuid(job_id),
+                    project=project,
+                    operation="parse",
+                    status="queued",
+                    parameters={
+                        "apiJob": _api_job(
+                            stage="queued",
+                            progress=0,
+                            message="Waiting to process the uploaded file.",
+                        )
+                    },
+                    algorithm_version="pending",
+                    code_version="v2-phase2",
+                    created_at=now,
+                )
                 uow.session.add_all([project, source_file, run])
                 uow.commit()
         except Exception as exc:
@@ -567,7 +997,9 @@ class PostgresProjectStore:
             "source_json": json.dumps(source_document, ensure_ascii=False),
             "storage_mode": project.storage_mode,
             "owner_user_id": _id(project.owner_user_id) if project.owner_user_id else None,
-            "guest_token_digest": project.guest_token_digest,
+            "guest_token_digest": (
+                project.guest_session.token_digest if project.guest_session is not None else None
+            ),
             "expires_at": iso_at(project.expires_at) if project.expires_at else None,
             "updated_at": iso_at(project.updated_at),
             "chart_json": (
@@ -591,6 +1023,23 @@ class PostgresProjectStore:
             "ready": ready,
         }
 
+    @staticmethod
+    def _dedup_scope(project: Project) -> str:
+        if project.storage_mode == "saved-cloud" and project.owner_user_id is not None:
+            return f"user:{project.owner_user_id.hex}"
+        if project.guest_session_id is not None:
+            return f"guest:{project.guest_session_id.hex}"
+        if project.owner_user_id is not None:
+            return f"user:{project.owner_user_id.hex}"
+        raise PersistenceConflict("Project has no deduplication security scope.")
+
+    def _project_dedup_scope(self, project_id: str) -> str:
+        with self._uow() as uow:
+            project = uow.projects.get_project(project_id)
+            if project is None:
+                raise PersistenceNotFound("Project does not exist.")
+            return self._dedup_scope(project)
+
     def get_project(self, project_id: str, *, touch: bool = True) -> dict[str, Any] | None:
         try:
             with self._uow() as uow:
@@ -603,12 +1052,934 @@ class PostgresProjectStore:
                     project.updated_at = now
                     if project.storage_mode == "temporary-cloud":
                         project.expires_at = now + timedelta(seconds=self.project_ttl_seconds)
+                        if project.guest_session is not None:
+                            project.guest_session.last_seen_at = now
+                            project.guest_session.expires_at = now + timedelta(
+                                seconds=self.guest_session_ttl_seconds
+                            )
                     row = self._project_row(uow.projects, project)
                     row["expires_at"] = iso_at(project.expires_at) if project.expires_at else None
                     row["updated_at"] = iso_at(project.updated_at)
                     uow.commit()
                     return row
                 return self._project_row(uow.projects, project)
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    @staticmethod
+    def _guest_matches(project: Project, guest_token_digest: str | None, now: datetime) -> bool:
+        guest = project.guest_session
+        return bool(
+            guest_token_digest
+            and guest is not None
+            and guest.status == "active"
+            and guest.expires_at > now
+            and secrets.compare_digest(guest.token_digest, guest_token_digest)
+        )
+
+    def save_project(
+        self,
+        project_id: str,
+        owner_user_id: str,
+        *,
+        guest_token_digest: str | None,
+    ) -> str:
+        now = _now()
+        owner_id = _uuid(owner_user_id)
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project = uow.projects.get_project(project_id, for_update=True)
+                owner = uow.session.get(User, owner_id)
+                if project is None or project.current_revision_id is None:
+                    raise PersistenceNotFound("Ready project does not exist.")
+                if owner is None:
+                    raise PersistenceNotFound("Authenticated user does not exist.")
+                if project.storage_mode == "saved-cloud":
+                    if project.owner_user_id != owner_id:
+                        raise PersistenceConflict("Project belongs to another user.")
+                    uow.commit()
+                    return iso_at(project.updated_at)
+                if project.storage_mode != "temporary-cloud" or not self._guest_matches(
+                    project, guest_token_digest, now
+                ):
+                    raise PersistenceConflict("GuestSession cannot claim this project.")
+                guest = project.guest_session
+                if guest is None:
+                    raise PersistenceConflict("Temporary project has no GuestSession owner.")
+                existing_claim = uow.session.get(ProjectClaim, project.id)
+                if existing_claim is not None:
+                    if existing_claim.user_uuid_snapshot != owner_id:
+                        raise PersistenceConflict("Project was already claimed by another user.")
+                else:
+                    uow.session.add(
+                        ProjectClaim(
+                            project_id=project.id,
+                            guest_session_id=guest.id,
+                            user_id=owner.id,
+                            guest_session_uuid_snapshot=guest.id,
+                            user_uuid_snapshot=owner.id,
+                            claimed_at=now,
+                        )
+                    )
+                    uow.session.add(
+                        ProjectLifecycleEvent(
+                            id=uuid4(),
+                            project_id=project.id,
+                            project_uuid_snapshot=project.id,
+                            actor_user_id=owner.id,
+                            event_type="claim",
+                            details={"guestSessionId": guest.id.hex},
+                            created_at=now,
+                        )
+                    )
+                project.owner = owner
+                project.guest_session = None
+                project.storage_mode = "saved-cloud"
+                project.expires_at = None
+                project.saved_at = project.saved_at or now
+                project.updated_at = now
+                project.last_activity_at = now
+                project.lock_version += 1
+                uow.session.add(
+                    ProjectLifecycleEvent(
+                        id=uuid4(),
+                        project_id=project.id,
+                        project_uuid_snapshot=project.id,
+                        actor_user_id=owner.id,
+                        event_type="save",
+                        details={"objectLifecycleReconciliationRequired": True},
+                        created_at=now,
+                    )
+                )
+                uow.commit()
+                return iso_at(now)
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    @staticmethod
+    def _duplicate_access_allowed(
+        project: Project,
+        owner_id: UUID,
+        guest_token_digest: str | None,
+        now: datetime,
+    ) -> bool:
+        if project.storage_mode == "saved-cloud":
+            return project.owner_user_id == owner_id
+        return PostgresProjectStore._guest_matches(project, guest_token_digest, now)
+
+    @staticmethod
+    def _version_closure(
+        session: Session,
+        active_version: DatasetVersion,
+        report: QualityReportRecord | None,
+    ) -> list[DatasetVersion]:
+        ordered: list[DatasetVersion] = []
+        visited: set[UUID] = set()
+
+        def visit(version: DatasetVersion) -> None:
+            if version.id in visited:
+                return
+            if version.parent_version_id is not None:
+                parent = session.get(DatasetVersion, version.parent_version_id)
+                if parent is None:
+                    raise PersistenceConflict("DatasetVersion parent lineage is incomplete.")
+                visit(parent)
+            visited.add(version.id)
+            ordered.append(version)
+
+        visit(active_version)
+        if report is not None:
+            visit(report.dataset_version)
+        return ordered
+
+    def _prepare_duplicate_objects(
+        self,
+        *,
+        source_project_id: str,
+        owner_id: UUID,
+        guest_token_digest: str | None,
+    ) -> tuple[UUID, dict[UUID, dict[str, Any]]]:
+        with self._uow() as uow:
+            assert uow.session is not None
+            project = uow.projects.get_project(source_project_id)
+            if project is None or project.current_revision_id is None:
+                raise PersistenceNotFound("Ready source project does not exist.")
+            if not self._duplicate_access_allowed(project, owner_id, guest_token_digest, _now()):
+                raise PersistenceConflict("Source project access changed.")
+            revision = uow.projects.current_revision(project)
+            active_version = uow.projects.current_dataset_version(project)
+            report = uow.projects.current_quality_report(project)
+            if revision is None or active_version is None:
+                raise PersistenceConflict("Source ProjectRevision is incomplete.")
+            versions = self._version_closure(uow.session, active_version, report)
+            source_revision_id = revision.id
+            same_owner_saved_project = (
+                project.storage_mode == "saved-cloud" and project.owner_user_id == owner_id
+            )
+            source_objects = {
+                version.stored_object.id: {
+                    "id": version.stored_object.id,
+                    "object_key": version.stored_object.object_key,
+                    "storage_backend": version.stored_object.storage_backend,
+                    "purpose": version.stored_object.purpose,
+                    "media_type": version.stored_object.media_type,
+                    "size_bytes": version.stored_object.size_bytes,
+                    "sha256": version.stored_object.sha256,
+                    "encryption_key_id": version.stored_object.encryption_key_id,
+                    "dedup_scope": version.stored_object.dedup_scope,
+                    "format_contract_version": version.stored_object.format_contract_version,
+                    "status": version.stored_object.status,
+                }
+                for version in versions
+            }
+        target_scope = f"user:{owner_id.hex}"
+        prepared: dict[UUID, dict[str, Any]] = {}
+        for source_object_id, source_object in source_objects.items():
+            if source_object["status"] != "available":
+                raise PersistenceConflict("Source DatasetVersion object is not available.")
+            # A claimed Project keeps its immutable object graph in place. Once the
+            # source Project is owner-authorized, another Project of that same owner
+            # can safely add an FK reference even if the object's creation scope still
+            # records the former GuestSession. The source Project authorization—not
+            # a project id embedded in the key—is the security boundary here.
+            if source_object["dedup_scope"] == target_scope or same_owner_saved_project:
+                prepared[source_object_id] = {"reuse_source": True, **source_object}
+                continue
+            target_key = _scope_storage_key(target_scope, str(source_object["sha256"]))
+            preexisting = self.storage.exists(target_key)
+            with self.storage.open(str(source_object["object_key"])) as source_stream:
+                staged = self.storage.stage(
+                    target_key,
+                    source_stream,
+                    expected_sha256=str(source_object["sha256"]),
+                )
+            try:
+                self.storage.confirm(staged)
+            except Exception:
+                self.storage.discard(staged)
+                raise
+            prepared[source_object_id] = {
+                **source_object,
+                "reuse_source": False,
+                "target_key": target_key,
+                "target_scope": target_scope,
+                "preexisting": preexisting,
+            }
+        return source_revision_id, prepared
+
+    def _compensate_duplicate_objects(self, prepared: dict[UUID, dict[str, Any]]) -> None:
+        for item in prepared.values():
+            if item.get("reuse_source") or item.get("preexisting"):
+                continue
+            target_key = str(item["target_key"])
+            with self._uow() as uow:
+                assert uow.session is not None
+                persisted = uow.session.scalar(
+                    select(StoredObject.id).where(StoredObject.object_key == target_key)
+                )
+            if persisted is None:
+                self.storage.delete(target_key)
+
+    def duplicate_project(
+        self,
+        *,
+        source_project_id: str,
+        project_id: str,
+        job_id: str,
+        owner_user_id: str,
+        guest_token_digest: str | None,
+        idempotency_key: str | None = None,
+    ) -> str:
+        owner_id = _uuid(owner_user_id)
+        if idempotency_key is not None and not 1 <= len(idempotency_key) <= 255:
+            raise PersistenceConflict("Idempotency-Key must contain 1 to 255 characters.")
+        if idempotency_key is not None:
+            with self._uow() as uow:
+                assert uow.session is not None
+                existing = uow.session.scalar(
+                    select(IdempotencyRecord).where(
+                        IdempotencyRecord.actor_user_id == owner_id,
+                        IdempotencyRecord.operation == "duplicate-project",
+                        IdempotencyRecord.idempotency_key == idempotency_key,
+                    )
+                )
+                if existing is not None:
+                    return existing.resource_id.hex
+
+        prepared: dict[UUID, dict[str, Any]] = {}
+        try:
+            source_revision_id, prepared = self._prepare_duplicate_objects(
+                source_project_id=source_project_id,
+                owner_id=owner_id,
+                guest_token_digest=guest_token_digest,
+            )
+            now = _now()
+            with self._uow() as uow:
+                assert uow.session is not None
+                session = uow.session
+                source_project = uow.projects.get_project(source_project_id, for_update=True)
+                owner = session.get(User, owner_id)
+                if source_project is None or owner is None:
+                    raise PersistenceNotFound("Source project or owner does not exist.")
+                if not self._duplicate_access_allowed(
+                    source_project, owner_id, guest_token_digest, now
+                ):
+                    raise PersistenceConflict("Source project access changed.")
+                source_revision = uow.projects.current_revision(source_project)
+                active_version = uow.projects.current_dataset_version(source_project)
+                source_report = uow.projects.current_quality_report(source_project)
+                source_decision_set = uow.projects.current_decision_set(source_project)
+                source_chart = uow.projects.current_chart_revision(source_project)
+                source_file = uow.projects.get_source_file(source_project_id)
+                if (
+                    source_revision is None
+                    or source_revision.id != source_revision_id
+                    or active_version is None
+                    or source_chart is None
+                    or source_file is None
+                ):
+                    raise PersistenceConflict("Source ProjectRevision changed during duplicate.")
+                source_dataset = active_version.dataset
+                versions = self._version_closure(session, active_version, source_report)
+                target_scope = f"user:{owner.id.hex}"
+
+                stored_object_map: dict[UUID, StoredObject] = {}
+                target_object_by_signature: dict[tuple[str, int], StoredObject] = {}
+                for source_version in versions:
+                    source_object = source_version.stored_object
+                    if source_object.id in stored_object_map:
+                        continue
+                    item = prepared[source_object.id]
+                    signature = (source_object.sha256, source_object.size_bytes)
+                    if not item["reuse_source"] and signature in target_object_by_signature:
+                        stored_object_map[source_object.id] = target_object_by_signature[signature]
+                        continue
+                    if item["reuse_source"]:
+                        target_object = session.scalar(
+                            select(StoredObject)
+                            .where(StoredObject.id == source_object.id)
+                            .with_for_update()
+                        )
+                    else:
+                        target_object = session.scalar(
+                            select(StoredObject)
+                            .where(
+                                StoredObject.storage_backend == source_object.storage_backend,
+                                StoredObject.dedup_scope == target_scope,
+                                StoredObject.purpose == source_object.purpose,
+                                StoredObject.media_type == source_object.media_type,
+                                StoredObject.format_contract_version
+                                == source_object.format_contract_version,
+                                StoredObject.sha256 == source_object.sha256,
+                                StoredObject.size_bytes == source_object.size_bytes,
+                                (
+                                    StoredObject.encryption_key_id.is_(None)
+                                    if source_object.encryption_key_id is None
+                                    else StoredObject.encryption_key_id
+                                    == source_object.encryption_key_id
+                                ),
+                            )
+                            .with_for_update()
+                        )
+                        if target_object is None:
+                            target_object = StoredObject(
+                                id=uuid4(),
+                                storage_backend=source_object.storage_backend,
+                                object_key=str(item["target_key"]),
+                                staging_key=None,
+                                purpose=source_object.purpose,
+                                status="available",
+                                media_type=source_object.media_type,
+                                size_bytes=source_object.size_bytes,
+                                sha256=source_object.sha256,
+                                encryption_key_id=source_object.encryption_key_id,
+                                dedup_scope=target_scope,
+                                format_contract_version=source_object.format_contract_version,
+                                created_at=now,
+                                updated_at=now,
+                            )
+                            session.add(target_object)
+                    if target_object is None or target_object.status != "available":
+                        raise PersistenceConflict("StoredObject is not available for duplicate.")
+                    stored_object_map[source_object.id] = target_object
+                    if not item["reuse_source"]:
+                        target_object_by_signature[signature] = target_object
+
+                copy_title = f"{source_project.title} copy"[:200]
+                target_project = Project(
+                    id=_uuid(project_id),
+                    owner=owner,
+                    storage_mode="saved-cloud",
+                    title=copy_title,
+                    description=source_project.description,
+                    saved_at=now,
+                    last_activity_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                target_source = SourceFile(
+                    id=uuid4(),
+                    project=target_project,
+                    original_name=source_file.original_name,
+                    media_type=source_file.media_type,
+                    size_bytes=source_file.size_bytes,
+                    sha256=source_file.sha256,
+                    sheet_name=source_file.sheet_name,
+                    available_sheets=deepcopy(source_file.available_sheets),
+                    header_row=source_file.header_row,
+                    parser_name=source_file.parser_name,
+                    parser_version=source_file.parser_version,
+                    binary_deleted_at=source_file.binary_deleted_at,
+                    parsed_at=source_file.parsed_at,
+                    created_at=now,
+                )
+                target_dataset = Dataset(
+                    id=uuid4(),
+                    project=target_project,
+                    source_file=target_source,
+                    name=source_dataset.name,
+                    sheet_name=source_dataset.sheet_name,
+                    header_row=source_dataset.header_row,
+                    created_at=now,
+                )
+                session.add_all([target_project, target_source, target_dataset])
+
+                version_map: dict[UUID, DatasetVersion] = {}
+                deferred_versions: list[DatasetVersion] = []
+                for source_version in versions:
+                    if source_version.cleaning_decision_set_id is not None:
+                        deferred_versions.append(source_version)
+                        continue
+                    parent = (
+                        version_map.get(source_version.parent_version_id)
+                        if source_version.parent_version_id is not None
+                        else None
+                    )
+                    cloned_version = DatasetVersion(
+                        id=uuid4(),
+                        project=target_project,
+                        dataset=target_dataset,
+                        parent_version=parent,
+                        stored_object=stored_object_map[source_version.stored_object_id],
+                        version_number=len(version_map) + 1,
+                        kind=source_version.kind,
+                        schema_document=deepcopy(source_version.schema_document),
+                        preview_document={
+                            **deepcopy(source_version.preview_document),
+                            "projectId": target_project.id.hex,
+                        },
+                        quality_document={
+                            **deepcopy(source_version.quality_document),
+                            "projectId": target_project.id.hex,
+                        },
+                        parquet_schema_version=source_version.parquet_schema_version,
+                        content_sha256=source_version.content_sha256,
+                        row_count=source_version.row_count,
+                        column_count=source_version.column_count,
+                        created_at=now,
+                    )
+                    version_map[source_version.id] = cloned_version
+                    session.add(cloned_version)
+
+                target_report: QualityReportRecord | None = None
+                finding_map: dict[UUID, QualityFindingRecord] = {}
+                if source_report is not None:
+                    report_version = version_map.get(source_report.dataset_version_id)
+                    if report_version is None:
+                        raise PersistenceConflict(
+                            "QualityReport input is not in duplicate closure."
+                        )
+                    source_run = source_report.processing_run
+                    report_run = ProcessingRun(
+                        id=uuid4(),
+                        project=target_project,
+                        input_dataset_version=report_version,
+                        operation=source_run.operation,
+                        status="succeeded",
+                        parameters={
+                            **deepcopy(source_run.parameters),
+                            "reusedFromRunId": source_run.id.hex,
+                        },
+                        algorithm_version=source_run.algorithm_version,
+                        code_version=source_run.code_version,
+                        execution_mode="reused-result",
+                        origin_processing_run_id=source_run.id,
+                        origin_run_uuid_snapshot=source_run.id,
+                        started_at=now,
+                        finished_at=now,
+                        created_at=now,
+                    )
+                    target_report = QualityReportRecord(
+                        id=uuid4(),
+                        project=target_project,
+                        dataset_version=report_version,
+                        processing_run=report_run,
+                        revision_number=1,
+                        status=source_report.status,
+                        profiler_name=source_report.profiler_name,
+                        profiler_version=source_report.profiler_version,
+                        algorithm_version=source_report.algorithm_version,
+                        code_version=source_report.code_version,
+                        parameters=deepcopy(source_report.parameters),
+                        report_document={
+                            **deepcopy(source_report.report_document),
+                            "projectId": target_project.id.hex,
+                        },
+                        completed_at=now,
+                        created_at=now,
+                    )
+                    session.add_all([report_run, target_report])
+                    for source_finding in source_report.findings:
+                        refs = deepcopy(source_finding.source_record_refs)
+                        for reference in refs:
+                            source_version_text = str(reference.get("datasetVersionId", ""))
+                            for old_id, new_version in version_map.items():
+                                if source_version_text.replace("-", "") == old_id.hex:
+                                    reference["datasetVersionId"] = new_version.id.hex
+                        target_finding = QualityFindingRecord(
+                            id=uuid4(),
+                            project_id=target_project.id,
+                            quality_report=target_report,
+                            external_id=source_finding.external_id,
+                            kind=source_finding.kind,
+                            severity=source_finding.severity,
+                            column_name=source_finding.column_name,
+                            column_identity=deepcopy(source_finding.column_identity),
+                            source_record_refs=refs,
+                            affected_count=source_finding.affected_count,
+                            evidence_document=deepcopy(source_finding.evidence_document),
+                            summary=source_finding.summary,
+                            reason=source_finding.reason,
+                            created_at=now,
+                        )
+                        finding_map[source_finding.id] = target_finding
+                        session.add(target_finding)
+
+                target_decision_set: CleaningDecisionSet | None = None
+                if source_decision_set is not None:
+                    if target_report is None:
+                        raise PersistenceConflict("DecisionSet has no QualityReport in closure.")
+                    decision_input = version_map.get(source_decision_set.input_dataset_version_id)
+                    if decision_input is None:
+                        raise PersistenceConflict("DecisionSet input is not in duplicate closure.")
+                    target_decision_set = CleaningDecisionSet(
+                        id=uuid4(),
+                        project=target_project,
+                        quality_report=target_report,
+                        input_dataset_version=decision_input,
+                        created_by=owner,
+                        revision_number=1,
+                        decisions_hash=source_decision_set.decisions_hash,
+                        created_at=now,
+                    )
+                    session.add(target_decision_set)
+                    for source_decision in source_decision_set.decisions:
+                        decision_finding = finding_map.get(source_decision.quality_finding_id)
+                        if decision_finding is None:
+                            raise PersistenceConflict(
+                                "Decision finding is not in duplicate closure."
+                            )
+                        session.add(
+                            CleaningDecisionRecord(
+                                id=uuid4(),
+                                project_id=target_project.id,
+                                decision_set=target_decision_set,
+                                quality_finding=decision_finding,
+                                action=source_decision.action,
+                                created_at=now,
+                            )
+                        )
+
+                for source_version in deferred_versions:
+                    if (
+                        source_decision_set is None
+                        or source_version.cleaning_decision_set_id != source_decision_set.id
+                        or target_decision_set is None
+                    ):
+                        raise PersistenceConflict(
+                            "Duplicate closure would require an unrelated DecisionSet history."
+                        )
+                    parent = (
+                        version_map.get(source_version.parent_version_id)
+                        if source_version.parent_version_id is not None
+                        else None
+                    )
+                    cloned_version = DatasetVersion(
+                        id=uuid4(),
+                        project=target_project,
+                        dataset=target_dataset,
+                        parent_version=parent,
+                        stored_object=stored_object_map[source_version.stored_object_id],
+                        version_number=len(version_map) + 1,
+                        kind=source_version.kind,
+                        schema_document=deepcopy(source_version.schema_document),
+                        preview_document={
+                            **deepcopy(source_version.preview_document),
+                            "projectId": target_project.id.hex,
+                        },
+                        quality_document={
+                            **deepcopy(source_version.quality_document),
+                            "projectId": target_project.id.hex,
+                        },
+                        parquet_schema_version=source_version.parquet_schema_version,
+                        content_sha256=source_version.content_sha256,
+                        cleaning_decision_set=target_decision_set,
+                        row_count=source_version.row_count,
+                        column_count=source_version.column_count,
+                        created_at=now,
+                    )
+                    version_map[source_version.id] = cloned_version
+                    session.add(cloned_version)
+
+                target_active = version_map.get(active_version.id)
+                if target_active is None:
+                    raise PersistenceConflict("Active DatasetVersion was not duplicated.")
+                source_parse_run = uow.projects.get_run_for_project(source_project_id)
+                target_parse_run = ProcessingRun(
+                    id=_uuid(job_id),
+                    project=target_project,
+                    output_dataset_version=next(iter(version_map.values())),
+                    operation="parse",
+                    status="succeeded",
+                    parameters={
+                        "apiJob": _api_job(
+                            stage="ready", progress=100, message="Copied project is ready."
+                        ),
+                        "reusedFromRunId": source_parse_run.id.hex if source_parse_run else None,
+                    },
+                    algorithm_version=(
+                        source_parse_run.algorithm_version if source_parse_run else "duplicate-v1"
+                    ),
+                    code_version=PHASE4_CODE_VERSION,
+                    execution_mode="reused-result",
+                    origin_processing_run_id=source_parse_run.id if source_parse_run else None,
+                    origin_run_uuid_snapshot=(
+                        source_parse_run.id if source_parse_run else source_revision.id
+                    ),
+                    started_at=now,
+                    finished_at=now,
+                    created_at=now,
+                )
+                session.add(target_parse_run)
+                if target_decision_set is not None:
+                    source_clean_run = session.scalar(
+                        select(ProcessingRun).where(
+                            ProcessingRun.output_dataset_version_id == active_version.id
+                        )
+                    )
+                    session.add(
+                        ProcessingRun(
+                            id=uuid4(),
+                            project=target_project,
+                            input_dataset_version=target_decision_set.input_dataset_version,
+                            output_dataset_version=target_active,
+                            operation="clean",
+                            status="succeeded",
+                            parameters={
+                                "cleaningDecisionSetId": target_decision_set.id.hex,
+                                "reusedFromRunId": (
+                                    source_clean_run.id.hex if source_clean_run else None
+                                ),
+                            },
+                            algorithm_version=(
+                                source_clean_run.algorithm_version
+                                if source_clean_run
+                                else CLEANING_ALGORITHM_VERSION
+                            ),
+                            code_version=PHASE4_CODE_VERSION,
+                            execution_mode="reused-result",
+                            origin_processing_run_id=(
+                                source_clean_run.id if source_clean_run else None
+                            ),
+                            origin_run_uuid_snapshot=(
+                                source_clean_run.id if source_clean_run else source_revision.id
+                            ),
+                            started_at=now,
+                            finished_at=now,
+                            created_at=now,
+                        )
+                    )
+
+                target_chart = ChartSpecRevision(
+                    id=uuid4(),
+                    project=target_project,
+                    dataset_version=target_active,
+                    created_by=owner,
+                    revision_number=1,
+                    schema_version=source_chart.schema_version,
+                    decision_set_revision=1 if target_decision_set is not None else None,
+                    cleaning_decision_set=target_decision_set,
+                    spec_document=deepcopy(source_chart.spec_document),
+                    created_at=now,
+                )
+                source_spec = ProjectSpecV1.model_validate(source_revision.spec_document)
+                target_spec = source_spec.model_copy(
+                    update={
+                        "project_id": target_project.id,
+                        "title": copy_title,
+                        "source": ProjectSourceSpec(
+                            source_file_id=target_source.id,
+                            dataset_id=target_dataset.id,
+                            dataset_version_id=target_active.id,
+                            sheet_name=target_source.sheet_name,
+                            header_row=target_source.header_row,
+                        ),
+                        "cleaning": (
+                            ProjectCleaningSpec(decision_set_id=target_decision_set.id, revision=1)
+                            if target_decision_set is not None
+                            else None
+                        ),
+                        "chart": ChartSpec.model_validate(target_chart.spec_document),
+                    }
+                )
+                target_revision = ProjectRevision(
+                    id=uuid4(),
+                    project=target_project,
+                    active_dataset_version=target_active,
+                    chart_spec_revision=target_chart,
+                    quality_report=target_report,
+                    cleaning_decision_set=target_decision_set,
+                    created_by=owner,
+                    revision_number=1,
+                    spec_schema_version=1,
+                    spec_document=target_spec.model_dump(mode="json", by_alias=True),
+                    created_at=now,
+                )
+                target_project.current_revision = target_revision
+                session.add_all([target_chart, target_revision])
+                # ProjectOrigin and lifecycle rows intentionally carry scalar FKs
+                # rather than aggregate relationships. Flush the complete target
+                # graph first so PostgreSQL never observes provenance before its
+                # target Project exists.
+                session.flush()
+                session.add(
+                    ProjectOrigin(
+                        target_project_id=target_project.id,
+                        source_project_id=source_project.id,
+                        source_revision_id=source_revision.id,
+                        source_project_uuid_snapshot=source_project.id,
+                        source_revision_uuid_snapshot=source_revision.id,
+                        origin_kind="duplicate",
+                        created_at=now,
+                    )
+                )
+                session.add(
+                    ProjectLifecycleEvent(
+                        id=uuid4(),
+                        project_id=target_project.id,
+                        project_uuid_snapshot=target_project.id,
+                        actor_user_id=owner.id,
+                        event_type="duplicate",
+                        details={
+                            "sourceProjectId": source_project.id.hex,
+                            "sourceRevisionId": source_revision.id.hex,
+                        },
+                        created_at=now,
+                    )
+                )
+                if idempotency_key is not None:
+                    session.add(
+                        IdempotencyRecord(
+                            id=uuid4(),
+                            actor_user_id=owner.id,
+                            operation="duplicate-project",
+                            idempotency_key=idempotency_key,
+                            resource_id=target_project.id,
+                            response_document={"projectId": target_project.id.hex},
+                            created_at=now,
+                        )
+                    )
+                uow.commit()
+            return _uuid(project_id).hex
+        except Exception as exc:
+            if prepared:
+                self._compensate_duplicate_objects(prepared)
+            if idempotency_key is not None:
+                with self._uow() as uow:
+                    assert uow.session is not None
+                    existing = uow.session.scalar(
+                        select(IdempotencyRecord).where(
+                            IdempotencyRecord.actor_user_id == owner_id,
+                            IdempotencyRecord.operation == "duplicate-project",
+                            IdempotencyRecord.idempotency_key == idempotency_key,
+                        )
+                    )
+                    if existing is not None:
+                        return existing.resource_id.hex
+            raise _translate_database_error(exc) from exc
+
+    def list_projects(self, owner_user_id: str | None) -> list[dict[str, Any]]:
+        if owner_user_id is None:
+            return []
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                projects = list(
+                    uow.session.scalars(
+                        select(Project)
+                        .where(
+                            Project.owner_user_id == _uuid(owner_user_id),
+                            Project.storage_mode == "saved-cloud",
+                            Project.deleted_at.is_(None),
+                        )
+                        .order_by(Project.updated_at.desc())
+                    )
+                )
+                return [self._project_row(uow.projects, project) for project in projects]
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def list_deleted_projects(self, owner_user_id: str) -> list[dict[str, Any]]:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                projects = list(
+                    uow.session.scalars(
+                        select(Project)
+                        .where(
+                            Project.owner_user_id == _uuid(owner_user_id),
+                            Project.storage_mode == "saved-cloud",
+                            Project.deleted_at.is_not(None),
+                            Project.purge_after > _now(),
+                        )
+                        .order_by(Project.deleted_at.desc())
+                    )
+                )
+                return [self._project_row(uow.projects, project) for project in projects]
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def get_workspace(self, project_id: str) -> dict[str, Any]:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project = uow.projects.get_project(project_id)
+                if project is None or project.current_revision_id is None:
+                    raise PersistenceNotFound("Ready project does not exist.")
+                revision = uow.projects.current_revision(project)
+                version = uow.projects.current_dataset_version(project)
+                chart = uow.projects.current_chart_revision(project)
+                report = uow.projects.current_quality_report(project)
+                decision_set = uow.projects.current_decision_set(project)
+                if revision is None or version is None or chart is None or report is None:
+                    raise PersistenceConflict("ProjectRevision workspace graph is incomplete.")
+                if chart.dataset_version_id != version.id:
+                    raise PersistenceConflict("ChartSpecRevision does not bind the active data.")
+                if decision_set is not None and (
+                    revision.cleaning_decision_set_id != decision_set.id
+                    or chart.cleaning_decision_set_id != decision_set.id
+                    or decision_set.quality_report_id != report.id
+                ):
+                    raise PersistenceConflict("Cleaning lineage is inconsistent.")
+                ProjectSpecV1.model_validate(revision.spec_document)
+                decisions: list[dict[str, str]] = []
+                if decision_set is not None:
+                    decisions = [
+                        {
+                            "findingId": decision.quality_finding.external_id,
+                            "action": decision.action,
+                        }
+                        for decision in sorted(
+                            decision_set.decisions,
+                            key=lambda item: item.quality_finding.external_id,
+                        )
+                    ]
+                return {
+                    "project": self._project_row(uow.projects, project),
+                    "preview": version.preview_document,
+                    "quality": report.report_document,
+                    "decisions": decisions,
+                    "chart": chart.spec_document,
+                    "shares": [],
+                }
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def delete_project(
+        self,
+        project_id: str,
+        *,
+        owner_user_id: str,
+        guest_token_digest: str | None,
+    ) -> bool:
+        now = _now()
+        object_ids: list[UUID] = []
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project = uow.projects.get_project(project_id, for_update=True)
+                if project is None:
+                    return False
+                actor_id = _uuid(owner_user_id)
+                if project.storage_mode == "saved-cloud":
+                    if project.owner_user_id != actor_id:
+                        raise PersistenceConflict("Project belongs to another user.")
+                    project.deleted_at = now
+                    project.purge_after = now + timedelta(hours=24)
+                    project.updated_at = now
+                    project.lock_version += 1
+                    uow.session.add(
+                        ProjectLifecycleEvent(
+                            id=uuid4(),
+                            project_id=project.id,
+                            project_uuid_snapshot=project.id,
+                            actor_user_id=actor_id,
+                            event_type="delete",
+                            details={"purgeAfter": iso_at(project.purge_after)},
+                            created_at=now,
+                        )
+                    )
+                else:
+                    if not self._guest_matches(project, guest_token_digest, now):
+                        raise PersistenceConflict("GuestSession cannot delete this project.")
+                    object_ids = list(
+                        uow.session.scalars(
+                            select(DatasetVersion.stored_object_id).where(
+                                DatasetVersion.project_id == project.id
+                            )
+                        )
+                    )
+                    uow.session.delete(project)
+                uow.commit()
+            if object_ids:
+                self._mark_gc_candidates(object_ids)
+            return True
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def restore_deleted_project(self, project_id: str, owner_user_id: str | None = None) -> str:
+        now = _now()
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project = uow.projects.get_project(
+                    project_id, for_update=True, include_deleted=True
+                )
+                if project is None or project.deleted_at is None or project.purge_after is None:
+                    raise PersistenceNotFound("Deleted project does not exist.")
+                if owner_user_id is not None and project.owner_user_id != _uuid(owner_user_id):
+                    raise PersistenceNotFound("Deleted project does not exist.")
+                if project.storage_mode != "saved-cloud" or project.purge_after <= now:
+                    raise PersistenceNotFound("The project recovery window has expired.")
+                project.deleted_at = None
+                project.purge_after = None
+                project.updated_at = now
+                project.last_activity_at = now
+                project.lock_version += 1
+                uow.session.add(
+                    ProjectLifecycleEvent(
+                        id=uuid4(),
+                        project_id=project.id,
+                        project_uuid_snapshot=project.id,
+                        actor_user_id=project.owner_user_id,
+                        event_type="restore",
+                        details={},
+                        created_at=now,
+                    )
+                )
+                uow.commit()
+            return iso_at(now)
         except Exception as exc:
             raise _translate_database_error(exc) from exc
 
@@ -638,7 +2009,8 @@ class PostgresProjectStore:
         units = {str(item["field"]): item.get("unit") for item in preview["columns"]}
         artifact = write_parquet(frame, units=units)
         version_id = uuid4()
-        final_key = f"datasets/{project_id}/{version_id.hex}-{artifact.sha256[:16]}.parquet"
+        dedup_scope = self._project_dedup_scope(project_id)
+        final_key = _scope_storage_key(dedup_scope, artifact.sha256)
         staged = self.storage.stage(
             final_key,
             io.BytesIO(artifact.payload),
@@ -647,7 +2019,7 @@ class PostgresProjectStore:
         try:
             with self.storage.open_staged(staged) as staged_stream:
                 read_parquet(staged_stream.read(), expected_sha256=artifact.sha256)
-            persisted = self._persist_processed_project(
+            persistence_result = self._persist_processed_project(
                 project_id=project_id,
                 source=source,
                 version_id=version_id,
@@ -663,7 +2035,10 @@ class PostgresProjectStore:
         except Exception as exc:
             self.storage.discard(staged)
             raise _translate_database_error(exc) from exc
-        if not persisted:
+        if persistence_result == "noop":
+            self.storage.discard(staged)
+            return
+        if persistence_result == "reused":
             self.storage.discard(staged)
             return
         try:
@@ -688,7 +2063,7 @@ class PostgresProjectStore:
         preview: dict[str, Any],
         quality: dict[str, Any],
         chart: dict[str, Any],
-    ) -> bool:
+    ) -> str:
         now = _now()
         with self._uow() as uow:
             assert uow.session is not None
@@ -696,25 +2071,46 @@ class PostgresProjectStore:
             if project is None:
                 raise PersistenceNotFound("Project does not exist.")
             if project.current_revision_id is not None:
-                return False
+                return "noop"
             source_file = uow.projects.get_source_file(project_id)
             parse_run = uow.projects.get_run_for_project(project_id)
             if source_file is None or parse_run is None:
                 raise PersistenceNotFound("Pending project metadata is incomplete.")
 
-            stored_object = StoredObject(
-                id=uuid4(),
-                storage_backend="local",
-                object_key=staged.key,
-                staging_key=staged.staging_key,
-                purpose="dataset",
-                status="pending",
-                media_type="application/vnd.apache.parquet",
-                size_bytes=staged.size_bytes,
-                sha256=staged.sha256,
-                created_at=now,
-                updated_at=now,
+            dedup_scope = self._dedup_scope(project)
+            stored_object = uow.session.scalar(
+                select(StoredObject)
+                .where(
+                    StoredObject.storage_backend == "local",
+                    StoredObject.dedup_scope == dedup_scope,
+                    StoredObject.purpose == "dataset",
+                    StoredObject.media_type == "application/vnd.apache.parquet",
+                    StoredObject.format_contract_version == "parquet-v1",
+                    StoredObject.sha256 == staged.sha256,
+                    StoredObject.size_bytes == staged.size_bytes,
+                    StoredObject.encryption_key_id.is_(None),
+                )
+                .with_for_update()
             )
+            reused = stored_object is not None
+            if stored_object is not None and stored_object.status != "available":
+                raise PersistenceConflict("Matching StoredObject is not available for reuse.")
+            if stored_object is None:
+                stored_object = StoredObject(
+                    id=uuid4(),
+                    storage_backend="local",
+                    object_key=staged.key,
+                    staging_key=staged.staging_key,
+                    purpose="dataset",
+                    status="pending",
+                    media_type="application/vnd.apache.parquet",
+                    size_bytes=staged.size_bytes,
+                    sha256=staged.sha256,
+                    dedup_scope=dedup_scope,
+                    format_contract_version="parquet-v1",
+                    created_at=now,
+                    updated_at=now,
+                )
             dataset = Dataset(
                 id=uuid4(),
                 project=project,
@@ -850,7 +2246,7 @@ class PostgresProjectStore:
                 ]
             )
             uow.commit()
-        return True
+        return "reused" if reused else "created"
 
     def _mark_object_confirmed(self, staged: StagedObject) -> None:
         now = _now()
@@ -1246,7 +2642,8 @@ class PostgresProjectStore:
             }
             artifact = write_parquet(cleaned, units=units)
             version_id = uuid4()
-            final_key = f"datasets/{project_id}/{version_id.hex}-{artifact.sha256[:16]}.parquet"
+            dedup_scope = self._project_dedup_scope(project_id)
+            final_key = _scope_storage_key(dedup_scope, artifact.sha256)
             staged = self.storage.stage(
                 final_key,
                 io.BytesIO(artifact.payload),
@@ -1255,7 +2652,7 @@ class PostgresProjectStore:
             try:
                 with self.storage.open_staged(staged) as staged_stream:
                     read_parquet(staged_stream.read(), expected_sha256=artifact.sha256)
-                persisted = self._persist_cleaning_result(
+                persistence_result = self._persist_cleaning_result(
                     project_id=project_id,
                     quality_report_id=report_id,
                     decisions=canonical,
@@ -1271,11 +2668,17 @@ class PostgresProjectStore:
             except Exception as exc:
                 self.storage.discard(staged)
                 raise _translate_database_error(exc) from exc
-            if not persisted:
+            if persistence_result == "noop":
                 self.storage.discard(staged)
                 existing = self.get_decisions(project_id)
                 if _decisions_hash(existing) != decision_hash:
                     raise PersistenceConflict("Cleaning decisions changed concurrently.")
+                project_row = self.get_project(project_id, touch=False)
+                if project_row is None:
+                    raise PersistenceNotFound("Project does not exist.")
+                return str(project_row["updated_at"])
+            if persistence_result == "reused":
+                self.storage.discard(staged)
                 project_row = self.get_project(project_id, touch=False)
                 if project_row is None:
                     raise PersistenceNotFound("Project does not exist.")
@@ -1310,7 +2713,7 @@ class PostgresProjectStore:
         quality: dict[str, Any],
         row_count: int,
         column_count: int,
-    ) -> bool:
+    ) -> str:
         now = _now()
         with self._uow() as uow:
             assert uow.session is not None
@@ -1328,7 +2731,7 @@ class PostgresProjectStore:
                 and current_set.quality_report_id == report.id
                 and current_set.decisions_hash == decisions_hash
             ):
-                return False
+                return "noop"
             if current is None or current_chart is None:
                 raise PersistenceConflict("Ready project lineage is incomplete.")
             input_version = report.dataset_version
@@ -1375,19 +2778,40 @@ class PostgresProjectStore:
                 )
                 for item in decisions
             ]
-            stored_object = StoredObject(
-                id=uuid4(),
-                storage_backend="local",
-                object_key=staged.key,
-                staging_key=staged.staging_key,
-                purpose="dataset",
-                status="pending",
-                media_type="application/vnd.apache.parquet",
-                size_bytes=staged.size_bytes,
-                sha256=staged.sha256,
-                created_at=now,
-                updated_at=now,
+            dedup_scope = self._dedup_scope(project)
+            stored_object = uow.session.scalar(
+                select(StoredObject)
+                .where(
+                    StoredObject.storage_backend == "local",
+                    StoredObject.dedup_scope == dedup_scope,
+                    StoredObject.purpose == "dataset",
+                    StoredObject.media_type == "application/vnd.apache.parquet",
+                    StoredObject.format_contract_version == "parquet-v1",
+                    StoredObject.sha256 == staged.sha256,
+                    StoredObject.size_bytes == staged.size_bytes,
+                    StoredObject.encryption_key_id.is_(None),
+                )
+                .with_for_update()
             )
+            reused = stored_object is not None
+            if stored_object is not None and stored_object.status != "available":
+                raise PersistenceConflict("Matching StoredObject is not available for reuse.")
+            if stored_object is None:
+                stored_object = StoredObject(
+                    id=uuid4(),
+                    storage_backend="local",
+                    object_key=staged.key,
+                    staging_key=staged.staging_key,
+                    purpose="dataset",
+                    status="pending",
+                    media_type="application/vnd.apache.parquet",
+                    size_bytes=staged.size_bytes,
+                    sha256=staged.sha256,
+                    dedup_scope=dedup_scope,
+                    format_contract_version="parquet-v1",
+                    created_at=now,
+                    updated_at=now,
+                )
             version_number = (
                 int(
                     uow.session.scalar(
@@ -1517,7 +2941,7 @@ class PostgresProjectStore:
                 ]
             )
             uow.commit()
-        return True
+        return "reused" if reused else "created"
 
     def save_chart(self, project_id: str, chart: dict[str, Any]) -> str:
         now = _now()
@@ -1601,7 +3025,12 @@ class PostgresProjectStore:
         except Exception as exc:
             raise _translate_database_error(exc) from exc
 
-    def restore_project_revision(self, project_id: str, revision_number: int) -> str:
+    def restore_project_revision(
+        self,
+        project_id: str,
+        revision_number: int,
+        owner_user_id: str | None = None,
+    ) -> str:
         now = _now()
         try:
             with self._uow() as uow:
@@ -1609,6 +3038,8 @@ class PostgresProjectStore:
                 project = uow.projects.get_project(project_id, for_update=True)
                 revision = uow.projects.get_revision(project_id, revision_number)
                 if project is None or revision is None:
+                    raise PersistenceNotFound("ProjectRevision does not exist.")
+                if owner_user_id is not None and project.owner_user_id != _uuid(owner_user_id):
                     raise PersistenceNotFound("ProjectRevision does not exist.")
                 version = uow.session.get(DatasetVersion, revision.active_dataset_version_id)
                 if (
@@ -1622,26 +3053,18 @@ class PostgresProjectStore:
                 project.title = spec.title
                 project.last_activity_at = now
                 project.updated_at = now
-                uow.commit()
-            return iso_at(now)
-        except Exception as exc:
-            raise _translate_database_error(exc) from exc
-
-    def restore_deleted_project(self, project_id: str) -> str:
-        now = _now()
-        try:
-            with self._uow() as uow:
-                project = uow.projects.get_project(
-                    project_id, for_update=True, include_deleted=True
+                project.lock_version += 1
+                uow.session.add(
+                    ProjectLifecycleEvent(
+                        id=uuid4(),
+                        project_id=project.id,
+                        project_uuid_snapshot=project.id,
+                        actor_user_id=project.owner_user_id,
+                        event_type="revision-restore",
+                        details={"revisionNumber": revision_number},
+                        created_at=now,
+                    )
                 )
-                if project is None or project.deleted_at is None or project.purge_after is None:
-                    raise PersistenceNotFound("Deleted project does not exist.")
-                if project.storage_mode != "saved-cloud" or project.purge_after <= now:
-                    raise PersistenceNotFound("The project recovery window has expired.")
-                project.deleted_at = None
-                project.purge_after = None
-                project.updated_at = now
-                project.last_activity_at = now
                 uow.commit()
             return iso_at(now)
         except Exception as exc:

@@ -88,6 +88,48 @@ class ProjectStore(ProjectReader, Protocol):
 
     def load_chart_dataframe(self, project_id: str) -> pd.DataFrame: ...
 
+    def save_project(
+        self,
+        project_id: str,
+        owner_user_id: str,
+        *,
+        guest_token_digest: str | None,
+    ) -> str: ...
+
+    def duplicate_project(
+        self,
+        *,
+        source_project_id: str,
+        project_id: str,
+        job_id: str,
+        owner_user_id: str,
+        guest_token_digest: str | None,
+        idempotency_key: str | None = None,
+    ) -> str: ...
+
+    def delete_project(
+        self,
+        project_id: str,
+        *,
+        owner_user_id: str,
+        guest_token_digest: str | None,
+    ) -> bool: ...
+
+    def restore_deleted_project(self, project_id: str, owner_user_id: str | None = None) -> str: ...
+
+    def restore_project_revision(
+        self,
+        project_id: str,
+        revision_number: int,
+        owner_user_id: str | None = None,
+    ) -> str: ...
+
+    def list_projects(self, owner_user_id: str | None) -> list[dict[str, Any]]: ...
+
+    def list_deleted_projects(self, owner_user_id: str) -> list[dict[str, Any]]: ...
+
+    def get_workspace(self, project_id: str) -> dict[str, Any]: ...
+
 
 class ProjectRepository(Protocol):
     """Database-only aggregate access used inside one Unit of Work."""

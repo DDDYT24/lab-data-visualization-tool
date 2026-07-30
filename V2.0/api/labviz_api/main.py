@@ -20,6 +20,7 @@ from fastapi import (
     FastAPI,
     File,
     Form,
+    Header,
     Request,
     Response,
     UploadFile,
@@ -29,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from .auth import AuthError, AuthService, build_auth_service
+from .auth import AuthError, AuthRepository, AuthService, build_auth_service
 from .config import Settings
 from .models import (
     AuthenticatedUser,
@@ -335,7 +336,15 @@ def create_app(
     resolved_project_store = project_store or build_project_store(
         resolved_settings, resolved_repository
     )
-    resolved_auth = auth_service or build_auth_service(resolved_settings, resolved_repository)
+    resolved_auth_repository = cast(
+        AuthRepository,
+        (
+            resolved_project_store
+            if resolved_settings.persistence_backend == "postgresql"
+            else resolved_repository
+        ),
+    )
+    resolved_auth = auth_service or build_auth_service(resolved_settings, resolved_auth_repository)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> Any:
@@ -364,6 +373,7 @@ def create_app(
     app.state.settings = resolved_settings
     app.state.repository = resolved_repository
     app.state.project_store = resolved_project_store
+    app.state.auth_repository = resolved_auth_repository
     app.state.auth_service = resolved_auth
     app.add_middleware(
         CORSMiddleware,
@@ -450,6 +460,9 @@ def create_app(
 
     def get_auth() -> AuthService:
         return resolved_auth
+
+    def get_auth_repository() -> AuthRepository:
+        return resolved_auth_repository
 
     def optional_user(
         session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
@@ -598,12 +611,16 @@ def create_app(
         project_id: str,
         user: dict[str, str] = Depends(required_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> ProjectSession:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         if project["owner_user_id"] and project["owner_user_id"] != user["id"]:
             raise ApiProblem(403, "project-access-denied", "This project belongs to another user.")
-        repository.save_project(project_id, user["id"])
+        repository.save_project(
+            project_id,
+            user["id"],
+            guest_token_digest=_guest_digest(guest_token) if guest_token else None,
+        )
         saved = _require_project_access(repository, project_id, user, guest_token, ready=True)
         return _project_session(repository, saved)
 
@@ -615,15 +632,18 @@ def create_app(
         project_id: str,
         user: dict[str, str] = Depends(required_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> ProjectSession:
         _require_project_access(repository, project_id, user, guest_token, ready=True)
         copy_id = uuid4().hex
-        repository.duplicate_project(
+        copy_id = repository.duplicate_project(
             source_project_id=project_id,
             project_id=copy_id,
             job_id=uuid4().hex,
             owner_user_id=user["id"],
+            guest_token_digest=_guest_digest(guest_token) if guest_token else None,
+            idempotency_key=idempotency_key,
         )
         return _project_session(
             repository,
@@ -635,11 +655,42 @@ def create_app(
         project_id: str,
         user: dict[str, str] = Depends(required_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> Response:
         _require_project_access(repository, project_id, user, guest_token)
-        repository.delete_project(project_id)
+        repository.delete_project(
+            project_id,
+            owner_user_id=user["id"],
+            guest_token_digest=_guest_digest(guest_token) if guest_token else None,
+        )
         return Response(status_code=204)
+
+    @app.post(
+        f"{API_PREFIX}/projects/{{project_id}}/restore",
+        response_model=ProjectSession,
+    )
+    def restore_deleted_project(
+        project_id: str,
+        user: dict[str, str] = Depends(required_user),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> ProjectSession:
+        repository.restore_deleted_project(project_id, user["id"])
+        restored = _require_project_access(repository, project_id, user, None, ready=True)
+        return _project_session(repository, restored)
+
+    @app.post(
+        f"{API_PREFIX}/projects/{{project_id}}/revisions/{{revision_number}}/restore",
+        response_model=ProjectSession,
+    )
+    def restore_project_revision(
+        project_id: str,
+        revision_number: int,
+        user: dict[str, str] = Depends(required_user),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> ProjectSession:
+        repository.restore_project_revision(project_id, revision_number, user["id"])
+        restored = _require_project_access(repository, project_id, user, None, ready=True)
+        return _project_session(repository, restored)
 
     @app.get(
         f"{API_PREFIX}/projects/{{project_id}}/workspace",
@@ -649,10 +700,11 @@ def create_app(
         project_id: str,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
         current_settings: Settings = Depends(get_settings),
     ) -> ProjectWorkspace:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        workspace = repository.get_workspace(project_id)
         shares = [
             ShareSummary(
                 token=row["token"],
@@ -660,17 +712,14 @@ def create_app(
                 downloads_enabled=bool(row["downloads_enabled"]),
                 created_at=row["created_at"],
             )
-            for row in repository.list_shares(project_id)
+            for row in workspace["shares"]
         ]
         return ProjectWorkspace(
             session=_project_session(repository, project),
-            preview=DataPreview.model_validate_json(project["preview_json"]),
-            quality=QualityReport.model_validate_json(project["quality_json"]),
-            decisions=[
-                CleaningDecision.model_validate(item)
-                for item in repository.get_decisions(project_id)
-            ],
-            chart=ChartSpec.model_validate_json(project["chart_json"]),
+            preview=DataPreview.model_validate(workspace["preview"]),
+            quality=QualityReport.model_validate(workspace["quality"]),
+            decisions=[CleaningDecision.model_validate(item) for item in workspace["decisions"]],
+            chart=ChartSpec.model_validate(workspace["chart"]),
             shares=shares,
         )
 
@@ -809,10 +858,32 @@ def create_app(
     @app.get(f"{API_PREFIX}/projects", response_model=ProjectList)
     def list_projects(
         user: dict[str, str] | None = Depends(optional_user),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> ProjectList:
         projects = []
         for row in repository.list_projects(user["id"] if user else None):
+            chart = ChartSpec.model_validate_json(row["chart_json"])
+            source = SourceFile.model_validate_json(row["source_json"])
+            projects.append(
+                ProjectSummary(
+                    id=row["id"],
+                    title=row["title"],
+                    source_name=source.name,
+                    chart_type=chart.type,
+                    updated_at=row["updated_at"],
+                    storage_mode=row["storage_mode"],
+                    thumbnail_url=None,
+                )
+            )
+        return ProjectList(projects=projects)
+
+    @app.get(f"{API_PREFIX}/recovery/projects", response_model=ProjectList)
+    def list_deleted_projects(
+        user: dict[str, str] = Depends(required_user),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> ProjectList:
+        projects = []
+        for row in repository.list_deleted_projects(user["id"]):
             chart = ChartSpec.model_validate_json(row["chart_json"])
             source = SourceFile.model_validate_json(row["source_json"])
             projects.append(
@@ -833,7 +904,7 @@ def create_app(
         body: RequestEmailCode,
         request: Request,
         auth: AuthService = Depends(get_auth),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: AuthRepository = Depends(get_auth_repository),
     ) -> RequestEmailCodeResponse:
         email = str(body.email).strip().lower()
         client_key = request.client.host if request.client else "unknown"

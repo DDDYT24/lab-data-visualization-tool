@@ -22,4 +22,9 @@ def build_project_store(
         raise ValueError("PostgreSQL persistence requires LABVIZ_POSTGRES_URL.")
     database = Database(settings.postgres_url, echo=settings.postgres_echo)
     storage = LocalObjectStorage(settings.object_storage_root)
-    return PostgresProjectStore(database, storage, settings.project_ttl_seconds)
+    return PostgresProjectStore(
+        database,
+        storage,
+        settings.project_ttl_seconds,
+        guest_session_ttl_seconds=settings.session_ttl_seconds,
+    )

@@ -9,11 +9,11 @@ import smtplib
 import ssl
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from .config import Settings
-from .repository import ProjectRepository, iso_at
+from .repository import iso_at
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +39,52 @@ class EmailSender(Protocol):
 
     def send_code(self, email: str, code: str) -> None:
         """Deliver one verification code."""
+        ...
+
+
+class AuthRepository(Protocol):
+    """Operational authentication persistence selected with the project backend."""
+
+    def latest_auth_challenge(self, email: str) -> dict[str, Any] | None: ...
+
+    def create_auth_challenge(
+        self,
+        *,
+        challenge_id: str,
+        email: str,
+        salt: str,
+        code_digest: str,
+        expires_at: str,
+        resend_at: str,
+    ) -> None: ...
+
+    def get_auth_challenge(self, challenge_id: str) -> dict[str, Any] | None: ...
+
+    def increment_auth_challenge_attempts(self, challenge_id: str) -> None: ...
+
+    def delete_auth_challenge(self, challenge_id: str) -> None: ...
+
+    def create_auth_session(
+        self,
+        *,
+        token_digest: str,
+        user_id: str,
+        email: str,
+        expires_at: str,
+    ) -> None: ...
+
+    def get_auth_session(self, token_digest: str) -> dict[str, Any] | None: ...
+
+    def delete_auth_session(self, token_digest: str) -> None: ...
+
+    def allow_auth_request(
+        self,
+        *,
+        client_key: str,
+        email: str,
+        ip_limit: int = 30,
+        email_limit: int = 10,
+    ) -> bool: ...
 
 
 class ConsoleEmailSender:
@@ -98,7 +144,7 @@ class AuthService:
         self,
         sender: EmailSender,
         session_ttl_seconds: int,
-        repository: ProjectRepository,
+        repository: AuthRepository,
     ) -> None:
         self.sender = sender
         self.session_ttl_seconds = session_ttl_seconds
@@ -171,7 +217,7 @@ class AuthService:
 
         self.repository.delete_auth_challenge(challenge_id)
 
-        user_id = str(uuid5(NAMESPACE_URL, f"labviz:{challenge['email']}"))
+        user_id = uuid5(NAMESPACE_URL, f"labviz:{challenge['email']}").hex
         raw_token = secrets.token_urlsafe(32)
         self.repository.create_auth_session(
             token_digest=self._digest_token(raw_token),
@@ -211,7 +257,7 @@ class AuthService:
         return hashlib.sha256(token.encode()).hexdigest()
 
 
-def build_auth_service(settings: Settings, repository: ProjectRepository) -> AuthService:
+def build_auth_service(settings: Settings, repository: AuthRepository) -> AuthService:
     sender: EmailSender = (
         SmtpEmailSender(settings) if settings.auth_mode == "smtp" else ConsoleEmailSender()
     )
