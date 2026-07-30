@@ -3,6 +3,9 @@
 **Status:** Phase 2A and the approved Phase 2B vertical slice implemented
 **Date:** 2026-07-30
 
+Phase 3 now extends this boundary through quality reports and cleaning. See
+[`PERSISTENCE_PHASE3.md`](PERSISTENCE_PHASE3.md).
+
 ## Recovery boundary
 
 The PostgreSQL column `projects.purge_after` is the current physical name for the saved-project
@@ -28,8 +31,9 @@ SQLite repository is unchanged and is exposed through `SqliteProjectStore`. Post
 
 `LABVIZ_PERSISTENCE_BACKEND=sqlite|postgresql` selects one project backend. The four migrated
 routes and their processing-job support write only that backend. There is no SQLite/PostgreSQL
-project dual-write. Authentication, quality editing, cleaning, sharing, and exports remain on the
-SQLite reference path until their own migration slices are implemented.
+project dual-write. Authentication, sharing, and publication exports remain on the SQLite
+reference path until their own migration slices are implemented. Quality editing and cleaning are
+covered by the subsequent Phase 3 slice.
 
 The current POST contract has no idempotency key, so two intentional HTTP uploads create two
 projects even when their bytes match. Idempotency applies to retrying completion for the same

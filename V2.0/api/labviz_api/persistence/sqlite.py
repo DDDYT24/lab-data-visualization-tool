@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pandas as pd
 
-from labviz_api.processing import serialize_dataframe
+from labviz_api.processing import (
+    apply_chart_decisions,
+    deserialize_dataframe,
+    serialize_dataframe,
+)
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 
 
@@ -96,3 +101,48 @@ class SqliteProjectStore:
 
     def save_chart(self, project_id: str, chart: dict[str, Any]) -> str:
         return self.repository.save_chart(project_id, chart)
+
+    def load_quality_dataframe(self, project_id: str) -> pd.DataFrame:
+        payload = self.repository.get_data_blob(project_id)
+        if payload is None:
+            raise ValueError("Ready project data does not exist.")
+        return deserialize_dataframe(payload)
+
+    def save_quality_report(
+        self,
+        project_id: str,
+        quality: dict[str, Any],
+        *,
+        parameters: dict[str, Any],
+    ) -> str:
+        del parameters
+        return self.repository.replace_quality(project_id, quality)
+
+    def save_decisions(self, project_id: str, decisions: list[dict[str, str]]) -> str:
+        return self.repository.save_decisions(project_id, decisions)
+
+    def get_decisions(self, project_id: str) -> list[dict[str, str]]:
+        return self.repository.get_decisions(project_id)
+
+    def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame:
+        frame = self.load_quality_dataframe(project_id)
+        project = self.repository.get_project(project_id, touch=False)
+        if project is None or project["quality_json"] is None:
+            raise ValueError("Ready project quality report does not exist.")
+        return apply_chart_decisions(
+            frame,
+            json.loads(project["quality_json"]),
+            self.get_decisions(project_id),
+            actions={"remove"},
+        )
+
+    def load_chart_dataframe(self, project_id: str) -> pd.DataFrame:
+        frame = self.load_quality_dataframe(project_id)
+        project = self.repository.get_project(project_id, touch=False)
+        if project is None or project["quality_json"] is None:
+            raise ValueError("Ready project quality report does not exist.")
+        return apply_chart_decisions(
+            frame,
+            json.loads(project["quality_json"]),
+            self.get_decisions(project_id),
+        )

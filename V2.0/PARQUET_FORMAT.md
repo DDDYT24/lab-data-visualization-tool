@@ -38,3 +38,8 @@ the PostgreSQL transaction commits; every reopened object is checked against the
 The embedded `labviz.schema` JSON metadata records schema version, hash rule, missing-value rule,
 UTC timestamp rule, ordered column names, Arrow types, nullability, and units. Changing any writer
 rule requires a new Parquet schema version rather than silently changing v1.
+
+Exact pandas, PyArrow, and Parquet writer package versions are processing provenance rather than
+part of the current v1 logical schema. Phase 3 records algorithm and code versions on every
+ProcessingRun. Persisting exact package versions in object metadata is tracked as follow-up work;
+adding mandatory embedded metadata that changes canonical bytes requires Parquet schema v2.

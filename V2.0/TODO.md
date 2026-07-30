@@ -43,7 +43,11 @@ Next:
 - [ ] Add optional project/experiment description persistence and editing for shared-chart context without introducing speculative Experiment entities.
 - [x] Add the phase 1 SQLAlchemy 2 persistence boundary, PostgreSQL development/test environment, provider-neutral object-storage interface, first nine core models, and reversible Alembic migration.
 - [x] Add Phase 2 Repository/Unit of Work boundaries, selectable SQLite/PostgreSQL project persistence, ProjectSpec v1, Parquet v1, and the approved six-entity project revision slice without runtime dual-write.
-- [ ] Migrate quality editing, immutable cleaning decisions, project save/history, sharing, exports, authentication, and physical expiry/purge workers in bounded follow-up slices.
+- [x] Add Phase 3 immutable QualityReport/Finding and CleaningDecisionSet/Decision lineage, derived Parquet DatasetVersions, copied chart revisions, API parity, and object compensation.
+- [ ] Migrate project save/history, sharing, publication exports, authentication, and physical expiry/purge workers in bounded follow-up slices.
+- [ ] Design HTTP upload `Idempotency-Key` persistence and replay semantics without treating identical file hashes as the same intentional project.
+- [ ] Move pending StoredObject recovery from startup-only handling to a leased periodic reconciliation worker with retry, age, alert, and quarantine policies.
+- [ ] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [ ] Move reference-service SQLite authentication and project state to production-grade shared services before running multiple hosts.
 - [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.
 - [ ] Move saved cloud datasets and exports from SQLite blobs to managed object storage with a scheduled expiry worker.

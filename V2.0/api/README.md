@@ -3,7 +3,8 @@
 SQLite remains the default reference repository. Phase 2 adds an opt-in PostgreSQL project
 persistence slice for project creation, reopening, preview, and immutable chart revisions without
 changing their `/api/v1` request or response models. The two project backends are selected, never
-dual-written.
+dual-written. Phase 3 extends that selected backend through quality reports, immutable cleaning
+decisions, derived Parquet DatasetVersions, and cleaned-data download.
 
 ## Local PostgreSQL
 
@@ -65,4 +66,5 @@ python -m scripts.export_project_spec_schema
 
 The generated schema and shared fixtures live in `V2.0/contracts`. See
 `PERSISTENCE_PHASE2.md` and `PARQUET_FORMAT.md` for the transaction, compensation, and Parquet v1
-rules.
+rules. See `PERSISTENCE_PHASE3.md` for quality lineage, decision semantics, undo, and derived
+dataset behavior.

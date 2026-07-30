@@ -38,6 +38,10 @@ CORE_TABLES = {
     "processing_runs",
     "chart_spec_revisions",
     "project_revisions",
+    "quality_reports",
+    "quality_findings",
+    "cleaning_decision_sets",
+    "cleaning_decisions",
 }
 
 

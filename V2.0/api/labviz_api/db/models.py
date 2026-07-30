@@ -56,6 +56,10 @@ class User(Base):
         back_populates="created_by",
         foreign_keys="ChartSpecRevision.created_by_user_id",
     )
+    created_cleaning_decision_sets: Mapped[list[CleaningDecisionSet]] = relationship(
+        back_populates="created_by",
+        foreign_keys="CleaningDecisionSet.created_by_user_id",
+    )
 
 
 class Project(Base):
@@ -138,6 +142,12 @@ class Project(Base):
         back_populates="project", cascade="all, delete-orphan", passive_deletes=True
     )
     chart_revisions: Mapped[list[ChartSpecRevision]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", passive_deletes=True
+    )
+    quality_reports: Mapped[list[QualityReportRecord]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", passive_deletes=True
+    )
+    cleaning_decision_sets: Mapped[list[CleaningDecisionSet]] = relationship(
         back_populates="project", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -298,6 +308,16 @@ class DatasetVersion(Base):
         ),
         CheckConstraint("parquet_schema_version = 1", name="parquet_schema_v1"),
         CheckConstraint("content_sha256 ~ '^[0-9a-f]{64}$'", name="content_sha256_lower_hex"),
+        ForeignKeyConstraint(
+            ["cleaning_decision_set_id", "project_id"],
+            ["cleaning_decision_sets.id", "cleaning_decision_sets.project_id"],
+            name="fk_dataset_versions_decision_set_same_project",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+        UniqueConstraint(
+            "cleaning_decision_set_id", name="uq_dataset_versions_cleaning_decision_set"
+        ),
         Index("ix_dataset_versions_project_created", "project_id", "created_at"),
     )
 
@@ -323,6 +343,7 @@ class DatasetVersion(Base):
     content_sha256: Mapped[str] = mapped_column(
         String(64), nullable=False, default=lambda: "0" * 64
     )
+    cleaning_decision_set_id: Mapped[UUID | None] = mapped_column(nullable=True)
     row_count: Mapped[int] = mapped_column(nullable=False)
     column_count: Mapped[int] = mapped_column(nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -342,6 +363,14 @@ class DatasetVersion(Base):
     output_of_run: Mapped[ProcessingRun | None] = relationship(
         back_populates="output_dataset_version",
         foreign_keys="ProcessingRun.output_dataset_version_id",
+    )
+    quality_reports: Mapped[list[QualityReportRecord]] = relationship(
+        back_populates="dataset_version",
+        foreign_keys="QualityReportRecord.dataset_version_id",
+    )
+    cleaning_decision_set: Mapped[CleaningDecisionSet | None] = relationship(
+        back_populates="output_dataset_version",
+        foreign_keys=[cleaning_decision_set_id],
     )
 
 
@@ -373,6 +402,7 @@ class ProcessingRun(Base):
         CheckConstraint(
             "output_dataset_version_id IS NULL OR status = 'succeeded'", name="output_succeeded"
         ),
+        UniqueConstraint("id", "project_id", name="uq_processing_runs_id_project"),
         UniqueConstraint("output_dataset_version_id", name="uq_processing_runs_output_version"),
         Index("ix_processing_runs_project_created", "project_id", "created_at"),
         Index("ix_processing_runs_status_created", "status", "created_at"),
@@ -404,6 +434,234 @@ class ProcessingRun(Base):
     output_dataset_version: Mapped[DatasetVersion | None] = relationship(
         back_populates="output_of_run", foreign_keys=[output_dataset_version_id]
     )
+    quality_report: Mapped[QualityReportRecord | None] = relationship(
+        back_populates="processing_run", overlaps="quality_reports"
+    )
+
+
+class QualityReportRecord(Base):
+    """Immutable profiler result bound to one immutable DatasetVersion and run."""
+
+    __tablename__ = "quality_reports"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["dataset_version_id", "project_id"],
+            ["dataset_versions.id", "dataset_versions.project_id"],
+            name="fk_quality_reports_dataset_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["processing_run_id", "project_id"],
+            ["processing_runs.id", "processing_runs.project_id"],
+            name="fk_quality_reports_run_same_project",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("id", "project_id", name="uq_quality_reports_id_project"),
+        UniqueConstraint(
+            "dataset_version_id",
+            "revision_number",
+            name="uq_quality_reports_dataset_revision",
+        ),
+        UniqueConstraint("processing_run_id", name="uq_quality_reports_processing_run"),
+        CheckConstraint("revision_number >= 1", name="revision_positive"),
+        CheckConstraint("status IN ('completed', 'failed')", name="status"),
+        CheckConstraint("length(profiler_name) > 0", name="profiler_name_nonempty"),
+        Index("ix_quality_reports_project_created", "project_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    dataset_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    processing_run_id: Mapped[UUID] = mapped_column(nullable=False)
+    revision_number: Mapped[int] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    profiler_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    profiler_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    algorithm_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    code_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    parameters: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False, default=dict)
+    report_document: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    project: Mapped[Project] = relationship(
+        back_populates="quality_reports", overlaps="quality_report"
+    )
+    dataset_version: Mapped[DatasetVersion] = relationship(
+        back_populates="quality_reports", foreign_keys=[dataset_version_id]
+    )
+    processing_run: Mapped[ProcessingRun] = relationship(
+        back_populates="quality_report", overlaps="project,quality_reports"
+    )
+    findings: Mapped[list[QualityFindingRecord]] = relationship(
+        back_populates="quality_report",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    decision_sets: Mapped[list[CleaningDecisionSet]] = relationship(
+        back_populates="quality_report", overlaps="cleaning_decision_sets"
+    )
+
+
+class QualityFindingRecord(Base):
+    """Stable finding identity plus bounded evidence tied to an immutable report."""
+
+    __tablename__ = "quality_findings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["quality_report_id", "project_id"],
+            ["quality_reports.id", "quality_reports.project_id"],
+            name="fk_quality_findings_report_same_project",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("id", "project_id", name="uq_quality_findings_id_project"),
+        UniqueConstraint(
+            "quality_report_id", "external_id", name="uq_quality_findings_report_external"
+        ),
+        CheckConstraint("affected_count >= 0", name="affected_count_nonnegative"),
+        CheckConstraint(
+            "kind IN ('missing', 'duplicate', 'type-conflict', 'extreme-value', "
+            "'sudden-change', 'outside-range', 'trend-inconsistent')",
+            name="kind",
+        ),
+        CheckConstraint("severity IN ('info', 'warning', 'error')", name="severity"),
+        Index("ix_quality_findings_report_kind", "quality_report_id", "kind"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(nullable=False)
+    quality_report_id: Mapped[UUID] = mapped_column(nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(48), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    column_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    column_identity: Mapped[dict[str, Any] | None] = mapped_column(JSON_DOCUMENT, nullable=True)
+    source_record_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON_DOCUMENT, nullable=False, default=list
+    )
+    affected_count: Mapped[int] = mapped_column(nullable=False)
+    evidence_document: Mapped[dict[str, Any]] = mapped_column(
+        JSON_DOCUMENT, nullable=False, default=dict
+    )
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    quality_report: Mapped[QualityReportRecord] = relationship(back_populates="findings")
+    decisions: Mapped[list[CleaningDecisionRecord]] = relationship(back_populates="quality_finding")
+
+
+class CleaningDecisionSet(Base):
+    """Immutable, monotonically versioned user decision snapshot."""
+
+    __tablename__ = "cleaning_decision_sets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["quality_report_id", "project_id"],
+            ["quality_reports.id", "quality_reports.project_id"],
+            name="fk_cleaning_decision_sets_report_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["input_dataset_version_id", "project_id"],
+            ["dataset_versions.id", "dataset_versions.project_id"],
+            name="fk_cleaning_decision_sets_input_same_project",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("id", "project_id", name="uq_cleaning_decision_sets_id_project"),
+        UniqueConstraint(
+            "project_id", "revision_number", name="uq_cleaning_decision_sets_project_revision"
+        ),
+        CheckConstraint("revision_number >= 1", name="revision_positive"),
+        CheckConstraint("decisions_hash ~ '^[0-9a-f]{64}$'", name="decisions_hash_lower_hex"),
+        Index("ix_cleaning_decision_sets_project_created", "project_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    quality_report_id: Mapped[UUID] = mapped_column(nullable=False)
+    input_dataset_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    revision_number: Mapped[int] = mapped_column(nullable=False)
+    decisions_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    project: Mapped[Project] = relationship(
+        back_populates="cleaning_decision_sets", overlaps="decision_sets"
+    )
+    quality_report: Mapped[QualityReportRecord] = relationship(
+        back_populates="decision_sets", overlaps="cleaning_decision_sets,project"
+    )
+    input_dataset_version: Mapped[DatasetVersion] = relationship(
+        foreign_keys=[input_dataset_version_id]
+    )
+    created_by: Mapped[User | None] = relationship(
+        back_populates="created_cleaning_decision_sets",
+        foreign_keys=[created_by_user_id],
+    )
+    decisions: Mapped[list[CleaningDecisionRecord]] = relationship(
+        back_populates="decision_set",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        overlaps="decisions",
+    )
+    output_dataset_version: Mapped[DatasetVersion | None] = relationship(
+        back_populates="cleaning_decision_set",
+        foreign_keys="DatasetVersion.cleaning_decision_set_id",
+        uselist=False,
+    )
+
+
+class CleaningDecisionRecord(Base):
+    """One immutable action against one stable QualityFinding."""
+
+    __tablename__ = "cleaning_decisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["decision_set_id", "project_id"],
+            ["cleaning_decision_sets.id", "cleaning_decision_sets.project_id"],
+            name="fk_cleaning_decisions_set_same_project",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["quality_finding_id", "project_id"],
+            ["quality_findings.id", "quality_findings.project_id"],
+            name="fk_cleaning_decisions_finding_same_project",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "decision_set_id", "quality_finding_id", name="uq_cleaning_decisions_set_finding"
+        ),
+        CheckConstraint("action IN ('ignore', 'exclude', 'remove')", name="action"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(nullable=False)
+    decision_set_id: Mapped[UUID] = mapped_column(nullable=False)
+    quality_finding_id: Mapped[UUID] = mapped_column(nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    decision_set: Mapped[CleaningDecisionSet] = relationship(
+        back_populates="decisions", overlaps="decisions"
+    )
+    quality_finding: Mapped[QualityFindingRecord] = relationship(
+        back_populates="decisions", overlaps="decision_set,decisions"
+    )
 
 
 class ChartSpecRevision(Base):
@@ -413,6 +671,12 @@ class ChartSpecRevision(Base):
             ["dataset_version_id", "project_id"],
             ["dataset_versions.id", "dataset_versions.project_id"],
             name="fk_chart_spec_revisions_dataset_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["cleaning_decision_set_id", "project_id"],
+            ["cleaning_decision_sets.id", "cleaning_decision_sets.project_id"],
+            name="fk_chart_spec_revisions_decision_set_same_project",
             ondelete="RESTRICT",
         ),
         UniqueConstraint("id", "project_id", name="uq_chart_spec_revisions_id_project"),
@@ -439,6 +703,7 @@ class ChartSpecRevision(Base):
     revision_number: Mapped[int] = mapped_column(nullable=False)
     schema_version: Mapped[int] = mapped_column(nullable=False)
     decision_set_revision: Mapped[int | None] = mapped_column(nullable=True)
+    cleaning_decision_set_id: Mapped[UUID | None] = mapped_column(nullable=True)
     spec_document: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
@@ -448,6 +713,9 @@ class ChartSpecRevision(Base):
     dataset_version: Mapped[DatasetVersion] = relationship(foreign_keys=[dataset_version_id])
     created_by: Mapped[User | None] = relationship(
         back_populates="created_chart_revisions", foreign_keys=[created_by_user_id]
+    )
+    cleaning_decision_set: Mapped[CleaningDecisionSet | None] = relationship(
+        foreign_keys=[cleaning_decision_set_id]
     )
 
 
@@ -466,6 +734,18 @@ class ProjectRevision(Base):
             name="fk_project_revisions_chart_same_project",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["quality_report_id", "project_id"],
+            ["quality_reports.id", "quality_reports.project_id"],
+            name="fk_project_revisions_quality_report_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["cleaning_decision_set_id", "project_id"],
+            ["cleaning_decision_sets.id", "cleaning_decision_sets.project_id"],
+            name="fk_project_revisions_decision_set_same_project",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint("id", "project_id", name="uq_project_revisions_id_project"),
         UniqueConstraint(
             "project_id", "revision_number", name="uq_project_revisions_project_revision"
@@ -481,6 +761,8 @@ class ProjectRevision(Base):
     )
     active_dataset_version_id: Mapped[UUID] = mapped_column(nullable=False)
     chart_spec_revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    quality_report_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    cleaning_decision_set_id: Mapped[UUID | None] = mapped_column(nullable=True)
     created_by_user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -497,6 +779,12 @@ class ProjectRevision(Base):
     )
     chart_spec_revision: Mapped[ChartSpecRevision] = relationship(
         foreign_keys=[chart_spec_revision_id]
+    )
+    quality_report: Mapped[QualityReportRecord | None] = relationship(
+        foreign_keys=[quality_report_id]
+    )
+    cleaning_decision_set: Mapped[CleaningDecisionSet | None] = relationship(
+        foreign_keys=[cleaning_decision_set_id]
     )
     created_by: Mapped[User | None] = relationship(
         back_populates="created_project_revisions", foreign_keys=[created_by_user_id]
