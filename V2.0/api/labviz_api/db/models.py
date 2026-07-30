@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -151,6 +152,36 @@ class AuthRequest(Base):
     )
 
 
+class WorkerLease(Base):
+    """Task-level scanner lease; work-item leases remain on their authoritative rows."""
+
+    __tablename__ = "worker_leases"
+    __table_args__ = (
+        CheckConstraint(
+            "task IN ('pending-reconciliation', 'project-lifecycle', 'stored-object-gc', "
+            "'orphan-staging-inventory', 'metadata-cleanup')",
+            name="task",
+        ),
+        CheckConstraint("(lease_owner IS NULL) = (lease_until IS NULL)", name="lease_pair"),
+        CheckConstraint("fencing_token >= 0", name="fencing_token_nonnegative"),
+        Index("ix_worker_leases_until", "lease_until"),
+    )
+
+    task: Mapped[str] = mapped_column(String(64), primary_key=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = (
@@ -181,8 +212,23 @@ class Project(Base):
             "purge_after = deleted_at + INTERVAL '24 hours')",
             name="deletion_window",
         ),
+        CheckConstraint("(lease_owner IS NULL) = (lease_until IS NULL)", name="worker_lease_pair"),
+        CheckConstraint("fencing_token >= 0", name="worker_fencing_token_nonnegative"),
+        CheckConstraint("retry_count >= 0", name="worker_retry_count_nonnegative"),
+        CheckConstraint(
+            "quarantined_at IS NULL OR (lease_owner IS NULL AND lease_until IS NULL)",
+            name="worker_quarantine_has_no_lease",
+        ),
         Index("ix_projects_owner_updated", "owner_user_id", "updated_at"),
         Index("ix_projects_purge_after", "purge_after"),
+        Index(
+            "ix_projects_worker_claim",
+            "quarantined_at",
+            "next_attempt_at",
+            "lease_until",
+            "expires_at",
+            "purge_after",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -204,6 +250,17 @@ class Project(Base):
     purge_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lock_version: Mapped[int] = mapped_column(nullable=False, default=1)
+    lease_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retry_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    quarantined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -268,8 +325,23 @@ class StoredObject(Base):
             "(status <> 'pending' AND staging_key IS NULL)",
             name="pending_staging_key",
         ),
+        CheckConstraint("(lease_owner IS NULL) = (lease_until IS NULL)", name="worker_lease_pair"),
+        CheckConstraint("fencing_token >= 0", name="worker_fencing_token_nonnegative"),
+        CheckConstraint("retry_count >= 0", name="worker_retry_count_nonnegative"),
+        CheckConstraint(
+            "quarantined_at IS NULL OR (lease_owner IS NULL AND lease_until IS NULL)",
+            name="worker_quarantine_has_no_lease",
+        ),
         Index("ix_stored_objects_status_expires", "status", "expires_at"),
         Index("ix_stored_objects_gc_candidate", "gc_candidate_at"),
+        Index(
+            "ix_stored_objects_worker_claim",
+            "status",
+            "quarantined_at",
+            "next_attempt_at",
+            "lease_until",
+            "gc_candidate_at",
+        ),
         Index(
             "ix_stored_objects_dedup_lookup",
             "storage_backend",
@@ -300,6 +372,17 @@ class StoredObject(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gc_candidate_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retry_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    quarantined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -1179,7 +1262,21 @@ class StoredObjectWriteIntent(Base):
             "(status = 'completed' AND completed_at IS NOT NULL)",
             name="completion_state",
         ),
+        CheckConstraint("(lease_owner IS NULL) = (lease_until IS NULL)", name="worker_lease_pair"),
+        CheckConstraint("fencing_token >= 0", name="worker_fencing_token_nonnegative"),
+        CheckConstraint("retry_count >= 0", name="worker_retry_count_nonnegative"),
+        CheckConstraint(
+            "quarantined_at IS NULL OR (lease_owner IS NULL AND lease_until IS NULL)",
+            name="worker_quarantine_has_no_lease",
+        ),
         Index("ix_stored_object_write_intents_status_created", "status", "created_at"),
+        Index(
+            "ix_stored_object_write_intents_worker_claim",
+            "status",
+            "quarantined_at",
+            "next_attempt_at",
+            "lease_until",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -1194,6 +1291,17 @@ class StoredObjectWriteIntent(Base):
         DateTime(timezone=True), nullable=False, default=utc_now
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retry_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    quarantined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ShareExportBinding(Base):

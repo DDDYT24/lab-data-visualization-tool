@@ -48,9 +48,10 @@ Next:
 - [x] Add Phase 3 immutable QualityReport/Finding and CleaningDecisionSet/Decision lineage, derived Parquet DatasetVersions, copied chart revisions, API parity, and object compensation.
 - [x] Add Phase 4 PostgreSQL GuestSession/User ownership, authentication, in-place claim/Save, history/workspace assembly, current-revision Duplicate, 24-hour delete/restore, provenance, idempotency, and FK-authoritative object GC.
 - [x] Complete Phase 5A PostgreSQL revision-pinned HMAC sharing, fixed ShareLink/export bindings, immutable permanent publication exports, and recoverable StoredObjectWriteIntent flow.
-- [ ] Complete Phase 5B leased lifecycle/reconciliation workers, final FK reachability GC, orphan staging cleanup, and the S3-compatible adapter.
+- [x] Complete Phase 5B-1 independent Worker runner, task/work-item leases, PostgreSQL-time heartbeat, fencing, bounded retry/backoff, and quarantine infrastructure without destructive maintenance.
+- [ ] Complete Phase 5B-2 lifecycle/reconciliation execution, final FK reachability GC, orphan staging cleanup, and the S3-compatible adapter.
 - [ ] Design HTTP upload `Idempotency-Key` persistence and replay semantics without treating identical file hashes as the same intentional project.
-- [ ] Move pending StoredObject recovery from startup-only handling to a leased periodic reconciliation worker with retry, age, alert, and quarantine policies.
+- [ ] Activate pending StoredObject confirmation/finalization in the leased reconciliation worker and retire PostgreSQL lifespan recovery only after the Phase 5B-2 cross-restart path passes.
 - [ ] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
 - [ ] Add multi-host authentication abuse controls and a leased lifecycle/reconciliation worker before horizontally scaling the API.

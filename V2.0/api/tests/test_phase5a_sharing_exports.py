@@ -875,8 +875,10 @@ def test_migration_0005_downgrade_fails_closed_with_tracked_artifacts(
     with pytest.raises(DBAPIError, match="Phase 5A downgrade refused"):
         command.downgrade(_alembic_config(), "0004_identity_project_lifecycle")
     with postgres_database.engine.connect() as connection:
+        # Alembic runs the requested multi-revision downgrade transactionally;
+        # 0005's fail-closed guard therefore restores the 0006 starting head too.
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0005_share_publication_exports"
+            "0006_worker_leases"
         )
 
 
@@ -895,7 +897,7 @@ def test_empty_database_migrates_0005_to_0004_and_back(
     command.check(config)
     with postgres_database.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0005_share_publication_exports"
+            "0006_worker_leases"
         )
 
 
