@@ -689,7 +689,7 @@ def create_app(
         project_id: str,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> QualityReport:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         return QualityReport.model_validate_json(project["quality_json"])
@@ -703,10 +703,10 @@ def create_app(
         body: QualityRulesRequest,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> QualityReport:
-        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
-        frame = deserialize_dataframe(bytes(project["data_blob"]))
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        frame = repository.load_quality_dataframe(project_id)
         ranges = {rule.field: (rule.minimum, rule.maximum) for rule in body.ranges}
         if len(ranges) != len(body.ranges):
             raise ApiProblem(
@@ -718,7 +718,11 @@ def create_app(
             quality = build_quality_report(project_id, frame, ranges)
         except ProcessingError as exc:
             raise ApiProblem(422, exc.code, str(exc)) from exc
-        repository.replace_quality(project_id, quality)
+        repository.save_quality_report(
+            project_id,
+            quality,
+            parameters={"validRanges": [_model_json(rule) for rule in body.ranges]},
+        )
         return QualityReport.model_validate(quality)
 
     @app.patch(
@@ -730,7 +734,7 @@ def create_app(
         body: CleaningDecisionsRequest,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> CleaningDecisionsResponse:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         quality = QualityReport.model_validate_json(project["quality_json"])
@@ -1104,16 +1108,10 @@ def create_app(
         project_id: str,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> Response:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
-        frame = deserialize_dataframe(bytes(project["data_blob"]))
-        cleaned = apply_chart_decisions(
-            frame,
-            json.loads(project["quality_json"]),
-            repository.get_decisions(project_id),
-            actions={"remove"},
-        )
+        cleaned = repository.load_cleaned_dataframe(project_id)
         payload = cleaned.to_csv(index=False).encode("utf-8-sig")
         safe_name = "".join(
             character if character.isalnum() or character in {"-", "_"} else "-"

@@ -8,7 +8,15 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-from labviz_api.db.models import ProcessingRun, Project, ProjectRevision, SourceFile, StoredObject
+from labviz_api.db.models import (
+    CleaningDecisionSet,
+    ProcessingRun,
+    Project,
+    ProjectRevision,
+    QualityReportRecord,
+    SourceFile,
+    StoredObject,
+)
 
 
 class ProjectReader(Protocol):
@@ -62,6 +70,24 @@ class ProjectStore(ProjectReader, Protocol):
 
     def save_chart(self, project_id: str, chart: dict[str, Any]) -> str: ...
 
+    def load_quality_dataframe(self, project_id: str) -> pd.DataFrame: ...
+
+    def save_quality_report(
+        self,
+        project_id: str,
+        quality: dict[str, Any],
+        *,
+        parameters: dict[str, Any],
+    ) -> str: ...
+
+    def save_decisions(self, project_id: str, decisions: list[dict[str, str]]) -> str: ...
+
+    def get_decisions(self, project_id: str) -> list[dict[str, str]]: ...
+
+    def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame: ...
+
+    def load_chart_dataframe(self, project_id: str) -> pd.DataFrame: ...
+
 
 class ProjectRepository(Protocol):
     """Database-only aggregate access used inside one Unit of Work."""
@@ -81,6 +107,10 @@ class ProjectRepository(Protocol):
     def get_run_for_project(self, project_id: str) -> ProcessingRun | None: ...
 
     def get_revision(self, project_id: str, revision_number: int) -> ProjectRevision | None: ...
+
+    def current_quality_report(self, project: Project) -> QualityReportRecord | None: ...
+
+    def current_decision_set(self, project: Project) -> CleaningDecisionSet | None: ...
 
     def pending_objects(self) -> Iterable[StoredObject]: ...
 
