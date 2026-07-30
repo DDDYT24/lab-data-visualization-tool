@@ -37,6 +37,8 @@ Next:
 
 ## Backend Production Hardening
 
+**Last checkpoint:** 2026-07-30
+
 - [x] Approve the production data route: PostgreSQL metadata and revisions, S3-compatible object storage, and immutable Parquet dataset versions. See [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md).
 - [ ] Approve the remaining production backend runtime, worker, hosting, and provider selections; the current FastAPI service remains a local API-contract reference implementation.
 - [x] Implement versioned `ProjectSpec` v1 in frontend Zod and backend Pydantic, backed by immutable ProjectRevision records and cross-contract fixtures.
@@ -44,17 +46,19 @@ Next:
 - [x] Add the phase 1 SQLAlchemy 2 persistence boundary, PostgreSQL development/test environment, provider-neutral object-storage interface, first nine core models, and reversible Alembic migration.
 - [x] Add Phase 2 Repository/Unit of Work boundaries, selectable SQLite/PostgreSQL project persistence, ProjectSpec v1, Parquet v1, and the approved six-entity project revision slice without runtime dual-write.
 - [x] Add Phase 3 immutable QualityReport/Finding and CleaningDecisionSet/Decision lineage, derived Parquet DatasetVersions, copied chart revisions, API parity, and object compensation.
-- [ ] Migrate project save/history, sharing, publication exports, authentication, and physical expiry/purge workers in bounded follow-up slices.
+- [x] Add Phase 4 PostgreSQL GuestSession/User ownership, authentication, in-place claim/Save, history/workspace assembly, current-revision Duplicate, 24-hour delete/restore, provenance, idempotency, and FK-authoritative object GC.
+- [ ] Migrate immutable revision-pinned sharing and permanent publication exports in separate bounded slices.
 - [ ] Design HTTP upload `Idempotency-Key` persistence and replay semantics without treating identical file hashes as the same intentional project.
 - [ ] Move pending StoredObject recovery from startup-only handling to a leased periodic reconciliation worker with retry, age, alert, and quarantine policies.
 - [ ] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
-- [ ] Move reference-service SQLite authentication and project state to production-grade shared services before running multiple hosts.
+- [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
+- [ ] Add multi-host authentication abuse controls and a leased lifecycle/reconciliation worker before horizontally scaling the API.
 - [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.
-- [ ] Move saved cloud datasets and exports from SQLite blobs to managed object storage with a scheduled expiry worker.
-- [ ] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.
+- [ ] Move publication exports to managed object storage; saved PostgreSQL datasets already use the provider-neutral object-storage boundary.
+- [x] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.
 - [ ] Implement immutable share snapshots pinned to ProjectRevision; links do not expire by default, remain revocable, and never change when the working project is edited.
 - [ ] Retain saved-project exports for the lifetime of the project and remove them only after permanent project purge.
-- [ ] Implement 24-hour saved-project soft-delete recovery; suspend access immediately and purge database/object data after the window.
+- [x] Implement 24-hour saved-project soft-delete recovery; suspend access immediately and purge database/object data after the window.
 - [ ] Enforce the production baseline for TLS, managed encryption at rest, environment-separated secrets and KMS keys, seven-day-or-longer PITR, 30-day daily backup retention, and quarterly restore drills.
 - [ ] Select the initial cloud provider and single deployment/data region before public production launch; keep database, objects, workers, and backups co-located.
 - [ ] Finalize configurable saved-project count and total-storage quota values before public launch; keep the approved 50 MB per-upload limit.

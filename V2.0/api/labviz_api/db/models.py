@@ -60,6 +60,95 @@ class User(Base):
         back_populates="created_by",
         foreign_keys="CleaningDecisionSet.created_by_user_id",
     )
+    auth_sessions: Mapped[list[AuthSession]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class GuestSession(Base):
+    """Server-side anonymous browser identity; raw cookie tokens are never stored."""
+
+    __tablename__ = "guest_sessions"
+    __table_args__ = (
+        CheckConstraint("token_digest ~ '^[0-9a-f]{64}$'", name="token_digest_lower_hex"),
+        CheckConstraint("status IN ('active', 'revoked')", name="status"),
+        CheckConstraint(
+            "(status = 'revoked' AND revoked_at IS NOT NULL) OR "
+            "(status = 'active' AND revoked_at IS NULL)",
+            name="revoked_status_time",
+        ),
+        Index("ix_guest_sessions_status_expires", "status", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    token_digest: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    projects: Mapped[list[Project]] = relationship(back_populates="guest_session")
+
+
+class AuthChallenge(Base):
+    __tablename__ = "auth_challenges"
+    __table_args__ = (
+        CheckConstraint("email = lower(email)", name="email_normalized"),
+        CheckConstraint("failed_attempts >= 0", name="failed_attempts_nonnegative"),
+        Index("ix_auth_challenges_email_created", "email", "created_at"),
+        Index("ix_auth_challenges_expires", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    salt: Mapped[str] = mapped_column(String(64), nullable=False)
+    code_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resend_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        CheckConstraint("token_digest ~ '^[0-9a-f]{64}$'", name="token_digest_lower_hex"),
+        Index("ix_auth_sessions_user_expires", "user_id", "expires_at"),
+        Index("ix_auth_sessions_expires", "expires_at"),
+    )
+
+    token_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    user: Mapped[User] = relationship(back_populates="auth_sessions")
+
+
+class AuthRequest(Base):
+    __tablename__ = "auth_requests"
+    __table_args__ = (
+        Index("ix_auth_requests_client_time", "client_key", "requested_at"),
+        Index("ix_auth_requests_email_time", "email", "requested_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    client_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class Project(Base):
@@ -78,12 +167,12 @@ class Project(Base):
             name="storage_mode",
         ),
         CheckConstraint(
-            "storage_mode <> 'saved-cloud' OR owner_user_id IS NOT NULL",
-            name="saved_project_owner",
-        ),
-        CheckConstraint(
-            "storage_mode <> 'temporary-cloud' OR expires_at IS NOT NULL",
-            name="temporary_project_expiry",
+            "(storage_mode = 'temporary-cloud' AND expires_at IS NOT NULL AND "
+            "((owner_user_id IS NULL) <> (guest_session_id IS NULL))) OR "
+            "(storage_mode = 'saved-cloud' AND owner_user_id IS NOT NULL AND "
+            "guest_session_id IS NULL AND expires_at IS NULL) OR "
+            "storage_mode = 'local'",
+            name="ownership_by_storage_mode",
         ),
         CheckConstraint("length(title) BETWEEN 1 AND 200", name="title_length"),
         CheckConstraint(
@@ -100,8 +189,10 @@ class Project(Base):
     owner_user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
+    guest_session_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("guest_sessions.id", ondelete="RESTRICT"), nullable=True
+    )
     current_revision_id: Mapped[UUID | None] = mapped_column(nullable=True)
-    guest_token_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     storage_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -111,6 +202,8 @@ class Project(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     purge_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lock_version: Mapped[int] = mapped_column(nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -119,6 +212,7 @@ class Project(Base):
     )
 
     owner: Mapped[User | None] = relationship(back_populates="projects")
+    guest_session: Mapped[GuestSession | None] = relationship(back_populates="projects")
     current_revision: Mapped[ProjectRevision | None] = relationship(
         foreign_keys=[current_revision_id],
         post_update=True,
@@ -160,6 +254,10 @@ class StoredObject(Base):
         CheckConstraint("size_bytes >= 0", name="size_nonnegative"),
         CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="sha256_lower_hex"),
         CheckConstraint("length(object_key) > 0", name="object_key_nonempty"),
+        CheckConstraint("length(dedup_scope) > 0", name="dedup_scope_nonempty"),
+        CheckConstraint(
+            "length(format_contract_version) > 0", name="format_contract_version_nonempty"
+        ),
         CheckConstraint(
             "(status = 'deleted' AND deleted_at IS NOT NULL) OR "
             "(status <> 'deleted' AND deleted_at IS NULL)",
@@ -171,6 +269,18 @@ class StoredObject(Base):
             name="pending_staging_key",
         ),
         Index("ix_stored_objects_status_expires", "status", "expires_at"),
+        Index("ix_stored_objects_gc_candidate", "gc_candidate_at"),
+        Index(
+            "ix_stored_objects_dedup_lookup",
+            "storage_backend",
+            "dedup_scope",
+            "purpose",
+            "media_type",
+            "format_contract_version",
+            "sha256",
+            "size_bytes",
+            "encryption_key_id",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -183,8 +293,13 @@ class StoredObject(Base):
     size_bytes: Mapped[int] = mapped_column(nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     encryption_key_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    dedup_scope: Mapped[str] = mapped_column(String(255), nullable=False, default="legacy")
+    format_contract_version: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="unknown"
+    )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gc_candidate_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -193,7 +308,7 @@ class StoredObject(Base):
     )
 
     source_file: Mapped[SourceFile | None] = relationship(back_populates="stored_object")
-    dataset_version: Mapped[DatasetVersion | None] = relationship(back_populates="stored_object")
+    dataset_versions: Mapped[list[DatasetVersion]] = relationship(back_populates="stored_object")
 
 
 class SourceFile(Base):
@@ -328,7 +443,7 @@ class DatasetVersion(Base):
     dataset_id: Mapped[UUID] = mapped_column(nullable=False)
     parent_version_id: Mapped[UUID | None] = mapped_column(nullable=True)
     stored_object_id: Mapped[UUID] = mapped_column(
-        ForeignKey("stored_objects.id", ondelete="RESTRICT"), nullable=False, unique=True
+        ForeignKey("stored_objects.id", ondelete="RESTRICT"), nullable=False
     )
     version_number: Mapped[int] = mapped_column(nullable=False)
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -355,7 +470,7 @@ class DatasetVersion(Base):
     parent_version: Mapped[DatasetVersion | None] = relationship(
         remote_side=[id], foreign_keys=[parent_version_id]
     )
-    stored_object: Mapped[StoredObject] = relationship(back_populates="dataset_version")
+    stored_object: Mapped[StoredObject] = relationship(back_populates="dataset_versions")
     input_to_runs: Mapped[list[ProcessingRun]] = relationship(
         back_populates="input_dataset_version",
         foreign_keys="ProcessingRun.input_dataset_version_id",
@@ -395,6 +510,11 @@ class ProcessingRun(Base):
         CheckConstraint(
             "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')", name="status"
         ),
+        CheckConstraint("execution_mode IN ('executed', 'reused-result')", name="execution_mode"),
+        CheckConstraint(
+            "execution_mode <> 'reused-result' OR origin_run_uuid_snapshot IS NOT NULL",
+            name="reused_result_origin",
+        ),
         CheckConstraint(
             "finished_at IS NULL OR (started_at IS NOT NULL AND finished_at >= started_at)",
             name="finish_after_start",
@@ -419,6 +539,11 @@ class ProcessingRun(Base):
     parameters: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False, default=dict)
     algorithm_version: Mapped[str] = mapped_column(String(128), nullable=False)
     code_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(24), nullable=False, default="executed")
+    origin_processing_run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("processing_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    origin_run_uuid_snapshot: Mapped[UUID | None] = mapped_column(nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -788,4 +913,101 @@ class ProjectRevision(Base):
     )
     created_by: Mapped[User | None] = relationship(
         back_populates="created_project_revisions", foreign_keys=[created_by_user_id]
+    )
+
+
+class ProjectClaim(Base):
+    """Single successful GuestSession-to-User ownership transfer for a Project."""
+
+    __tablename__ = "project_claims"
+
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
+    )
+    guest_session_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("guest_sessions.id", ondelete="SET NULL"), nullable=True
+    )
+    user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    guest_session_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    user_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    claimed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class ProjectOrigin(Base):
+    """Duplicate/import provenance that survives deletion of the source aggregate."""
+
+    __tablename__ = "project_origins"
+    __table_args__ = (
+        CheckConstraint("origin_kind IN ('duplicate', 'local-import')", name="origin_kind"),
+    )
+
+    target_project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
+    )
+    source_project_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    source_revision_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("project_revisions.id", ondelete="SET NULL"), nullable=True
+    )
+    source_project_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    source_revision_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    origin_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class ProjectLifecycleEvent(Base):
+    __tablename__ = "project_lifecycle_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('claim', 'save', 'duplicate', 'delete', 'restore', "
+            "'revision-restore', 'purge')",
+            name="event_type",
+        ),
+        Index("ix_project_lifecycle_events_project_created", "project_uuid_snapshot", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    project_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_user_id", "operation", "idempotency_key", name="uq_idempotency_actor_operation"
+        ),
+        CheckConstraint("length(idempotency_key) BETWEEN 1 AND 255", name="key_length"),
+        Index("ix_idempotency_records_created", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    actor_user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    resource_id: Mapped[UUID] = mapped_column(nullable=False)
+    response_document: Mapped[dict[str, Any]] = mapped_column(
+        JSON_DOCUMENT, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
     )

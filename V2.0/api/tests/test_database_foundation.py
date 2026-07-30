@@ -17,6 +17,7 @@ from labviz_api.db.models import (
     ChartSpecRevision,
     Dataset,
     DatasetVersion,
+    GuestSession,
     ProcessingRun,
     Project,
     ProjectRevision,
@@ -42,6 +43,14 @@ CORE_TABLES = {
     "quality_findings",
     "cleaning_decision_sets",
     "cleaning_decisions",
+    "guest_sessions",
+    "auth_challenges",
+    "auth_sessions",
+    "auth_requests",
+    "project_claims",
+    "project_origins",
+    "project_lifecycle_events",
+    "idempotency_records",
 }
 
 
@@ -342,7 +351,15 @@ def test_chart_revision_cannot_reference_another_projects_dataset(
     now = datetime.now(UTC)
 
     def project_with_version(label: str, digest: str) -> tuple[Project, DatasetVersion]:
+        guest_session = GuestSession(
+            token_digest=(digest * 64)[:64],
+            status="active",
+            expires_at=now + timedelta(hours=2),
+            last_seen_at=now,
+            created_at=now,
+        )
         project = Project(
+            guest_session=guest_session,
             storage_mode="temporary-cloud",
             title=label,
             expires_at=now + timedelta(hours=2),
