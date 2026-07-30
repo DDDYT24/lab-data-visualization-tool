@@ -47,7 +47,8 @@ Next:
 - [x] Add Phase 2 Repository/Unit of Work boundaries, selectable SQLite/PostgreSQL project persistence, ProjectSpec v1, Parquet v1, and the approved six-entity project revision slice without runtime dual-write.
 - [x] Add Phase 3 immutable QualityReport/Finding and CleaningDecisionSet/Decision lineage, derived Parquet DatasetVersions, copied chart revisions, API parity, and object compensation.
 - [x] Add Phase 4 PostgreSQL GuestSession/User ownership, authentication, in-place claim/Save, history/workspace assembly, current-revision Duplicate, 24-hour delete/restore, provenance, idempotency, and FK-authoritative object GC.
-- [ ] Migrate immutable revision-pinned sharing and permanent publication exports in separate bounded slices.
+- [x] Complete Phase 5A PostgreSQL revision-pinned HMAC sharing, fixed ShareLink/export bindings, immutable permanent publication exports, and recoverable StoredObjectWriteIntent flow.
+- [ ] Complete Phase 5B leased lifecycle/reconciliation workers, final FK reachability GC, orphan staging cleanup, and the S3-compatible adapter.
 - [ ] Design HTTP upload `Idempotency-Key` persistence and replay semantics without treating identical file hashes as the same intentional project.
 - [ ] Move pending StoredObject recovery from startup-only handling to a leased periodic reconciliation worker with retry, age, alert, and quarantine policies.
 - [ ] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
@@ -56,8 +57,8 @@ Next:
 - [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.
 - [ ] Move publication exports to managed object storage; saved PostgreSQL datasets already use the provider-neutral object-storage boundary.
 - [x] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.
-- [ ] Implement immutable share snapshots pinned to ProjectRevision; links do not expire by default, remain revocable, and never change when the working project is edited.
-- [ ] Retain saved-project exports for the lifetime of the project and remove them only after permanent project purge.
+- [x] Implement immutable share snapshots pinned to ProjectRevision; links do not expire by default, remain revocable, and never change when the working project is edited.
+- [x] Retain saved-project publication exports for the lifetime of the project and remove them only after permanent project purge.
 - [x] Implement 24-hour saved-project soft-delete recovery; suspend access immediately and purge database/object data after the window.
 - [ ] Enforce the production baseline for TLS, managed encryption at rest, environment-separated secrets and KMS keys, seven-day-or-longer PITR, 30-day daily backup retention, and quarterly restore drills.
 - [ ] Select the initial cloud provider and single deployment/data region before public production launch; keep database, objects, workers, and backups co-located.

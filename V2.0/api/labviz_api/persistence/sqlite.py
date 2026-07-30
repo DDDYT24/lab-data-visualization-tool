@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 
@@ -14,11 +16,22 @@ from labviz_api.processing import (
     serialize_dataframe,
 )
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
+from labviz_api.repository import expires_in
+from labviz_api.share_tokens import ShareTokenCodec
 
 
 class SqliteProjectStore:
-    def __init__(self, repository: SqliteReferenceRepository) -> None:
+    def __init__(
+        self,
+        repository: SqliteReferenceRepository,
+        share_tokens: ShareTokenCodec | None = None,
+        export_ttl_seconds: int = 7_200,
+    ) -> None:
         self.repository = repository
+        self.share_tokens = share_tokens or ShareTokenCodec.from_strings(
+            ((1, "labviz-development-share-token-key-v1"),), 1
+        )
+        self.export_ttl_seconds = export_ttl_seconds
 
     def ping(self) -> bool:
         return self.repository.ping()
@@ -218,4 +231,158 @@ class SqliteProjectStore:
             "decisions": self.repository.get_decisions(project_id),
             "chart": json.loads(project["chart_json"]),
             "shares": self.repository.list_shares(project_id),
+        }
+
+    def create_share(
+        self,
+        *,
+        project_id: str,
+        owner_user_id: str,
+        downloads_enabled: bool,
+    ) -> dict[str, Any]:
+        token = self.share_tokens.issue(uuid4())
+        created_at = self.repository.create_share(
+            token=token,
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            downloads_enabled=downloads_enabled,
+        )
+        return {
+            "token": token,
+            "downloads_enabled": downloads_enabled,
+            "created_at": created_at,
+        }
+
+    def update_share(
+        self,
+        *,
+        token: str,
+        project_id: str,
+        owner_user_id: str,
+        downloads_enabled: bool,
+    ) -> dict[str, Any] | None:
+        project = self.repository.get_project(project_id, touch=False)
+        share = self.repository.get_share(token)
+        if (
+            project is None
+            or project.get("owner_user_id") != owner_user_id
+            or share is None
+            or share["project_id"] != project_id
+        ):
+            return None
+        self.repository.update_share(token, project_id, downloads_enabled)
+        return {
+            "token": token,
+            "downloads_enabled": downloads_enabled,
+            "created_at": share["created_at"],
+        }
+
+    def revoke_share(
+        self,
+        *,
+        token: str,
+        project_id: str,
+        owner_user_id: str,
+    ) -> bool:
+        project = self.repository.get_project(project_id, touch=False)
+        if project is None or project.get("owner_user_id") != owner_user_id:
+            return False
+        share = self.repository.get_share(token)
+        if share is None:
+            return True
+        if share["project_id"] != project_id:
+            return False
+        return self.repository.revoke_share(token, project_id)
+
+    def get_shared_project(self, token: str) -> tuple[dict[str, Any], pd.DataFrame] | None:
+        share = self.repository.get_share(token)
+        if share is None:
+            return None
+        project = self.repository.get_project(share["project_id"], touch=False)
+        if project is None:
+            return None
+        chart = json.loads(project["chart_json"])
+        frame = apply_chart_decisions(
+            deserialize_dataframe(bytes(project["data_blob"])),
+            json.loads(project["quality_json"]),
+            self.repository.get_decisions(project["id"]),
+        )
+        formats = self.repository.latest_exports(project["id"])
+        return (
+            {
+                "token": token,
+                "project_id": project["id"],
+                "title": project["title"],
+                "description": "A figure shared from LabViz.",
+                "updated_at": project["updated_at"],
+                "chart": chart,
+                "preview": json.loads(project["preview_json"]),
+                "downloads_enabled": bool(share["downloads_enabled"]),
+                "download_formats": sorted(formats),
+            },
+            frame,
+        )
+
+    def create_publication_export(
+        self,
+        *,
+        project_id: str,
+        expected_revision_id: str | None,
+        chart: dict[str, Any],
+        payload: bytes,
+        owner_user_id: str | None,
+        guest_token_digest: str | None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        del expected_revision_id, owner_user_id, guest_token_digest, idempotency_key
+        export_id = uuid4().hex
+        format_name = str(chart["export"]["format"])
+        expires_at = expires_in(self.export_ttl_seconds)
+        self.repository.save_chart(project_id, chart)
+        self.repository.save_export(
+            export_id=export_id,
+            project_id=project_id,
+            format_name=format_name,
+            payload=payload,
+            expires_at=expires_at,
+            message="Your publication-ready figure is ready to download.",
+        )
+        return {
+            "id": export_id,
+            "project_id": project_id,
+            "status": "ready",
+            "format": format_name,
+            "expires_at": expires_at,
+            "message": "Your publication-ready figure is ready to download.",
+        }
+
+    def get_export(self, export_id: str) -> dict[str, Any] | None:
+        return self.repository.get_export(export_id)
+
+    def get_export_metadata(self, export_id: str) -> dict[str, Any] | None:
+        self.repository.cleanup_expired()
+        with sqlite3.connect(self.repository.database_path, timeout=30) as connection:
+            connection.row_factory = sqlite3.Row
+            row = connection.execute(
+                "SELECT id, project_id, format FROM exports WHERE id = ?",
+                (export_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "project_id": row["project_id"],
+            "format": row["format"],
+        }
+
+    def get_shared_export(self, token: str, format_name: str) -> dict[str, Any] | None:
+        share = self.repository.get_share(token)
+        if share is None:
+            return None
+        if not bool(share["downloads_enabled"]):
+            return {"downloads_enabled": False, "export": None}
+        export_id = self.repository.latest_exports(share["project_id"]).get(format_name)
+        return {
+            "downloads_enabled": True,
+            "export": self.repository.get_export(export_id) if export_id else None,
         }

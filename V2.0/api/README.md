@@ -4,7 +4,9 @@ SQLite remains the default reference repository. Phase 2 adds an opt-in PostgreS
 persistence slice for project creation, reopening, preview, and immutable chart revisions without
 changing their `/api/v1` request or response models. The two project backends are selected, never
 dual-written. Phase 3 extends that selected backend through quality reports, immutable cleaning
-decisions, derived Parquet DatasetVersions, and cleaned-data download.
+decisions, derived Parquet DatasetVersions, and cleaned-data download. Phase 4 adds identity and
+project lifecycle persistence. Phase 5A adds revision-pinned HMAC shares and immutable publication
+exports without changing the SQLite reference repository.
 
 ## Local PostgreSQL
 
@@ -33,15 +35,21 @@ Select PostgreSQL for the migrated project slice:
 $env:LABVIZ_PERSISTENCE_BACKEND = "postgresql"
 $env:LABVIZ_POSTGRES_URL = "postgresql+psycopg://labviz:labviz-local@127.0.0.1:54329/labviz"
 $env:LABVIZ_OBJECT_STORAGE_ROOT = ".labviz/objects"
+$env:LABVIZ_SHARE_TOKEN_KEY_VERSION = "1"
+$env:LABVIZ_SHARE_TOKEN_KEYS = "1=replace-with-at-least-32-random-characters"
 python -m uvicorn labviz_api.main:app --reload
 ```
 
+Share key rotation keeps old `version=secret` entries in `LABVIZ_SHARE_TOKEN_KEYS` for validation
+while `LABVIZ_SHARE_TOKEN_KEY_VERSION` selects the only version used for new links. Do not remove
+an old key while a ShareLink still records that `token_key_version`.
+
 Omit `LABVIZ_PERSISTENCE_BACKEND` or set it to `sqlite` to run the unchanged reference path.
 
-Rollback only the Phase 2 migration while retaining the Phase 1 tables, then reapply it:
+Rollback only Phase 5A while retaining the Phase 4 schema, then reapply it:
 
 ```powershell
-python -m alembic downgrade 0001_core_foundation
+python -m alembic downgrade 0004_identity_project_lifecycle
 python -m alembic upgrade head
 ```
 

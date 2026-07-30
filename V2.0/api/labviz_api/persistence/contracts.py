@@ -130,6 +130,51 @@ class ProjectStore(ProjectReader, Protocol):
 
     def get_workspace(self, project_id: str) -> dict[str, Any]: ...
 
+    def create_share(
+        self,
+        *,
+        project_id: str,
+        owner_user_id: str,
+        downloads_enabled: bool,
+    ) -> dict[str, Any]: ...
+
+    def update_share(
+        self,
+        *,
+        token: str,
+        project_id: str,
+        owner_user_id: str,
+        downloads_enabled: bool,
+    ) -> dict[str, Any] | None: ...
+
+    def revoke_share(
+        self,
+        *,
+        token: str,
+        project_id: str,
+        owner_user_id: str,
+    ) -> bool: ...
+
+    def get_shared_project(self, token: str) -> tuple[dict[str, Any], pd.DataFrame] | None: ...
+
+    def create_publication_export(
+        self,
+        *,
+        project_id: str,
+        expected_revision_id: str | None,
+        chart: dict[str, Any],
+        payload: bytes,
+        owner_user_id: str | None,
+        guest_token_digest: str | None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    def get_export_metadata(self, export_id: str) -> dict[str, Any] | None: ...
+
+    def get_export(self, export_id: str) -> dict[str, Any] | None: ...
+
+    def get_shared_export(self, token: str, format_name: str) -> dict[str, Any] | None: ...
+
 
 class ProjectRepository(Protocol):
     """Database-only aggregate access used inside one Unit of Work."""

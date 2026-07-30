@@ -27,6 +27,7 @@ from labviz_api.db.models import (
     CleaningDecisionSet,
     Dataset,
     DatasetVersion,
+    ExportJobRecord,
     GuestSession,
     IdempotencyRecord,
     ProcessingRun,
@@ -35,10 +36,15 @@ from labviz_api.db.models import (
     ProjectLifecycleEvent,
     ProjectOrigin,
     ProjectRevision,
+    PublicationExport,
     QualityFindingRecord,
     QualityReportRecord,
+    ShareExportBinding,
+    ShareLinkEvent,
+    ShareLinkRecord,
     SourceFile,
     StoredObject,
+    StoredObjectWriteIntent,
     User,
 )
 from labviz_api.db.session import Database
@@ -51,6 +57,7 @@ from labviz_api.project_spec import (
     ProjectSpecV1,
 )
 from labviz_api.repository import iso_at
+from labviz_api.share_tokens import ShareTokenCodec
 from labviz_api.storage import ObjectStorage, StagedObject
 
 from .contracts import ProjectRepository
@@ -68,7 +75,17 @@ QUALITY_ALGORITHM_VERSION = "quality-v1"
 CLEANING_ALGORITHM_VERSION = "cleaning-decisions-v1"
 PHASE3_CODE_VERSION = "v2-phase3"
 PHASE4_CODE_VERSION = "v2-phase4"
+PHASE5_CODE_VERSION = "v2-phase5a"
+EXPORT_RENDERER_NAME = "labviz-matplotlib"
+EXPORT_RENDERER_VERSION = "1"
+EXPORT_CONTRACT_VERSION = "publication-export-v1"
+API_CONTRACT_VERSION = "api-v1"
 MAX_PERSISTED_FINDING_REFS = 100
+EXPORT_MEDIA_TYPES = {
+    "png": "image/png",
+    "svg": "image/svg+xml",
+    "pdf": "application/pdf",
+}
 
 
 def _uuid(value: str | UUID) -> UUID:
@@ -90,6 +107,67 @@ def _parse_iso(value: str) -> datetime:
 def _scope_storage_key(dedup_scope: str, sha256: str) -> str:
     scope_hash = hashlib.sha256(dedup_scope.encode("utf-8")).hexdigest()[:32]
     return f"datasets/parquet-v1/{scope_hash}/{sha256}.parquet"
+
+
+def _export_storage_key(dedup_scope: str, sha256: str, format_name: str) -> str:
+    scope_hash = hashlib.sha256(dedup_scope.encode("utf-8")).hexdigest()[:32]
+    return f"exports/{EXPORT_CONTRACT_VERSION}/{scope_hash}/{sha256}.{format_name}"
+
+
+def _canonical_sha256(document: dict[str, Any]) -> str:
+    payload = json.dumps(
+        document,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _export_request_sha256(
+    *,
+    actor_user_id: UUID | None,
+    guest_session_id: UUID | None,
+    project_id: UUID,
+    project_revision_id: UUID,
+    chart_document: dict[str, Any],
+) -> str:
+    if actor_user_id is not None:
+        actor = {"kind": "user", "id": actor_user_id.hex}
+    elif guest_session_id is not None:
+        actor = {"kind": "guest-session", "id": guest_session_id.hex}
+    else:
+        raise ValueError("An export request requires exactly one actor.")
+    return _canonical_sha256(
+        {
+            "actor": actor,
+            "projectId": project_id.hex,
+            "projectRevisionId": project_revision_id.hex,
+            "chart": chart_document,
+            "apiContractVersion": API_CONTRACT_VERSION,
+            "exportContractVersion": EXPORT_CONTRACT_VERSION,
+        }
+    )
+
+
+def _validate_export_payload(payload: bytes, format_name: str) -> dict[str, Any]:
+    if not payload:
+        raise PersistenceConflict("The rendered export is empty.")
+    valid = False
+    if format_name == "png":
+        valid = payload.startswith(b"\x89PNG\r\n\x1a\n")
+    elif format_name == "pdf":
+        valid = payload.startswith(b"%PDF-")
+    elif format_name == "svg":
+        try:
+            valid = "<svg" in payload[:1024].decode("utf-8").lower()
+        except UnicodeDecodeError:
+            valid = False
+    if not valid:
+        raise PersistenceConflict(
+            f"Rendered bytes do not match the requested {format_name} format."
+        )
+    return {"signatureValidated": True, "validatorVersion": "export-signature-v1"}
 
 
 def _canonical_decisions(decisions: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -373,11 +451,15 @@ class PostgresProjectStore:
         project_ttl_seconds: int,
         *,
         guest_session_ttl_seconds: int = 604_800,
+        share_tokens: ShareTokenCodec | None = None,
     ) -> None:
         self.database = database
         self.storage = storage
         self.project_ttl_seconds = project_ttl_seconds
         self.guest_session_ttl_seconds = guest_session_ttl_seconds
+        self.share_tokens = share_tokens or ShareTokenCodec.from_strings(
+            ((1, "labviz-development-share-token-key-v1"),), 1
+        )
 
     def _uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.database)
@@ -387,6 +469,14 @@ class PostgresProjectStore:
 
     def ping(self) -> bool:
         return self.database.health().ready
+
+    def _discard_staged_best_effort(self, staged: StagedObject) -> None:
+        """Do not turn a committed result or the original failure into a cleanup failure."""
+        try:
+            self.storage.discard(staged)
+        except Exception:
+            # Phase 5B's orphan-staging cleanup owns eventual removal.
+            return
 
     def allow_auth_request(
         self,
@@ -601,6 +691,12 @@ class PostgresProjectStore:
                 )
                 uow.session.execute(sql_delete(AuthSession).where(AuthSession.expires_at <= now))
                 uow.session.execute(
+                    sql_delete(IdempotencyRecord).where(
+                        IdempotencyRecord.expires_at.is_not(None),
+                        IdempotencyRecord.expires_at <= now,
+                    )
+                )
+                uow.session.execute(
                     sql_delete(AuthRequest).where(
                         AuthRequest.requested_at < now - timedelta(hours=1)
                     )
@@ -649,27 +745,36 @@ class PostgresProjectStore:
             )
             or 0
         )
-        return dataset_refs + source_refs
-
-    def _mark_gc_candidates(self, stored_object_ids: list[UUID]) -> None:
-        if not stored_object_ids:
-            return
-        now = _now()
-        with self._uow() as uow:
-            assert uow.session is not None
-            objects = list(
-                uow.session.scalars(
-                    select(StoredObject)
-                    .where(StoredObject.id.in_(set(stored_object_ids)))
-                    .with_for_update()
+        publication_refs = int(
+            session.scalar(
+                select(func.count())
+                .select_from(PublicationExport)
+                .where(PublicationExport.stored_object_id == stored_object_id)
+            )
+            or 0
+        )
+        intent_refs = int(
+            session.scalar(
+                select(func.count())
+                .select_from(StoredObjectWriteIntent)
+                .where(
+                    StoredObjectWriteIntent.stored_object_id == stored_object_id,
+                    StoredObjectWriteIntent.status == "pending",
                 )
             )
-            for stored_object in objects:
-                if self._object_reference_count(uow.session, stored_object.id) == 0:
-                    stored_object.gc_candidate_at = now
-            uow.commit()
+            or 0
+        )
+        pending_job_refs = int(
+            session.scalar(
+                select(func.count())
+                .select_from(ExportJobRecord)
+                .where(ExportJobRecord.pending_stored_object_id == stored_object_id)
+            )
+            or 0
+        )
+        return dataset_refs + source_refs + publication_refs + intent_refs + pending_job_refs
 
-    def _purge_project(self, project_id: UUID) -> None:
+    def _purge_project(self, project_id: UUID, *, force_temporary: bool = False) -> bool:
         object_ids: list[UUID] = []
         with self._uow() as uow:
             assert uow.session is not None
@@ -679,11 +784,11 @@ class PostgresProjectStore:
             now = _now()
             if project is None:
                 uow.commit()
-                return
+                return False
             eligible = (
                 project.storage_mode == "temporary-cloud"
                 and project.expires_at is not None
-                and project.expires_at <= now
+                and (force_temporary or project.expires_at <= now)
             ) or (
                 project.deleted_at is not None
                 and project.purge_after is not None
@@ -691,14 +796,49 @@ class PostgresProjectStore:
             )
             if not eligible:
                 uow.commit()
-                return
+                return False
             object_ids = list(
-                uow.session.scalars(
-                    select(DatasetVersion.stored_object_id).where(
-                        DatasetVersion.project_id == project.id
+                {
+                    *uow.session.scalars(
+                        select(DatasetVersion.stored_object_id).where(
+                            DatasetVersion.project_id == project.id
+                        )
+                    ),
+                    *uow.session.scalars(
+                        select(SourceFile.stored_object_id).where(
+                            SourceFile.project_id == project.id,
+                            SourceFile.stored_object_id.is_not(None),
+                        )
+                    ),
+                    *uow.session.scalars(
+                        select(PublicationExport.stored_object_id).where(
+                            PublicationExport.project_id == project.id
+                        )
+                    ),
+                    *uow.session.scalars(
+                        select(StoredObjectWriteIntent.stored_object_id).where(
+                            StoredObjectWriteIntent.project_id == project.id,
+                            StoredObjectWriteIntent.status == "pending",
+                        )
+                    ),
+                    *uow.session.scalars(
+                        select(ExportJobRecord.pending_stored_object_id).where(
+                            ExportJobRecord.project_id == project.id,
+                            ExportJobRecord.pending_stored_object_id.is_not(None),
+                        )
+                    ),
+                }
+            )
+            if object_ids:
+                stored_objects = list(
+                    uow.session.scalars(
+                        select(StoredObject)
+                        .where(StoredObject.id.in_(object_ids))
+                        .with_for_update()
                     )
                 )
-            )
+                for stored_object in stored_objects:
+                    stored_object.gc_candidate_at = now
             uow.session.add(
                 ProjectLifecycleEvent(
                     id=uuid4(),
@@ -712,7 +852,7 @@ class PostgresProjectStore:
             )
             uow.session.delete(project)
             uow.commit()
-        self._mark_gc_candidates(object_ids)
+            return True
 
     def _collect_garbage(self) -> int:
         with self._uow() as uow:
@@ -993,6 +1133,9 @@ class PostgresProjectStore:
         )
         return {
             "id": _id(project.id),
+            "current_revision_id": (
+                _id(project.current_revision_id) if project.current_revision_id else None
+            ),
             "title": project.title,
             "source_json": json.dumps(source_document, ensure_ascii=False),
             "storage_mode": project.storage_mode,
@@ -1891,8 +2034,1000 @@ class PostgresProjectStore:
                     "quality": report.report_document,
                     "decisions": decisions,
                     "chart": chart.spec_document,
-                    "shares": [],
+                    "shares": [
+                        self._share_row(share)
+                        for share in uow.session.scalars(
+                            select(ShareLinkRecord)
+                            .where(
+                                ShareLinkRecord.project_id == project.id,
+                                ShareLinkRecord.status == "active",
+                                or_(
+                                    ShareLinkRecord.expires_at.is_(None),
+                                    ShareLinkRecord.expires_at > _now(),
+                                ),
+                            )
+                            .order_by(ShareLinkRecord.created_at)
+                        )
+                    ],
                 }
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def _share_row(self, share: ShareLinkRecord) -> dict[str, Any]:
+        return {
+            "token": self.share_tokens.issue(share.id, share.token_key_version),
+            "project_id": _id(share.project_id),
+            "project_revision_id": _id(share.project_revision_id),
+            "downloads_enabled": share.downloads_enabled,
+            "created_at": iso_at(share.created_at),
+        }
+
+    def _load_share_by_token(
+        self,
+        session: Session,
+        token: str,
+        *,
+        for_update: bool = False,
+        require_active: bool = True,
+    ) -> tuple[ShareLinkRecord, Project] | None:
+        parsed_id = self.share_tokens.parse_public_id(token)
+        lookup_id = parsed_id or UUID(int=0)
+        statement = select(ShareLinkRecord).where(ShareLinkRecord.id == lookup_id)
+        share = session.scalar(statement)
+        key_version = (
+            share.token_key_version if share is not None else self.share_tokens.current_key_version
+        )
+        stored_digest = share.token_digest if share is not None else "0" * 64
+        verified = self.share_tokens.verify(
+            token,
+            public_id=lookup_id,
+            key_version=key_version,
+            stored_digest=stored_digest,
+        )
+        if share is None or not verified:
+            return None
+        if for_update:
+            project = session.scalar(
+                select(Project).where(Project.id == share.project_id).with_for_update()
+            )
+            share = session.scalar(
+                select(ShareLinkRecord).where(ShareLinkRecord.id == share.id).with_for_update()
+            )
+            if share is None or not self.share_tokens.verify(
+                token,
+                public_id=share.id,
+                key_version=share.token_key_version,
+                stored_digest=share.token_digest,
+            ):
+                return None
+        else:
+            project = session.get(Project, share.project_id)
+        now = _now()
+        unavailable = bool(
+            project is None
+            or project.deleted_at is not None
+            or (
+                project.storage_mode == "temporary-cloud"
+                and project.expires_at is not None
+                and project.expires_at <= now
+            )
+            or (share.expires_at is not None and share.expires_at <= now)
+            or (require_active and share.status != "active")
+        )
+        if unavailable or project is None:
+            return None
+        return share, project
+
+    @staticmethod
+    def _share_owner_matches(project: Project, owner_user_id: str) -> bool:
+        return bool(
+            project.storage_mode == "saved-cloud"
+            and project.owner_user_id == _uuid(owner_user_id)
+            and project.deleted_at is None
+        )
+
+    @staticmethod
+    def _bind_existing_exports(
+        session: Session,
+        share: ShareLinkRecord,
+        now: datetime,
+    ) -> None:
+        if not share.downloads_enabled:
+            return
+        bound_formats = set(
+            session.scalars(
+                select(ShareExportBinding.format).where(
+                    ShareExportBinding.share_link_id == share.id
+                )
+            )
+        )
+        for format_name in EXPORT_MEDIA_TYPES:
+            if format_name in bound_formats:
+                continue
+            publication = session.scalar(
+                select(PublicationExport)
+                .where(
+                    PublicationExport.project_id == share.project_id,
+                    PublicationExport.project_revision_id == share.project_revision_id,
+                    PublicationExport.format == format_name,
+                )
+                .order_by(PublicationExport.created_at, PublicationExport.id)
+                .limit(1)
+            )
+            if publication is not None:
+                session.add(
+                    ShareExportBinding(
+                        share_link_id=share.id,
+                        format=format_name,
+                        project_id=share.project_id,
+                        project_revision_id=share.project_revision_id,
+                        publication_export_id=publication.id,
+                        created_at=now,
+                    )
+                )
+
+    @staticmethod
+    def _bind_export_to_shares(
+        session: Session,
+        publication: PublicationExport,
+        now: datetime,
+    ) -> None:
+        shares = list(
+            session.scalars(
+                select(ShareLinkRecord)
+                .where(
+                    ShareLinkRecord.project_id == publication.project_id,
+                    ShareLinkRecord.project_revision_id == publication.project_revision_id,
+                    ShareLinkRecord.status == "active",
+                    ShareLinkRecord.downloads_enabled.is_(True),
+                    or_(
+                        ShareLinkRecord.expires_at.is_(None),
+                        ShareLinkRecord.expires_at > now,
+                    ),
+                )
+                .with_for_update()
+            )
+        )
+        for share in shares:
+            existing = session.get(ShareExportBinding, (share.id, publication.format))
+            if existing is None:
+                session.add(
+                    ShareExportBinding(
+                        share_link_id=share.id,
+                        format=publication.format,
+                        project_id=share.project_id,
+                        project_revision_id=share.project_revision_id,
+                        publication_export_id=publication.id,
+                        created_at=now,
+                    )
+                )
+
+    def create_share(
+        self,
+        *,
+        project_id: str,
+        owner_user_id: str,
+        downloads_enabled: bool,
+    ) -> dict[str, Any]:
+        now = _now()
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project = uow.projects.get_project(project_id, for_update=True)
+                if (
+                    project is None
+                    or project.current_revision_id is None
+                    or not self._share_owner_matches(project, owner_user_id)
+                ):
+                    raise PersistenceNotFound("Shareable project does not exist.")
+                public_id = uuid4()
+                key_version = self.share_tokens.current_key_version
+                token = self.share_tokens.issue(public_id, key_version)
+                share = ShareLinkRecord(
+                    id=public_id,
+                    project_id=project.id,
+                    project_revision_id=project.current_revision_id,
+                    created_by_user_id=_uuid(owner_user_id),
+                    token_digest=self.share_tokens.digest(token),
+                    token_key_version=key_version,
+                    downloads_enabled=downloads_enabled,
+                    status="active",
+                    created_at=now,
+                    updated_at=now,
+                )
+                uow.session.add(share)
+                uow.session.flush()
+                self._bind_existing_exports(uow.session, share, now)
+                uow.session.add(
+                    ShareLinkEvent(
+                        id=uuid4(),
+                        share_link_id=share.id,
+                        share_uuid_snapshot=share.id,
+                        project_uuid_snapshot=project.id,
+                        project_revision_uuid_snapshot=project.current_revision_id,
+                        actor_user_id=_uuid(owner_user_id),
+                        event_type="create",
+                        details={"downloadsEnabled": downloads_enabled},
+                        created_at=now,
+                    )
+                )
+                uow.commit()
+                return self._share_row(share)
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def update_share(
+        self,
+        *,
+        token: str,
+        project_id: str,
+        owner_user_id: str,
+        downloads_enabled: bool,
+    ) -> dict[str, Any] | None:
+        now = _now()
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                resolved = self._load_share_by_token(
+                    uow.session, token, for_update=True, require_active=True
+                )
+                if resolved is None:
+                    return None
+                share, project = resolved
+                if share.project_id != _uuid(project_id) or not self._share_owner_matches(
+                    project, owner_user_id
+                ):
+                    return None
+                share.downloads_enabled = downloads_enabled
+                share.updated_at = now
+                if downloads_enabled:
+                    self._bind_existing_exports(uow.session, share, now)
+                uow.session.add(
+                    ShareLinkEvent(
+                        id=uuid4(),
+                        share_link_id=share.id,
+                        share_uuid_snapshot=share.id,
+                        project_uuid_snapshot=project.id,
+                        project_revision_uuid_snapshot=share.project_revision_id,
+                        actor_user_id=_uuid(owner_user_id),
+                        event_type="downloads-update",
+                        details={"downloadsEnabled": downloads_enabled},
+                        created_at=now,
+                    )
+                )
+                uow.commit()
+                return self._share_row(share)
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def revoke_share(
+        self,
+        *,
+        token: str,
+        project_id: str,
+        owner_user_id: str,
+    ) -> bool:
+        now = _now()
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                resolved = self._load_share_by_token(
+                    uow.session, token, for_update=True, require_active=False
+                )
+                if resolved is None:
+                    return False
+                share, project = resolved
+                if share.project_id != _uuid(project_id) or not self._share_owner_matches(
+                    project, owner_user_id
+                ):
+                    return False
+                if share.status == "revoked":
+                    return True
+                share.status = "revoked"
+                share.revoked_at = now
+                share.revoked_by_user_id = _uuid(owner_user_id)
+                share.updated_at = now
+                uow.session.add(
+                    ShareLinkEvent(
+                        id=uuid4(),
+                        share_link_id=share.id,
+                        share_uuid_snapshot=share.id,
+                        project_uuid_snapshot=project.id,
+                        project_revision_uuid_snapshot=share.project_revision_id,
+                        actor_user_id=_uuid(owner_user_id),
+                        event_type="revoke",
+                        details={},
+                        created_at=now,
+                    )
+                )
+                uow.commit()
+                return True
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def get_shared_project(self, token: str) -> tuple[dict[str, Any], pd.DataFrame] | None:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                resolved = self._load_share_by_token(uow.session, token)
+                if resolved is None:
+                    return None
+                share, project = resolved
+                revision = uow.session.get(ProjectRevision, share.project_revision_id)
+                if revision is None:
+                    return None
+                chart = uow.session.get(ChartSpecRevision, revision.chart_spec_revision_id)
+                version = uow.session.get(DatasetVersion, revision.active_dataset_version_id)
+                report = (
+                    uow.session.get(QualityReportRecord, revision.quality_report_id)
+                    if revision.quality_report_id is not None
+                    else None
+                )
+                if chart is None or version is None:
+                    return None
+                decisions: list[dict[str, str]] = []
+                if revision.cleaning_decision_set_id is not None:
+                    decision_set = uow.session.get(
+                        CleaningDecisionSet, revision.cleaning_decision_set_id
+                    )
+                    if decision_set is None:
+                        return None
+                    decisions = [
+                        {
+                            "findingId": decision.quality_finding.external_id,
+                            "action": decision.action,
+                        }
+                        for decision in decision_set.decisions
+                    ]
+                formats = list(
+                    uow.session.scalars(
+                        select(ShareExportBinding.format)
+                        .where(ShareExportBinding.share_link_id == share.id)
+                        .order_by(ShareExportBinding.format)
+                    )
+                )
+                spec = ProjectSpecV1.model_validate(revision.spec_document)
+                quality_document: dict[str, Any] = (
+                    report.report_document if report is not None else version.quality_document
+                )
+                context = {
+                    "token": token,
+                    "project_id": _id(project.id),
+                    "title": str(chart.spec_document.get("title") or spec.title),
+                    "description": project.description,
+                    "updated_at": iso_at(revision.created_at),
+                    "chart": chart.spec_document,
+                    "preview": version.preview_document,
+                    "quality": quality_document,
+                    "decisions": decisions,
+                    "downloads_enabled": share.downloads_enabled,
+                    "download_formats": formats if share.downloads_enabled else [],
+                    "dataset_version_id": _id(version.id),
+                }
+                version_id = version.id
+            frame = self._load_version_dataframe(version_id)
+            if quality_document:
+                frame = apply_chart_decisions(
+                    frame,
+                    quality_document,
+                    decisions,
+                )
+            return context, frame
+        except PersistenceError:
+            raise
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    @staticmethod
+    def _authorize_export_actor(
+        project: Project,
+        *,
+        owner_user_id: str | None,
+        guest_token_digest: str | None,
+        now: datetime,
+    ) -> tuple[UUID | None, UUID | None]:
+        if project.storage_mode == "saved-cloud":
+            if owner_user_id is None or project.owner_user_id != _uuid(owner_user_id):
+                raise PersistenceNotFound("Exportable project does not exist.")
+            return project.owner_user_id, None
+        if not PostgresProjectStore._guest_matches(project, guest_token_digest, now):
+            raise PersistenceNotFound("Exportable project does not exist.")
+        if project.guest_session_id is None:
+            raise PersistenceConflict("Temporary project has no GuestSession owner.")
+        return None, project.guest_session_id
+
+    @staticmethod
+    def _export_job_row(job: ExportJobRecord) -> dict[str, Any]:
+        return {
+            "id": _id(job.id),
+            "project_id": _id(job.project_id),
+            "project_revision_id": _id(job.project_revision_id),
+            "status": job.status,
+            "format": job.format,
+            "expires_at": iso_at(job.expires_at) if job.expires_at else None,
+            "message": job.message,
+        }
+
+    @staticmethod
+    def _find_idempotency_record(
+        session: Session,
+        *,
+        actor_user_id: UUID | None,
+        guest_session_id: UUID | None,
+        idempotency_key: str,
+        now: datetime,
+    ) -> IdempotencyRecord | None:
+        actor_filter = (
+            IdempotencyRecord.actor_user_id == actor_user_id
+            if actor_user_id is not None
+            else IdempotencyRecord.guest_session_id == guest_session_id
+        )
+        record = session.scalar(
+            select(IdempotencyRecord)
+            .where(
+                actor_filter,
+                IdempotencyRecord.operation == "publication-export",
+                IdempotencyRecord.idempotency_key == idempotency_key,
+            )
+            .with_for_update()
+        )
+        if record is not None and record.expires_at is not None and record.expires_at <= now:
+            session.delete(record)
+            session.flush()
+            return None
+        return record
+
+    @staticmethod
+    def _revision_for_export(
+        session: Session,
+        project: Project,
+        current: ProjectRevision,
+        chart_model: ChartSpec,
+        chart_document: dict[str, Any],
+        now: datetime,
+    ) -> ProjectRevision:
+        current_chart = session.get(ChartSpecRevision, current.chart_spec_revision_id)
+        if current_chart is None:
+            raise PersistenceNotFound("Current ChartSpecRevision does not exist.")
+        project.title = chart_model.title or "Untitled figure"
+        project.last_activity_at = now
+        project.updated_at = now
+        current_visual = {
+            key: value for key, value in current_chart.spec_document.items() if key != "export"
+        }
+        requested_visual = {key: value for key, value in chart_document.items() if key != "export"}
+        if current_visual == requested_visual:
+            return current
+        chart_number = (
+            int(
+                session.scalar(
+                    select(func.max(ChartSpecRevision.revision_number)).where(
+                        ChartSpecRevision.project_id == project.id
+                    )
+                )
+                or 0
+            )
+            + 1
+        )
+        project_number = (
+            int(
+                session.scalar(
+                    select(func.max(ProjectRevision.revision_number)).where(
+                        ProjectRevision.project_id == project.id
+                    )
+                )
+                or 0
+            )
+            + 1
+        )
+        chart_revision = ChartSpecRevision(
+            id=uuid4(),
+            project=project,
+            dataset_version_id=current.active_dataset_version_id,
+            created_by_user_id=project.owner_user_id,
+            revision_number=chart_number,
+            schema_version=chart_model.schema_version,
+            cleaning_decision_set_id=current.cleaning_decision_set_id,
+            decision_set_revision=(
+                current.cleaning_decision_set.revision_number
+                if current.cleaning_decision_set is not None
+                else None
+            ),
+            spec_document=chart_document,
+            created_at=now,
+        )
+        previous_spec = ProjectSpecV1.model_validate(current.spec_document)
+        next_spec = previous_spec.model_copy(update={"title": project.title, "chart": chart_model})
+        revision = ProjectRevision(
+            id=uuid4(),
+            project=project,
+            active_dataset_version_id=current.active_dataset_version_id,
+            chart_spec_revision=chart_revision,
+            quality_report_id=current.quality_report_id,
+            cleaning_decision_set_id=current.cleaning_decision_set_id,
+            created_by_user_id=project.owner_user_id,
+            revision_number=project_number,
+            spec_schema_version=1,
+            spec_document=next_spec.model_dump(mode="json", by_alias=True),
+            created_at=now,
+        )
+        project.current_revision = revision
+        session.add_all([chart_revision, revision])
+        return revision
+
+    @staticmethod
+    def _publication_from_job(
+        job: ExportJobRecord,
+        run: ProcessingRun,
+        stored: StoredObject,
+        now: datetime,
+    ) -> PublicationExport:
+        parameters = run.parameters
+        if run.input_dataset_version_id is None:
+            raise PersistenceConflict("Export ProcessingRun has no input DatasetVersion.")
+        render_spec = dict(parameters["renderSpec"])
+        decision_id = parameters.get("cleaningDecisionSetId")
+        return PublicationExport(
+            id=job.id,
+            project_id=job.project_id,
+            project_revision_id=job.project_revision_id,
+            dataset_version_id=run.input_dataset_version_id,
+            cleaning_decision_set_id=_uuid(decision_id) if decision_id else None,
+            chart_spec_revision_id=_uuid(parameters["chartSpecRevisionId"]),
+            processing_run_id=run.id,
+            stored_object_id=stored.id,
+            format=job.format,
+            media_type=parameters["mediaType"],
+            renderer_name=parameters["rendererName"],
+            renderer_version=parameters["rendererVersion"],
+            render_contract_version=parameters["renderContractVersion"],
+            render_spec_document=render_spec,
+            size_preset=render_spec["sizePreset"],
+            width=render_spec.get("width"),
+            height=render_spec.get("height"),
+            unit=render_spec["unit"],
+            dpi=render_spec["dpi"],
+            output_sha256=stored.sha256,
+            output_size_bytes=stored.size_bytes,
+            validation_document=dict(parameters["validation"]),
+            created_at=now,
+        )
+
+    def _complete_export_intent(
+        self,
+        session: Session,
+        stored: StoredObject,
+        now: datetime,
+    ) -> ExportJobRecord | None:
+        intent = session.scalar(
+            select(StoredObjectWriteIntent)
+            .where(
+                StoredObjectWriteIntent.stored_object_id == stored.id,
+                StoredObjectWriteIntent.status == "pending",
+            )
+            .with_for_update()
+        )
+        if intent is None:
+            return None
+        job = session.scalar(
+            select(ExportJobRecord)
+            .where(ExportJobRecord.id == intent.export_job_id)
+            .with_for_update()
+        )
+        if job is None or job.current_processing_run_id is None:
+            raise PersistenceNotFound("Pending export has no ExportJob or ProcessingRun.")
+        run = session.get(ProcessingRun, job.current_processing_run_id)
+        if run is None:
+            raise PersistenceNotFound("Pending export ProcessingRun does not exist.")
+        stored.status = "available"
+        stored.staging_key = None
+        stored.updated_at = now
+        session.flush()
+        publication = self._publication_from_job(job, run, stored, now)
+        session.add(publication)
+        session.flush()
+        intent.status = "completed"
+        intent.completed_at = now
+        job.pending_stored_object_id = None
+        job.status = "ready"
+        job.message = "Your publication-ready figure is ready to download."
+        job.finished_at = now
+        job.updated_at = now
+        run.status = "succeeded"
+        run.finished_at = now
+        run.error_code = None
+        run.error_message = None
+        self._bind_export_to_shares(session, publication, now)
+        return job
+
+    def _finalize_export_object(self, staged: StagedObject) -> dict[str, Any]:
+        now = _now()
+        with self._uow() as uow:
+            assert uow.session is not None
+            stored = uow.session.scalar(
+                select(StoredObject)
+                .where(
+                    StoredObject.object_key == staged.key,
+                    StoredObject.sha256 == staged.sha256,
+                    StoredObject.status.in_(("pending", "available")),
+                )
+                .with_for_update()
+            )
+            if stored is None:
+                raise PersistenceNotFound("Pending export StoredObject does not exist.")
+            job = self._complete_export_intent(uow.session, stored, now)
+            if job is None:
+                publication = uow.session.scalar(
+                    select(PublicationExport).where(PublicationExport.stored_object_id == stored.id)
+                )
+                if publication is None:
+                    raise PersistenceNotFound("Pending export WriteIntent does not exist.")
+                job = uow.session.get(ExportJobRecord, publication.id)
+                if job is None:
+                    raise PersistenceNotFound("Completed ExportJob does not exist.")
+            uow.commit()
+            return self._export_job_row(job)
+
+    def create_publication_export(
+        self,
+        *,
+        project_id: str,
+        expected_revision_id: str | None,
+        chart: dict[str, Any],
+        payload: bytes,
+        owner_user_id: str | None,
+        guest_token_digest: str | None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        if idempotency_key is not None and not 1 <= len(idempotency_key) <= 255:
+            raise PersistenceConflict("Idempotency-Key must contain between 1 and 255 characters.")
+        chart_model = ChartSpec.model_validate(chart)
+        chart_document = chart_model.model_dump(mode="json", by_alias=True)
+        export_spec = dict(chart_document["export"])
+        format_name = str(export_spec["format"])
+        media_type = EXPORT_MEDIA_TYPES[format_name]
+        validation = _validate_export_payload(payload, format_name)
+        output_sha = hashlib.sha256(payload).hexdigest()
+        now = _now()
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project = uow.projects.get_project(project_id)
+                if project is None or project.current_revision_id is None:
+                    raise PersistenceNotFound("Exportable project does not exist.")
+                actor_user_id, guest_session_id = self._authorize_export_actor(
+                    project,
+                    owner_user_id=owner_user_id,
+                    guest_token_digest=guest_token_digest,
+                    now=now,
+                )
+                if idempotency_key is not None:
+                    record = self._find_idempotency_record(
+                        uow.session,
+                        actor_user_id=actor_user_id,
+                        guest_session_id=guest_session_id,
+                        idempotency_key=idempotency_key,
+                        now=now,
+                    )
+                    if record is not None:
+                        job = uow.session.get(ExportJobRecord, record.resource_id)
+                        if job is None:
+                            raise PersistenceConflict(
+                                "Idempotency record refers to a missing ExportJob."
+                            )
+                        request_sha = _export_request_sha256(
+                            actor_user_id=actor_user_id,
+                            guest_session_id=guest_session_id,
+                            project_id=project.id,
+                            project_revision_id=job.project_revision_id,
+                            chart_document=chart_document,
+                        )
+                        if record.request_sha256 != request_sha:
+                            raise PersistenceConflict(
+                                "Idempotency-Key was already used with a different request."
+                            )
+                        return self._export_job_row(job)
+                    uow.commit()
+                dedup_scope = self._dedup_scope(project)
+            object_key = _export_storage_key(dedup_scope, output_sha, format_name)
+            staged = self.storage.stage(
+                object_key,
+                io.BytesIO(payload),
+                expected_sha256=output_sha,
+            )
+            pending_committed = False
+            try:
+                with self._uow() as uow:
+                    assert uow.session is not None
+                    project = uow.projects.get_project(project_id, for_update=True)
+                    if project is None or project.current_revision_id is None:
+                        raise PersistenceNotFound("Exportable project does not exist.")
+                    actor_user_id, guest_session_id = self._authorize_export_actor(
+                        project,
+                        owner_user_id=owner_user_id,
+                        guest_token_digest=guest_token_digest,
+                        now=now,
+                    )
+                    if idempotency_key is not None:
+                        record = self._find_idempotency_record(
+                            uow.session,
+                            actor_user_id=actor_user_id,
+                            guest_session_id=guest_session_id,
+                            idempotency_key=idempotency_key,
+                            now=now,
+                        )
+                        if record is not None:
+                            job = uow.session.get(ExportJobRecord, record.resource_id)
+                            if job is None:
+                                raise PersistenceConflict(
+                                    "Idempotency record refers to a missing ExportJob."
+                                )
+                            request_sha = _export_request_sha256(
+                                actor_user_id=actor_user_id,
+                                guest_session_id=guest_session_id,
+                                project_id=project.id,
+                                project_revision_id=job.project_revision_id,
+                                chart_document=chart_document,
+                            )
+                            if record.request_sha256 != request_sha:
+                                raise PersistenceConflict(
+                                    "Idempotency-Key was already used with a different request."
+                                )
+                            uow.commit()
+                            self._discard_staged_best_effort(staged)
+                            return self._export_job_row(job)
+                    if expected_revision_id is not None and project.current_revision_id != _uuid(
+                        expected_revision_id
+                    ):
+                        raise PersistenceConflict(
+                            "Project changed while the export was being rendered. Retry the export."
+                        )
+                    current = uow.session.get(ProjectRevision, project.current_revision_id)
+                    if current is None:
+                        raise PersistenceNotFound("Current ProjectRevision does not exist.")
+                    revision = self._revision_for_export(
+                        uow.session,
+                        project,
+                        current,
+                        chart_model,
+                        chart_document,
+                        now,
+                    )
+                    uow.session.flush()
+                    request_sha = _export_request_sha256(
+                        actor_user_id=actor_user_id,
+                        guest_session_id=guest_session_id,
+                        project_id=project.id,
+                        project_revision_id=revision.id,
+                        chart_document=chart_document,
+                    )
+                    run_id = uuid4()
+                    job_id = uuid4()
+                    run = ProcessingRun(
+                        id=run_id,
+                        project_id=project.id,
+                        input_dataset_version_id=revision.active_dataset_version_id,
+                        operation="export",
+                        status="running",
+                        parameters={
+                            "chartSpecRevisionId": revision.chart_spec_revision_id.hex,
+                            "cleaningDecisionSetId": (
+                                revision.cleaning_decision_set_id.hex
+                                if revision.cleaning_decision_set_id is not None
+                                else None
+                            ),
+                            "renderSpec": export_spec,
+                            "rendererName": EXPORT_RENDERER_NAME,
+                            "rendererVersion": EXPORT_RENDERER_VERSION,
+                            "renderContractVersion": EXPORT_CONTRACT_VERSION,
+                            "mediaType": media_type,
+                            "validation": validation,
+                            "outputSha256": output_sha,
+                            "outputSizeBytes": len(payload),
+                        },
+                        algorithm_version=EXPORT_RENDERER_VERSION,
+                        code_version=PHASE5_CODE_VERSION,
+                        execution_mode="executed",
+                        started_at=now,
+                        created_at=now,
+                    )
+                    uow.session.add(run)
+                    uow.session.flush()
+                    candidate = uow.session.scalar(
+                        select(StoredObject)
+                        .where(
+                            StoredObject.storage_backend == "local",
+                            StoredObject.dedup_scope == dedup_scope,
+                            StoredObject.purpose == "export",
+                            StoredObject.media_type == media_type,
+                            StoredObject.format_contract_version == EXPORT_CONTRACT_VERSION,
+                            StoredObject.sha256 == output_sha,
+                            StoredObject.size_bytes == len(payload),
+                            StoredObject.encryption_key_id.is_(None),
+                            StoredObject.status == "available",
+                        )
+                        .with_for_update()
+                    )
+                    job = ExportJobRecord(
+                        id=job_id,
+                        project_id=project.id,
+                        project_revision_id=revision.id,
+                        requested_by_user_id=actor_user_id,
+                        guest_session_id=guest_session_id,
+                        current_processing_run_id=run.id,
+                        pending_stored_object_id=None,
+                        status="rendering",
+                        format=format_name,
+                        request_sha256=request_sha,
+                        message="Rendering the publication-ready figure.",
+                        attempt_count=1,
+                        expires_at=(
+                            project.expires_at
+                            if project.storage_mode == "temporary-cloud"
+                            else None
+                        ),
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    uow.session.add(job)
+                    uow.session.flush()
+                    if idempotency_key is not None:
+                        uow.session.add(
+                            IdempotencyRecord(
+                                id=uuid4(),
+                                actor_user_id=actor_user_id,
+                                guest_session_id=guest_session_id,
+                                operation="publication-export",
+                                idempotency_key=idempotency_key,
+                                request_sha256=request_sha,
+                                resource_id=job.id,
+                                response_document={"exportJobId": job.id.hex},
+                                created_at=now,
+                                expires_at=now + timedelta(hours=24),
+                            )
+                        )
+                    if candidate is not None:
+                        run.status = "succeeded"
+                        run.finished_at = now
+                        job.status = "ready"
+                        job.message = "Your publication-ready figure is ready to download."
+                        job.finished_at = now
+                        publication = self._publication_from_job(job, run, candidate, now)
+                        uow.session.add(publication)
+                        uow.session.flush()
+                        self._bind_export_to_shares(uow.session, publication, now)
+                        uow.commit()
+                        self._discard_staged_best_effort(staged)
+                        return self._export_job_row(job)
+                    existing_key = uow.session.scalar(
+                        select(StoredObject.id).where(StoredObject.object_key == object_key)
+                    )
+                    if existing_key is not None:
+                        raise PersistenceConflict(
+                            "An identical export object is still awaiting confirmation."
+                        )
+                    stored = StoredObject(
+                        id=uuid4(),
+                        storage_backend="local",
+                        object_key=staged.key,
+                        staging_key=staged.staging_key,
+                        purpose="export",
+                        status="pending",
+                        media_type=media_type,
+                        size_bytes=staged.size_bytes,
+                        sha256=staged.sha256,
+                        dedup_scope=dedup_scope,
+                        format_contract_version=EXPORT_CONTRACT_VERSION,
+                        expires_at=job.expires_at,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    uow.session.add(stored)
+                    uow.session.flush()
+                    job.pending_stored_object_id = stored.id
+                    intent = StoredObjectWriteIntent(
+                        id=uuid4(),
+                        project_id=project.id,
+                        export_job_id=job.id,
+                        stored_object_id=stored.id,
+                        operation="export",
+                        status="pending",
+                        created_at=now,
+                    )
+                    uow.session.add(intent)
+                    uow.commit()
+                    pending_committed = True
+            except Exception:
+                if not pending_committed:
+                    self._discard_staged_best_effort(staged)
+                raise
+            try:
+                self.storage.confirm(staged)
+                return self._finalize_export_object(staged)
+            except Exception as exc:
+                raise ObjectConfirmationPending(
+                    "The export is durable and awaiting object confirmation."
+                ) from exc
+        except PersistenceError:
+            raise
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def get_export_metadata(self, export_id: str) -> dict[str, Any] | None:
+        try:
+            export_uuid = _uuid(export_id)
+        except ValueError:
+            return None
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                publication = uow.session.get(PublicationExport, export_uuid)
+                if publication is None:
+                    return None
+                return {
+                    "id": _id(publication.id),
+                    "project_id": _id(publication.project_id),
+                    "project_revision_id": _id(publication.project_revision_id),
+                    "format": publication.format,
+                    "media_type": publication.media_type,
+                }
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def get_export(self, export_id: str) -> dict[str, Any] | None:
+        try:
+            export_uuid = _uuid(export_id)
+        except ValueError:
+            return None
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                publication = uow.session.get(PublicationExport, export_uuid)
+                if publication is None:
+                    return None
+                stored = uow.session.get(StoredObject, publication.stored_object_id)
+                if stored is None or stored.status != "available":
+                    return None
+                object_key = stored.object_key
+                expected_sha = publication.output_sha256
+                expected_size = publication.output_size_bytes
+                row: dict[str, Any] = {
+                    "id": _id(publication.id),
+                    "project_id": _id(publication.project_id),
+                    "project_revision_id": _id(publication.project_revision_id),
+                    "format": publication.format,
+                    "media_type": publication.media_type,
+                }
+            with self.storage.open(object_key) as stream:
+                payload = stream.read()
+            if len(payload) != expected_size or hashlib.sha256(payload).hexdigest() != expected_sha:
+                raise PersistenceUnavailable("Publication export integrity verification failed.")
+            row["payload"] = payload
+            return row
+        except PersistenceError:
+            raise
+        except Exception as exc:
+            raise PersistenceUnavailable("Publication export could not be reopened.") from exc
+
+    def get_shared_export(self, token: str, format_name: str) -> dict[str, Any] | None:
+        if format_name not in EXPORT_MEDIA_TYPES:
+            return None
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                resolved = self._load_share_by_token(
+                    uow.session, token, for_update=True, require_active=True
+                )
+                if resolved is None:
+                    return None
+                share, _project = resolved
+                if not share.downloads_enabled:
+                    return {"downloads_enabled": False, "export": None}
+                binding = uow.session.get(ShareExportBinding, (share.id, format_name))
+                export_id = binding.publication_export_id if binding is not None else None
+                uow.commit()
+            export = self.get_export(_id(export_id)) if export_id is not None else None
+            return {"downloads_enabled": True, "export": export}
         except Exception as exc:
             raise _translate_database_error(exc) from exc
 
@@ -1904,7 +3039,7 @@ class PostgresProjectStore:
         guest_token_digest: str | None,
     ) -> bool:
         now = _now()
-        object_ids: list[UUID] = []
+        immediate_purge_id: UUID | None = None
         try:
             with self._uow() as uow:
                 assert uow.session is not None
@@ -1933,17 +3068,10 @@ class PostgresProjectStore:
                 else:
                     if not self._guest_matches(project, guest_token_digest, now):
                         raise PersistenceConflict("GuestSession cannot delete this project.")
-                    object_ids = list(
-                        uow.session.scalars(
-                            select(DatasetVersion.stored_object_id).where(
-                                DatasetVersion.project_id == project.id
-                            )
-                        )
-                    )
-                    uow.session.delete(project)
+                    immediate_purge_id = project.id
                 uow.commit()
-            if object_ids:
-                self._mark_gc_candidates(object_ids)
+            if immediate_purge_id is not None:
+                return self._purge_project(immediate_purge_id, force_temporary=True)
             return True
         except Exception as exc:
             raise _translate_database_error(exc) from exc
@@ -2262,6 +3390,10 @@ class PostgresProjectStore:
                 .with_for_update()
             )
             if stored is None:
+                return
+            export_job = self._complete_export_intent(uow.session, stored, now)
+            if export_job is not None:
+                uow.commit()
                 return
             version = uow.session.scalar(
                 select(DatasetVersion).where(DatasetVersion.stored_object_id == stored.id)

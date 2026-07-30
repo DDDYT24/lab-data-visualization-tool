@@ -916,6 +916,322 @@ class ProjectRevision(Base):
     )
 
 
+class ShareLinkRecord(Base):
+    """Owner-managed bearer link pinned to one immutable ProjectRevision."""
+
+    __tablename__ = "share_links"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_revision_id", "project_id"],
+            ["project_revisions.id", "project_revisions.project_id"],
+            name="fk_share_links_revision_same_project",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "id", "project_id", "project_revision_id", name="uq_share_links_identity_scope"
+        ),
+        CheckConstraint("token_digest ~ '^[0-9a-f]{64}$'", name="token_digest_lower_hex"),
+        CheckConstraint("token_key_version >= 1", name="token_key_version_positive"),
+        CheckConstraint("status IN ('active', 'revoked')", name="status"),
+        CheckConstraint(
+            "(status = 'active' AND revoked_at IS NULL AND revoked_by_user_id IS NULL) OR "
+            "(status = 'revoked' AND revoked_at IS NOT NULL)",
+            name="revocation_state",
+        ),
+        CheckConstraint(
+            "expires_at IS NULL OR expires_at > created_at", name="expiry_after_create"
+        ),
+        Index("ix_share_links_project_created", "project_id", "created_at"),
+        Index("ix_share_links_status_expires", "status", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    project_revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    token_digest: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_key_version: Mapped[int] = mapped_column(nullable=False)
+    downloads_enabled: Mapped[bool] = mapped_column(nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class ShareLinkEvent(Base):
+    """Immutable management audit event that survives ShareLink purge."""
+
+    __tablename__ = "share_link_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('create', 'downloads-update', 'revoke')", name="event_type"
+        ),
+        Index("ix_share_link_events_share_created", "share_uuid_snapshot", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    share_link_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("share_links.id", ondelete="SET NULL"), nullable=True
+    )
+    share_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    project_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    project_revision_uuid_snapshot: Mapped[UUID] = mapped_column(nullable=False)
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class ExportJobRecord(Base):
+    """Mutable execution state for one publication export request."""
+
+    __tablename__ = "export_jobs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_revision_id", "project_id"],
+            ["project_revisions.id", "project_revisions.project_id"],
+            name="fk_export_jobs_revision_same_project",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["current_processing_run_id", "project_id"],
+            ["processing_runs.id", "processing_runs.project_id"],
+            name="fk_export_jobs_run_same_project",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("id", "project_id", name="uq_export_jobs_id_project"),
+        UniqueConstraint(
+            "id",
+            "project_id",
+            "project_revision_id",
+            "format",
+            name="uq_export_jobs_id_project_revision_format",
+        ),
+        CheckConstraint(
+            "((requested_by_user_id IS NOT NULL)::int + (guest_session_id IS NOT NULL)::int) = 1",
+            name="exactly_one_actor",
+        ),
+        CheckConstraint("status IN ('queued', 'rendering', 'ready', 'failed')", name="status"),
+        CheckConstraint("format IN ('png', 'svg', 'pdf')", name="format"),
+        CheckConstraint("request_sha256 ~ '^[0-9a-f]{64}$'", name="request_sha256_lower_hex"),
+        CheckConstraint(
+            "status <> 'ready' OR pending_stored_object_id IS NULL",
+            name="ready_has_no_pending_object",
+        ),
+        CheckConstraint("attempt_count >= 1", name="attempt_count_positive"),
+        Index("ix_export_jobs_project_created", "project_id", "created_at"),
+        Index("ix_export_jobs_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    project_revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    requested_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    guest_session_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("guest_sessions.id", ondelete="RESTRICT"), nullable=True
+    )
+    current_processing_run_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    pending_stored_object_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("stored_objects.id", ondelete="RESTRICT"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    format: Mapped[str] = mapped_column(String(8), nullable=False)
+    request_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(nullable=False, default=1)
+    error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class PublicationExport(Base):
+    """Immutable, reproducible publication artifact produced by an ExportJob."""
+
+    __tablename__ = "publication_exports"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["id", "project_id", "project_revision_id", "format"],
+            [
+                "export_jobs.id",
+                "export_jobs.project_id",
+                "export_jobs.project_revision_id",
+                "export_jobs.format",
+            ],
+            name="fk_publication_exports_export_job_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["dataset_version_id", "project_id"],
+            ["dataset_versions.id", "dataset_versions.project_id"],
+            name="fk_publication_exports_dataset_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["cleaning_decision_set_id", "project_id"],
+            ["cleaning_decision_sets.id", "cleaning_decision_sets.project_id"],
+            name="fk_publication_exports_decision_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["chart_spec_revision_id", "project_id"],
+            ["chart_spec_revisions.id", "chart_spec_revisions.project_id"],
+            name="fk_publication_exports_chart_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["processing_run_id", "project_id"],
+            ["processing_runs.id", "processing_runs.project_id"],
+            name="fk_publication_exports_run_same_project",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["project_id"],
+            ["projects.id"],
+            name="fk_publication_exports_project_id_projects",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "id",
+            "project_id",
+            "project_revision_id",
+            "format",
+            name="uq_publication_exports_binding_scope",
+        ),
+        CheckConstraint("format IN ('png', 'svg', 'pdf')", name="format"),
+        CheckConstraint("dpi > 0", name="dpi_positive"),
+        CheckConstraint("output_size_bytes >= 0", name="output_size_nonnegative"),
+        CheckConstraint("output_sha256 ~ '^[0-9a-f]{64}$'", name="output_sha256_lower_hex"),
+        Index("ix_publication_exports_revision_format", "project_revision_id", "format"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(nullable=False)
+    project_revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    dataset_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    cleaning_decision_set_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    chart_spec_revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    processing_run_id: Mapped[UUID] = mapped_column(nullable=False)
+    stored_object_id: Mapped[UUID] = mapped_column(
+        ForeignKey("stored_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    format: Mapped[str] = mapped_column(String(8), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    renderer_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    renderer_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    render_contract_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    render_spec_document: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False)
+    size_preset: Mapped[str] = mapped_column(String(32), nullable=False)
+    width: Mapped[float | None] = mapped_column(nullable=True)
+    height: Mapped[float | None] = mapped_column(nullable=True)
+    unit: Mapped[str] = mapped_column(String(8), nullable=False)
+    dpi: Mapped[int] = mapped_column(nullable=False)
+    output_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    output_size_bytes: Mapped[int] = mapped_column(nullable=False)
+    validation_document: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class StoredObjectWriteIntent(Base):
+    """GC hold for a staged object until its immutable business reference commits."""
+
+    __tablename__ = "stored_object_write_intents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["export_job_id", "project_id"],
+            ["export_jobs.id", "export_jobs.project_id"],
+            name="fk_stored_object_write_intents_export_job_scope",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("export_job_id", name="uq_stored_object_write_intents_export_job_id"),
+        CheckConstraint("operation = 'export'", name="operation"),
+        CheckConstraint("status IN ('pending', 'completed')", name="status"),
+        CheckConstraint(
+            "(status = 'pending' AND completed_at IS NULL) OR "
+            "(status = 'completed' AND completed_at IS NOT NULL)",
+            name="completion_state",
+        ),
+        Index("ix_stored_object_write_intents_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(nullable=False)
+    export_job_id: Mapped[UUID] = mapped_column(nullable=False)
+    stored_object_id: Mapped[UUID] = mapped_column(
+        ForeignKey("stored_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(24), nullable=False, default="export")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ShareExportBinding(Base):
+    """Immutable one-time ShareLink-to-PublicationExport binding for one format."""
+
+    __tablename__ = "share_export_bindings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["share_link_id", "project_id", "project_revision_id"],
+            ["share_links.id", "share_links.project_id", "share_links.project_revision_id"],
+            name="fk_share_export_bindings_share_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["publication_export_id", "project_id", "project_revision_id", "format"],
+            [
+                "publication_exports.id",
+                "publication_exports.project_id",
+                "publication_exports.project_revision_id",
+                "publication_exports.format",
+            ],
+            name="fk_share_export_bindings_export_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("format IN ('png', 'svg', 'pdf')", name="format"),
+        Index("ix_share_export_bindings_export", "publication_export_id"),
+    )
+
+    share_link_id: Mapped[UUID] = mapped_column(primary_key=True)
+    format: Mapped[str] = mapped_column(String(8), primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(nullable=False)
+    project_revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    publication_export_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
 class ProjectClaim(Base):
     """Single successful GuestSession-to-User ownership transfer for a Project."""
 
@@ -994,16 +1310,35 @@ class IdempotencyRecord(Base):
         UniqueConstraint(
             "actor_user_id", "operation", "idempotency_key", name="uq_idempotency_actor_operation"
         ),
+        UniqueConstraint(
+            "guest_session_id",
+            "operation",
+            "idempotency_key",
+            name="uq_idempotency_guest_operation",
+        ),
+        CheckConstraint(
+            "((actor_user_id IS NOT NULL)::int + (guest_session_id IS NOT NULL)::int) = 1",
+            name="exactly_one_actor",
+        ),
         CheckConstraint("length(idempotency_key) BETWEEN 1 AND 255", name="key_length"),
+        CheckConstraint(
+            "request_sha256 IS NULL OR request_sha256 ~ '^[0-9a-f]{64}$'",
+            name="request_sha256_lower_hex",
+        ),
         Index("ix_idempotency_records_created", "created_at"),
+        Index("ix_idempotency_records_expires", "expires_at"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    actor_user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    guest_session_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("guest_sessions.id", ondelete="CASCADE"), nullable=True
     )
     operation: Mapped[str] = mapped_column(String(64), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    request_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     resource_id: Mapped[UUID] = mapped_column(nullable=False)
     response_document: Mapped[dict[str, Any]] = mapped_column(
         JSON_DOCUMENT, nullable=False, default=dict
@@ -1011,3 +1346,4 @@ class IdempotencyRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
