@@ -1,8 +1,9 @@
 # LabViz V2.0 Database and Storage Design
 
-**Status:** Production data route confirmed; phase 1 database foundation implemented, business cutover pending
+**Status:** Production data route confirmed; Phase 2 project persistence slice implemented
 **Decision date:** 2026-07-29
 **Phase 1 implementation:** 2026-07-29
+**Phase 2 implementation:** 2026-07-30 — see [`PERSISTENCE_PHASE2.md`](PERSISTENCE_PHASE2.md)
 **Product source of truth:** [`prd.md`](prd.md)
 **Architecture source of truth:** [`PROJECT_PLAN.md`](PROJECT_PLAN.md)
 **Design process:** [`DATABASE_PLAN.md`](DATABASE_PLAN.md)
@@ -138,8 +139,9 @@ cleaning revision used to produce the figure.
 
 ### 3.2 Resolution
 
-Define the same `ProjectSpec` version in frontend Zod and backend Pydantic. API contract tests
-must validate that both representations accept and reject the same fixtures.
+`ProjectSpecV1` in backend Pydantic is the authoritative source. Its generated JSON Schema builds
+the frontend Zod validator, and both validators run against the same accepted and rejected
+fixtures. Contract drift is therefore detected without maintaining two handwritten schemas.
 
 Conceptual ProjectSpec v1:
 

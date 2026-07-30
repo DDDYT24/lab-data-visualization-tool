@@ -39,10 +39,11 @@ Next:
 
 - [x] Approve the production data route: PostgreSQL metadata and revisions, S3-compatible object storage, and immutable Parquet dataset versions. See [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md).
 - [ ] Approve the remaining production backend runtime, worker, hosting, and provider selections; the current FastAPI service remains a local API-contract reference implementation.
-- [ ] Implement versioned `ProjectSpec` v1 in frontend Zod and backend Pydantic, backed by immutable ProjectRevision records and cross-contract fixtures.
+- [x] Implement versioned `ProjectSpec` v1 in frontend Zod and backend Pydantic, backed by immutable ProjectRevision records and cross-contract fixtures.
 - [ ] Add optional project/experiment description persistence and editing for shared-chart context without introducing speculative Experiment entities.
 - [x] Add the phase 1 SQLAlchemy 2 persistence boundary, PostgreSQL development/test environment, provider-neutral object-storage interface, first nine core models, and reversible Alembic migration.
-- [ ] Add phase 2 repositories and dual-run migration services that write PostgreSQL/object storage without changing the `/api/v1` response contract.
+- [x] Add Phase 2 Repository/Unit of Work boundaries, selectable SQLite/PostgreSQL project persistence, ProjectSpec v1, Parquet v1, and the approved six-entity project revision slice without runtime dual-write.
+- [ ] Migrate quality editing, immutable cleaning decisions, project save/history, sharing, exports, authentication, and physical expiry/purge workers in bounded follow-up slices.
 - [ ] Move reference-service SQLite authentication and project state to production-grade shared services before running multiple hosts.
 - [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.
 - [ ] Move saved cloud datasets and exports from SQLite blobs to managed object storage with a scheduled expiry worker.

@@ -15,6 +15,16 @@ class ObjectInfo:
     sha256: str
 
 
+@dataclass(frozen=True)
+class StagedObject:
+    """Recoverable object write prepared before its database transaction commits."""
+
+    key: str
+    staging_key: str
+    size_bytes: int
+    sha256: str
+
+
 class ObjectStorage(Protocol):
     """Minimum interface required by the dataset and export pipelines."""
 
@@ -39,4 +49,26 @@ class ObjectStorage(Protocol):
 
     def delete(self, key: str) -> bool:
         """Delete one exact object key and report whether it existed."""
+        ...
+
+    def stage(
+        self,
+        key: str,
+        source: BinaryIO,
+        *,
+        expected_sha256: str | None = None,
+    ) -> StagedObject:
+        """Write and validate recoverable bytes without publishing the final key."""
+        ...
+
+    def open_staged(self, staged: StagedObject) -> BinaryIO:
+        """Open staged bytes for format validation before database commit."""
+        ...
+
+    def confirm(self, staged: StagedObject) -> ObjectInfo:
+        """Publish a staged write; repeated confirmation must be safe."""
+        ...
+
+    def discard(self, staged: StagedObject) -> bool:
+        """Remove uncommitted staged bytes during transaction compensation."""
         ...

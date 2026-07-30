@@ -86,7 +86,7 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: Verify API
         run: |
-          ruff check labviz_api tests migrations
-          ruff format --check labviz_api tests migrations
-          mypy labviz_api tests migrations
+          ruff check labviz_api tests migrations scripts
+          ruff format --check labviz_api tests migrations scripts
+          mypy labviz_api tests migrations scripts
           pytest

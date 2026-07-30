@@ -97,6 +97,7 @@ class Project(Base):
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
     current_revision_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    guest_token_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     storage_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -154,12 +155,18 @@ class StoredObject(Base):
             "(status <> 'deleted' AND deleted_at IS NULL)",
             name="deleted_status_time",
         ),
+        CheckConstraint(
+            "(status = 'pending' AND staging_key IS NOT NULL) OR "
+            "(status <> 'pending' AND staging_key IS NULL)",
+            name="pending_staging_key",
+        ),
         Index("ix_stored_objects_status_expires", "status", "expires_at"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     storage_backend: Mapped[str] = mapped_column(String(64), nullable=False)
     object_key: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    staging_key: Mapped[str | None] = mapped_column(String(1024), nullable=True, unique=True)
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
     media_type: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -202,6 +209,7 @@ class SourceFile(Base):
     size_bytes: Mapped[int] = mapped_column(nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     sheet_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    available_sheets: Mapped[list[str]] = mapped_column(JSON_DOCUMENT, nullable=False, default=list)
     header_row: Mapped[int | None] = mapped_column(nullable=True)
     parser_name: Mapped[str] = mapped_column(String(128), nullable=False)
     parser_version: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -288,6 +296,8 @@ class DatasetVersion(Base):
         CheckConstraint(
             "parent_version_id IS NULL OR parent_version_id <> id", name="parent_not_self"
         ),
+        CheckConstraint("parquet_schema_version = 1", name="parquet_schema_v1"),
+        CheckConstraint("content_sha256 ~ '^[0-9a-f]{64}$'", name="content_sha256_lower_hex"),
         Index("ix_dataset_versions_project_created", "project_id", "created_at"),
     )
 
@@ -303,6 +313,16 @@ class DatasetVersion(Base):
     version_number: Mapped[int] = mapped_column(nullable=False)
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     schema_document: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False)
+    preview_document: Mapped[dict[str, Any]] = mapped_column(
+        JSON_DOCUMENT, nullable=False, default=dict
+    )
+    quality_document: Mapped[dict[str, Any]] = mapped_column(
+        JSON_DOCUMENT, nullable=False, default=dict
+    )
+    parquet_schema_version: Mapped[int] = mapped_column(nullable=False, default=1)
+    content_sha256: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=lambda: "0" * 64
+    )
     row_count: Mapped[int] = mapped_column(nullable=False)
     column_count: Mapped[int] = mapped_column(nullable=False)
     created_at: Mapped[datetime] = mapped_column(

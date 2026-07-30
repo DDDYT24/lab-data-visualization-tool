@@ -7,8 +7,9 @@ import os
 import tempfile
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
+from uuid import uuid4
 
-from .base import ObjectInfo
+from .base import ObjectInfo, StagedObject
 
 CHUNK_SIZE = 1024 * 1024
 
@@ -85,6 +86,63 @@ class LocalObjectStorage:
                 temporary.unlink()
 
         return ObjectInfo(key=key, size_bytes=size_bytes, sha256=sha256)
+
+    def stage(
+        self,
+        key: str,
+        source: BinaryIO,
+        *,
+        expected_sha256: str | None = None,
+    ) -> StagedObject:
+        self._path(key)
+        staging_key = f".staging/{uuid4().hex}.part"
+        info = self.put(
+            staging_key,
+            source,
+            expected_sha256=expected_sha256,
+            overwrite=False,
+        )
+        return StagedObject(
+            key=key,
+            staging_key=staging_key,
+            size_bytes=info.size_bytes,
+            sha256=info.sha256,
+        )
+
+    def open_staged(self, staged: StagedObject) -> BinaryIO:
+        return self.open(staged.staging_key)
+
+    def confirm(self, staged: StagedObject) -> ObjectInfo:
+        staging_path = self._path(staged.staging_key)
+        destination = self._path(staged.key)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.is_file():
+            with destination.open("rb") as existing:
+                digest = hashlib.file_digest(existing, "sha256").hexdigest()
+            if digest != staged.sha256 or destination.stat().st_size != staged.size_bytes:
+                raise ObjectAlreadyExists(staged.key)
+            if staging_path.is_file():
+                staging_path.unlink()
+            return ObjectInfo(
+                key=staged.key,
+                size_bytes=staged.size_bytes,
+                sha256=staged.sha256,
+            )
+        if not staging_path.is_file():
+            raise FileNotFoundError(staged.staging_key)
+        try:
+            os.link(staging_path, destination)
+        except FileExistsError:
+            return self.confirm(staged)
+        staging_path.unlink()
+        return ObjectInfo(
+            key=staged.key,
+            size_bytes=staged.size_bytes,
+            sha256=staged.sha256,
+        )
+
+    def discard(self, staged: StagedObject) -> bool:
+        return self.delete(staged.staging_key)
 
     def open(self, key: str) -> BinaryIO:
         return self._path(key).open("rb")

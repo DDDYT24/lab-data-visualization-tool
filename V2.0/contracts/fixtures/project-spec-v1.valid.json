@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "projectId": "11111111-1111-4111-8111-111111111111",
+  "title": "Thermal response",
+  "description": "A reproducible baseline project",
+  "source": {
+    "sourceFileId": "22222222-2222-4222-8222-222222222222",
+    "datasetId": "33333333-3333-4333-8333-333333333333",
+    "datasetVersionId": "44444444-4444-4444-8444-444444444444",
+    "sheetName": "Measurements",
+    "headerRow": 1
+  },
+  "cleaning": null,
+  "chart": {
+    "schemaVersion": 1,
+    "type": "line",
+    "title": "Response over time",
+    "subtitle": "",
+    "xAxis": {"field": "time", "title": "Time", "unit": "min"},
+    "yAxis": {"field": "response", "title": "Response", "unit": "mV"},
+    "series": [
+      {
+        "field": "response",
+        "label": "Response",
+        "color": "#2563EB",
+        "lineStyle": "solid",
+        "panel": 1,
+        "yAxis": "primary"
+      }
+    ],
+    "groupField": null,
+    "panelCount": 1,
+    "fitting": {
+      "model": "none",
+      "polynomialOrder": 2,
+      "showEquation": true,
+      "showRSquared": true,
+      "confidenceBand": false,
+      "confidenceLevel": 95
+    },
+    "uncertainty": {
+      "mode": "none",
+      "errorField": null,
+      "confidenceLevel": 95
+    },
+    "secondaryYAxis": {
+      "enabled": false,
+      "field": null,
+      "title": "Secondary response",
+      "unit": ""
+    },
+    "export": {
+      "format": "png",
+      "dpi": 300,
+      "sizePreset": "double-column",
+      "grayscalePreview": false,
+      "width": null,
+      "height": null,
+      "unit": "mm",
+      "fontFamily": "Arial",
+      "fontSize": 10,
+      "lineWidth": 1.5,
+      "markerSize": 4,
+      "legendPosition": "auto",
+      "transparentBackground": false,
+      "gridVisible": true,
+      "backgroundColor": "#FFFFFF"
+    }
+  }
+}

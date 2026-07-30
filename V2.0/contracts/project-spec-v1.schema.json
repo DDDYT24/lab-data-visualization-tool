@@ -1,0 +1,564 @@
+{
+  "$defs": {
+    "AxisSpec": {
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 120,
+          "title": "Title",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 40,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "title",
+        "unit"
+      ],
+      "title": "AxisSpec",
+      "type": "object"
+    },
+    "ChartSpec": {
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "line",
+            "scatter",
+            "bar",
+            "histogram",
+            "box",
+            "heatmap",
+            "surface3d"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "title": "Title",
+          "type": "string"
+        },
+        "subtitle": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Subtitle",
+          "type": "string"
+        },
+        "xAxis": {
+          "$ref": "#/$defs/AxisSpec"
+        },
+        "yAxis": {
+          "$ref": "#/$defs/AxisSpec"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/SeriesSpec"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Series",
+          "type": "array"
+        },
+        "groupField": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Groupfield"
+        },
+        "panelCount": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Panelcount",
+          "type": "integer"
+        },
+        "fitting": {
+          "$ref": "#/$defs/FittingSpec"
+        },
+        "uncertainty": {
+          "$ref": "#/$defs/UncertaintySpec"
+        },
+        "secondaryYAxis": {
+          "$ref": "#/$defs/SecondaryYAxisSpec"
+        },
+        "export": {
+          "$ref": "#/$defs/ExportSpec"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "type",
+        "title",
+        "xAxis",
+        "yAxis",
+        "series",
+        "panelCount",
+        "export"
+      ],
+      "title": "ChartSpec",
+      "type": "object"
+    },
+    "ExportSpec": {
+      "properties": {
+        "format": {
+          "enum": [
+            "png",
+            "svg",
+            "pdf"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "dpi": {
+          "enum": [
+            300,
+            600
+          ],
+          "title": "Dpi",
+          "type": "integer"
+        },
+        "sizePreset": {
+          "enum": [
+            "single-column",
+            "double-column",
+            "a4",
+            "custom"
+          ],
+          "title": "Sizepreset",
+          "type": "string"
+        },
+        "grayscalePreview": {
+          "title": "Grayscalepreview",
+          "type": "boolean"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2000,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2000,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "unit": {
+          "default": "in",
+          "enum": [
+            "mm",
+            "cm",
+            "in"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "fontFamily": {
+          "default": "Arial",
+          "enum": [
+            "Arial",
+            "Times New Roman"
+          ],
+          "title": "Fontfamily",
+          "type": "string"
+        },
+        "fontSize": {
+          "default": 10,
+          "maximum": 36,
+          "minimum": 6,
+          "title": "Fontsize",
+          "type": "number"
+        },
+        "lineWidth": {
+          "default": 1.5,
+          "maximum": 10,
+          "minimum": 0.25,
+          "title": "Linewidth",
+          "type": "number"
+        },
+        "markerSize": {
+          "default": 4,
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Markersize",
+          "type": "number"
+        },
+        "legendPosition": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "top",
+            "bottom",
+            "left",
+            "right",
+            "none"
+          ],
+          "title": "Legendposition",
+          "type": "string"
+        },
+        "transparentBackground": {
+          "default": false,
+          "title": "Transparentbackground",
+          "type": "boolean"
+        },
+        "gridVisible": {
+          "default": true,
+          "title": "Gridvisible",
+          "type": "boolean"
+        },
+        "backgroundColor": {
+          "default": "#FFFFFF",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Backgroundcolor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "dpi",
+        "sizePreset",
+        "grayscalePreview"
+      ],
+      "title": "ExportSpec",
+      "type": "object"
+    },
+    "FittingSpec": {
+      "properties": {
+        "model": {
+          "default": "none",
+          "enum": [
+            "none",
+            "linear",
+            "polynomial",
+            "exponential",
+            "logarithmic",
+            "power"
+          ],
+          "title": "Model",
+          "type": "string"
+        },
+        "polynomialOrder": {
+          "default": 2,
+          "enum": [
+            1,
+            2,
+            3
+          ],
+          "title": "Polynomialorder",
+          "type": "integer"
+        },
+        "showEquation": {
+          "default": true,
+          "title": "Showequation",
+          "type": "boolean"
+        },
+        "showRSquared": {
+          "default": true,
+          "title": "Showrsquared",
+          "type": "boolean"
+        },
+        "confidenceBand": {
+          "default": false,
+          "title": "Confidenceband",
+          "type": "boolean"
+        },
+        "confidenceLevel": {
+          "default": 95,
+          "enum": [
+            90,
+            95,
+            99
+          ],
+          "title": "Confidencelevel",
+          "type": "integer"
+        }
+      },
+      "title": "FittingSpec",
+      "type": "object"
+    },
+    "ProjectCleaningSpec": {
+      "description": "Optional immutable cleaning decision-set reference.",
+      "properties": {
+        "decisionSetId": {
+          "format": "uuid",
+          "title": "Decisionsetid",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "decisionSetId",
+        "revision"
+      ],
+      "title": "ProjectCleaningSpec",
+      "type": "object"
+    },
+    "ProjectSourceSpec": {
+      "description": "Immutable identifiers and import selection for one project revision.",
+      "properties": {
+        "sourceFileId": {
+          "format": "uuid",
+          "title": "Sourcefileid",
+          "type": "string"
+        },
+        "datasetId": {
+          "format": "uuid",
+          "title": "Datasetid",
+          "type": "string"
+        },
+        "datasetVersionId": {
+          "format": "uuid",
+          "title": "Datasetversionid",
+          "type": "string"
+        },
+        "sheetName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheetname"
+        },
+        "headerRow": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Headerrow"
+        }
+      },
+      "required": [
+        "sourceFileId",
+        "datasetId",
+        "datasetVersionId"
+      ],
+      "title": "ProjectSourceSpec",
+      "type": "object"
+    },
+    "SecondaryYAxisSpec": {
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "title": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Title",
+          "type": "string"
+        },
+        "unit": {
+          "default": "",
+          "maxLength": 40,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "title": "SecondaryYAxisSpec",
+      "type": "object"
+    },
+    "SeriesSpec": {
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "lineStyle": {
+          "default": "solid",
+          "enum": [
+            "solid",
+            "dashed",
+            "dotted",
+            "dashdot"
+          ],
+          "title": "Linestyle",
+          "type": "string"
+        },
+        "panel": {
+          "default": 1,
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Panel",
+          "type": "integer"
+        },
+        "yAxis": {
+          "default": "primary",
+          "enum": [
+            "primary",
+            "secondary"
+          ],
+          "title": "Yaxis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "label",
+        "color"
+      ],
+      "title": "SeriesSpec",
+      "type": "object"
+    },
+    "UncertaintySpec": {
+      "properties": {
+        "mode": {
+          "default": "none",
+          "enum": [
+            "none",
+            "standard-deviation",
+            "standard-error",
+            "confidence-interval",
+            "column"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "errorField": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errorfield"
+        },
+        "confidenceLevel": {
+          "default": 95,
+          "enum": [
+            90,
+            95,
+            99
+          ],
+          "title": "Confidencelevel",
+          "type": "integer"
+        }
+      },
+      "title": "UncertaintySpec",
+      "type": "object"
+    }
+  },
+  "description": "Complete reproducible project snapshot stored by ProjectRevision.",
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "projectId": {
+      "format": "uuid",
+      "title": "Projectid",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ProjectSourceSpec"
+    },
+    "cleaning": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProjectCleaningSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "chart": {
+      "$ref": "#/$defs/ChartSpec"
+    }
+  },
+  "required": [
+    "projectId",
+    "title",
+    "source",
+    "chart"
+  ],
+  "title": "ProjectSpecV1",
+  "type": "object"
+}
