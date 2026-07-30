@@ -34,6 +34,7 @@ class Settings:
     postgres_url: str | None = None
     postgres_echo: bool = False
     object_storage_root: Path = Path(".labviz/objects")
+    persistence_backend: str = "sqlite"
 
     def __post_init__(self) -> None:
         if self.environment not in {"development", "test", "production"}:
@@ -44,6 +45,10 @@ class Settings:
             raise ValueError("Production must use SMTP authentication delivery.")
         if self.environment == "production" and not self.cookie_secure:
             raise ValueError("Production requires secure cookies.")
+        if self.persistence_backend not in {"sqlite", "postgresql"}:
+            raise ValueError("LABVIZ_PERSISTENCE_BACKEND must be 'sqlite' or 'postgresql'.")
+        if self.persistence_backend == "postgresql" and not self.postgres_url:
+            raise ValueError("LABVIZ_POSTGRES_URL is required for PostgreSQL persistence.")
 
     @classmethod
     def from_env(cls, base_dir: Path | None = None) -> Settings:
@@ -86,4 +91,7 @@ class Settings:
             object_storage_root=Path(
                 os.environ.get("LABVIZ_OBJECT_STORAGE_ROOT", root / ".labviz" / "objects")
             ).expanduser(),
+            persistence_backend=os.environ.get("LABVIZ_PERSISTENCE_BACKEND", "sqlite")
+            .strip()
+            .lower(),
         )

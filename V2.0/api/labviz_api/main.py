@@ -63,6 +63,13 @@ from .models import (
     VerifyEmailCode,
     VerifyEmailCodeResponse,
 )
+from .persistence import PersistenceError, ProjectStore, build_project_store
+from .persistence.contracts import ProjectReader
+from .persistence.exceptions import (
+    PersistenceConflict,
+    PersistenceNotFound,
+    PersistenceUnavailable,
+)
 from .processing import (
     ProcessingError,
     analyze_chart,
@@ -74,7 +81,6 @@ from .processing import (
     load_dataframe,
     render_chart,
     sample_csv_bytes,
-    serialize_dataframe,
     validate_upload,
 )
 from .repository import ProjectRepository, expires_in
@@ -129,7 +135,7 @@ def _job_from_row(row: dict[str, Any]) -> ProcessingJob:
     )
 
 
-def _project_session(repository: ProjectRepository, project: dict[str, Any]) -> ProjectSession:
+def _project_session(repository: ProjectReader, project: dict[str, Any]) -> ProjectSession:
     job_row = repository.get_job_for_project(project["id"])
     return ProjectSession(
         project_id=project["id"],
@@ -140,14 +146,14 @@ def _project_session(repository: ProjectRepository, project: dict[str, Any]) -> 
     )
 
 
-def _require_project(repository: ProjectRepository, project_id: str) -> dict[str, Any]:
+def _require_project(repository: ProjectReader, project_id: str) -> dict[str, Any]:
     project = repository.get_project(project_id)
     if project is None:
         raise ApiProblem(404, "project-not-found", "This project does not exist or has expired.")
     return project
 
 
-def _require_ready_project(repository: ProjectRepository, project_id: str) -> dict[str, Any]:
+def _require_ready_project(repository: ProjectReader, project_id: str) -> dict[str, Any]:
     project = _require_project(repository, project_id)
     job = repository.get_job_for_project(project_id)
     if job and job["stage"] == "failed":
@@ -156,13 +162,16 @@ def _require_ready_project(repository: ProjectRepository, project_id: str) -> di
             job["error_code"] or "processing-failed",
             job["message"],
         )
-    if not project["preview_json"] or not project["quality_json"] or not project["data_blob"]:
+    ready = project.get("ready")
+    if ready is None:
+        ready = bool(project["preview_json"] and project["quality_json"] and project["data_blob"])
+    if not ready:
         raise ApiProblem(409, "processing-not-ready", "The uploaded file is still being processed.")
     return project
 
 
 def _require_project_access(
-    repository: ProjectRepository,
+    repository: ProjectReader,
     project_id: str,
     user: dict[str, str] | None,
     guest_token: str | None,
@@ -233,7 +242,7 @@ def _shared_preview(preview: DataPreview, chart: ChartSpec) -> DataPreview:
 
 
 def _process_project(
-    repository: ProjectRepository,
+    repository: ProjectStore,
     settings: Settings,
     project_id: str,
     job_id: str,
@@ -283,7 +292,7 @@ def _process_project(
         repository.complete_project(
             project_id=project_id,
             source=_model_json(source),
-            data_blob=serialize_dataframe(frame),
+            frame=frame,
             preview=preview,
             quality=quality,
             chart=chart,
@@ -317,22 +326,26 @@ def create_app(
     settings: Settings | None = None,
     repository: ProjectRepository | None = None,
     auth_service: AuthService | None = None,
+    project_store: ProjectStore | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_env()
     resolved_repository = repository or ProjectRepository(
         resolved_settings.database_path, resolved_settings.project_ttl_seconds
     )
+    resolved_project_store = project_store or build_project_store(
+        resolved_settings, resolved_repository
+    )
     resolved_auth = auth_service or build_auth_service(resolved_settings, resolved_repository)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> Any:
-        resolved_repository.recover_stale_jobs()
+        resolved_project_store.recover_stale_jobs()
 
         async def maintain_temporary_data() -> None:
             while True:
                 await asyncio.sleep(60)
-                await asyncio.to_thread(resolved_repository.cleanup_expired)
-                await asyncio.to_thread(resolved_repository.recover_stale_jobs)
+                await asyncio.to_thread(resolved_project_store.cleanup_expired)
+                await asyncio.to_thread(resolved_project_store.recover_stale_jobs)
 
         maintenance = asyncio.create_task(maintain_temporary_data())
         try:
@@ -350,6 +363,7 @@ def create_app(
     )
     app.state.settings = resolved_settings
     app.state.repository = resolved_repository
+    app.state.project_store = resolved_project_store
     app.state.auth_service = resolved_auth
     app.add_middleware(
         CORSMiddleware,
@@ -397,6 +411,21 @@ def create_app(
             content={"code": exc.code, "message": str(exc)},
         )
 
+    @app.exception_handler(PersistenceError)
+    async def persistence_error_handler(_request: Request, exc: PersistenceError) -> JSONResponse:
+        if isinstance(exc, PersistenceNotFound):
+            status_code = 404
+        elif isinstance(exc, PersistenceConflict):
+            status_code = 409
+        elif isinstance(exc, PersistenceUnavailable):
+            status_code = 503
+        else:
+            status_code = 500
+        return JSONResponse(
+            status_code=status_code,
+            content={"code": exc.code, "message": str(exc)},
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
         _request: Request, exc: RequestValidationError
@@ -412,6 +441,9 @@ def create_app(
 
     def get_repository() -> ProjectRepository:
         return resolved_repository
+
+    def get_project_store() -> ProjectStore:
+        return resolved_project_store
 
     def get_settings() -> Settings:
         return resolved_settings
@@ -438,7 +470,7 @@ def create_app(
         return HealthResponse()
 
     @app.get(f"{API_PREFIX}/ready", response_model=HealthResponse)
-    def readiness(repository: ProjectRepository = Depends(get_repository)) -> HealthResponse:
+    def readiness(repository: ProjectStore = Depends(get_project_store)) -> HealthResponse:
         if not repository.ping():
             raise ApiProblem(503, "database-unavailable", "The database is not ready.")
         return HealthResponse()
@@ -455,7 +487,7 @@ def create_app(
         sheet_name: str | None = Form(default=None, alias="sheetName"),
         header_row: int = Form(default=1, alias="headerRow", ge=1, le=1_000),
         guest_cookie: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
         current_settings: Settings = Depends(get_settings),
     ) -> ProjectSession:
         filename = Path(file.filename or "uploaded-data").name
@@ -477,6 +509,7 @@ def create_app(
             job_id=job_id,
             title=Path(filename).stem or "Untitled project",
             source=_model_json(source),
+            source_sha256=hashlib.sha256(payload).hexdigest(),
             guest_token_digest=_guest_digest(guest_token),
         )
         background_tasks.add_task(
@@ -503,7 +536,7 @@ def create_app(
         background_tasks: BackgroundTasks,
         response: Response,
         guest_cookie: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
         current_settings: Settings = Depends(get_settings),
     ) -> ProjectSession:
         payload = sample_csv_bytes()
@@ -519,6 +552,7 @@ def create_app(
             job_id=job_id,
             title="Thermal response sample",
             source=_model_json(source),
+            source_sha256=hashlib.sha256(payload).hexdigest(),
             guest_token_digest=_guest_digest(guest_token),
         )
         background_tasks.add_task(
@@ -541,7 +575,7 @@ def create_app(
         project_id: str,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> ProjectSession:
         project = _require_project_access(repository, project_id, user, guest_token)
         return _project_session(repository, project)
@@ -551,7 +585,7 @@ def create_app(
         job_id: str,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> ProcessingJob:
         row = repository.get_job(job_id)
         if row is None:
@@ -645,7 +679,7 @@ def create_app(
         project_id: str,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> DataPreview:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         return DataPreview.model_validate_json(project["preview_json"])
@@ -728,7 +762,7 @@ def create_app(
         body: ChartRequest,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> SavedChartResponse:
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         preview = DataPreview.model_validate_json(project["preview_json"])
