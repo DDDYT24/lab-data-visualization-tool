@@ -182,6 +182,36 @@ class WorkerLease(Base):
     )
 
 
+class OrphanStagingCandidate(Base):
+    """A staging key observed in separate inventories before safe deletion."""
+
+    __tablename__ = "orphan_staging_candidates"
+    __table_args__ = (
+        CheckConstraint("observation_count >= 1", name="observation_count_positive"),
+        CheckConstraint("size_bytes >= 0", name="size_bytes_nonnegative"),
+        CheckConstraint("retry_count >= 0", name="retry_count_nonnegative"),
+        Index(
+            "ix_orphan_staging_candidates_cleanup",
+            "quarantined_at",
+            "next_attempt_at",
+            "first_seen_at",
+        ),
+    )
+
+    staging_key: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observation_count: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retry_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    quarantined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = (

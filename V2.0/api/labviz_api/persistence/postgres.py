@@ -59,6 +59,10 @@ from labviz_api.project_spec import (
 from labviz_api.repository import iso_at
 from labviz_api.share_tokens import ShareTokenCodec
 from labviz_api.storage import ObjectStorage, StagedObject
+from labviz_api.workers.references import (
+    collect_project_object_ids,
+    finalize_purged_project_objects,
+)
 
 from .contracts import ProjectRepository
 from .exceptions import (
@@ -669,110 +673,59 @@ class PostgresProjectStore:
             raise _translate_database_error(exc) from exc
 
     def cleanup_expired(self) -> None:
-        now = _now()
-        try:
-            with self._uow() as uow:
-                assert uow.session is not None
-                project_ids = list(
-                    uow.session.scalars(
-                        select(Project.id).where(
-                            or_(
-                                (
-                                    (Project.storage_mode == "temporary-cloud")
-                                    & (Project.expires_at <= now)
-                                ),
-                                (Project.deleted_at.is_not(None) & (Project.purge_after <= now)),
-                            )
-                        )
-                    )
-                )
-                uow.session.execute(
-                    sql_delete(AuthChallenge).where(AuthChallenge.expires_at <= now)
-                )
-                uow.session.execute(sql_delete(AuthSession).where(AuthSession.expires_at <= now))
-                uow.session.execute(
-                    sql_delete(IdempotencyRecord).where(
-                        IdempotencyRecord.expires_at.is_not(None),
-                        IdempotencyRecord.expires_at <= now,
-                    )
-                )
-                uow.session.execute(
-                    sql_delete(AuthRequest).where(
-                        AuthRequest.requested_at < now - timedelta(hours=1)
-                    )
-                )
-                uow.commit()
-            for project_id in project_ids:
-                self._purge_project(project_id)
-            self._collect_garbage()
-            with self._uow() as uow:
-                assert uow.session is not None
-                expired_guests = list(
-                    uow.session.scalars(
-                        select(GuestSession).where(GuestSession.expires_at <= now).with_for_update()
-                    )
-                )
-                for guest in expired_guests:
-                    reference_count = int(
-                        uow.session.scalar(
-                            select(func.count())
-                            .select_from(Project)
-                            .where(Project.guest_session_id == guest.id)
-                        )
-                        or 0
-                    )
-                    if reference_count == 0:
-                        uow.session.delete(guest)
-                uow.commit()
-        except Exception as exc:
-            raise _translate_database_error(exc) from exc
+        # Compatibility entry point for explicit callers. PostgreSQL FastAPI lifespan
+        # never invokes it; the same leased handlers are used by the independent CLI.
+        from labviz_api.workers.garbage_collection import StoredObjectGarbageCollector
+        from labviz_api.workers.leases import (
+            METADATA_CLEANUP,
+            PROJECT_LIFECYCLE,
+            STORED_OBJECT_GC,
+            LeaseStore,
+            RetryPolicy,
+        )
+        from labviz_api.workers.lifecycle import ProjectLifecycleHandler
+        from labviz_api.workers.metadata_cleanup import MetadataCleanupHandler
+        from labviz_api.workers.runner import RunnerConfig, WorkerRunner
+        from labviz_api.workers.safety import MaintenanceSafety
 
-    @staticmethod
-    def _object_reference_count(session: Session, stored_object_id: UUID) -> int:
-        dataset_refs = int(
-            session.scalar(
-                select(func.count())
-                .select_from(DatasetVersion)
-                .where(DatasetVersion.stored_object_id == stored_object_id)
-            )
-            or 0
+        leases = LeaseStore(self.database)
+        safety = MaintenanceSafety(dry_run=False, delete_enabled=True)
+        config = RunnerConfig(
+            batch_size=100,
+            lease_seconds=60,
+            heartbeat_seconds=20,
+            retry_policy=RetryPolicy(),
+            dry_run=False,
+            delete_enabled=True,
         )
-        source_refs = int(
-            session.scalar(
-                select(func.count())
-                .select_from(SourceFile)
-                .where(SourceFile.stored_object_id == stored_object_id)
-            )
-            or 0
+        owner_prefix = f"compat-cleanup-{uuid4()}"
+        lifecycle = WorkerRunner(
+            task=PROJECT_LIFECYCLE,
+            owner=f"{owner_prefix}-projects",
+            leases=leases,
+            config=config,
+            item_handler=ProjectLifecycleHandler(safety),
         )
-        publication_refs = int(
-            session.scalar(
-                select(func.count())
-                .select_from(PublicationExport)
-                .where(PublicationExport.stored_object_id == stored_object_id)
-            )
-            or 0
+        while lifecycle.run_once() > 0:
+            pass
+        gc = WorkerRunner(
+            task=STORED_OBJECT_GC,
+            owner=f"{owner_prefix}-objects",
+            leases=leases,
+            config=config,
+            item_handler=StoredObjectGarbageCollector(self.storage, safety, config.retry_policy),
         )
-        intent_refs = int(
-            session.scalar(
-                select(func.count())
-                .select_from(StoredObjectWriteIntent)
-                .where(
-                    StoredObjectWriteIntent.stored_object_id == stored_object_id,
-                    StoredObjectWriteIntent.status == "pending",
-                )
-            )
-            or 0
+        while gc.run_once() > 0:
+            pass
+        metadata = WorkerRunner(
+            task=METADATA_CLEANUP,
+            owner=f"{owner_prefix}-metadata",
+            leases=leases,
+            config=config,
+            scanner_handler=MetadataCleanupHandler(safety, batch_size=config.batch_size),
         )
-        pending_job_refs = int(
-            session.scalar(
-                select(func.count())
-                .select_from(ExportJobRecord)
-                .where(ExportJobRecord.pending_stored_object_id == stored_object_id)
-            )
-            or 0
-        )
-        return dataset_refs + source_refs + publication_refs + intent_refs + pending_job_refs
+        while metadata.run_once() > 0:
+            pass
 
     def _purge_project(self, project_id: UUID, *, force_temporary: bool = False) -> bool:
         object_ids: list[UUID] = []
@@ -797,38 +750,8 @@ class PostgresProjectStore:
             if not eligible:
                 uow.commit()
                 return False
-            object_ids = list(
-                {
-                    *uow.session.scalars(
-                        select(DatasetVersion.stored_object_id).where(
-                            DatasetVersion.project_id == project.id
-                        )
-                    ),
-                    *uow.session.scalars(
-                        select(SourceFile.stored_object_id).where(
-                            SourceFile.project_id == project.id,
-                            SourceFile.stored_object_id.is_not(None),
-                        )
-                    ),
-                    *uow.session.scalars(
-                        select(PublicationExport.stored_object_id).where(
-                            PublicationExport.project_id == project.id
-                        )
-                    ),
-                    *uow.session.scalars(
-                        select(StoredObjectWriteIntent.stored_object_id).where(
-                            StoredObjectWriteIntent.project_id == project.id,
-                            StoredObjectWriteIntent.status == "pending",
-                        )
-                    ),
-                    *uow.session.scalars(
-                        select(ExportJobRecord.pending_stored_object_id).where(
-                            ExportJobRecord.project_id == project.id,
-                            ExportJobRecord.pending_stored_object_id.is_not(None),
-                        )
-                    ),
-                }
-            )
+            object_ids = list(collect_project_object_ids(uow.session, project.id))
+            stored_objects: list[StoredObject] = []
             if object_ids:
                 stored_objects = list(
                     uow.session.scalars(
@@ -851,72 +774,9 @@ class PostgresProjectStore:
                 )
             )
             uow.session.delete(project)
+            finalize_purged_project_objects(uow.session, stored_objects, now)
             uow.commit()
             return True
-
-    def _collect_garbage(self) -> int:
-        with self._uow() as uow:
-            assert uow.session is not None
-            candidate_ids = list(
-                uow.session.scalars(
-                    select(StoredObject.id).where(
-                        or_(
-                            StoredObject.gc_candidate_at.is_not(None),
-                            StoredObject.status == "deleting",
-                        )
-                    )
-                )
-            )
-        deleted = 0
-        for stored_object_id in candidate_ids:
-            object_key: str | None = None
-            with self._uow() as uow:
-                assert uow.session is not None
-                stored_object = uow.session.scalar(
-                    select(StoredObject)
-                    .where(StoredObject.id == stored_object_id)
-                    .with_for_update()
-                )
-                if stored_object is None or stored_object.status == "deleted":
-                    uow.commit()
-                    continue
-                if self._object_reference_count(uow.session, stored_object.id) != 0:
-                    stored_object.gc_candidate_at = None
-                    uow.commit()
-                    continue
-                if stored_object.status == "available":
-                    stored_object.status = "deleting"
-                    stored_object.updated_at = _now()
-                if stored_object.status != "deleting":
-                    uow.commit()
-                    continue
-                object_key = stored_object.object_key
-                uow.commit()
-            if object_key is None:
-                continue
-            try:
-                self.storage.delete(object_key)
-            except Exception:
-                continue
-            with self._uow() as uow:
-                assert uow.session is not None
-                stored_object = uow.session.scalar(
-                    select(StoredObject)
-                    .where(StoredObject.id == stored_object_id)
-                    .with_for_update()
-                )
-                if (
-                    stored_object is not None
-                    and stored_object.status == "deleting"
-                    and self._object_reference_count(uow.session, stored_object.id) == 0
-                ):
-                    stored_object.status = "deleted"
-                    stored_object.deleted_at = _now()
-                    stored_object.gc_candidate_at = None
-                    stored_object.updated_at = _now()
-                    deleted += 1
-                uow.commit()
-        return deleted
 
     def recover_stale_jobs(self, stale_after_seconds: int = 900) -> int:
         recovered = self.recover_pending_objects()

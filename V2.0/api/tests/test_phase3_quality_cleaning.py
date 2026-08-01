@@ -15,7 +15,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from labviz_api.config import Settings
@@ -62,6 +62,9 @@ def postgres_database() -> Iterator[Database]:
         database.dispose()
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
     config = alembic_config(POSTGRES_URL)
+    with database.engine.begin() as connection:
+        if "projects" in inspect(connection).get_table_names():
+            connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     try:

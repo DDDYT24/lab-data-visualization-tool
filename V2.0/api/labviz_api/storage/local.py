@@ -150,6 +150,28 @@ class LocalObjectStorage:
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
 
+    def head(self, key: str) -> ObjectInfo | None:
+        target = self._path(key)
+        if not target.is_file():
+            return None
+        with target.open("rb") as source:
+            sha256 = hashlib.file_digest(source, "sha256").hexdigest()
+        return ObjectInfo(key=key, size_bytes=target.stat().st_size, sha256=sha256)
+
+    def list_staged(self) -> list[ObjectInfo]:
+        staging_root = self._path(".staging")
+        if not staging_root.is_dir():
+            return []
+        inventory: list[ObjectInfo] = []
+        for target in sorted(staging_root.rglob("*.part")):
+            if not target.is_file():
+                continue
+            key = target.relative_to(self.root).as_posix()
+            info = self.head(key)
+            if info is not None:
+                inventory.append(info)
+        return inventory
+
     def delete(self, key: str) -> bool:
         target = self._path(key)
         if not target.is_file():

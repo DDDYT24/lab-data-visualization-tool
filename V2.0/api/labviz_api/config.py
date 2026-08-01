@@ -59,6 +59,10 @@ class Settings:
     worker_backoff_max_seconds: int = 3_600
     worker_max_retries: int = 5
     worker_destructive_maintenance: bool = False
+    worker_dry_run: bool = True
+    worker_delete_enabled: bool = False
+    worker_gc_orphan_age_seconds: int = 86_400
+    worker_orphan_staging_grace_seconds: int = 3_600
 
     def __post_init__(self) -> None:
         if self.environment not in {"development", "test", "production"}:
@@ -92,6 +96,10 @@ class Settings:
             raise ValueError("Worker heartbeat must be positive and shorter than the lease.")
         if self.worker_max_retries < 1:
             raise ValueError("Worker retries must be at least one.")
+        if self.worker_gc_orphan_age_seconds < 1:
+            raise ValueError("Worker GC orphan age must be positive.")
+        if self.worker_orphan_staging_grace_seconds < 1:
+            raise ValueError("Orphan staging grace must be positive.")
         if (
             self.worker_backoff_base_seconds < 1
             or self.worker_backoff_max_seconds < self.worker_backoff_base_seconds
@@ -157,5 +165,13 @@ class Settings:
             worker_max_retries=int(os.environ.get("LABVIZ_WORKER_MAX_RETRIES", "5")),
             worker_destructive_maintenance=_as_bool(
                 os.environ.get("LABVIZ_WORKER_DESTRUCTIVE_MAINTENANCE")
+            ),
+            worker_dry_run=_as_bool(os.environ.get("LABVIZ_WORKER_DRY_RUN"), True),
+            worker_delete_enabled=_as_bool(os.environ.get("LABVIZ_WORKER_DELETE_ENABLED"), False),
+            worker_gc_orphan_age_seconds=int(
+                os.environ.get("LABVIZ_WORKER_GC_ORPHAN_AGE_SECONDS", "86400")
+            ),
+            worker_orphan_staging_grace_seconds=int(
+                os.environ.get("LABVIZ_WORKER_ORPHAN_STAGING_GRACE_SECONDS", "3600")
             ),
         )

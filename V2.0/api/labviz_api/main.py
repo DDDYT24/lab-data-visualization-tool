@@ -348,6 +348,11 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> Any:
+        if resolved_settings.persistence_backend == "postgresql":
+            # PostgreSQL maintenance is owned by the independently leased worker CLI.
+            # FastAPI replicas must not race an unfenced lifespan cleanup loop.
+            yield
+            return
         resolved_project_store.recover_stale_jobs()
 
         async def maintain_temporary_data() -> None:

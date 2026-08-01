@@ -7,11 +7,13 @@ from datetime import datetime, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, not_, or_, select
 from sqlalchemy.orm import Session
 
 from labviz_api.db.models import Project, StoredObject, StoredObjectWriteIntent, WorkerLease
 from labviz_api.db.session import Database
+
+from .references import object_is_referenced
 
 PENDING_RECONCILIATION = "pending-reconciliation"
 PROJECT_LIFECYCLE = "project-lifecycle"
@@ -27,7 +29,7 @@ TASKS = (
     METADATA_CLEANUP,
 )
 
-WorkItemKind = Literal["write-intent", "project", "stored-object"]
+WorkItemKind = Literal["write-intent", "pending-object", "project", "stored-object"]
 
 
 @dataclass(frozen=True)
@@ -70,8 +72,11 @@ class WorkItemLease:
 class LeaseStore:
     """Acquire short-transaction leases and fence every completion write."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, gc_orphan_age_seconds: int = 86_400) -> None:
+        if gc_orphan_age_seconds < 1:
+            raise ValueError("gc_orphan_age_seconds must be positive")
         self.database = database
+        self.gc_orphan_age_seconds = gc_orphan_age_seconds
 
     @staticmethod
     def _database_now(session: Session) -> datetime:
@@ -168,6 +173,13 @@ class LeaseStore:
         self, owner: str, *, batch_size: int, lease_seconds: int
     ) -> list[WorkItemLease]:
         return self._claim("project", owner, batch_size=batch_size, lease_seconds=lease_seconds)
+
+    def claim_pending_objects(
+        self, owner: str, *, batch_size: int, lease_seconds: int
+    ) -> list[WorkItemLease]:
+        return self._claim(
+            "pending-object", owner, batch_size=batch_size, lease_seconds=lease_seconds
+        )
 
     def claim_stored_objects(
         self, owner: str, *, batch_size: int, lease_seconds: int
@@ -278,6 +290,51 @@ class LeaseStore:
                 row.next_attempt_at = now + policy.delay_after(row.retry_count)
             return True
 
+    def quarantine_item(
+        self,
+        lease: WorkItemLease,
+        *,
+        error_code: str,
+        error_message: str,
+    ) -> bool:
+        """Permanently stop automatic retries without weakening fencing checks."""
+
+        with self.database.session() as session:
+            now = self._database_now(session)
+            row = self._locked_owned_row(session, lease, now)
+            if row is None:
+                return False
+            row.retry_count += 1
+            row.last_attempt_at = now
+            row.last_error_code = (error_code or "permanent-worker-error")[:128]
+            row.last_error_message = (error_message or "Permanent worker failure.")[:1024]
+            row.next_attempt_at = None
+            row.quarantined_at = now
+            row.lease_owner = None
+            row.lease_until = None
+            return True
+
+    def lock_owned_item(self, session: Session, lease: WorkItemLease) -> Any | None:
+        """Lock a still-current work item inside a caller-owned final transaction."""
+
+        now = self._database_now(session)
+        return self._locked_owned_row(session, lease, now)
+
+    def lock_owned_task(self, session: Session, lease: TaskLease) -> WorkerLease | None:
+        """Fence scanner mutations with the task lease that authorized the inventory."""
+
+        now = self._database_now(session)
+        return session.scalar(
+            select(WorkerLease)
+            .where(
+                WorkerLease.task == lease.task,
+                WorkerLease.lease_owner == lease.owner,
+                WorkerLease.fencing_token == lease.fencing_token,
+                WorkerLease.lease_until > now,
+            )
+            .with_for_update()
+        )
+
     def _locked_owned_row(
         self, session: Session, lease: WorkItemLease, now: datetime
     ) -> Any | None:
@@ -303,10 +360,23 @@ class LeaseStore:
             return Project
         return StoredObject
 
-    @staticmethod
-    def _eligible(kind: WorkItemKind, now: datetime) -> Any:
+    def _eligible(self, kind: WorkItemKind, now: datetime) -> Any:
         if kind == "write-intent":
             return StoredObjectWriteIntent.status == "pending"
+        if kind == "pending-object":
+            return and_(
+                StoredObject.status == "pending",
+                not_(
+                    StoredObject.id.in_(
+                        select(StoredObjectWriteIntent.stored_object_id).where(
+                            or_(
+                                StoredObjectWriteIntent.status == "pending",
+                                StoredObjectWriteIntent.quarantined_at.is_not(None),
+                            )
+                        )
+                    )
+                ),
+            )
         if kind == "project":
             return or_(
                 and_(
@@ -320,9 +390,19 @@ class LeaseStore:
                     Project.purge_after <= now,
                 ),
             )
+        historic_cutoff = now - timedelta(seconds=self.gc_orphan_age_seconds)
         return or_(
-            and_(StoredObject.status == "available", StoredObject.gc_candidate_at.is_not(None)),
             StoredObject.status == "deleting",
+            and_(
+                StoredObject.status == "available",
+                or_(
+                    StoredObject.gc_candidate_at.is_not(None),
+                    and_(
+                        StoredObject.created_at <= historic_cutoff,
+                        not_(object_is_referenced()),
+                    ),
+                ),
+            ),
         )
 
     @staticmethod
@@ -335,7 +415,7 @@ class LeaseStore:
     def _state_expression(kind: WorkItemKind, state: str) -> Any:
         if kind == "write-intent":
             return StoredObjectWriteIntent.status == state
-        if kind == "stored-object":
+        if kind in {"stored-object", "pending-object"}:
             return StoredObject.status == state
         if state == "temporary-expired":
             return Project.storage_mode == "temporary-cloud"
