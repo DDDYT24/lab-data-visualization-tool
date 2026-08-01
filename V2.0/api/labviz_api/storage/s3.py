@@ -35,6 +35,16 @@ ALLOWED_CALLER_METADATA = {
     "labviz-format-version",
     "labviz-media-type",
 }
+EXPLICIT_CONTINUATION_ERROR_CODES = {
+    "expiredcontinuationtoken",
+    "invalidcontinuationtoken",
+    "invalidcontinuationtokenexception",
+}
+CONTEXTUAL_CONTINUATION_ERROR_CODES = {
+    "expiredtoken",
+    "invalidargument",
+    "invalidtoken",
+}
 
 
 class S3ObjectStorage:
@@ -345,7 +355,7 @@ class S3ObjectStorage:
                 snapshot_at = datetime.fromisoformat(state["snapshotAt"])
             except (KeyError, TypeError, ValueError) as exc:
                 raise InvalidStorageCursor("S3 inventory cursor state is malformed.") from exc
-            if (token is not None and not isinstance(token, str)) or snapshot_at.tzinfo is None:
+            if not isinstance(token, str) or not token or snapshot_at.tzinfo is None:
                 raise InvalidStorageCursor("S3 inventory cursor state is malformed.")
         parameters: dict[str, Any] = {
             "Bucket": self.bucket,
@@ -354,7 +364,10 @@ class S3ObjectStorage:
         }
         if token:
             parameters["ContinuationToken"] = token
-        response = self._call("list_objects_v2", **parameters)
+        response = self._list_staged_page(
+            parameters,
+            has_continuation_token=token is not None,
+        )
         items: list[ObjectInfo] = []
         for item in response.get("Contents", []):
             modified = item.get("LastModified")
@@ -392,6 +405,39 @@ class S3ObjectStorage:
                 ttl_seconds=self.cursor_ttl_seconds,
             )
         return StagingPage(tuple(items), next_cursor, has_more)
+
+    def _list_staged_page(
+        self,
+        parameters: Mapping[str, Any],
+        *,
+        has_continuation_token: bool,
+    ) -> Any:
+        try:
+            return self.client.list_objects_v2(**parameters)
+        except ClientError as exc:
+            if has_continuation_token and self._is_rejected_continuation_token(exc):
+                raise InvalidStorageCursor(
+                    "Inventory continuation cursor was rejected and cannot be resumed."
+                ) from exc
+            raise self._safe_error(exc) from exc
+        except BotoCoreError as exc:
+            raise OSError("S3 list_objects_v2 operation failed.") from exc
+
+    @classmethod
+    def _is_rejected_continuation_token(cls, error: ClientError) -> bool:
+        details = error.response.get("Error", {})
+        if not isinstance(details, Mapping):
+            return False
+        code = cls._error_code(error).casefold()
+        if code in EXPLICIT_CONTINUATION_ERROR_CODES:
+            return True
+        if code not in CONTEXTUAL_CONTINUATION_ERROR_CODES:
+            return False
+        context = " ".join(
+            str(details.get(name, "")) for name in ("Message", "ArgumentName", "ParameterName")
+        ).casefold()
+        normalized = context.replace("-", " ").replace("_", " ")
+        return "continuation" in normalized and "token" in normalized
 
     def delete(self, key: str, *, expected: ObjectInfo | None = None) -> bool:
         current = self.head(key)

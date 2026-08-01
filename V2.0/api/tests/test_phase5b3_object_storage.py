@@ -4,6 +4,8 @@ import hashlib
 import io
 import os
 import sqlite3
+import subprocess
+import sys
 import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -18,7 +20,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from botocore.config import Config as BotoConfig
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError, ReadTimeoutError
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, select, text
 
@@ -42,7 +44,14 @@ from labviz_api.processing import (
     default_chart_spec,
     render_chart,
 )
-from labviz_api.storage import ObjectInfo, ObjectStorage, StagedObject, StagingPage
+from labviz_api.storage import (
+    InvalidStorageCursor,
+    ObjectInfo,
+    ObjectStorage,
+    StagedObject,
+    StagingPage,
+)
+from labviz_api.storage.cursor import encode_cursor
 from labviz_api.storage.factory import build_object_storage
 from labviz_api.storage.s3 import S3ObjectStorage
 from labviz_api.workers.garbage_collection import StoredObjectGarbageCollector
@@ -95,6 +104,34 @@ def _ensure_minio() -> Any:
     return client
 
 
+def _delete_minio_prefix(client: Any, prefix: str) -> None:
+    keys: list[dict[str, str]] = []
+    continuation: str | None = None
+    while True:
+        parameters: dict[str, Any] = {
+            "Bucket": MINIO_BUCKET,
+            "Prefix": f"{prefix}/",
+        }
+        if continuation is not None:
+            parameters["ContinuationToken"] = continuation
+        listed = client.list_objects_v2(**parameters)
+        keys.extend({"Key": str(item["Key"])} for item in listed.get("Contents", []))
+        if not listed.get("IsTruncated"):
+            break
+        continuation = str(listed["NextContinuationToken"])
+    for offset in range(0, len(keys), 1_000):
+        client.delete_objects(
+            Bucket=MINIO_BUCKET,
+            Delete={"Objects": keys[offset : offset + 1_000]},
+        )
+    remaining = client.list_objects_v2(
+        Bucket=MINIO_BUCKET,
+        Prefix=f"{prefix}/",
+        MaxKeys=1,
+    )
+    assert remaining.get("Contents", []) == []
+
+
 @pytest.fixture(scope="module")
 def postgres_database() -> Iterator[Database]:
     database = Database(POSTGRES_URL)
@@ -140,21 +177,17 @@ def minio_storage() -> Iterator[S3ObjectStorage]:
         client=client,
     )
     yield storage
-    continuation: str | None = None
-    while True:
-        parameters: dict[str, Any] = {
-            "Bucket": MINIO_BUCKET,
-            "Prefix": f"{prefix}/",
-        }
-        if continuation is not None:
-            parameters["ContinuationToken"] = continuation
-        listed = client.list_objects_v2(**parameters)
-        objects = [{"Key": item["Key"]} for item in listed.get("Contents", [])]
-        if objects:
-            client.delete_objects(Bucket=MINIO_BUCKET, Delete={"Objects": objects})
-        if not listed.get("IsTruncated"):
-            break
-        continuation = str(listed["NextContinuationToken"])
+    _delete_minio_prefix(client, prefix)
+
+
+@pytest.fixture
+def api_minio_prefix() -> Iterator[str]:
+    client = _ensure_minio()
+    prefix = f"api/{uuid4().hex}"
+    try:
+        yield prefix
+    finally:
+        _delete_minio_prefix(client, prefix)
 
 
 def _settings(tmp_path: Path, prefix: str) -> Settings:
@@ -309,18 +342,62 @@ class FailListOnceStorage(DelegatingStorage):
         return self.storage.list_staged(page_size=page_size, cursor=cursor)
 
 
+class FailListObjectsClient:
+    def __init__(self, client: Any, failure: Exception) -> None:
+        self.client = client
+        self.failure = failure
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.client, name)
+
+    def list_objects_v2(self, **parameters: Any) -> Any:
+        raise self.failure
+
+
+def _provider_cursor(storage: S3ObjectStorage, provider_token: str) -> str:
+    return encode_cursor(
+        backend_name=storage.backend_name,
+        inventory_scope=storage.inventory_scope,
+        state={
+            "providerToken": provider_token,
+            "snapshotAt": datetime.now(UTC).isoformat(),
+        },
+        issued_at=datetime.now(UTC),
+        ttl_seconds=3_600,
+    )
+
+
+def _list_failure(kind: str) -> Exception:
+    if kind == "network":
+        return EndpointConnectionError(endpoint_url=MINIO_ENDPOINT)
+    if kind == "timeout":
+        return ReadTimeoutError(endpoint_url=MINIO_ENDPOINT, error="timed out")
+    code, message, status = {
+        "throttle": ("SlowDown", "Please reduce your request rate.", 503),
+        "service": ("ServiceUnavailable", "Service is temporarily unavailable.", 503),
+        "auth": ("AccessDenied", "Access denied.", 403),
+        "other-invalid-argument": ("InvalidArgument", "Invalid max-keys value.", 400),
+    }[kind]
+    return ClientError(
+        {
+            "Error": {"Code": code, "Message": message},
+            "ResponseMetadata": {"HTTPStatusCode": status},
+        },
+        "ListObjectsV2",
+    )
+
+
 def test_api_factory_postgres_minio_round_trip_export_and_restart(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     postgres_database: Database,
+    api_minio_prefix: str,
 ) -> None:
-    _ensure_minio()
     _aws_test_credentials(monkeypatch)
-    prefix = f"api/{uuid4().hex}"
-    settings = _settings(tmp_path, prefix)
+    settings = _settings(tmp_path, api_minio_prefix)
     provider = build_object_storage(settings)
     assert provider.backend_name == "s3"
-    assert provider.inventory_scope == f"s3://{MINIO_BUCKET}/{prefix}/.staging"
+    assert provider.inventory_scope == f"s3://{MINIO_BUCKET}/{api_minio_prefix}/.staging"
 
     cookies: dict[str, str]
     with TestClient(create_app(settings)) as client:
@@ -581,6 +658,77 @@ def test_inventory_checkpoint_resumes_pages_and_counts_only_complete_generations
     assert _acquire_and_scan(deleting, leases, "delete-page-6") == 1
 
 
+def test_inventory_checkpoint_resumes_across_real_processes(
+    minio_storage: S3ObjectStorage,
+    postgres_database: Database,
+) -> None:
+    for index in range(5):
+        minio_storage.stage(f"datasets/process-{index}.parquet", io.BytesIO(str(index).encode()))
+    script = """
+import os
+from uuid import uuid4
+
+from labviz_api.db.session import Database
+from labviz_api.storage.s3 import S3ObjectStorage
+from labviz_api.workers.leases import ORPHAN_STAGING_INVENTORY, LeaseStore, RetryPolicy
+from labviz_api.workers.orphan_staging import OrphanStagingHandler
+from labviz_api.workers.safety import MaintenanceSafety
+
+database = Database(os.environ["LABVIZ_SUBPROCESS_POSTGRES_URL"])
+storage = S3ObjectStorage(
+    bucket=os.environ["LABVIZ_SUBPROCESS_MINIO_BUCKET"],
+    prefix=os.environ["LABVIZ_SUBPROCESS_MINIO_PREFIX"],
+    endpoint_url=os.environ["LABVIZ_SUBPROCESS_MINIO_ENDPOINT"],
+    region="us-east-1",
+)
+leases = LeaseStore(database, storage_backend="s3")
+lease = leases.acquire_task(ORPHAN_STAGING_INVENTORY, f"process-{uuid4().hex}", 60)
+if lease is None:
+    raise RuntimeError("inventory task lease unavailable")
+try:
+    handler = OrphanStagingHandler(
+        storage,
+        MaintenanceSafety(),
+        RetryPolicy(),
+        grace_seconds=1,
+        batch_size=2,
+    )
+    print(handler(lease, leases))
+finally:
+    leases.release_task(lease)
+    database.dispose()
+"""
+    environment = {
+        **os.environ,
+        "AWS_ACCESS_KEY_ID": MINIO_ACCESS_KEY,
+        "AWS_SECRET_ACCESS_KEY": MINIO_SECRET_KEY,
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "LABVIZ_SUBPROCESS_POSTGRES_URL": POSTGRES_URL,
+        "LABVIZ_SUBPROCESS_MINIO_BUCKET": MINIO_BUCKET,
+        "LABVIZ_SUBPROCESS_MINIO_PREFIX": minio_storage.prefix.rstrip("/"),
+        "LABVIZ_SUBPROCESS_MINIO_ENDPOINT": MINIO_ENDPOINT,
+    }
+    results: list[int] = []
+    for _page in range(3):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=API_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        results.append(int(completed.stdout.strip().splitlines()[-1]))
+    assert results == [0, 0, 5]
+    with postgres_database.session() as session:
+        checkpoint = session.scalar(select(StorageInventoryCheckpoint))
+        assert checkpoint is not None and checkpoint.status == "completed"
+        assert checkpoint.cursor is None
+        assert checkpoint.page_count == 3 and checkpoint.item_count == 5
+
+
 def test_inventory_takeover_fences_old_page_and_resumes_committed_cursor(
     minio_storage: S3ObjectStorage,
     postgres_database: Database,
@@ -662,6 +810,133 @@ def test_inventory_invalid_persisted_cursor_fails_closed_without_restart(
         assert checkpoint.page_count == 1 and checkpoint.item_count == 2
         assert checkpoint.last_error_code == "InvalidStorageCursor"
         assert checkpoint.cursor == "invalid-cursor"
+
+
+def test_real_minio_rejected_provider_token_fails_checkpoint_without_restart(
+    minio_storage: S3ObjectStorage,
+    postgres_database: Database,
+) -> None:
+    minio_storage.stage("datasets/provider-token.parquet", io.BytesIO(b"provider-token"))
+    provider_token = "secret-invalid-provider-continuation-token"
+    persisted_cursor = _provider_cursor(minio_storage, provider_token)
+    now = datetime.now(UTC)
+    with postgres_database.session() as session:
+        session.add(
+            StorageInventoryCheckpoint(
+                backend_name=minio_storage.backend_name,
+                inventory_scope=minio_storage.inventory_scope,
+                generation_id=uuid4(),
+                status="running",
+                cursor=persisted_cursor,
+                started_at=now,
+                last_checkpoint_at=now,
+                completed_at=None,
+                lease_owner="stopped-process",
+                task_fencing_token=1,
+                page_count=7,
+                item_count=11,
+            )
+        )
+    leases = LeaseStore(postgres_database, storage_backend="s3")
+    handler = OrphanStagingHandler(
+        minio_storage,
+        MaintenanceSafety(),
+        RetryPolicy(),
+        grace_seconds=1,
+        batch_size=2,
+    )
+    with pytest.raises(PermanentWorkerFailure, match="persisted inventory cursor") as caught:
+        _acquire_and_scan(handler, leases, "provider-token-resume")
+    cursor_error = caught.value.__cause__
+    assert isinstance(cursor_error, InvalidStorageCursor)
+    provider_error = cursor_error.__cause__
+    assert isinstance(provider_error, ClientError)
+    assert str(provider_error.response["Error"]["Code"]) == "InvalidArgument"
+    assert "continuation token" in str(provider_error.response["Error"]["Message"]).lower()
+
+    with postgres_database.session() as session:
+        checkpoint = session.scalar(select(StorageInventoryCheckpoint))
+        assert checkpoint is not None and checkpoint.status == "failed"
+        assert checkpoint.cursor == persisted_cursor
+        assert checkpoint.page_count == 7 and checkpoint.item_count == 11
+        assert checkpoint.completed_at is None
+        assert checkpoint.last_error_code == "InvalidStorageCursor"
+        diagnostic = checkpoint.last_error_message
+        assert diagnostic == "Inventory continuation cursor was rejected and cannot be resumed."
+        assert len(diagnostic) <= 1_024
+        assert provider_token not in diagnostic
+        assert MINIO_BUCKET not in diagnostic
+        assert MINIO_ENDPOINT not in diagnostic
+        assert MINIO_ACCESS_KEY not in diagnostic
+        assert MINIO_SECRET_KEY not in diagnostic
+        assert session.scalar(select(OrphanStagingCandidate)) is None
+
+    with pytest.raises(PermanentWorkerFailure, match="requires explicit operator diagnosis"):
+        _acquire_and_scan(handler, leases, "failed-checkpoint-does-not-restart")
+    with postgres_database.session() as session:
+        checkpoint = session.scalar(select(StorageInventoryCheckpoint))
+        assert checkpoint is not None and checkpoint.status == "failed"
+        assert checkpoint.cursor == persisted_cursor
+        assert checkpoint.page_count == 7 and checkpoint.item_count == 11
+
+
+@pytest.mark.parametrize(
+    "failure_kind",
+    ("network", "timeout", "throttle", "service", "auth", "other-invalid-argument"),
+)
+def test_s3_transient_and_non_cursor_errors_leave_checkpoint_retryable(
+    failure_kind: str,
+    minio_storage: S3ObjectStorage,
+    postgres_database: Database,
+) -> None:
+    provider_token = f"retryable-{failure_kind}"
+    failure = _list_failure(failure_kind)
+    failing_storage = S3ObjectStorage(
+        bucket=MINIO_BUCKET,
+        prefix=minio_storage.prefix,
+        endpoint_url=MINIO_ENDPOINT,
+        region="us-east-1",
+        multipart_threshold=FIVE_MIB,
+        multipart_part_size=FIVE_MIB,
+        client=FailListObjectsClient(minio_storage.client, failure),
+        validate_bucket=False,
+    )
+    persisted_cursor = _provider_cursor(failing_storage, provider_token)
+    now = datetime.now(UTC)
+    with postgres_database.session() as session:
+        session.add(
+            StorageInventoryCheckpoint(
+                backend_name=failing_storage.backend_name,
+                inventory_scope=failing_storage.inventory_scope,
+                generation_id=uuid4(),
+                status="running",
+                cursor=persisted_cursor,
+                started_at=now,
+                last_checkpoint_at=now,
+                completed_at=None,
+                lease_owner="retryable-process",
+                task_fencing_token=1,
+                page_count=3,
+                item_count=5,
+            )
+        )
+    leases = LeaseStore(postgres_database, storage_backend="s3")
+    handler = OrphanStagingHandler(
+        failing_storage,
+        MaintenanceSafety(),
+        RetryPolicy(),
+        grace_seconds=1,
+    )
+    with pytest.raises(OSError) as caught:
+        _acquire_and_scan(handler, leases, f"retryable-{failure_kind}")
+    assert not isinstance(caught.value, InvalidStorageCursor)
+    with postgres_database.session() as session:
+        checkpoint = session.scalar(select(StorageInventoryCheckpoint))
+        assert checkpoint is not None and checkpoint.status == "running"
+        assert checkpoint.cursor == persisted_cursor
+        assert checkpoint.page_count == 3 and checkpoint.item_count == 5
+        assert checkpoint.last_error_code is None
+        assert checkpoint.last_error_message is None
 
 
 def test_inventory_transient_provider_failure_retries_committed_checkpoint(
