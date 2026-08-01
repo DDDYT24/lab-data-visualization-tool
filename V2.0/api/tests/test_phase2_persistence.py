@@ -510,13 +510,19 @@ def _exercise_migrated_api(settings: Settings) -> dict[str, Any]:
             f"/api/v1/projects/{project_id}/chart",
             json={"chart": chart_document("API chart")},
         )
+        analysis_response = client.post(
+            f"/api/v1/projects/{project_id}/chart-analysis",
+            json={"chart": chart_document("API chart")},
+        )
         assert opened_response.status_code == preview_response.status_code == 200
         assert chart_response.status_code == 200
+        assert analysis_response.status_code == 200
         return {
             "created": created,
             "opened": opened_response.json(),
             "preview": preview_response.json(),
             "chart": chart_response.json(),
+            "analysis": analysis_response.json(),
         }
 
 
@@ -543,9 +549,46 @@ def test_sqlite_and_postgresql_api_responses_remain_compatible(
     postgres_settings = _api_settings(tmp_path / "postgres", backend="postgresql")
     sqlite = _exercise_migrated_api(sqlite_settings)
     postgres = _exercise_migrated_api(postgres_settings)
-    for key in ("created", "opened", "preview", "chart"):
+    for key in ("created", "opened", "preview", "chart", "analysis"):
         assert _without_dynamic_fields(sqlite[key]) == _without_dynamic_fields(postgres[key])
     with sqlite3.connect(postgres_settings.database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0
+
+
+def test_postgresql_chart_analysis_preserves_access_and_missing_project_errors(
+    tmp_path: Path,
+) -> None:
+    settings = _api_settings(tmp_path / "postgres-analysis", backend="postgresql")
+    app = create_app(settings)
+    with TestClient(app) as owner_client:
+        created = owner_client.post(
+            "/api/v1/projects",
+            files={"file": ("analysis.csv", b"time,response\n0,1.2\n1,1.4\n", "text/csv")},
+        )
+        assert created.status_code == 202
+        project_id = created.json()["projectId"]
+        analysis = owner_client.post(
+            f"/api/v1/projects/{project_id}/chart-analysis",
+            json={"chart": chart_document()},
+        )
+        assert analysis.status_code == 200
+        assert analysis.json()["projectId"] == project_id
+
+    with TestClient(app) as other_client:
+        denied = other_client.post(
+            f"/api/v1/projects/{project_id}/chart-analysis",
+            json={"chart": chart_document()},
+        )
+        missing = other_client.post(
+            f"/api/v1/projects/{uuid4().hex}/chart-analysis",
+            json={"chart": chart_document()},
+        )
+        assert denied.status_code == 403
+        assert denied.json()["code"] == "project-access-denied"
+        assert missing.status_code == 404
+        assert missing.json()["code"] == "project-not-found"
+
+    with sqlite3.connect(settings.database_path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0
 
 

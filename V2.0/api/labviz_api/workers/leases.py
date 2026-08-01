@@ -181,6 +181,22 @@ class LeaseStore:
             "pending-object", owner, batch_size=batch_size, lease_seconds=lease_seconds
         )
 
+    def claim_pending_object(
+        self,
+        owner: str,
+        *,
+        object_id: UUID,
+        lease_seconds: int,
+    ) -> WorkItemLease | None:
+        claimed = self._claim(
+            "pending-object",
+            owner,
+            batch_size=1,
+            lease_seconds=lease_seconds,
+            item_id=object_id,
+        )
+        return claimed[0] if claimed else None
+
     def claim_stored_objects(
         self, owner: str, *, batch_size: int, lease_seconds: int
     ) -> list[WorkItemLease]:
@@ -195,6 +211,7 @@ class LeaseStore:
         *,
         batch_size: int,
         lease_seconds: int,
+        item_id: UUID | None = None,
     ) -> list[WorkItemLease]:
         self._validate_owner(owner)
         self._validate_lease_seconds(lease_seconds)
@@ -204,15 +221,16 @@ class LeaseStore:
         model = self._model(kind)
         with self.database.session() as session:
             now = self._database_now(session)
+            statement = select(model).where(
+                model.quarantined_at.is_(None),
+                or_(model.next_attempt_at.is_(None), model.next_attempt_at <= now),
+                or_(model.lease_owner.is_(None), model.lease_until <= now),
+                self._eligible(kind, now),
+            )
+            if item_id is not None:
+                statement = statement.where(model.id == item_id)
             statement = (
-                select(model)
-                .where(
-                    model.quarantined_at.is_(None),
-                    or_(model.next_attempt_at.is_(None), model.next_attempt_at <= now),
-                    or_(model.lease_owner.is_(None), model.lease_until <= now),
-                    self._eligible(kind, now),
-                )
-                .order_by(model.next_attempt_at.asc().nulls_first(), model.id)
+                statement.order_by(model.next_attempt_at.asc().nulls_first(), model.id)
                 .limit(batch_size)
                 .with_for_update(skip_locked=True)
             )

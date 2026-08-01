@@ -196,6 +196,7 @@ export function WorkspaceScreen({
               color={loadStatus === "ready" ? "success" : "default"}
               label={loadStatus === "ready" ? t("ready") : t("processing")}
               size="small"
+              variant={loadStatus === "ready" ? "outlined" : "filled"}
             />
           </Stack>
         </Stack>
