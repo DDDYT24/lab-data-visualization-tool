@@ -13,7 +13,10 @@ from uuid import uuid4
 
 from labviz_api.config import Settings
 from labviz_api.db.session import Database
+from labviz_api.persistence.postgres import PostgresProjectStore
+from labviz_api.storage import LocalObjectStorage
 
+from .garbage_collection import StoredObjectGarbageCollector
 from .leases import (
     METADATA_CLEANUP,
     ORPHAN_STAGING_INVENTORY,
@@ -24,15 +27,26 @@ from .leases import (
     LeaseStore,
     RetryPolicy,
 )
-from .metadata_cleanup import inspect_metadata
-from .orphan_staging import inventory_only
+from .lifecycle import ProjectLifecycleHandler
+from .metadata_cleanup import MetadataCleanupHandler
+from .orphan_staging import OrphanStagingHandler
+from .reconciliation import PendingObjectReconciler
 from .runner import RunnerConfig, ScannerHandler, WorkerRunner, WorkItemHandler
+from .safety import MaintenanceSafety
 
 
 class JsonLogFormatter(logging.Formatter):
     """Emit bounded worker metadata without object paths, secrets, or content."""
 
-    _fields = ("task", "owner", "count", "item_kind", "fencing_token", "error_type")
+    _fields = (
+        "task",
+        "owner",
+        "count",
+        "item_kind",
+        "fencing_token",
+        "reason",
+        "error_type",
+    )
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, object] = {
@@ -58,14 +72,31 @@ def _logger() -> logging.Logger:
     return logger
 
 
-def _handlers(task: str) -> tuple[WorkItemHandler | None, ScannerHandler | None]:
-    if task in {PENDING_RECONCILIATION, PROJECT_LIFECYCLE, STORED_OBJECT_GC}:
-        # Phase 5B-1 intentionally does not claim business rows from the CLI.
-        return None, None
+def _handlers(
+    task: str,
+    *,
+    project_store: PostgresProjectStore,
+    safety: MaintenanceSafety,
+    retry_policy: RetryPolicy,
+    orphan_grace_seconds: int,
+    batch_size: int,
+) -> tuple[WorkItemHandler | None, ScannerHandler | None]:
+    if task == PENDING_RECONCILIATION:
+        return PendingObjectReconciler(project_store), None
+    if task == PROJECT_LIFECYCLE:
+        return ProjectLifecycleHandler(safety), None
+    if task == STORED_OBJECT_GC:
+        return StoredObjectGarbageCollector(project_store.storage, safety, retry_policy), None
     if task == ORPHAN_STAGING_INVENTORY:
-        return None, inventory_only
+        return None, OrphanStagingHandler(
+            project_store.storage,
+            safety,
+            retry_policy,
+            grace_seconds=orphan_grace_seconds,
+            batch_size=batch_size,
+        )
     if task == METADATA_CLEANUP:
-        return None, inspect_metadata
+        return None, MetadataCleanupHandler(safety, batch_size=batch_size)
     raise ValueError(f"Unsupported worker task: {task}")
 
 
@@ -83,6 +114,13 @@ def main(arguments: Sequence[str] | None = None) -> int:
         raise SystemExit("Workers require LABVIZ_PERSISTENCE_BACKEND=postgresql.")
 
     database = Database(settings.postgres_url, echo=settings.postgres_echo)
+    storage = LocalObjectStorage(settings.object_storage_root)
+    project_store = PostgresProjectStore(
+        database,
+        storage,
+        settings.project_ttl_seconds,
+        guest_session_ttl_seconds=settings.session_ttl_seconds,
+    )
     retry_policy = RetryPolicy(
         max_retries=settings.worker_max_retries,
         base_seconds=settings.worker_backoff_base_seconds,
@@ -95,12 +133,28 @@ def main(arguments: Sequence[str] | None = None) -> int:
         poll_seconds=settings.worker_poll_seconds,
         retry_policy=retry_policy,
         destructive_maintenance=settings.worker_destructive_maintenance,
+        dry_run=settings.worker_dry_run,
+        delete_enabled=settings.worker_delete_enabled,
     )
-    item_handler, scanner_handler = _handlers(args.task)
+    safety = MaintenanceSafety(
+        dry_run=settings.worker_dry_run,
+        delete_enabled=settings.worker_delete_enabled,
+    )
+    item_handler, scanner_handler = _handlers(
+        args.task,
+        project_store=project_store,
+        safety=safety,
+        retry_policy=retry_policy,
+        orphan_grace_seconds=settings.worker_orphan_staging_grace_seconds,
+        batch_size=settings.worker_batch_size,
+    )
     runner = WorkerRunner(
         task=args.task,
         owner=f"worker-{uuid4()}",
-        leases=LeaseStore(database),
+        leases=LeaseStore(
+            database,
+            gc_orphan_age_seconds=settings.worker_gc_orphan_age_seconds,
+        ),
         config=config,
         item_handler=item_handler,
         scanner_handler=scanner_handler,

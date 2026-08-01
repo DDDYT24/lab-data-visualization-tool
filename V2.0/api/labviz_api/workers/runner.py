@@ -18,6 +18,7 @@ from .leases import (
     TaskLease,
     WorkItemLease,
 )
+from .safety import PermanentWorkerFailure
 
 WorkItemHandler = Callable[[WorkItemLease, LeaseStore], None]
 ScannerHandler = Callable[[TaskLease, LeaseStore], int]
@@ -37,6 +38,8 @@ class RunnerConfig:
     poll_seconds: int = 5
     retry_policy: RetryPolicy = RetryPolicy()
     destructive_maintenance: bool = False
+    dry_run: bool = True
+    delete_enabled: bool = False
 
     def __post_init__(self) -> None:
         if self.batch_size < 1 or self.poll_seconds < 1:
@@ -88,7 +91,11 @@ class WorkerRunner:
             return 0
         processed = 0
         try:
-            if self.task in DESTRUCTIVE_TASKS and not self.config.destructive_maintenance:
+            if self.task in DESTRUCTIVE_TASKS and not (
+                self.config.dry_run
+                or self.config.delete_enabled
+                or self.config.destructive_maintenance
+            ):
                 self.logger.info(
                     "worker-destructive-task-disabled",
                     extra={"task": self.task, "owner": self.owner},
@@ -116,7 +123,33 @@ class WorkerRunner:
                     break
                 try:
                     # The claim session has committed before any handler or external I/O runs.
+                    self.logger.info(
+                        "worker-item-selected",
+                        extra={
+                            "task": self.task,
+                            "owner": self.owner,
+                            "item_kind": lease.kind,
+                            "fencing_token": lease.fencing_token,
+                            "reason": lease.expected_state,
+                        },
+                    )
                     self._run_item_handler(task_lease, lease)
+                except PermanentWorkerFailure as exc:
+                    self.logger.warning(
+                        "worker-item-quarantined",
+                        extra={
+                            "task": self.task,
+                            "owner": self.owner,
+                            "item_kind": lease.kind,
+                            "fencing_token": lease.fencing_token,
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+                    self.leases.quarantine_item(
+                        lease,
+                        error_code=type(exc).__name__,
+                        error_message=str(exc),
+                    )
                 except Exception as exc:
                     self.logger.warning(
                         "worker-item-failed",
@@ -150,7 +183,12 @@ class WorkerRunner:
         assert self.scanner_handler is not None
         heartbeat_stop, heartbeat = self._start_heartbeat(task_lease, None)
         try:
-            return self.scanner_handler(task_lease, self.leases)
+            count = self.scanner_handler(task_lease, self.leases)
+            self.logger.info(
+                "worker-scan-complete",
+                extra={"task": self.task, "owner": self.owner, "count": count},
+            )
+            return count
         finally:
             heartbeat_stop.set()
             heartbeat.join()
@@ -214,9 +252,17 @@ class WorkerRunner:
 
     def _claim_items(self) -> list[WorkItemLease]:
         if self.task == PENDING_RECONCILIATION:
-            return self.leases.claim_write_intents(
+            intents = self.leases.claim_write_intents(
                 self.owner,
                 batch_size=self.config.batch_size,
+                lease_seconds=self.config.lease_seconds,
+            )
+            remaining = self.config.batch_size - len(intents)
+            if remaining == 0:
+                return intents
+            return intents + self.leases.claim_pending_objects(
+                self.owner,
+                batch_size=remaining,
                 lease_seconds=self.config.lease_seconds,
             )
         if self.task == PROJECT_LIFECYCLE:

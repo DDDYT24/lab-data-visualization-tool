@@ -16,7 +16,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from labviz_api.auth import AuthService, MemoryEmailSender
@@ -73,6 +73,9 @@ def postgres_database() -> Iterator[Database]:
     if not database.health().ready:
         database.dispose()
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
+    with database.engine.begin() as connection:
+        if "projects" in inspect(connection).get_table_names():
+            connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
     command.downgrade(_alembic_config(), "base")
     command.upgrade(_alembic_config(), "head")
     try:
@@ -335,6 +338,9 @@ def test_guest_export_idempotency_uses_logical_request_and_allows_expired_key_re
     )
     assert replacement["id"] != first["id"]
 
+    # Create one already-expired immutable record, then let the worker decide with
+    # PostgreSQL time. IdempotencyRecord itself cannot be updated by design.
+    clock = datetime.now(UTC) - timedelta(hours=25)
     cleanup_job = store.create_publication_export(
         project_id=project_id,
         expected_revision_id=project["current_revision_id"],
@@ -345,7 +351,6 @@ def test_guest_export_idempotency_uses_logical_request_and_allows_expired_key_re
         idempotency_key="guest-expired-cleanup",
     )
     assert cleanup_job["status"] == "ready"
-    clock += timedelta(hours=25)
     store.cleanup_expired()
     with postgres_database.session() as session:
         assert (
@@ -878,7 +883,7 @@ def test_migration_0005_downgrade_fails_closed_with_tracked_artifacts(
         # Alembic runs the requested multi-revision downgrade transactionally;
         # 0005's fail-closed guard therefore restores the 0006 starting head too.
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0006_worker_leases"
+            "0007_phase5b2_orphan_staging"
         )
 
 
@@ -897,7 +902,7 @@ def test_empty_database_migrates_0005_to_0004_and_back(
     command.check(config)
     with postgres_database.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0006_worker_leases"
+            "0007_phase5b2_orphan_staging"
         )
 
 

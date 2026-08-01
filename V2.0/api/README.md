@@ -6,9 +6,10 @@ changing their `/api/v1` request or response models. The two project backends ar
 dual-written. Phase 3 extends that selected backend through quality reports, immutable cleaning
 decisions, derived Parquet DatasetVersions, and cleaned-data download. Phase 4 adds identity and
 project lifecycle persistence. Phase 5A adds revision-pinned HMAC shares and immutable publication
-exports without changing the SQLite reference repository. Phase 5B-1 adds independent,
-non-destructive PostgreSQL worker lease, fencing, heartbeat, retry, and quarantine infrastructure;
-it does not yet execute lifecycle or object-storage maintenance.
+exports without changing the SQLite reference repository. Phase 5B-1 adds independent PostgreSQL
+worker lease, fencing, heartbeat, retry, and quarantine infrastructure. Phase 5B-2 activates
+fenced reconciliation, lifecycle purge, metadata cleanup, StoredObject GC, and two-pass orphan
+staging cleanup. The SQLite reference repository remains unchanged.
 
 ## Local PostgreSQL
 
@@ -62,7 +63,15 @@ python -m alembic downgrade 0005_share_publication_exports
 python -m alembic upgrade head
 ```
 
-Run a non-destructive worker scan as an independent process:
+Rollback and reapply only the Phase 5B-2 staging-inventory schema:
+
+```powershell
+python -m alembic downgrade 0006_worker_leases
+python -m alembic upgrade head
+```
+
+Run a worker as an independent process. Reconciliation may finalize already-persisted writes;
+lifecycle, GC, metadata, and staging tasks default to audited dry-run:
 
 ```powershell
 $env:LABVIZ_PERSISTENCE_BACKEND = "postgresql"
@@ -71,11 +80,22 @@ python -m labviz_api.workers.cli pending-reconciliation --once
 ```
 
 Available tasks are `pending-reconciliation`, `project-lifecycle`, `stored-object-gc`,
-`orphan-staging-inventory`, and `metadata-cleanup`. In Phase 5B-1 the CLI only exercises task-level
-leases; business-row claims are covered by the worker contract tests and remain disabled until a
-real 5B-2 handler is installed. It does not purge Projects, delete StoredObjects, or clean staging
-data, even if destructive maintenance is configured. Phase 5B-2 must add those operations behind
-explicit safety checks.
+`orphan-staging-inventory`, and `metadata-cleanup`. All eligibility, lease, retry, and grace-period
+decisions use PostgreSQL time. FastAPI does not run PostgreSQL maintenance from its lifespan.
+
+Destructive execution requires both settings; changing only one is insufficient:
+
+```powershell
+$env:LABVIZ_WORKER_DRY_RUN = "false"
+$env:LABVIZ_WORKER_DELETE_ENABLED = "true"
+python -m labviz_api.workers.cli project-lifecycle --once
+python -m labviz_api.workers.cli stored-object-gc --once
+```
+
+Run `project-lifecycle` before `metadata-cleanup`, so expired temporary Projects are purged before
+their now-unreferenced GuestSessions. Run `pending-reconciliation` before GC during routine
+operations. `orphan-staging-inventory` requires two observations separated by
+`LABVIZ_WORKER_ORPHAN_STAGING_GRACE_SECONDS`; a single provider listing never deletes bytes.
 
 Use `downgrade base` only against an isolated disposable test database when verifying the full
 migration chain.
@@ -99,4 +119,5 @@ python -m scripts.export_project_spec_schema
 The generated schema and shared fixtures live in `V2.0/contracts`. See
 `PERSISTENCE_PHASE2.md` and `PARQUET_FORMAT.md` for the transaction, compensation, and Parquet v1
 rules. See `PERSISTENCE_PHASE3.md` for quality lineage, decision semantics, undo, and derived
-dataset behavior. See `PERSISTENCE_PHASE5B1.md` for worker lease and fencing guarantees.
+dataset behavior. See `PERSISTENCE_PHASE5B1.md` for the lease foundation and
+`PERSISTENCE_PHASE5B2.md` for lifecycle state machines and operations.

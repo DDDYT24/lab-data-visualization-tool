@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -79,6 +79,9 @@ def postgres_database() -> Iterator[Database]:
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
 
     config = alembic_config(database.engine.url.render_as_string(hide_password=False))
+    with database.engine.begin() as connection:
+        if "projects" in inspect(connection).get_table_names():
+            connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     try:

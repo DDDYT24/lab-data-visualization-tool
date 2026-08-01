@@ -47,6 +47,14 @@ class ObjectStorage(Protocol):
         """Return whether an exact object key exists."""
         ...
 
+    def head(self, key: str) -> ObjectInfo | None:
+        """Return integrity metadata without returning object bytes."""
+        ...
+
+    def list_staged(self) -> list[ObjectInfo]:
+        """Inventory provider-owned staging objects without deleting them."""
+        ...
+
     def delete(self, key: str) -> bool:
         """Delete one exact object key and report whether it existed."""
         ...
