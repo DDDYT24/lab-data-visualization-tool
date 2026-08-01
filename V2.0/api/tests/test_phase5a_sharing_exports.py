@@ -883,7 +883,7 @@ def test_migration_0005_downgrade_fails_closed_with_tracked_artifacts(
         # Alembic runs the requested multi-revision downgrade transactionally;
         # 0005's fail-closed guard therefore restores the 0006 starting head too.
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0007_phase5b2_orphan_staging"
+            "0008_phase5b3_storage_inventory"
         )
 
 
@@ -902,7 +902,7 @@ def test_empty_database_migrates_0005_to_0004_and_back(
     command.check(config)
     with postgres_database.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0007_phase5b2_orphan_staging"
+            "0008_phase5b3_storage_inventory"
         )
 
 

@@ -187,29 +187,81 @@ class OrphanStagingCandidate(Base):
 
     __tablename__ = "orphan_staging_candidates"
     __table_args__ = (
-        CheckConstraint("observation_count >= 1", name="observation_count_positive"),
+        CheckConstraint("observation_count >= 0", name="observation_count_nonnegative"),
         CheckConstraint("size_bytes >= 0", name="size_bytes_nonnegative"),
         CheckConstraint("retry_count >= 0", name="retry_count_nonnegative"),
+        CheckConstraint(
+            "deletion_completed_at IS NULL OR deletion_started_at IS NOT NULL",
+            name="deletion_completion",
+        ),
         Index(
             "ix_orphan_staging_candidates_cleanup",
+            "backend_name",
+            "inventory_scope",
             "quarantined_at",
             "next_attempt_at",
             "first_seen_at",
         ),
     )
 
+    backend_name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    inventory_scope: Mapped[str] = mapped_column(String(1024), primary_key=True)
     staging_key: Mapped[str] = mapped_column(String(1024), primary_key=True)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    observation_count: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    observation_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    provider_last_modified: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    provider_etag: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    seen_generation_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    deletion_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    deletion_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     retry_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     quarantined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class StorageInventoryCheckpoint(Base):
+    """Cross-process provider inventory cursor fenced by the scanner task lease."""
+
+    __tablename__ = "storage_inventory_checkpoints"
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'completed', 'failed')", name="status"),
+        CheckConstraint("page_count >= 0", name="page_count_nonnegative"),
+        CheckConstraint("item_count >= 0", name="item_count_nonnegative"),
+        CheckConstraint("task_fencing_token >= 0", name="task_fencing_token_nonnegative"),
+        CheckConstraint(
+            "(status = 'completed' AND completed_at IS NOT NULL AND cursor IS NULL) OR "
+            "(status <> 'completed' AND completed_at IS NULL)",
+            name="completion_state",
+        ),
+        UniqueConstraint("generation_id", name="uq_storage_inventory_checkpoints_generation"),
+    )
+
+    backend_name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    inventory_scope: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    generation_id: Mapped[UUID] = mapped_column(nullable=False, default=uuid4)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_checkpoint_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_owner: Mapped[str] = mapped_column(String(255), nullable=False)
+    task_fencing_token: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    page_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    item_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
 
 class Project(Base):
@@ -362,6 +414,16 @@ class StoredObject(Base):
             "quarantined_at IS NULL OR (lease_owner IS NULL AND lease_until IS NULL)",
             name="worker_quarantine_has_no_lease",
         ),
+        UniqueConstraint(
+            "storage_backend",
+            "object_key",
+            name="uq_stored_objects_backend_object_key",
+        ),
+        UniqueConstraint(
+            "storage_backend",
+            "staging_key",
+            name="uq_stored_objects_backend_staging_key",
+        ),
         Index("ix_stored_objects_status_expires", "status", "expires_at"),
         Index("ix_stored_objects_gc_candidate", "gc_candidate_at"),
         Index(
@@ -387,8 +449,8 @@ class StoredObject(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     storage_backend: Mapped[str] = mapped_column(String(64), nullable=False)
-    object_key: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
-    staging_key: Mapped[str | None] = mapped_column(String(1024), nullable=True, unique=True)
+    object_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    staging_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
     media_type: Mapped[str] = mapped_column(String(255), nullable=False)
