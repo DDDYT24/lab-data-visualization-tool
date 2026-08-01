@@ -244,6 +244,54 @@ class FailBeforeConfirmOnceStorage(LocalObjectStorage):
         return super().confirm(staged)
 
 
+def _pending_dataset(
+    database: Database,
+    storage: FailBeforeConfirmOnceStorage | ConfirmThenFailOnceStorage,
+) -> tuple[PostgresProjectStore, str, UUID, dict[str, Any], pd.DataFrame]:
+    store = PostgresProjectStore(database, storage, 7_200)
+    project_id = uuid4().hex
+    guest_digest = hashlib.sha256(uuid4().bytes).hexdigest()
+    frame = pd.DataFrame({"time": [0, 1], "signal": [1.0, 2.0]})
+    payload = frame.to_csv(index=False).encode()
+    source = {
+        "name": "pending-dataset.csv",
+        "size": len(payload),
+        "mediaType": "text/csv",
+        "sheetName": None,
+        "availableSheets": [],
+        "headerRow": 1,
+    }
+    store.create_project(
+        project_id=project_id,
+        job_id=uuid4().hex,
+        title="Pending dataset",
+        source=source,
+        source_sha256=hashlib.sha256(payload).hexdigest(),
+        guest_token_digest=guest_digest,
+    )
+    if isinstance(storage, FailBeforeConfirmOnceStorage):
+        storage.fail_before_confirm = True
+    else:
+        storage.fail_after_confirm = True
+    with pytest.raises(ObjectConfirmationPending):
+        store.complete_project(
+            project_id=project_id,
+            source=source,
+            frame=frame,
+            preview=build_preview(project_id, frame),
+            quality=build_quality_report(project_id, frame),
+            chart=_chart(),
+        )
+    with database.session() as session:
+        object_id = session.scalar(
+            select(DatasetVersion.stored_object_id).where(
+                DatasetVersion.project_id == UUID(project_id)
+            )
+        )
+        assert object_id is not None
+    return store, project_id, object_id, source, frame
+
+
 def _pending_export(
     database: Database,
     storage: ConfirmThenFailOnceStorage,
@@ -385,6 +433,119 @@ def test_reconciliation_confirms_staged_dataset_and_finishes_processing_run(
         assert stored is not None and stored.status == "available"
         assert version is not None and version.output_of_run is not None
         assert version.output_of_run.status == "succeeded"
+
+
+def test_dataset_request_and_compat_recovery_cannot_bypass_a_worker_lease(
+    tmp_path: Path,
+    postgres_database: Database,
+) -> None:
+    storage = FailBeforeConfirmOnceStorage(tmp_path / "objects")
+    store, project_id, object_id, source, frame = _pending_dataset(postgres_database, storage)
+    leases = LeaseStore(postgres_database)
+    claimed = leases.claim_pending_object("leased-worker", object_id=object_id, lease_seconds=60)
+    assert claimed is not None
+
+    assert store.recover_pending_objects() == 0
+    with pytest.raises(ObjectConfirmationPending):
+        store.complete_project(
+            project_id=project_id,
+            source=source,
+            frame=frame,
+            preview=build_preview(project_id, frame),
+            quality=build_quality_report(project_id, frame),
+            chart=_chart(),
+        )
+
+    with postgres_database.session() as session:
+        stored = session.get(StoredObject, object_id)
+        version = session.scalar(
+            select(DatasetVersion).where(DatasetVersion.stored_object_id == object_id)
+        )
+        assert stored is not None
+        assert (stored.status, stored.lease_owner, stored.fencing_token) == (
+            "pending",
+            "leased-worker",
+            claimed.fencing_token,
+        )
+        assert version is not None
+    assert leases.claim_stored_objects("gc-worker", batch_size=1, lease_seconds=60) == []
+
+
+def test_dataset_expired_lease_takeover_fences_old_worker_and_clears_lease(
+    tmp_path: Path,
+    postgres_database: Database,
+) -> None:
+    storage = FailBeforeConfirmOnceStorage(tmp_path / "objects")
+    store, _project_id, object_id, _source, _frame = _pending_dataset(postgres_database, storage)
+    leases = LeaseStore(postgres_database)
+    old = leases.claim_pending_object("old-worker", object_id=object_id, lease_seconds=60)
+    assert old is not None
+    with postgres_database.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE stored_objects SET lease_until = clock_timestamp() - INTERVAL '1 second' "
+                "WHERE id = :id"
+            ),
+            {"id": object_id},
+        )
+    replacement = leases.claim_pending_object(
+        "replacement-worker", object_id=object_id, lease_seconds=60
+    )
+    assert replacement is not None
+    assert replacement.fencing_token == old.fencing_token + 1
+
+    PendingObjectReconciler(store)(old, leases)
+    assert leases.heartbeat_item(old, 60) is None
+    assert not leases.release_item(old)
+    with postgres_database.session() as session:
+        stored = session.get(StoredObject, object_id)
+        assert stored is not None
+        assert (stored.status, stored.lease_owner) == ("pending", "replacement-worker")
+
+    PendingObjectReconciler(store)(replacement, leases)
+    with postgres_database.session() as session:
+        stored = session.get(StoredObject, object_id)
+        assert stored is not None
+        assert (stored.status, stored.lease_owner, stored.lease_until) == (
+            "available",
+            None,
+            None,
+        )
+    assert store.recover_pending_objects() == 0
+
+
+def test_dataset_recovery_is_idempotent_after_confirm_before_sql_finalize_crash(
+    tmp_path: Path,
+    postgres_database: Database,
+) -> None:
+    storage = ConfirmThenFailOnceStorage(tmp_path / "objects")
+    _store, project_id, object_id, _source, _frame = _pending_dataset(postgres_database, storage)
+    with postgres_database.session() as session:
+        stored = session.get(StoredObject, object_id)
+        assert stored is not None
+        assert stored.status == "pending"
+        assert stored.lease_owner is None
+        assert stored.fencing_token == 1
+
+    restarted = PostgresProjectStore(
+        postgres_database,
+        LocalObjectStorage(tmp_path / "objects"),
+        7_200,
+    )
+    assert restarted.recover_pending_objects() == 1
+    assert restarted.recover_pending_objects() == 0
+    with postgres_database.session() as session:
+        stored = session.get(StoredObject, object_id)
+        version = session.scalar(
+            select(DatasetVersion).where(DatasetVersion.stored_object_id == object_id)
+        )
+        assert stored is not None
+        assert (stored.status, stored.lease_owner, stored.lease_until) == (
+            "available",
+            None,
+            None,
+        )
+        assert version is not None and version.project_id == UUID(project_id)
 
 
 def test_reconciliation_retry_handles_crash_after_external_confirm(

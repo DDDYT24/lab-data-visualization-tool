@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 import secrets
 import time
@@ -74,11 +73,9 @@ from .persistence.exceptions import (
 from .processing import (
     ProcessingError,
     analyze_chart,
-    apply_chart_decisions,
     build_preview,
     build_quality_report,
     default_chart_spec,
-    deserialize_dataframe,
     load_dataframe,
     render_chart,
     sample_csv_bytes,
@@ -1154,16 +1151,11 @@ def create_app(
         body: ChartRequest,
         user: dict[str, str] | None = Depends(optional_user),
         guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
-        repository: ProjectRepository = Depends(get_repository),
+        repository: ProjectStore = Depends(get_project_store),
     ) -> ChartAnalysis:
-        project = _require_project_access(repository, project_id, user, guest_token, ready=True)
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
         try:
-            frame = deserialize_dataframe(bytes(project["data_blob"]))
-            frame = apply_chart_decisions(
-                frame,
-                json.loads(project["quality_json"]),
-                repository.get_decisions(project_id),
-            )
+            frame = repository.load_chart_dataframe(project_id)
             analysis = analyze_chart(frame, body.chart)
         except (ProcessingError, ValidationError) as exc:
             code = exc.code if isinstance(exc, ProcessingError) else "invalid-chart"

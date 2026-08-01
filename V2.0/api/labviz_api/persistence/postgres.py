@@ -2987,7 +2987,7 @@ class PostgresProjectStore:
         if existing["ready"]:
             return
         if existing["preview_json"] is not None:
-            self.recover_pending_objects()
+            self._reconcile_project_dataset(project_id)
             recovered = self.get_project(project_id, touch=False)
             if recovered is not None and recovered["ready"]:
                 return
@@ -3030,8 +3030,10 @@ class PostgresProjectStore:
             self.storage.discard(staged)
             return
         try:
-            self.storage.confirm(staged)
-            self._mark_object_confirmed(staged)
+            if not self._reconcile_staged_dataset(staged):
+                raise ObjectConfirmationPending(
+                    "The pending DatasetVersion is currently owned by another worker."
+                )
         except Exception as exc:
             raise ObjectConfirmationPending(
                 "Dataset bytes are durable but require confirmation recovery."
@@ -3236,83 +3238,71 @@ class PostgresProjectStore:
             uow.commit()
         return "reused" if reused else "created"
 
-    def _mark_object_confirmed(self, staged: StagedObject) -> None:
-        now = _now()
-        with self._uow() as uow:
-            assert uow.session is not None
-            stored = uow.session.scalar(
-                select(StoredObject)
-                .where(
+    def _reconcile_staged_dataset(self, staged: StagedObject) -> bool:
+        with self.database.session() as session:
+            object_id = session.scalar(
+                select(StoredObject.id).where(
                     StoredObject.object_key == staged.key,
                     StoredObject.sha256 == staged.sha256,
                     StoredObject.status == "pending",
                 )
-                .with_for_update()
             )
-            if stored is None:
-                return
-            export_job = self._complete_export_intent(uow.session, stored, now)
-            if export_job is not None:
-                uow.commit()
-                return
-            version = uow.session.scalar(
-                select(DatasetVersion).where(DatasetVersion.stored_object_id == stored.id)
-            )
-            if version is None:
-                raise PersistenceNotFound("Pending object has no DatasetVersion.")
-            run = uow.session.scalar(
-                select(ProcessingRun)
+        return object_id is not None and self._reconcile_dataset_object(object_id)
+
+    def _reconcile_project_dataset(self, project_id: str) -> bool:
+        with self.database.session() as session:
+            object_id = session.scalar(
+                select(StoredObject.id)
+                .join(DatasetVersion, DatasetVersion.stored_object_id == StoredObject.id)
                 .where(
-                    ProcessingRun.project_id == version.project_id,
-                    ProcessingRun.parameters["pendingDatasetVersionId"].as_string()
-                    == version.id.hex,
+                    DatasetVersion.project_id == _uuid(project_id),
+                    StoredObject.status == "pending",
                 )
-                .with_for_update()
+                .order_by(DatasetVersion.created_at.desc())
+                .limit(1)
             )
-            if run is None:
-                raise PersistenceNotFound("Pending object has no ProcessingRun.")
-            stored.status = "available"
-            stored.staging_key = None
-            stored.updated_at = now
-            run.output_dataset_version = version
-            run.status = "succeeded"
-            run.finished_at = now
-            run.error_code = None
-            run.error_message = None
-            if run.operation == "parse":
-                run.parameters = {
-                    **run.parameters,
-                    "apiJob": _api_job(
-                        stage="ready",
-                        progress=100,
-                        message="Your data is ready to inspect.",
-                    ),
-                }
-            uow.commit()
+        return object_id is not None and self._reconcile_dataset_object(object_id)
+
+    def _reconcile_dataset_object(self, object_id: UUID) -> bool:
+        from labviz_api.workers.leases import LeaseStore
+        from labviz_api.workers.reconciliation import PendingObjectReconciler
+
+        leases = LeaseStore(self.database)
+        lease = leases.claim_pending_object(
+            f"request-reconciliation-{uuid4().hex}",
+            object_id=object_id,
+            lease_seconds=60,
+        )
+        if lease is None:
+            return False
+        try:
+            PendingObjectReconciler(self)(lease, leases)
+        finally:
+            # Finalization clears the lease atomically. On failure, releasing it
+            # allows the independent worker to retry through the same protocol.
+            leases.release_item(lease)
+        with self.database.session() as session:
+            stored = session.get(StoredObject, object_id)
+            return bool(
+                stored is not None
+                and stored.status == "available"
+                and stored.lease_owner is None
+                and stored.lease_until is None
+            )
 
     def recover_pending_objects(self) -> int:
-        recovered = 0
-        try:
-            with self._uow() as uow:
-                pending = [
-                    StagedObject(
-                        key=item.object_key,
-                        staging_key=str(item.staging_key),
-                        size_bytes=item.size_bytes,
-                        sha256=item.sha256,
-                    )
-                    for item in uow.projects.pending_objects()
-                ]
-        except Exception as exc:
-            raise _translate_database_error(exc) from exc
-        for staged in pending:
-            try:
-                self.storage.confirm(staged)
-                self._mark_object_confirmed(staged)
-                recovered += 1
-            except Exception:
-                continue
-        return recovered
+        from labviz_api.workers.leases import PENDING_RECONCILIATION, LeaseStore
+        from labviz_api.workers.reconciliation import PendingObjectReconciler
+        from labviz_api.workers.runner import RunnerConfig, WorkerRunner
+
+        runner = WorkerRunner(
+            task=PENDING_RECONCILIATION,
+            owner=f"compat-reconciliation-{uuid4().hex}",
+            leases=LeaseStore(self.database),
+            config=RunnerConfig(batch_size=100, lease_seconds=60, heartbeat_seconds=20),
+            item_handler=PendingObjectReconciler(self),
+        )
+        return runner.run_once()
 
     def _load_version_dataframe(self, version_id: UUID) -> pd.DataFrame:
         try:
@@ -3613,7 +3603,7 @@ class PostgresProjectStore:
                 quality = report.report_document
                 schema_document = report.dataset_version.schema_document
             if pending_retry_at is not None:
-                self.recover_pending_objects()
+                self._reconcile_project_dataset(project_id)
                 recovered_project = self.get_project(project_id, touch=False)
                 if recovered_project is not None and recovered_project["ready"]:
                     return pending_retry_at
@@ -3676,8 +3666,10 @@ class PostgresProjectStore:
                     raise PersistenceNotFound("Project does not exist.")
                 return str(project_row["updated_at"])
             try:
-                self.storage.confirm(staged)
-                self._mark_object_confirmed(staged)
+                if not self._reconcile_staged_dataset(staged):
+                    raise ObjectConfirmationPending(
+                        "The pending cleaned DatasetVersion is owned by another worker."
+                    )
             except Exception as exc:
                 raise ObjectConfirmationPending(
                     "Cleaned DatasetVersion is durable but requires confirmation recovery."

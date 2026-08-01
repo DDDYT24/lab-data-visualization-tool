@@ -167,3 +167,75 @@ Final verification:
 
 Phase 5B-3 remains responsible for a final S3-compatible adapter and provider contract tests.
 Production KMS, backup, compliance, and formal retention configuration remain Phase 6 work.
+
+## Phase 5B-2.1 admission closure
+
+Phase 5B-2.1 closes the three blockers found by the Phase 5B-3 admission precheck without changing
+the database schema, public API contract, SQLite reference Repository, or Phase 5B-3 scope.
+Migrations `0001` through `0007` remain unchanged and no `0008` was created.
+
+### Backend-independent chart analysis
+
+`POST /api/v1/projects/{project_id}/chart-analysis` now resolves the configured `ProjectStore`
+instead of the SQLite-only `ProjectRepository`. The route first performs the unchanged ownership
+and readiness checks, then calls the existing backend-independent `load_chart_dataframe()`
+contract. SQLite reconstructs the frame from its reference data, while PostgreSQL resolves the
+current immutable DatasetVersion and quality/decision metadata in short transactions and reads the
+Parquet object after those transactions have closed. PostgreSQL never falls back to or writes the
+SQLite project table.
+
+Real API integration tests prove that a PostgreSQL-created project returns a successful analysis,
+an unrelated GuestSession is rejected, a missing project retains `project-not-found`, PostgreSQL
+and SQLite success responses have the same JSON shape, and the SQLite reference project table
+stays empty in PostgreSQL mode.
+
+### One Dataset finalization authority
+
+The unfenced PostgreSQL `_mark_object_confirmed()` path was removed. Initial Dataset confirmation,
+an explicit request retry, the compatibility `recover_pending_objects()` entry point, and the
+standalone Worker now all use `LeaseStore` claims and `PendingObjectReconciler` finalization:
+
+```text
+PostgreSQL-time pending selection
+-> short transaction claims StoredObject and increments fencing_token
+-> commit
+-> object confirm outside SQL transaction
+-> new transaction verifies owner + fencing token + pending state
+-> lock StoredObject and validate SHA-256/size
+-> finalize DatasetVersion ProcessingRun
+-> set StoredObject available and clear lease atomically
+```
+
+The request path may target its own pending object, but cannot claim an item already leased by a
+Worker. The compatibility recovery entry delegates to `WorkerRunner`; it no longer scans and
+mutates pending rows itself. If confirmation has already completed externally, a replacement
+Worker repeats the idempotent confirmation and completes SQL. A stale owner cannot finalize,
+heartbeat, or release after takeover. A pending DatasetVersion FK remains an authoritative GC root,
+and GC cannot claim its `pending` StoredObject.
+
+Real PostgreSQL transaction tests cover request/compatibility-entry exclusion under an active
+lease, database-time lease expiry, fencing-token takeover, stale-owner rejection, crash after
+external confirm but before SQL finalization, repeated recovery/confirm idempotency, atomic lease
+clearing, absence of `available + lease_owner`, and DatasetVersion/GC reachability.
+
+### WCAG Ready status
+
+The workspace Ready Chip now uses the existing outlined success style. This preserves the design
+palette and interaction while providing compliant foreground/background contrast. The WCAG test
+runs normally—there is no skip, exemption, or test-only style override.
+
+Phase 5B-2.1 final verification:
+
+- backend: 110 tests passed; the Phase 5B-1/5B-2 focused suites passed 38 tests;
+- Ruff: all API files passed;
+- MyPy strict: 34 source files passed;
+- Alembic: `0007 -> 0006 -> 0007` passed; `alembic check` found no schema drift;
+- frontend: ESLint and TypeScript passed; 8 Vitest files / 33 tests passed; production build passed;
+- Playwright: 15 tests passed and 2 live-API tests were skipped because
+  `LABVIZ_E2E_LIVE=1` and the optional private `LABVIZ_E2E_FILE` were not configured;
+- WCAG principal-state test passed without exceptions.
+
+Phase 5B-3 still owns S3/MinIO compatibility, multipart upload, staging pagination and stable
+cursors, provider metadata, and any storage `backend_name` work. Phase 6 still owns production KMS,
+backup, region, quotas, retention, SMTP, and compliance configuration. Other product backlog items
+remain unchanged.
