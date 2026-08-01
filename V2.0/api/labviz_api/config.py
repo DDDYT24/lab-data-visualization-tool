@@ -48,6 +48,16 @@ class Settings:
     postgres_url: str | None = None
     postgres_echo: bool = False
     object_storage_root: Path = Path(".labviz/objects")
+    object_storage_backend: str = "local"
+    object_storage_cursor_ttl_seconds: int = 86_400
+    s3_bucket: str | None = None
+    s3_prefix: str = ""
+    s3_region: str | None = None
+    s3_endpoint_url: str | None = None
+    s3_multipart_threshold_bytes: int = 16 * 1024 * 1024
+    s3_multipart_part_size_bytes: int = 8 * 1024 * 1024
+    s3_connect_timeout_seconds: int = 5
+    s3_read_timeout_seconds: int = 60
     persistence_backend: str = "sqlite"
     share_token_key_version: int = 1
     share_token_keys: tuple[tuple[int, str], ...] = DEFAULT_SHARE_TOKEN_KEYS
@@ -77,6 +87,18 @@ class Settings:
             raise ValueError("LABVIZ_PERSISTENCE_BACKEND must be 'sqlite' or 'postgresql'.")
         if self.persistence_backend == "postgresql" and not self.postgres_url:
             raise ValueError("LABVIZ_POSTGRES_URL is required for PostgreSQL persistence.")
+        if self.object_storage_backend not in {"local", "s3"}:
+            raise ValueError("LABVIZ_OBJECT_STORAGE_BACKEND must be 'local' or 's3'.")
+        if self.object_storage_backend == "s3" and not self.s3_bucket:
+            raise ValueError("LABVIZ_S3_BUCKET is required for S3 object storage.")
+        if self.object_storage_cursor_ttl_seconds < 1:
+            raise ValueError("Object storage cursor TTL must be positive.")
+        if self.s3_multipart_part_size_bytes < 5 * 1024 * 1024:
+            raise ValueError("S3 multipart part size must be at least 5 MiB.")
+        if self.s3_multipart_threshold_bytes < self.s3_multipart_part_size_bytes:
+            raise ValueError("S3 multipart threshold must be at least the part size.")
+        if min(self.s3_connect_timeout_seconds, self.s3_read_timeout_seconds) < 1:
+            raise ValueError("S3 connection and read timeouts must be positive.")
         versions = [version for version, _secret in self.share_token_keys]
         if self.share_token_key_version not in versions:
             raise ValueError(
@@ -147,6 +169,26 @@ class Settings:
             object_storage_root=Path(
                 os.environ.get("LABVIZ_OBJECT_STORAGE_ROOT", root / ".labviz" / "objects")
             ).expanduser(),
+            object_storage_backend=os.environ.get("LABVIZ_OBJECT_STORAGE_BACKEND", "local")
+            .strip()
+            .lower(),
+            object_storage_cursor_ttl_seconds=int(
+                os.environ.get("LABVIZ_OBJECT_STORAGE_CURSOR_TTL_SECONDS", "86400")
+            ),
+            s3_bucket=os.environ.get("LABVIZ_S3_BUCKET"),
+            s3_prefix=os.environ.get("LABVIZ_S3_PREFIX", ""),
+            s3_region=os.environ.get("LABVIZ_S3_REGION"),
+            s3_endpoint_url=os.environ.get("LABVIZ_S3_ENDPOINT_URL"),
+            s3_multipart_threshold_bytes=int(
+                os.environ.get("LABVIZ_S3_MULTIPART_THRESHOLD_BYTES", str(16 * 1024 * 1024))
+            ),
+            s3_multipart_part_size_bytes=int(
+                os.environ.get("LABVIZ_S3_MULTIPART_PART_SIZE_BYTES", str(8 * 1024 * 1024))
+            ),
+            s3_connect_timeout_seconds=int(
+                os.environ.get("LABVIZ_S3_CONNECT_TIMEOUT_SECONDS", "5")
+            ),
+            s3_read_timeout_seconds=int(os.environ.get("LABVIZ_S3_READ_TIMEOUT_SECONDS", "60")),
             persistence_backend=os.environ.get("LABVIZ_PERSISTENCE_BACKEND", "sqlite")
             .strip()
             .lower(),

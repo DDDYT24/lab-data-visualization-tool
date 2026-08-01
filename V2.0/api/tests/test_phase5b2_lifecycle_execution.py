@@ -76,11 +76,18 @@ def postgres_database() -> Iterator[Database]:
     with database.engine.begin() as connection:
         if "projects" in inspect(connection).get_table_names():
             connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        if "storage_inventory_checkpoints" in inspect(connection).get_table_names():
+            connection.execute(text("TRUNCATE TABLE storage_inventory_checkpoints"))
+        if "orphan_staging_candidates" in inspect(connection).get_table_names():
+            connection.execute(text("TRUNCATE TABLE orphan_staging_candidates"))
     command.downgrade(_alembic_config(), "base")
     command.upgrade(_alembic_config(), "head")
     try:
         yield database
     finally:
+        with database.engine.begin() as connection:
+            connection.execute(text("TRUNCATE TABLE storage_inventory_checkpoints"))
+            connection.execute(text("TRUNCATE TABLE orphan_staging_candidates"))
         command.upgrade(_alembic_config(), "head")
         database.dispose()
 
@@ -93,6 +100,7 @@ def empty_postgres(postgres_database: Database) -> None:
             text("TRUNCATE TABLE auth_challenges, auth_requests, guest_sessions CASCADE")
         )
         connection.execute(text("TRUNCATE TABLE orphan_staging_candidates"))
+        connection.execute(text("TRUNCATE TABLE storage_inventory_checkpoints"))
         connection.execute(
             text(
                 "UPDATE worker_leases SET lease_owner = NULL, lease_until = NULL, "
@@ -111,7 +119,7 @@ def test_local_storage_heads_and_lists_only_staging_objects(tmp_path: Path) -> N
     assert info.key == staged.staging_key
     assert info.size_bytes == len(b"parquet")
     assert info.sha256 == hashlib.sha256(b"parquet").hexdigest()
-    assert [item.key for item in storage.list_staged()] == [staged.staging_key]
+    assert [item.key for item in storage.list_staged().items] == [staged.staging_key]
     assert storage.head("missing") is None
 
 
@@ -853,21 +861,21 @@ class DeleteFailureStorage(LocalObjectStorage):
     permanent_failure = False
     delete_calls = 0
 
-    def delete(self, key: str) -> bool:
+    def delete(self, key: str, *, expected: ObjectInfo | None = None) -> bool:
         self.delete_calls += 1
         if self.permanent_failure:
             raise PermissionError("object policy denies deletion")
         if self.transient_failures > 0:
             self.transient_failures -= 1
             raise OSError("temporary object-store outage")
-        return super().delete(key)
+        return super().delete(key, expected=expected)
 
 
 class DeleteThenFailOnceStorage(LocalObjectStorage):
     failed = False
 
-    def delete(self, key: str) -> bool:
-        existed = super().delete(key)
+    def delete(self, key: str, *, expected: ObjectInfo | None = None) -> bool:
+        existed = super().delete(key, expected=expected)
         if not self.failed:
             self.failed = True
             raise OSError("process stopped after external delete")
@@ -1084,7 +1092,11 @@ def test_orphan_staging_requires_two_inventories_and_grace_before_delete(
     assert handler(second, leases) == 1
     assert not storage.exists(staged.staging_key)
     with postgres_database.session() as session:
-        assert session.get(OrphanStagingCandidate, staged.staging_key) is None
+        tombstone = session.get(
+            OrphanStagingCandidate,
+            (storage.backend_name, storage.inventory_scope, staged.staging_key),
+        )
+        assert tombstone is not None and tombstone.deletion_completed_at is not None
 
 
 def test_orphan_staging_active_database_owner_is_never_candidate(
@@ -1225,6 +1237,12 @@ def test_metadata_and_orphan_dry_run_have_no_destructive_side_effects(
     )
     with postgres_database.session() as session:
         assert session.get(GuestSession, free_guest_id) is not None
-        assert session.get(OrphanStagingCandidate, staged.staging_key) is not None
+        assert (
+            session.get(
+                OrphanStagingCandidate,
+                (storage.backend_name, storage.inventory_scope, staged.staging_key),
+            )
+            is not None
+        )
     assert storage.exists(staged.staging_key)
     assert storage.delete_calls == 0

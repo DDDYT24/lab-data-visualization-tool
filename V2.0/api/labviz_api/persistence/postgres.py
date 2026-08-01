@@ -62,6 +62,8 @@ from labviz_api.storage import ObjectStorage, StagedObject
 from labviz_api.workers.references import (
     collect_project_object_ids,
     finalize_purged_project_objects,
+    lock_staging_key,
+    staging_key_deletion_claimed,
 )
 
 from .contracts import ProjectRepository
@@ -482,6 +484,16 @@ class PostgresProjectStore:
             # Phase 5B's orphan-staging cleanup owns eventual removal.
             return
 
+    def _protect_staged_write(self, session: Session, staged: StagedObject) -> None:
+        lock_staging_key(session, self.storage.backend_name, staged.staging_key)
+        if staging_key_deletion_claimed(
+            session,
+            backend_name=self.storage.backend_name,
+            inventory_scope=self.storage.inventory_scope,
+            staging_key=staged.staging_key,
+        ):
+            raise PersistenceConflict("Staged object is already claimed for orphan cleanup.")
+
     def allow_auth_request(
         self,
         *,
@@ -688,7 +700,7 @@ class PostgresProjectStore:
         from labviz_api.workers.runner import RunnerConfig, WorkerRunner
         from labviz_api.workers.safety import MaintenanceSafety
 
-        leases = LeaseStore(self.database)
+        leases = LeaseStore(self.database, storage_backend=self.storage.backend_name)
         safety = MaintenanceSafety(dry_run=False, delete_enabled=True)
         config = RunnerConfig(
             batch_size=100,
@@ -1241,6 +1253,10 @@ class PostgresProjectStore:
         for source_object_id, source_object in source_objects.items():
             if source_object["status"] != "available":
                 raise PersistenceConflict("Source DatasetVersion object is not available.")
+            if source_object["storage_backend"] != self.storage.backend_name:
+                raise PersistenceUnavailable(
+                    "Source DatasetVersion belongs to another object storage backend."
+                )
             # A claimed Project keeps its immutable object graph in place. Once the
             # source Project is owner-authorized, another Project of that same owner
             # can safely add an FK reference even if the object's creation scope still
@@ -1256,6 +1272,10 @@ class PostgresProjectStore:
                     target_key,
                     source_stream,
                     expected_sha256=str(source_object["sha256"]),
+                    metadata={
+                        "labviz-format-version": str(source_object["format_contract_version"]),
+                        "labviz-media-type": str(source_object["media_type"]),
+                    },
                 )
             try:
                 self.storage.confirm(staged)
@@ -1279,7 +1299,10 @@ class PostgresProjectStore:
             with self._uow() as uow:
                 assert uow.session is not None
                 persisted = uow.session.scalar(
-                    select(StoredObject.id).where(StoredObject.object_key == target_key)
+                    select(StoredObject.id).where(
+                        StoredObject.storage_backend == self.storage.backend_name,
+                        StoredObject.object_key == target_key,
+                    )
                 )
             if persisted is None:
                 self.storage.delete(target_key)
@@ -2507,6 +2530,7 @@ class PostgresProjectStore:
             stored = uow.session.scalar(
                 select(StoredObject)
                 .where(
+                    StoredObject.storage_backend == self.storage.backend_name,
                     StoredObject.object_key == staged.key,
                     StoredObject.sha256 == staged.sha256,
                     StoredObject.status.in_(("pending", "available")),
@@ -2594,6 +2618,10 @@ class PostgresProjectStore:
                 object_key,
                 io.BytesIO(payload),
                 expected_sha256=output_sha,
+                metadata={
+                    "labviz-format-version": EXPORT_CONTRACT_VERSION,
+                    "labviz-media-type": media_type,
+                },
             )
             pending_committed = False
             try:
@@ -2696,7 +2724,7 @@ class PostgresProjectStore:
                     candidate = uow.session.scalar(
                         select(StoredObject)
                         .where(
-                            StoredObject.storage_backend == "local",
+                            StoredObject.storage_backend == self.storage.backend_name,
                             StoredObject.dedup_scope == dedup_scope,
                             StoredObject.purpose == "export",
                             StoredObject.media_type == media_type,
@@ -2759,8 +2787,12 @@ class PostgresProjectStore:
                         uow.commit()
                         self._discard_staged_best_effort(staged)
                         return self._export_job_row(job)
+                    self._protect_staged_write(uow.session, staged)
                     existing_key = uow.session.scalar(
-                        select(StoredObject.id).where(StoredObject.object_key == object_key)
+                        select(StoredObject.id).where(
+                            StoredObject.storage_backend == self.storage.backend_name,
+                            StoredObject.object_key == object_key,
+                        )
                     )
                     if existing_key is not None:
                         raise PersistenceConflict(
@@ -2768,7 +2800,7 @@ class PostgresProjectStore:
                         )
                     stored = StoredObject(
                         id=uuid4(),
-                        storage_backend="local",
+                        storage_backend=self.storage.backend_name,
                         object_key=staged.key,
                         staging_key=staged.staging_key,
                         purpose="export",
@@ -2846,7 +2878,11 @@ class PostgresProjectStore:
                 if publication is None:
                     return None
                 stored = uow.session.get(StoredObject, publication.stored_object_id)
-                if stored is None or stored.status != "available":
+                if (
+                    stored is None
+                    or stored.status != "available"
+                    or stored.storage_backend != self.storage.backend_name
+                ):
                     return None
                 object_key = stored.object_key
                 expected_sha = publication.output_sha256
@@ -3003,6 +3039,10 @@ class PostgresProjectStore:
             final_key,
             io.BytesIO(artifact.payload),
             expected_sha256=artifact.sha256,
+            metadata={
+                "labviz-format-version": "parquet-v1",
+                "labviz-media-type": "application/vnd.apache.parquet",
+            },
         )
         try:
             with self.storage.open_staged(staged) as staged_stream:
@@ -3071,7 +3111,7 @@ class PostgresProjectStore:
             stored_object = uow.session.scalar(
                 select(StoredObject)
                 .where(
-                    StoredObject.storage_backend == "local",
+                    StoredObject.storage_backend == self.storage.backend_name,
                     StoredObject.dedup_scope == dedup_scope,
                     StoredObject.purpose == "dataset",
                     StoredObject.media_type == "application/vnd.apache.parquet",
@@ -3086,9 +3126,10 @@ class PostgresProjectStore:
             if stored_object is not None and stored_object.status != "available":
                 raise PersistenceConflict("Matching StoredObject is not available for reuse.")
             if stored_object is None:
+                self._protect_staged_write(uow.session, staged)
                 stored_object = StoredObject(
                     id=uuid4(),
-                    storage_backend="local",
+                    storage_backend=self.storage.backend_name,
                     object_key=staged.key,
                     staging_key=staged.staging_key,
                     purpose="dataset",
@@ -3242,6 +3283,7 @@ class PostgresProjectStore:
         with self.database.session() as session:
             object_id = session.scalar(
                 select(StoredObject.id).where(
+                    StoredObject.storage_backend == self.storage.backend_name,
                     StoredObject.object_key == staged.key,
                     StoredObject.sha256 == staged.sha256,
                     StoredObject.status == "pending",
@@ -3267,7 +3309,7 @@ class PostgresProjectStore:
         from labviz_api.workers.leases import LeaseStore
         from labviz_api.workers.reconciliation import PendingObjectReconciler
 
-        leases = LeaseStore(self.database)
+        leases = LeaseStore(self.database, storage_backend=self.storage.backend_name)
         lease = leases.claim_pending_object(
             f"request-reconciliation-{uuid4().hex}",
             object_id=object_id,
@@ -3298,7 +3340,7 @@ class PostgresProjectStore:
         runner = WorkerRunner(
             task=PENDING_RECONCILIATION,
             owner=f"compat-reconciliation-{uuid4().hex}",
-            leases=LeaseStore(self.database),
+            leases=LeaseStore(self.database, storage_backend=self.storage.backend_name),
             config=RunnerConfig(batch_size=100, lease_seconds=60, heartbeat_seconds=20),
             item_handler=PendingObjectReconciler(self),
         )
@@ -3313,6 +3355,7 @@ class PostgresProjectStore:
                     version is None
                     or version.stored_object is None
                     or version.stored_object.status != "available"
+                    or version.stored_object.storage_backend != self.storage.backend_name
                 ):
                     raise PersistenceConflict("DatasetVersion is not available.")
                 object_key = version.stored_object.object_key
@@ -3630,6 +3673,10 @@ class PostgresProjectStore:
                 final_key,
                 io.BytesIO(artifact.payload),
                 expected_sha256=artifact.sha256,
+                metadata={
+                    "labviz-format-version": "parquet-v1",
+                    "labviz-media-type": "application/vnd.apache.parquet",
+                },
             )
             try:
                 with self.storage.open_staged(staged) as staged_stream:
@@ -3766,7 +3813,7 @@ class PostgresProjectStore:
             stored_object = uow.session.scalar(
                 select(StoredObject)
                 .where(
-                    StoredObject.storage_backend == "local",
+                    StoredObject.storage_backend == self.storage.backend_name,
                     StoredObject.dedup_scope == dedup_scope,
                     StoredObject.purpose == "dataset",
                     StoredObject.media_type == "application/vnd.apache.parquet",
@@ -3781,9 +3828,10 @@ class PostgresProjectStore:
             if stored_object is not None and stored_object.status != "available":
                 raise PersistenceConflict("Matching StoredObject is not available for reuse.")
             if stored_object is None:
+                self._protect_staged_write(uow.session, staged)
                 stored_object = StoredObject(
                     id=uuid4(),
-                    storage_backend="local",
+                    storage_backend=self.storage.backend_name,
                     object_key=staged.key,
                     staging_key=staged.staging_key,
                     purpose="dataset",

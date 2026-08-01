@@ -15,8 +15,12 @@ from labviz_api.db.models import (
     StoredObject,
 )
 from labviz_api.persistence.postgres import PostgresProjectStore
-from labviz_api.storage import ObjectInfo, StagedObject
-from labviz_api.storage.local import ObjectAlreadyExists, ObjectIntegrityError
+from labviz_api.storage import (
+    ObjectAlreadyExists,
+    ObjectInfo,
+    ObjectIntegrityError,
+    StagedObject,
+)
 
 from .leases import LeaseStore, WorkItemLease
 from .safety import PermanentWorkerFailure
@@ -176,6 +180,10 @@ class PendingObjectReconciler:
                     staging_key=".staging/already-confirmed.part",
                     size_bytes=stored.size_bytes,
                     sha256=stored.sha256,
+                    metadata={
+                        "labviz-format-version": stored.format_contract_version,
+                        "labviz-media-type": stored.media_type,
+                    },
                 )
             raise PermanentWorkerFailure("Pending StoredObject has no staging key.")
         return StagedObject(
@@ -183,6 +191,10 @@ class PendingObjectReconciler:
             staging_key=stored.staging_key,
             size_bytes=stored.size_bytes,
             sha256=stored.sha256,
+            metadata={
+                "labviz-format-version": stored.format_contract_version,
+                "labviz-media-type": stored.media_type,
+            },
         )
 
     @staticmethod

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID
 
-from sqlalchemy import and_, func, not_, or_, select
+from sqlalchemy import and_, exists, func, not_, or_, select
 from sqlalchemy.orm import Session
 
 from labviz_api.db.models import Project, StoredObject, StoredObjectWriteIntent, WorkerLease
@@ -72,11 +72,20 @@ class WorkItemLease:
 class LeaseStore:
     """Acquire short-transaction leases and fence every completion write."""
 
-    def __init__(self, database: Database, *, gc_orphan_age_seconds: int = 86_400) -> None:
+    def __init__(
+        self,
+        database: Database,
+        *,
+        gc_orphan_age_seconds: int = 86_400,
+        storage_backend: str = "local",
+    ) -> None:
         if gc_orphan_age_seconds < 1:
             raise ValueError("gc_orphan_age_seconds must be positive")
+        if not storage_backend or len(storage_backend) > 64:
+            raise ValueError("storage_backend must contain 1 to 64 characters")
         self.database = database
         self.gc_orphan_age_seconds = gc_orphan_age_seconds
+        self.storage_backend = storage_backend
 
     @staticmethod
     def _database_now(session: Session) -> datetime:
@@ -380,10 +389,19 @@ class LeaseStore:
 
     def _eligible(self, kind: WorkItemKind, now: datetime) -> Any:
         if kind == "write-intent":
-            return StoredObjectWriteIntent.status == "pending"
+            return and_(
+                StoredObjectWriteIntent.status == "pending",
+                exists(
+                    select(1).where(
+                        StoredObject.id == StoredObjectWriteIntent.stored_object_id,
+                        StoredObject.storage_backend == self.storage_backend,
+                    )
+                ),
+            )
         if kind == "pending-object":
             return and_(
                 StoredObject.status == "pending",
+                StoredObject.storage_backend == self.storage_backend,
                 not_(
                     StoredObject.id.in_(
                         select(StoredObjectWriteIntent.stored_object_id).where(
@@ -410,9 +428,13 @@ class LeaseStore:
             )
         historic_cutoff = now - timedelta(seconds=self.gc_orphan_age_seconds)
         return or_(
-            StoredObject.status == "deleting",
+            and_(
+                StoredObject.status == "deleting",
+                StoredObject.storage_backend == self.storage_backend,
+            ),
             and_(
                 StoredObject.status == "available",
+                StoredObject.storage_backend == self.storage_backend,
                 or_(
                     StoredObject.gc_candidate_at.is_not(None),
                     and_(

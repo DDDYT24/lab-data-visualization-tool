@@ -6,13 +6,14 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from labviz_api.db.models import (
     DatasetVersion,
     ExportJobRecord,
+    OrphanStagingCandidate,
     PublicationExport,
     SourceFile,
     StoredObject,
@@ -97,18 +98,74 @@ def finalize_purged_project_objects(
             stored.updated_at = now
 
 
-def staging_key_has_database_owner(session: Session, staging_key: str) -> bool:
-    """Return whether a staging key belongs to a persisted active object operation."""
+def lock_staging_key(session: Session, backend_name: str, staging_key: str) -> None:
+    """Serialize a staging deletion claim with creation of its authoritative SQL root."""
 
+    lock_identity = f"{len(backend_name)}:{backend_name}:{staging_key}"
+    session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(lock_identity, 0))))
+
+
+def staging_key_deletion_claimed(
+    session: Session,
+    *,
+    backend_name: str,
+    inventory_scope: str,
+    staging_key: str,
+) -> bool:
     return bool(
         session.scalar(
             select(
                 exists(
                     select(1).where(
-                        StoredObject.staging_key == staging_key,
-                        StoredObject.status == "pending",
+                        OrphanStagingCandidate.backend_name == backend_name,
+                        OrphanStagingCandidate.inventory_scope == inventory_scope,
+                        OrphanStagingCandidate.staging_key == staging_key,
+                        OrphanStagingCandidate.deletion_started_at.is_not(None),
                     )
                 )
+            )
+        )
+    )
+
+
+def staging_key_has_database_owner(
+    session: Session,
+    *,
+    backend_name: str,
+    staging_key: str,
+) -> bool:
+    """Recheck every authoritative reference for one provider staging key."""
+
+    stored_object = session.execute(
+        select(StoredObject.id, StoredObject.status).where(
+            StoredObject.storage_backend == backend_name,
+            StoredObject.staging_key == staging_key,
+        )
+    ).one_or_none()
+    explicit_intent = session.scalar(
+        select(
+            exists(
+                select(1)
+                .select_from(StoredObjectWriteIntent)
+                .join(StoredObject, StoredObject.id == StoredObjectWriteIntent.stored_object_id)
+                .where(
+                    StoredObject.storage_backend == backend_name,
+                    StoredObject.staging_key == staging_key,
+                    or_(
+                        StoredObjectWriteIntent.status == "pending",
+                        StoredObjectWriteIntent.quarantined_at.is_not(None),
+                    ),
+                )
+            )
+        )
+    )
+    return bool(
+        explicit_intent
+        or (
+            stored_object is not None
+            and (
+                stored_object.status == "pending"
+                or has_object_references(session, stored_object.id)
             )
         )
     )

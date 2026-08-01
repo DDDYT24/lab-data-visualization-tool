@@ -14,7 +14,7 @@ from uuid import uuid4
 from labviz_api.config import Settings
 from labviz_api.db.session import Database
 from labviz_api.persistence.postgres import PostgresProjectStore
-from labviz_api.storage import LocalObjectStorage
+from labviz_api.storage.factory import build_object_storage
 
 from .garbage_collection import StoredObjectGarbageCollector
 from .leases import (
@@ -114,7 +114,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         raise SystemExit("Workers require LABVIZ_PERSISTENCE_BACKEND=postgresql.")
 
     database = Database(settings.postgres_url, echo=settings.postgres_echo)
-    storage = LocalObjectStorage(settings.object_storage_root)
+    storage = build_object_storage(settings)
     project_store = PostgresProjectStore(
         database,
         storage,
@@ -154,6 +154,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         leases=LeaseStore(
             database,
             gc_orphan_age_seconds=settings.worker_gc_orphan_age_seconds,
+            storage_backend=storage.backend_name,
         ),
         config=config,
         item_handler=item_handler,

@@ -6,7 +6,7 @@ from labviz_api.config import Settings
 from labviz_api.db.session import Database
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 from labviz_api.share_tokens import ShareTokenCodec
-from labviz_api.storage import LocalObjectStorage
+from labviz_api.storage.factory import build_object_storage
 
 from .contracts import ProjectStore
 from .postgres import PostgresProjectStore
@@ -30,7 +30,7 @@ def build_project_store(
     if settings.postgres_url is None:
         raise ValueError("PostgreSQL persistence requires LABVIZ_POSTGRES_URL.")
     database = Database(settings.postgres_url, echo=settings.postgres_echo)
-    storage = LocalObjectStorage(settings.object_storage_root)
+    storage = build_object_storage(settings)
     return PostgresProjectStore(
         database,
         storage,
