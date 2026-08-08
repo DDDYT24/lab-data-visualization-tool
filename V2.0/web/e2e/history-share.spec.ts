@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 import { installMockApi } from "./support/mock-api";
 
@@ -67,7 +67,13 @@ test("renders a read-only shared chart and creator-enabled download", async ({
   expect(await download.failure()).toBeNull();
 });
 
-test("explains an expired share without exposing project data", async ({ page }) => {
+test("explains an expired share without exposing project data", async ({
+  page,
+  expectConsoleError,
+}) => {
+  expectConsoleError(/Failed to load resource:.*status of 410 \(Gone\)/);
+  expectConsoleError(/Failed to load resource:.*status of 410 \(Gone\)/);
+
   await installMockApi(page, { shareExpired: true });
 
   await page.goto("/share/share-e2e");

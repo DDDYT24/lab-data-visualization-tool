@@ -30,7 +30,7 @@ export function AppProviders({ children, locale, messages }: AppProvidersProps) 
 
   return (
     <AppRouterCacheProvider options={{ enableCssLayer: true }}>
-      <NextIntlClientProvider locale={locale} messages={messages}>
+      <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
         <ThemeProvider theme={theme}>
           <CssBaseline />
           <QueryClientProvider client={queryClient}>
