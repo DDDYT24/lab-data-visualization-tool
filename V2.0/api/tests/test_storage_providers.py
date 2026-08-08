@@ -189,6 +189,10 @@ def test_provider_contract_metadata_persists_and_conflicts_are_rejected(
         metadata={
             "labviz-format-version": "parquet-v1",
             "labviz-media-type": "application/vnd.apache.parquet",
+            "labviz-pandas-version": "pandas-test",
+            "labviz-pyarrow-version": "pyarrow-test",
+            "labviz-parquet-writer": "pyarrow.parquet.write_table",
+            "labviz-parquet-writer-version": "writer-test",
         },
     )
     committed = storage_provider.confirm(first)
@@ -196,6 +200,10 @@ def test_provider_contract_metadata_persists_and_conflicts_are_rejected(
     assert reopened is not None
     assert reopened.metadata["labviz-format-version"] == "parquet-v1"
     assert reopened.metadata["labviz-media-type"] == "application/vnd.apache.parquet"
+    assert reopened.metadata["labviz-pandas-version"] == "pandas-test"
+    assert reopened.metadata["labviz-pyarrow-version"] == "pyarrow-test"
+    assert reopened.metadata["labviz-parquet-writer"] == "pyarrow.parquet.write_table"
+    assert reopened.metadata["labviz-parquet-writer-version"] == "writer-test"
 
     conflicting = storage_provider.stage(
         committed.key,

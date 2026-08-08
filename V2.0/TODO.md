@@ -10,6 +10,7 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 - [x] P0-2: repair Ruff/MyPy gates and commit hash-pinned Python 3.12 runtime/development locks.
 - [x] P0-3: run PostgreSQL 17 and MinIO from the shared Compose definition in CI, initialize the test bucket, and clean up volumes.
 - [x] P0-4: document one API verification gate and keep the remaining production decisions explicitly deferred below.
+- [x] P1-1: record exact pandas, PyArrow, and Parquet writer provenance in PostgreSQL processing records and immutable object metadata without changing Parquet v1 bytes.
 
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
@@ -67,7 +68,7 @@ Next:
 - [x] Complete Phase 5B-3 provider-neutral S3-compatible adapter and provider contract/failure tests.
 - [ ] Design HTTP upload `Idempotency-Key` persistence and replay semantics without treating identical file hashes as the same intentional project.
 - [x] Activate pending StoredObject confirmation/finalization in the leased reconciliation worker and retire PostgreSQL lifespan recovery after the Phase 5B-2 cross-restart path passes.
-- [ ] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
+- [x] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
 - [ ] Add multi-host authentication abuse controls and a leased lifecycle/reconciliation worker before horizontally scaling the API.
 - [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.

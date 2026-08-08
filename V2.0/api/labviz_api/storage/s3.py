@@ -34,6 +34,10 @@ SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 ALLOWED_CALLER_METADATA = {
     "labviz-format-version",
     "labviz-media-type",
+    "labviz-pandas-version",
+    "labviz-pyarrow-version",
+    "labviz-parquet-writer",
+    "labviz-parquet-writer-version",
 }
 EXPLICIT_CONTINUATION_ERROR_CODES = {
     "expiredcontinuationtoken",

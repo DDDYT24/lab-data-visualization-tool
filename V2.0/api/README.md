@@ -40,6 +40,10 @@ docker compose down -v --remove-orphans
 
 The CI job runs the same gate and always removes its temporary Compose volumes. Keep
 `httpx2` in the development inputs: Starlette's current TestClient selects it explicitly.
+Parquet processing records the exact pandas, PyArrow, and writer versions in PostgreSQL
+provenance parameters and provider metadata; those fields remain outside the Parquet v1 schema
+metadata so existing bytes stay reproducible. Any byte-contract change requires a new schema
+version and an explicit migration plan.
 
 ## Local PostgreSQL
 
