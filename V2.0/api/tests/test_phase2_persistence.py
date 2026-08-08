@@ -11,6 +11,7 @@ from typing import Any, cast
 from uuid import uuid4
 
 import pandas as pd
+import pyarrow as pa
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -406,6 +407,13 @@ def test_parquet_v1_round_trip_units_missing_values_and_hash() -> None:
     )
     assert signal["unit"] == "mV"
     assert artifact.schema_document["missingValues"] == "arrow-null"
+    assert artifact.provenance == {
+        "provenanceVersion": "1",
+        "pandasVersion": pd.__version__,
+        "pyarrowVersion": pa.__version__,
+        "parquetWriter": "pyarrow.parquet.write_table",
+        "parquetWriterVersion": pa.__version__,
+    }
     corrupted = artifact.payload[:-1] + bytes([artifact.payload[-1] ^ 1])
     with pytest.raises(ParquetContractError, match="hash"):
         read_parquet(corrupted, expected_sha256=artifact.sha256)

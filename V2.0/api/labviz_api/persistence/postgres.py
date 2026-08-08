@@ -49,7 +49,12 @@ from labviz_api.db.models import (
 )
 from labviz_api.db.session import Database
 from labviz_api.models import ChartSpec
-from labviz_api.parquet import PARQUET_SCHEMA_VERSION, read_parquet, write_parquet
+from labviz_api.parquet import (
+    PARQUET_SCHEMA_VERSION,
+    read_parquet,
+    storage_provenance_metadata,
+    write_parquet,
+)
 from labviz_api.processing import apply_chart_decisions, build_preview
 from labviz_api.project_spec import (
     ProjectCleaningSpec,
@@ -3042,6 +3047,7 @@ class PostgresProjectStore:
             metadata={
                 "labviz-format-version": "parquet-v1",
                 "labviz-media-type": "application/vnd.apache.parquet",
+                **storage_provenance_metadata(artifact.provenance),
             },
         )
         try:
@@ -3053,6 +3059,7 @@ class PostgresProjectStore:
                 version_id=version_id,
                 staged=staged,
                 artifact_schema=artifact.schema_document,
+                provenance=artifact.provenance,
                 frame=frame,
                 row_count=artifact.row_count,
                 column_count=artifact.column_count,
@@ -3087,6 +3094,7 @@ class PostgresProjectStore:
         version_id: UUID,
         staged: StagedObject,
         artifact_schema: dict[str, Any],
+        provenance: dict[str, str],
         frame: pd.DataFrame,
         row_count: int,
         column_count: int,
@@ -3106,6 +3114,10 @@ class PostgresProjectStore:
             parse_run = uow.projects.get_run_for_project(project_id)
             if source_file is None or parse_run is None:
                 raise PersistenceNotFound("Pending project metadata is incomplete.")
+            parse_run.parameters = {
+                **parse_run.parameters,
+                "runtimeProvenance": provenance,
+            }
 
             dedup_scope = self._dedup_scope(project)
             stored_object = uow.session.scalar(
@@ -3173,7 +3185,7 @@ class PostgresProjectStore:
                 input_dataset_version=version,
                 operation="profile",
                 status="succeeded",
-                parameters={"validRanges": []},
+                parameters={"validRanges": [], "runtimeProvenance": provenance},
                 algorithm_version=QUALITY_ALGORITHM_VERSION,
                 code_version=PHASE3_CODE_VERSION,
                 started_at=now,
@@ -3191,7 +3203,7 @@ class PostgresProjectStore:
                 profiler_version=QUALITY_PROFILER_VERSION,
                 algorithm_version=QUALITY_ALGORITHM_VERSION,
                 code_version=PHASE3_CODE_VERSION,
-                parameters={"validRanges": []},
+                parameters={"validRanges": [], "runtimeProvenance": provenance},
                 report_document=quality,
                 completed_at=now,
                 created_at=now,
@@ -3676,6 +3688,7 @@ class PostgresProjectStore:
                 metadata={
                     "labviz-format-version": "parquet-v1",
                     "labviz-media-type": "application/vnd.apache.parquet",
+                    **storage_provenance_metadata(artifact.provenance),
                 },
             )
             try:
@@ -3689,6 +3702,7 @@ class PostgresProjectStore:
                     version_id=version_id,
                     staged=staged,
                     schema_document=artifact.schema_document,
+                    provenance=artifact.provenance,
                     preview=preview,
                     quality=quality,
                     row_count=artifact.row_count,
@@ -3740,6 +3754,7 @@ class PostgresProjectStore:
         version_id: UUID,
         staged: StagedObject,
         schema_document: dict[str, Any],
+        provenance: dict[str, str],
         preview: dict[str, Any],
         quality: dict[str, Any],
         row_count: int,
@@ -3888,6 +3903,7 @@ class PostgresProjectStore:
                         "exclude": "retain-data-exclude-chart",
                         "remove": "remove-cleaned-copy-and-chart",
                     },
+                    "runtimeProvenance": provenance,
                     "pendingDatasetVersionId": version.id.hex,
                 },
                 algorithm_version=CLEANING_ALGORITHM_VERSION,

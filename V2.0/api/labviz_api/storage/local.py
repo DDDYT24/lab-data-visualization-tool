@@ -32,6 +32,10 @@ CHUNK_SIZE = 1024 * 1024
 ALLOWED_CALLER_METADATA = {
     "labviz-format-version",
     "labviz-media-type",
+    "labviz-pandas-version",
+    "labviz-pyarrow-version",
+    "labviz-parquet-writer",
+    "labviz-parquet-writer-version",
 }
 PERSISTED_METADATA_FIELDS = ALLOWED_CALLER_METADATA | {"labviz-created-at"}
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,6 +15,8 @@ import pyarrow.parquet as pq
 
 PARQUET_SCHEMA_VERSION = 1
 PARQUET_CONTENT_HASH = "sha256-parquet-bytes-v1"
+PARQUET_WRITER = "pyarrow.parquet.write_table"
+PROVENANCE_VERSION = "1"
 SCHEMA_METADATA_KEY = b"labviz.schema"
 
 
@@ -26,8 +29,40 @@ class ParquetArtifact:
     payload: bytes
     sha256: str
     schema_document: dict[str, Any]
+    provenance: dict[str, str]
     row_count: int
     column_count: int
+
+
+def runtime_provenance() -> dict[str, str]:
+    """Return exact dependency versions without changing the Parquet v1 bytes."""
+
+    return {
+        "provenanceVersion": PROVENANCE_VERSION,
+        "pandasVersion": pd.__version__,
+        "pyarrowVersion": pa.__version__,
+        "parquetWriter": PARQUET_WRITER,
+        "parquetWriterVersion": pa.__version__,
+    }
+
+
+def storage_provenance_metadata(provenance: Mapping[str, str]) -> dict[str, str]:
+    """Map processing provenance to provider metadata fields."""
+
+    required = {
+        "pandasVersion",
+        "pyarrowVersion",
+        "parquetWriter",
+        "parquetWriterVersion",
+    }
+    if not required.issubset(provenance):
+        raise ValueError("Parquet provenance is incomplete.")
+    return {
+        "labviz-pandas-version": provenance["pandasVersion"],
+        "labviz-pyarrow-version": provenance["pyarrowVersion"],
+        "labviz-parquet-writer": provenance["parquetWriter"],
+        "labviz-parquet-writer-version": provenance["parquetWriterVersion"],
+    }
 
 
 def _normalize_series(series: pd.Series[Any]) -> pd.Series[Any]:
@@ -81,6 +116,7 @@ def write_parquet(
 ) -> ParquetArtifact:
     """Serialize normalized data and hash the exact immutable Parquet bytes."""
 
+    provenance = runtime_provenance()
     normalized = _canonical_frame(frame)
     table = pa.Table.from_pandas(normalized, preserve_index=False, safe=True)
     schema_document = _schema_document(table, units or {})
@@ -106,6 +142,7 @@ def write_parquet(
         payload=payload,
         sha256=hashlib.sha256(payload).hexdigest(),
         schema_document=schema_document,
+        provenance=provenance,
         row_count=len(normalized),
         column_count=len(normalized.columns),
     )
