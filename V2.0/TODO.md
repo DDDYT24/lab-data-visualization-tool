@@ -2,9 +2,23 @@
 
 This file records explicitly deferred work so it does not expand the V2.0 prototype scope.
 
+## V2.0 Closeout Gate
+
+**Checkpoint:** 2026-08-08
+
+- [x] P0-1: close frontend runtime-error gaps, enforce pageerror/console-error Playwright guards, and keep UTC rendering deterministic.
+- [x] P0-2: repair Ruff/MyPy gates and commit hash-pinned Python 3.12 runtime/development locks.
+- [x] P0-3: run PostgreSQL 17 and MinIO from the shared Compose definition in CI, initialize the test bucket, and clean up volumes.
+- [x] P0-4: document one API verification gate and keep the remaining production decisions explicitly deferred below.
+
+The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
+[`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
+integration suite. Production hosting, SMTP, cloud-provider, security, quota, and compliance
+decisions remain intentionally open.
+
 ## Website Frontend Progress
 
-**Last checkpoint:** 2026-07-29
+**Last checkpoint:** 2026-08-08
 **Architecture:** [`PROJECT_PLAN.md`](PROJECT_PLAN.md)
 
 Completed:
@@ -37,7 +51,7 @@ Next:
 
 ## Backend Production Hardening
 
-**Last checkpoint:** 2026-07-30
+**Last checkpoint:** 2026-08-08
 
 - [x] Approve the production data route: PostgreSQL metadata and revisions, S3-compatible object storage, and immutable Parquet dataset versions. See [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md).
 - [ ] Approve the remaining production backend runtime, worker, hosting, and provider selections; the current FastAPI service remains a local API-contract reference implementation.
@@ -50,7 +64,7 @@ Next:
 - [x] Complete Phase 5A PostgreSQL revision-pinned HMAC sharing, fixed ShareLink/export bindings, immutable permanent publication exports, and recoverable StoredObjectWriteIntent flow.
 - [x] Complete Phase 5B-1 independent Worker runner, task/work-item leases, PostgreSQL-time heartbeat, fencing, bounded retry/backoff, and quarantine infrastructure without destructive maintenance.
 - [x] Complete Phase 5B-2 lifecycle/reconciliation execution, final FK reachability GC, metadata cleanup, and two-pass orphan staging cleanup with safe defaults.
-- [ ] Complete Phase 5B-3 provider-neutral S3-compatible adapter and provider contract/failure tests.
+- [x] Complete Phase 5B-3 provider-neutral S3-compatible adapter and provider contract/failure tests.
 - [ ] Design HTTP upload `Idempotency-Key` persistence and replay semantics without treating identical file hashes as the same intentional project.
 - [x] Activate pending StoredObject confirmation/finalization in the leased reconciliation worker and retire PostgreSQL lifespan recovery after the Phase 5B-2 cross-restart path passes.
 - [ ] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.

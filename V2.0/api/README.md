@@ -13,6 +13,34 @@ staging cleanup. The SQLite reference repository remains unchanged.
 Phase 5B-3 adds the shared Local/S3 provider contract, real MinIO verification, bounded multipart
 uploads, provider metadata, and resumable provider-scoped staging inventory.
 
+## Dependency locking and verification
+
+`requirements.txt` and `requirements-dev.txt` remain the version-range inputs. The committed
+`requirements.lock.txt` and `requirements-dev.lock.txt` are hash-pinned outputs generated for
+Python 3.12; CI installs the development lock. Regenerate both after an intentional dependency
+change with `uv pip compile`:
+
+```powershell
+uv pip compile requirements.txt --universal --python-version 3.12 --generate-hashes --output-file requirements.lock.txt
+uv pip compile requirements-dev.txt --universal --python-version 3.12 --generate-hashes --output-file requirements-dev.lock.txt
+```
+
+Run the complete API gate (PostgreSQL and MinIO are required for the integration tests):
+
+```powershell
+python -m pip install -r requirements-dev.lock.txt
+docker compose up -d --wait postgres minio
+docker compose run --rm minio-init
+ruff check labviz_api tests migrations scripts
+ruff format --check labviz_api tests migrations scripts
+mypy labviz_api tests migrations scripts
+python -m pytest
+docker compose down -v --remove-orphans
+```
+
+The CI job runs the same gate and always removes its temporary Compose volumes. Keep
+`httpx2` in the development inputs: Starlette's current TestClient selects it explicitly.
+
 ## Local PostgreSQL
 
 Copy `.env.example` to `.env` if local overrides are needed, then start PostgreSQL and MinIO:
