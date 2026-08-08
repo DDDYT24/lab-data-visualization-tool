@@ -54,22 +54,20 @@ jobs:
 
   v2-api:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: labviz
-          POSTGRES_PASSWORD: labviz-ci
-          POSTGRES_DB: labviz_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U labviz -d labviz_test"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 30
     env:
-      LABVIZ_TEST_POSTGRES_URL: postgresql+psycopg://labviz:labviz-ci@127.0.0.1:5432/labviz_test
+      LABVIZ_POSTGRES_USER: labviz
+      LABVIZ_POSTGRES_PASSWORD: labviz-ci
+      LABVIZ_POSTGRES_DB: labviz
+      LABVIZ_POSTGRES_PORT: "54329"
+      LABVIZ_MINIO_ROOT_USER: labviz-minio
+      LABVIZ_MINIO_ROOT_PASSWORD: labviz-minio-ci-only
+      LABVIZ_MINIO_PORT: "59000"
+      LABVIZ_MINIO_BUCKET: labviz-test
+      LABVIZ_TEST_POSTGRES_URL: postgresql+psycopg://labviz:labviz-ci@127.0.0.1:54329/labviz_test
+      LABVIZ_TEST_MINIO_ENDPOINT: http://127.0.0.1:59000
+      LABVIZ_TEST_MINIO_BUCKET: labviz-test
+      LABVIZ_TEST_MINIO_ACCESS_KEY: labviz-minio
+      LABVIZ_TEST_MINIO_SECRET_KEY: labviz-minio-ci-only
     defaults:
       run:
         working-directory: V2.0/api
@@ -82,11 +80,20 @@ jobs:
           cache-dependency-path: |
             V2.0/api/requirements.txt
             V2.0/api/requirements-dev.txt
+            V2.0/api/requirements.lock.txt
+            V2.0/api/requirements-dev.lock.txt
+      - name: Start API integration services
+        run: docker compose up -d --wait postgres minio
+      - name: Initialize MinIO test bucket
+        run: docker compose run --rm minio-init
       - name: Install dependencies
-        run: python -m pip install -r requirements-dev.txt
+        run: python -m pip install -r requirements-dev.lock.txt
       - name: Verify API
         run: |
           ruff check labviz_api tests migrations scripts
           ruff format --check labviz_api tests migrations scripts
           mypy labviz_api tests migrations scripts
           pytest
+      - name: Stop API integration services
+        if: always()
+        run: docker compose down -v --remove-orphans
