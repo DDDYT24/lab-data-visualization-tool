@@ -88,7 +88,12 @@ def _minio_client() -> Any:
         region_name="us-east-1",
         aws_access_key_id=MINIO_ACCESS_KEY,
         aws_secret_access_key=MINIO_SECRET_KEY,
-        config=BotoConfig(signature_version="s3v4", retries={"max_attempts": 1}),
+        config=BotoConfig(
+            signature_version="s3v4",
+            connect_timeout=2,
+            read_timeout=2,
+            retries={"max_attempts": 1},
+        ),
     )
 
 
