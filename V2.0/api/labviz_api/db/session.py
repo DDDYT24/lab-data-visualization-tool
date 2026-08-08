@@ -32,6 +32,7 @@ class Database:
             echo=echo,
             pool_pre_ping=True,
             pool_recycle=1_800,
+            connect_args={"connect_timeout": 2},
         )
         self.session_factory = sessionmaker(
             bind=self.engine,

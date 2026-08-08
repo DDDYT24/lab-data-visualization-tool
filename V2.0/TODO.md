@@ -11,6 +11,7 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 - [x] P0-3: run PostgreSQL 17 and MinIO from the shared Compose definition in CI, initialize the test bucket, and clean up volumes.
 - [x] P0-4: document one API verification gate and keep the remaining production decisions explicitly deferred below.
 - [x] P1-1: record exact pandas, PyArrow, and Parquet writer provenance in PostgreSQL processing records and immutable object metadata without changing Parquet v1 bytes.
+- [x] P1-2: bound PostgreSQL and MinIO integration probes so missing local services fail explicitly instead of hanging.
 
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
