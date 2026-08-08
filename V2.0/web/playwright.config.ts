@@ -2,6 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3_000);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
+const nodeOptions = [process.env.NODE_OPTIONS, "--unhandled-rejections=strict"]
+  .filter(Boolean)
+  .join(" ");
 
 export default defineConfig({
   testDir: "./e2e",
@@ -14,6 +17,7 @@ export default defineConfig({
   expect: {
     timeout: 10_000,
     toHaveScreenshot: {
+      caret: "initial",
       maxDiffPixelRatio: 0.03,
     },
   },
@@ -42,7 +46,13 @@ export default defineConfig({
     ? undefined
     : {
         command: `npm run dev -- --hostname localhost --port ${port}`,
+        env: {
+          ...process.env,
+          NODE_OPTIONS: nodeOptions,
+        },
         reuseExistingServer: !process.env.CI,
+        stderr: "pipe",
+        stdout: "pipe",
         timeout: 120_000,
         url: baseURL,
       },

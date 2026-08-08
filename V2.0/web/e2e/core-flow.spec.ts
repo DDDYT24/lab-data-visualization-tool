@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 import { createCsvNearSize, installMockApi } from "./support/mock-api";
 
@@ -124,4 +124,18 @@ test("switches the principal interface to Simplified Chinese", async ({ page }) 
     page.getByRole("heading", { level: 1, name: "帮助与科研说明" }),
   ).toBeVisible();
   await expect(page.getByPlaceholder("搜索帮助")).toBeVisible();
+});
+
+test("renders an unknown route without browser runtime errors", async ({
+  page,
+  expectConsoleError,
+}) => {
+  expectConsoleError(/Failed to load resource:.*status of 404 \(Not Found\)/);
+
+  await page.goto("/this-route-does-not-exist");
+  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Return home" })).toHaveAttribute(
+    "href",
+    "/",
+  );
 });
