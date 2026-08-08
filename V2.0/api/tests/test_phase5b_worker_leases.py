@@ -342,7 +342,11 @@ def test_retry_backoff_truncation_and_quarantine_are_bounded(
         assert row.retry_count == 1
         assert len(row.last_error_code or "") == 128
         assert len(row.last_error_message or "") == 1024
-        assert row.next_attempt_at is not None and row.next_attempt_at > row.last_attempt_at
+        assert (
+            row.next_attempt_at is not None
+            and row.last_attempt_at is not None
+            and row.next_attempt_at > row.last_attempt_at
+        )
         assert row.quarantined_at is None and row.lease_owner is None
     assert store.claim_stored_objects("too-soon", batch_size=1, lease_seconds=60) == []
 

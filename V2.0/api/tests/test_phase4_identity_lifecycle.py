@@ -228,6 +228,7 @@ def test_dedup_scope_isolated_across_guests_and_content_keys_ignore_project_id(
         first = session.get(Project, UUID(first_id))
         second = session.get(Project, UUID(second_id))
         assert first is not None and second is not None
+        assert first.guest_session_id is not None and second.guest_session_id is not None
         assert first.guest_session_id != second.guest_session_id
         rows = list(session.scalars(select(StoredObject).order_by(StoredObject.created_at)))
         assert {row.dedup_scope for row in rows} == {
@@ -314,14 +315,12 @@ def test_duplicate_copies_only_current_reproducible_closure_and_is_idempotent(
             )
             == 1
         )
-        assert (
-            session.scalar(
-                select(func.count())
-                .select_from(QualityFindingRecord)
-                .where(QualityFindingRecord.project_id == duplicate.id)
-            )
-            > 0
+        finding_count = session.scalar(
+            select(func.count())
+            .select_from(QualityFindingRecord)
+            .where(QualityFindingRecord.project_id == duplicate.id)
         )
+        assert finding_count is not None and finding_count > 0
         reused_runs = list(
             session.scalars(select(ProcessingRun).where(ProcessingRun.project_id == duplicate.id))
         )

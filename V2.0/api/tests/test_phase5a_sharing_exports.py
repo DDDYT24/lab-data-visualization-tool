@@ -248,7 +248,7 @@ def test_export_job_scope_foreign_keys_reject_mismatched_publication_and_intent(
                 updated_at=datetime.now(UTC),
             )
         )
-        publication_values = {
+        publication_values: dict[str, Any] = {
             "id": job_id,
             "project_id": first_project.id,
             "project_revision_id": revision.id,
@@ -453,7 +453,7 @@ def test_revision_pinned_shares_fixed_bindings_and_exact_byte_reuse(
     assert share_id is not None
 
     class CleanupReportingFailure(LocalObjectStorage):
-        def discard(self, staged: StagedObject) -> None:
+        def discard(self, staged: StagedObject) -> bool:
             super().discard(staged)
             raise OSError("simulated post-commit staging cleanup failure")
 
@@ -531,7 +531,9 @@ def test_revision_pinned_shares_fixed_bindings_and_exact_byte_reuse(
     assert shared is not None
     assert shared[0]["title"] == "Pinned figure"
     assert shared[0]["download_formats"] == ["pdf", "png", "svg"]
-    assert store.get_shared_export(share["token"], "png")["export"]["id"] == first["id"]
+    shared_export = store.get_shared_export(share["token"], "png")
+    assert shared_export is not None
+    assert shared_export["export"]["id"] == first["id"]
     tampered_suffix = "A" if share["token"][-1] != "A" else "B"
     assert store.get_shared_project(f"{share['token'][:-1]}{tampered_suffix}") is None
 
@@ -547,7 +549,9 @@ def test_revision_pinned_shares_fixed_bindings_and_exact_byte_reuse(
         guest_token_digest=None,
     )
     assert changed["project_revision_id"] != pinned_revision_id
-    assert store.get_shared_project(share["token"])[0]["title"] == "Pinned figure"
+    shared_after_change = store.get_shared_project(share["token"])
+    assert shared_after_change is not None
+    assert shared_after_change[0]["title"] == "Pinned figure"
     stale_chart = _chart(title="Stale concurrent export")
     with pytest.raises(PersistenceConflict, match="Project changed"):
         store.create_publication_export(

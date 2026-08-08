@@ -37,9 +37,8 @@ from labviz_api.models import ChartSpec
 from labviz_api.persistence.exceptions import ObjectConfirmationPending
 from labviz_api.persistence.postgres import PostgresProjectStore
 from labviz_api.processing import build_preview, build_quality_report, render_chart
-from labviz_api.storage import LocalObjectStorage
+from labviz_api.storage import LocalObjectStorage, StagedObject
 from labviz_api.storage.base import ObjectInfo
-from labviz_api.storage.local import StagedObject
 from labviz_api.workers.garbage_collection import StoredObjectGarbageCollector
 from labviz_api.workers.leases import (
     METADATA_CLEANUP,

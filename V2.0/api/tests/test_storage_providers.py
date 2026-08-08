@@ -225,7 +225,7 @@ def test_provider_contract_inventory_snapshot_excludes_new_and_tolerates_delete(
     storage_provider.discard(delete_target)
 
     keys = [item.key for item in first.items]
-    cursor = first.next_cursor
+    cursor: str | None = first.next_cursor
     while cursor is not None:
         page = storage_provider.list_staged(page_size=2, cursor=cursor)
         keys.extend(item.key for item in page.items)
