@@ -141,7 +141,7 @@ V1.1/tests/                  Core, plotting, database, CLI, and UI smoke tests
 V2.0/prd.md                  Approved product and Figma prototype requirements
 V2.0/PROJECT_PLAN.md         Website-first architecture, boundaries, and phases
 V2.0/web/                    Next.js, TypeScript, MUI, and ECharts frontend
-V2.0/api/                    FastAPI, pandas, Matplotlib, and SQLite service
+V2.0/api/                    FastAPI, SQLite/PostgreSQL persistence, local/S3 storage, and Matplotlib
 V2.0/TODO.md                 Prototype checkpoints and explicitly deferred work
 ```
 
@@ -192,9 +192,11 @@ The frontend lockfile is authoritative. Its core stack is Next.js 16, React 19, 
 ### V2.0 API Dependencies and Configuration
 
 Install `V2.0/api/requirements.txt` for runtime use. The service uses FastAPI,
-Uvicorn, Pydantic, pandas, NumPy, Matplotlib, openpyxl, and Python's built-in
-SQLite driver. Install `requirements-dev.txt` instead when running pytest,
-Ruff, and mypy. Dependency ranges are bounded at the next major version.
+Uvicorn, Pydantic, pandas, NumPy, Matplotlib, openpyxl, PostgreSQL support, and
+Python's built-in SQLite driver. Install `requirements-dev.txt` for pytest,
+Ruff, and mypy. The committed `requirements.lock.txt` and
+`requirements-dev.lock.txt` are hash-pinned Python 3.12 installs used for
+reproducible checks and CI; the range files remain their update inputs.
 
 The API defaults are suitable for one local development process: SQLite data
 is stored in `V2.0/api/.labviz/labviz-v2.db`, temporary projects and exports
@@ -312,19 +314,23 @@ The first command runs ESLint, strict TypeScript checking, Vitest, and a product
 
 Verify the V2.0 API from its own Python 3.12 environment:
 
-```bash
+```powershell
 cd V2.0/api
-python -m pip install -r requirements-dev.txt
-ruff check labviz_api tests
-ruff format --check labviz_api tests
-mypy labviz_api tests
-pytest
+python -m pip install -r requirements-dev.lock.txt
+docker compose up -d --wait postgres minio
+docker compose run --rm minio-init
+ruff check labviz_api tests migrations scripts
+ruff format --check labviz_api tests migrations scripts
+mypy labviz_api tests migrations scripts
+python -m pytest
+docker compose down -v --remove-orphans
 ```
 
 The API integration suite exercises real CSV processing, data-quality
 findings, cleaning decisions, PNG/SVG/PDF generation, email-code sessions,
-history, sharing permissions, and stable error responses. CI runs the same
-checks on Python 3.12.
+history, sharing permissions, MinIO-backed object storage, and stable error
+responses. CI runs the same checks on Python 3.12; the Compose services are
+required for the full integration suite.
 
 ## 📚 Design References
 
@@ -453,7 +459,9 @@ SQLite 来自 Python 标准库，因此不需要额外安装数据库软件或 P
 
 运行服务安装 `V2.0/api/requirements.txt`；开发和测试安装
 `V2.0/api/requirements-dev.txt`。核心依赖包括 FastAPI、Uvicorn、Pydantic、
-pandas、NumPy、Matplotlib 和 openpyxl，SQLite 由 Python 自带。
+pandas、NumPy、Matplotlib、openpyxl 和 PostgreSQL 支持，SQLite 由 Python
+自带。提交的 `requirements.lock.txt` 与 `requirements-dev.lock.txt` 是带哈希的
+Python 3.12 锁文件，CI 和可复现验证使用它们；两个范围文件仍是升级输入。
 
 本地默认数据库为 `V2.0/api/.labviz/labviz-v2.db`；临时项目和导出结果按最后
 一次项目操作保留 2 小时；网站上传上限为 50 MB；验证码使用终端输出模式。
@@ -504,12 +512,17 @@ V2.0 API 验证命令：
 
 ```powershell
 Set-Location .\V2.0\api
-python -m pip install -r requirements-dev.txt
-ruff check labviz_api tests
-ruff format --check labviz_api tests
-mypy labviz_api tests
-pytest
+python -m pip install -r requirements-dev.lock.txt
+docker compose up -d --wait postgres minio
+docker compose run --rm minio-init
+ruff check labviz_api tests migrations scripts
+ruff format --check labviz_api tests migrations scripts
+mypy labviz_api tests migrations scripts
+python -m pytest
+docker compose down -v --remove-orphans
 ```
+
+完整 API 集成测试需要 Compose 提供 PostgreSQL 和 MinIO；CI 使用同一套锁文件、服务和验证命令。
 
 ---
 
