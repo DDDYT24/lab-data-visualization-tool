@@ -464,7 +464,7 @@ def downgrade() -> None:
         op.execute(f"DROP TRIGGER IF EXISTS trg_{table_name}_immutable ON {table_name}")
 
     op.execute(
-        "DROP TRIGGER IF EXISTS trg_project_lifecycle_events_guard " "ON project_lifecycle_events"
+        "DROP TRIGGER IF EXISTS trg_project_lifecycle_events_guard ON project_lifecycle_events"
     )
     op.execute("DROP FUNCTION IF EXISTS labviz_guard_lifecycle_event_update()")
     op.execute("DROP TRIGGER IF EXISTS trg_project_origins_guard ON project_origins")

@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, cast
 from uuid import uuid4
 
 import boto3
@@ -369,21 +369,24 @@ def _provider_cursor(storage: S3ObjectStorage, provider_token: str) -> str:
 
 def _list_failure(kind: str) -> Exception:
     if kind == "network":
-        return EndpointConnectionError(endpoint_url=MINIO_ENDPOINT)
+        return cast(Exception, EndpointConnectionError(endpoint_url=MINIO_ENDPOINT))
     if kind == "timeout":
-        return ReadTimeoutError(endpoint_url=MINIO_ENDPOINT, error="timed out")
+        return cast(Exception, ReadTimeoutError(endpoint_url=MINIO_ENDPOINT, error="timed out"))
     code, message, status = {
         "throttle": ("SlowDown", "Please reduce your request rate.", 503),
         "service": ("ServiceUnavailable", "Service is temporarily unavailable.", 503),
         "auth": ("AccessDenied", "Access denied.", 403),
         "other-invalid-argument": ("InvalidArgument", "Invalid max-keys value.", 400),
     }[kind]
-    return ClientError(
-        {
-            "Error": {"Code": code, "Message": message},
-            "ResponseMetadata": {"HTTPStatusCode": status},
-        },
-        "ListObjectsV2",
+    return cast(
+        Exception,
+        ClientError(
+            {
+                "Error": {"Code": code, "Message": message},
+                "ResponseMetadata": {"HTTPStatusCode": status},
+            },
+            "ListObjectsV2",
+        ),
     )
 
 

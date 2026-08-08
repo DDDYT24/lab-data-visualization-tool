@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from labviz_api.storage import InvalidStorageCursor
-from labviz_api.storage.local import (
+from labviz_api.storage import (
     InvalidObjectKey,
+    InvalidStorageCursor,
     LocalObjectStorage,
     ObjectAlreadyExists,
     ObjectIntegrityError,
