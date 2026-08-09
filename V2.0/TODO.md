@@ -13,6 +13,7 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 - [x] P1-1: record exact pandas, PyArrow, and Parquet writer provenance in PostgreSQL processing records and immutable object metadata without changing Parquet v1 bytes.
 - [x] P1-2: bound PostgreSQL and MinIO integration probes so missing local services fail explicitly instead of hanging.
 - [x] P1-3: return stable quality-finding message codes and parameters, and localize their summaries and reasons in the frontend with legacy-text fallback.
+- [x] P1-4: persist HTTP upload `Idempotency-Key` requests, replay the original project/job, reject changed requests, and serialize concurrent first attempts.
 
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
@@ -68,7 +69,7 @@ Next:
 - [x] Complete Phase 5B-1 independent Worker runner, task/work-item leases, PostgreSQL-time heartbeat, fencing, bounded retry/backoff, and quarantine infrastructure without destructive maintenance.
 - [x] Complete Phase 5B-2 lifecycle/reconciliation execution, final FK reachability GC, metadata cleanup, and two-pass orphan staging cleanup with safe defaults.
 - [x] Complete Phase 5B-3 provider-neutral S3-compatible adapter and provider contract/failure tests.
-- [ ] Design HTTP upload `Idempotency-Key` persistence and replay semantics without treating identical file hashes as the same intentional project.
+- [x] Persist HTTP upload `Idempotency-Key` requests and replay semantics without treating identical file hashes as the same intentional project.
 - [x] Activate pending StoredObject confirmation/finalization in the leased reconciliation worker and retire PostgreSQL lifespan recovery after the Phase 5B-2 cross-restart path passes.
 - [x] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.

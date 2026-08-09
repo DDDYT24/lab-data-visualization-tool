@@ -77,6 +77,20 @@ describe("LabViz API client contract", () => {
     expect(body.get("headerRow")).toBe("3");
   });
 
+  it("sends the upload idempotency key without taking over multipart headers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(readySession));
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File([new Uint8Array(512)], "experiment.csv", {
+      type: "text/csv",
+    });
+
+    await labvizApi.createProject(file, { idempotencyKey: "upload-key-1" });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.headers).toMatchObject({ "Idempotency-Key": "upload-key-1" });
+    expect(init.headers).not.toHaveProperty("Content-Type");
+  });
+
   it("reports malformed successful responses as a Contract error", async () => {
     vi.stubGlobal(
       "fetch",

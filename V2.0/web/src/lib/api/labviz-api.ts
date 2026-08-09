@@ -96,7 +96,11 @@ export const labvizApi = {
   },
   createProject(
     file: File,
-    options?: { sheetName?: string | null; headerRow?: number | null },
+    options?: {
+      sheetName?: string | null;
+      headerRow?: number | null;
+      idempotencyKey?: string;
+    },
     signal?: AbortSignal,
   ): Promise<ProjectSession> {
     const body = new FormData();
@@ -106,6 +110,9 @@ export const labvizApi = {
     return request("/projects", projectSessionSchema, {
       method: "POST",
       body,
+      headers: options?.idempotencyKey
+        ? { "Idempotency-Key": options.idempotencyKey }
+        : undefined,
       signal,
     });
   },

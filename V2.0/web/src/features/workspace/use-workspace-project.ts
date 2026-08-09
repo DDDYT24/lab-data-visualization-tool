@@ -6,6 +6,11 @@ import { useEffect, useRef } from "react";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
 import { useWorkspaceStore } from "./workspace-store";
+import {
+  getUploadIdempotencyState,
+  uploadRequestSignature,
+  type UploadIdempotencyState,
+} from "./upload-idempotency";
 
 function errorMessage(error: unknown) {
   return error instanceof LabVizApiError
@@ -16,6 +21,8 @@ function errorMessage(error: unknown) {
 export function useWorkspaceProject(initialProjectId?: string) {
   const queryClient = useQueryClient();
   const startedRef = useRef(false);
+  const createUploadStateRef = useRef<UploadIdempotencyState | null>(null);
+  const reimportUploadStateRef = useRef<UploadIdempotencyState | null>(null);
   const selectedFile = useWorkspaceStore((state) => state.selectedFile);
   const projectId = useWorkspaceStore((state) => state.projectId);
   const job = useWorkspaceStore((state) => state.job);
@@ -57,12 +64,23 @@ export function useWorkspaceProject(initialProjectId?: string) {
       if (!selectedFile.sourceFile) {
         throw new Error("The selected file is no longer available.");
       }
-      return labvizApi.createProject(selectedFile.sourceFile, {
+      const options = {
         sheetName: selectedFile.sheetName,
         headerRow: selectedFile.headerRow,
+      };
+      const signature = uploadRequestSignature(selectedFile.sourceFile, options);
+      const state = getUploadIdempotencyState(
+        createUploadStateRef.current,
+        signature,
+      );
+      createUploadStateRef.current = state;
+      return labvizApi.createProject(selectedFile.sourceFile, {
+        ...options,
+        idempotencyKey: state.key,
       });
     },
     onSuccess: (session) => {
+      createUploadStateRef.current = null;
       setSession(session);
       window.history.replaceState(
         window.history.state,
@@ -150,8 +168,21 @@ export function useWorkspaceProject(initialProjectId?: string) {
       file: File;
       headerRow: number;
       sheetName: string | null;
-    }) => labvizApi.createProject(file, { headerRow, sheetName }),
+    }) => {
+      const options = { headerRow, sheetName };
+      const signature = uploadRequestSignature(file, options);
+      const state = getUploadIdempotencyState(
+        reimportUploadStateRef.current,
+        signature,
+      );
+      reimportUploadStateRef.current = state;
+      return labvizApi.createProject(file, {
+        ...options,
+        idempotencyKey: state.key,
+      });
+    },
     onSuccess: (session) => {
+      reimportUploadStateRef.current = null;
       setSession(session);
       window.history.replaceState(
         window.history.state,

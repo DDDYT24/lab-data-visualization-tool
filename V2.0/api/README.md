@@ -48,6 +48,13 @@ fallbacks and now also carry locale-independent message codes and scalar paramet
 client owns the final English or Simplified Chinese rendering. Existing persisted quality
 documents without those optional fields remain readable.
 
+HTTP uploads accept an optional `Idempotency-Key`. The key is scoped to the anonymous browser
+session and stores a canonical request fingerprint containing the payload hash, filename, media
+type, worksheet, and header row. Replaying the same request returns the original project/job
+without scheduling another processor; reusing the key for a different request returns a 409
+`idempotency-key-reused` error. SQLite and PostgreSQL use the same semantics, and PostgreSQL
+serializes concurrent first attempts for one browser identity.
+
 ## Local PostgreSQL
 
 Copy `.env.example` to `.env` if local overrides are needed, then start PostgreSQL and MinIO:
