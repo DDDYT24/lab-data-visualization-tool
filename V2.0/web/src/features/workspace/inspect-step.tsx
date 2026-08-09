@@ -125,6 +125,71 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
     );
   }
 
+  const findingMessage = (
+    finding: (typeof quality.findings)[number],
+    field: "summary" | "reason",
+  ): string => {
+    const code = field === "summary" ? finding.summaryCode : finding.reasonCode;
+    const params = field === "summary" ? finding.summaryParams : finding.reasonParams;
+    const countParam = params?.count;
+    const count =
+      typeof countParam === "number"
+        ? countParam
+        : finding.affectedCount || finding.rowIds.length;
+    const value = (name: string, fallback = ""): string | number => {
+      const candidate = params?.[name];
+      return typeof candidate === "string" || typeof candidate === "number"
+        ? candidate
+        : fallback;
+    };
+
+    switch (code) {
+      case "quality.missing.summary":
+        return t("findingMessages.missing.summary", { count });
+      case "quality.missing.reason":
+        return t("findingMessages.missing.reason");
+      case "quality.type-conflict.summary":
+        return t("findingMessages.typeConflict.summary", { count });
+      case "quality.type-conflict.reason":
+        return t("findingMessages.typeConflict.reason");
+      case "quality.duplicate.summary":
+        return t("findingMessages.duplicate.summary", { count });
+      case "quality.duplicate.reason":
+        return t("findingMessages.duplicate.reason");
+      case "quality.outside-range.summary":
+        return t("findingMessages.outsideRange.summary", { count });
+      case "quality.outside-range.reason.both":
+        return t("findingMessages.outsideRange.reasonBoth", {
+          maximum: value("maximum"),
+          minimum: value("minimum"),
+        });
+      case "quality.outside-range.reason.minimum":
+        return t("findingMessages.outsideRange.reasonMinimum", {
+          minimum: value("minimum"),
+        });
+      case "quality.outside-range.reason.maximum":
+        return t("findingMessages.outsideRange.reasonMaximum", {
+          maximum: value("maximum"),
+        });
+      case "quality.extreme-value.summary":
+        return t("findingMessages.extremeValue.summary", { count });
+      case "quality.extreme-value.reason":
+        return t("findingMessages.extremeValue.reason");
+      case "quality.sudden-change.summary":
+        return t("findingMessages.suddenChange.summary", { count });
+      case "quality.sudden-change.reason":
+        return t("findingMessages.suddenChange.reason");
+      case "quality.trend-inconsistent.summary":
+        return t("findingMessages.trendInconsistent.summary", { count });
+      case "quality.trend-inconsistent.reason":
+        return t("findingMessages.trendInconsistent.reason", {
+          rSquared: value("rSquared", "?"),
+        });
+      default:
+        return finding[field];
+    }
+  };
+
   const decidedCount = quality.findings.filter(
     (finding) => issueActions[finding.id],
   ).length;
@@ -297,7 +362,7 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
                 >
                   {visibleFindings.map((finding, index) => (
                     <MenuItem key={finding.id} value={finding.id}>
-                      {index + 1}. {finding.summary}
+                      {index + 1}. {findingMessage(finding, "summary")}
                     </MenuItem>
                   ))}
                 </Select>
@@ -368,11 +433,11 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
                   <WarningAmberRoundedIcon color="warning" />
                 )}
                 <Typography component="h2" variant="h3">
-                  {selectedFinding.summary}
+                  {findingMessage(selectedFinding, "summary")}
                 </Typography>
               </Stack>
               <Typography color="text.secondary" variant="body2">
-                {selectedFinding.reason}
+                {findingMessage(selectedFinding, "reason")}
               </Typography>
               <Typography color="text.secondary" variant="caption">
                 {t("affectedRows", {

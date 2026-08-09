@@ -162,6 +162,38 @@
       "outside-range": "超出有效范围",
       "trend-inconsistent": "偏离趋势"
     },
+    "findingMessages": {
+      "missing": {
+        "summary": "{count} 个值缺失",
+        "reason": "这些单元格为空。未经你的决定，LabViz 不会替换或删除它们。"
+      },
+      "typeConflict": {
+        "summary": "{count} 个值与数值列不匹配",
+        "reason": "该列的大多数值是数值，但这些单元格包含其他文本。"
+      },
+      "duplicate": {
+        "summary": "{count} 行属于重复数据组",
+        "reason": "这些行的所有值都重复。删除清洗副本前，请确认这种重复是否符合预期。"
+      },
+      "outsideRange": {
+        "summary": "{count} 个值超出有效范围",
+        "reasonBoth": "你将 {minimum} 到 {maximum} 定义为该列的有效范围。LabViz 仅标记这些值供你检查。",
+        "reasonMinimum": "你将至少 {minimum} 定义为该列的有效范围。LabViz 仅标记这些值供你检查。",
+        "reasonMaximum": "你将至多 {maximum} 定义为该列的有效范围。LabViz 仅标记这些值供你检查。"
+      },
+      "extremeValue": {
+        "summary": "{count} 个值明显偏离中间范围",
+        "reason": "这些值超出 1.5 倍四分位距。这只是检查提示，不代表测量一定错误。"
+      },
+      "suddenChange": {
+        "summary": "{count} 个点相对上一行发生突变",
+        "reason": "该相邻变化明显大于此列的典型变化。排除数据前请先检查测量结果。"
+      },
+      "trendInconsistent": {
+        "summary": "{count} 个点偏离整体趋势",
+        "reason": "按行序存在明显线性趋势（R²={rSquared}），这些残差异常大。这只是检查提示，不代表测量一定错误。"
+      }
+    },
     "affectedRows": "影响 {count} 行",
     "decisionSaveFailed": "无法保存清洗决定。",
     "clearFilters": "清除问题筛选",

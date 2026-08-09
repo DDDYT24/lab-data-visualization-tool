@@ -319,6 +319,9 @@ def test_wide_tables_return_bounded_preview_and_representative_findings() -> Non
     missing = next(item for item in quality["findings"] if item["kind"] == "missing")
     assert missing["affectedCount"] == 500
     assert missing["rowIdsTruncated"] is True
+    assert missing["summaryCode"] == "quality.missing.summary"
+    assert missing["summaryParams"] == {"count": 500}
+    assert missing["reasonCode"] == "quality.missing.reason"
     assert len(json.dumps(preview)) < 400_000
     assert len(json.dumps(quality)) < 300_000
 
@@ -346,6 +349,10 @@ def test_valid_ranges_and_trend_flags_remain_user_controlled(
     outside = next(item for item in findings if item["kind"] == "outside-range")
     assert outside["affectedCount"] == 1
     assert outside["rowIds"] == [13]
+    assert outside["summaryCode"] == "quality.outside-range.summary"
+    assert outside["summaryParams"] == {"count": 1}
+    assert outside["reasonCode"] == "quality.outside-range.reason.both"
+    assert outside["reasonParams"] == {"minimum": 0, "maximum": 60}
     assert any(item["kind"] == "trend-inconsistent" for item in findings)
 
     removed = client.patch(

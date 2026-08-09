@@ -259,7 +259,15 @@ def _quality_findings(
         column_name = finding.get("column")
         evidence = {
             key: finding[key]
-            for key in ("rowIdsTruncated", "validMinimum", "validMaximum")
+            for key in (
+                "rowIdsTruncated",
+                "validMinimum",
+                "validMaximum",
+                "summaryCode",
+                "summaryParams",
+                "reasonCode",
+                "reasonParams",
+            )
             if key in finding
         }
         records.append(

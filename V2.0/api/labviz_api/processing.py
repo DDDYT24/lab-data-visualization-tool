@@ -19,7 +19,7 @@ import pandas as pd
 from matplotlib.figure import Figure
 from scipy.stats import t as student_t
 
-from .models import ChartSpec
+from .models import ChartSpec, JsonScalar
 
 matplotlib.use("Agg")
 
@@ -227,6 +227,23 @@ def _finding_rows(mask: pd.Series[Any]) -> tuple[list[int], int, bool]:
     return row_ids, affected_count, affected_count > len(row_ids)
 
 
+def _finding_message_fields(
+    *,
+    summary_code: str,
+    summary_params: dict[str, JsonScalar] | None = None,
+    reason_code: str,
+    reason_params: dict[str, JsonScalar] | None = None,
+) -> dict[str, Any]:
+    """Return stable message identifiers while retaining readable v1 fallbacks."""
+
+    return {
+        "summaryCode": summary_code,
+        "summaryParams": summary_params or {},
+        "reasonCode": reason_code,
+        "reasonParams": reason_params or {},
+    }
+
+
 def build_quality_report(
     project_id: str,
     frame: pd.DataFrame,
@@ -256,6 +273,11 @@ def build_quality_report(
                     "reason": (
                         "These cells are empty. LabViz will not replace or remove them "
                         "without your decision."
+                    ),
+                    **_finding_message_fields(
+                        summary_code="quality.missing.summary",
+                        summary_params={"count": affected_count},
+                        reason_code="quality.missing.reason",
                     ),
                 }
             )
@@ -290,6 +312,11 @@ def build_quality_report(
                                 "Most values in this column are numeric, but these cells "
                                 "contain other text."
                             ),
+                            **_finding_message_fields(
+                                summary_code="quality.type-conflict.summary",
+                                summary_params={"count": affected_count},
+                                reason_code="quality.type-conflict.reason",
+                            ),
                         }
                     )
 
@@ -310,6 +337,11 @@ def build_quality_report(
                 "reason": (
                     "These rows repeat all values. Confirm whether repetition is expected "
                     "before removing a cleaned copy."
+                ),
+                **_finding_message_fields(
+                    summary_code="quality.duplicate.summary",
+                    summary_params={"count": affected_count},
+                    reason_code="quality.duplicate.reason",
                 ),
             }
         )
@@ -349,6 +381,18 @@ def build_quality_report(
                     if minimum is not None
                     else f"at most {maximum:g}"
                 )
+                if minimum is not None and maximum is not None:
+                    range_reason_code = "quality.outside-range.reason.both"
+                    range_reason_params: dict[str, JsonScalar] = {
+                        "minimum": minimum,
+                        "maximum": maximum,
+                    }
+                elif minimum is not None:
+                    range_reason_code = "quality.outside-range.reason.minimum"
+                    range_reason_params = {"minimum": minimum}
+                else:
+                    range_reason_code = "quality.outside-range.reason.maximum"
+                    range_reason_params = {"maximum": maximum}
                 findings.append(
                     {
                         "id": f"outside-range:{column}",
@@ -365,6 +409,12 @@ def build_quality_report(
                         ),
                         "validMinimum": minimum,
                         "validMaximum": maximum,
+                        **_finding_message_fields(
+                            summary_code="quality.outside-range.summary",
+                            summary_params={"count": affected_count},
+                            reason_code=range_reason_code,
+                            reason_params=range_reason_params,
+                        ),
                     }
                 )
 
@@ -400,6 +450,11 @@ def build_quality_report(
                             "reason": (
                                 "These values fall beyond 1.5 interquartile ranges. This is a "
                                 "review flag, not proof that the measurements are wrong."
+                            ),
+                            **_finding_message_fields(
+                                summary_code="quality.extreme-value.summary",
+                                summary_params={"count": affected_count},
+                                reason_code="quality.extreme-value.reason",
                             ),
                         }
                     )
@@ -439,6 +494,11 @@ def build_quality_report(
                         "The adjacent change is much larger than the typical change in this "
                         "column. Review the measurements before excluding anything."
                     ),
+                    **_finding_message_fields(
+                        summary_code="quality.sudden-change.summary",
+                        summary_params={"count": affected_count},
+                        reason_code="quality.sudden-change.reason",
+                    ),
                 }
             )
 
@@ -466,6 +526,12 @@ def build_quality_report(
                         "A strong linear trend was present across row order "
                         f"(R²={trend_r_squared:.3f}), and these residuals were unusually large. "
                         "This is a review flag, not proof that the measurements are wrong."
+                    ),
+                    **_finding_message_fields(
+                        summary_code="quality.trend-inconsistent.summary",
+                        summary_params={"count": affected_count},
+                        reason_code="quality.trend-inconsistent.reason",
+                        reason_params={"rSquared": f"{trend_r_squared:.3f}"},
                     ),
                 }
             )

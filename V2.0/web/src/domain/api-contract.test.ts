@@ -70,6 +70,37 @@ describe("LabViz API v1 contract", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts locale-independent finding message codes and parameters", () => {
+    const result = qualityReportSchema.safeParse({
+      apiVersion: "v1",
+      projectId: "project-1",
+      totalRows: 10,
+      validRows: 9,
+      missingValues: 1,
+      duplicateRows: 0,
+      suspiciousPoints: 0,
+      findings: [
+        {
+          id: "missing:response",
+          kind: "missing",
+          severity: "warning",
+          column: "response",
+          rowIds: [4],
+          affectedCount: 1,
+          rowIdsTruncated: false,
+          summary: "1 missing value",
+          reason: "These cells are empty.",
+          summaryCode: "quality.missing.summary",
+          summaryParams: { count: 1 },
+          reasonCode: "quality.missing.reason",
+          reasonParams: {},
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("preserves undefined correlations for constant columns", () => {
     const result = chartAnalysisSchema.safeParse({
       apiVersion: "v1",
