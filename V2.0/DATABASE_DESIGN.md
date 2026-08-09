@@ -1,6 +1,6 @@
 # LabViz V2.0 Database and Storage Design
 
-**Status:** Production data route confirmed; Phase 3 quality and cleaning slice implemented
+**Status:** Production data route and initial AWS runtime confirmed; Phase 5B-3 storage implemented
 **Decision date:** 2026-07-29
 **Phase 1 implementation:** 2026-07-29
 **Phase 2 implementation:** 2026-07-30 — see [`PERSISTENCE_PHASE2.md`](PERSISTENCE_PHASE2.md)
@@ -24,6 +24,10 @@ The website production path uses:
 The existing FastAPI and SQLite service remains a contract and test reference. SQLite plus
 local files or Parquet is the intended direction for the deferred Windows local mode, not the
 production website database.
+
+The Phase 6 runtime decision deploys FastAPI, Next.js, and independent Workers on ECS/Fargate in
+one AWS region, with RDS PostgreSQL 17, S3, SES, Secrets Manager/KMS, and CloudWatch. Application
+contracts remain provider-neutral; see [`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md).
 
 The phase 1 implementation adds the PostgreSQL connection/session boundary, provider-neutral
 object-storage interface, the first nine metadata and lineage tables, and reversible Alembic

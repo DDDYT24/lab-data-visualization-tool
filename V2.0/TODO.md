@@ -22,8 +22,9 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
-integration suite. Production hosting, SMTP, cloud-provider, security, quota, and compliance
-decisions remain intentionally open.
+integration suite. The AWS single-region production runtime is approved in
+[`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md). SMTP delivery, cloud-resource IaC, restore
+evidence, quotas, observability/SLOs, and compliance remain explicit later Phase 6 work.
 
 The P2 dependency and architecture evidence is recorded in
 [`TECH_STACK_AUDIT.md`](TECH_STACK_AUDIT.md). P2 rendering consistency means shared scientific
@@ -64,12 +65,12 @@ Next:
 
 ## Backend Production Hardening
 
-**Last checkpoint:** 2026-08-08
+**Last checkpoint:** 2026-08-09
 
 - [x] Approve the production data route: PostgreSQL metadata and revisions, S3-compatible object storage, and immutable Parquet dataset versions. See [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md).
-- [ ] Approve the remaining production backend runtime, worker, hosting, and provider selections; the current FastAPI service remains a local API-contract reference implementation.
+- [x] Approve AWS ECS/Fargate, RDS PostgreSQL 17, S3, SES, Secrets Manager/KMS, CloudWatch, and one-region deployment as the initial production runtime. See [`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md).
 - [x] Implement versioned `ProjectSpec` v1 in frontend Zod and backend Pydantic, backed by immutable ProjectRevision records and cross-contract fixtures.
-- [ ] Add optional project/experiment description persistence and editing for shared-chart context without introducing speculative Experiment entities.
+- [ ] Add authenticated project-description editing API/UI; persistence, ProjectSpec, and shared-chart reads already support the optional field without speculative Experiment entities.
 - [x] Add the phase 1 SQLAlchemy 2 persistence boundary, PostgreSQL development/test environment, provider-neutral object-storage interface, first nine core models, and reversible Alembic migration.
 - [x] Add Phase 2 Repository/Unit of Work boundaries, selectable SQLite/PostgreSQL project persistence, ProjectSpec v1, Parquet v1, and the approved six-entity project revision slice without runtime dual-write.
 - [x] Add Phase 3 immutable QualityReport/Finding and CleaningDecisionSet/Decision lineage, derived Parquet DatasetVersions, copied chart revisions, API parity, and object compensation.
@@ -82,9 +83,9 @@ Next:
 - [x] Activate pending StoredObject confirmation/finalization in the leased reconciliation worker and retire PostgreSQL lifespan recovery after the Phase 5B-2 cross-restart path passes.
 - [x] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
-- [ ] Add multi-host authentication abuse controls and a leased lifecycle/reconciliation worker before horizontally scaling the API.
+- [ ] Add trusted-proxy client identity and atomic multi-host authentication abuse limits before horizontally scaling the API; leased lifecycle/reconciliation Workers already run independently.
 - [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.
-- [ ] Move publication exports to managed object storage; saved PostgreSQL datasets already use the provider-neutral object-storage boundary.
+- [x] Store PostgreSQL publication exports and datasets through the selected provider-neutral object-storage boundary; keep SQLite BLOBs only in the local/reference adapter.
 - [x] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.
 - [x] Implement immutable share snapshots pinned to ProjectRevision; links do not expire by default, remain revocable, and never change when the working project is edited.
 - [x] Retain saved-project publication exports for the lifetime of the project and remove them only after permanent project purge.
@@ -93,6 +94,14 @@ Next:
 - [ ] Select the initial cloud provider and single deployment/data region before public production launch; keep database, objects, workers, and backups co-located.
 - [ ] Finalize configurable saved-project count and total-storage quota values before public launch; keep the approved 50 MB per-upload limit.
 - [ ] Complete target-market privacy and compliance review before making GDPR, PIPL, HIPAA, GLP, GxP, or similar claims.
+
+### Phase 6 execution
+
+- [x] Phase 6-0: reconcile repository facts, approve the AWS production topology, preserve cloud-provider boundaries, and assign every remaining responsibility to a subphase.
+- [ ] Phase 6A: add fail-closed production settings, dependency readiness, process health checks, non-root API/Worker and standalone Next.js images, and deployment-safe examples.
+- [ ] Phase 6B: add multi-host abuse protection, SES delivery/monitoring, and project-description editing.
+- [ ] Phase 6C: add production IaC, encrypted backup/restore automation and evidence, CloudWatch operations, runbooks, alerts, and SLOs.
+- [ ] Phase 6D: add quotas, privacy/compliance review, load and recovery drills, and production-launch acceptance.
 
 ## Deferred Scientific Domain Model
 
