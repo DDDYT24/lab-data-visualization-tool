@@ -60,6 +60,9 @@ class LocalObjectStorage:
     def inventory_scope(self) -> str:
         return self._inventory_scope
 
+    def ping(self) -> bool:
+        return self.root.is_dir() and os.access(self.root, os.R_OK | os.W_OK)
+
     @staticmethod
     def _normalize_key(key: str) -> PurePosixPath:
         if not key or "\\" in key:

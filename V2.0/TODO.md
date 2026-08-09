@@ -98,7 +98,7 @@ Next:
 ### Phase 6 execution
 
 - [x] Phase 6-0: reconcile repository facts, approve the AWS production topology, preserve cloud-provider boundaries, and assign every remaining responsibility to a subphase.
-- [ ] Phase 6A: add fail-closed production settings, dependency readiness, process health checks, non-root API/Worker and standalone Next.js images, and deployment-safe examples.
+- [x] Phase 6A: add fail-closed production settings, dependency readiness, process health checks, non-root API/Worker and standalone Next.js images, and deployment-safe examples.
 - [ ] Phase 6B: add multi-host abuse protection, SES delivery/monitoring, and project-description editing.
 - [ ] Phase 6C: add production IaC, encrypted backup/restore automation and evidence, CloudWatch operations, runbooks, alerts, and SLOs.
 - [ ] Phase 6D: add quotas, privacy/compliance review, load and recovery drills, and production-launch acceptance.

@@ -74,6 +74,10 @@ class ObjectStorage(Protocol):
         """Return a stable, non-secret identity for the provider staging namespace."""
         ...
 
+    def ping(self) -> bool:
+        """Return whether the configured provider scope is reachable."""
+        ...
+
     def put(
         self,
         key: str,

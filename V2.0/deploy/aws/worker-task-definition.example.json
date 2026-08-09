@@ -1,0 +1,46 @@
+{
+  "family": "labviz-production-worker-${WORKER_TASK}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/labviz-production-execution",
+  "taskRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/labviz-production-worker",
+  "containerDefinitions": [
+    {
+      "name": "worker",
+      "image": "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/labviz-api@${API_IMAGE_DIGEST}",
+      "essential": true,
+      "command": ["python", "-m", "labviz_api.workers.cli", "${WORKER_TASK}"],
+      "environment": [
+        {"name": "LABVIZ_ENVIRONMENT", "value": "production"},
+        {"name": "LABVIZ_RUNTIME_ROLE", "value": "worker"},
+        {"name": "LABVIZ_PERSISTENCE_BACKEND", "value": "postgresql"},
+        {"name": "LABVIZ_OBJECT_STORAGE_BACKEND", "value": "s3"},
+        {"name": "LABVIZ_S3_BUCKET", "value": "${S3_BUCKET}"},
+        {"name": "LABVIZ_S3_PREFIX", "value": "production"},
+        {"name": "LABVIZ_S3_REGION", "value": "${AWS_REGION}"},
+        {"name": "LABVIZ_WORKER_DRY_RUN", "value": "true"},
+        {"name": "LABVIZ_WORKER_DELETE_ENABLED", "value": "false"}
+      ],
+      "secrets": [
+        {"name": "LABVIZ_POSTGRES_URL", "valueFrom": "${POSTGRES_URL_SECRET_ARN}"}
+      ],
+      "healthCheck": {
+        "command": ["CMD", "python", "-m", "labviz_api.runtime_health"],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/labviz/production/worker-${WORKER_TASK}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "worker"
+        }
+      }
+    }
+  ]
+}

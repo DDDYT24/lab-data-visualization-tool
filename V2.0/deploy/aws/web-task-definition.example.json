@@ -1,0 +1,32 @@
+{
+  "family": "labviz-production-web",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/labviz-production-execution",
+  "taskRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/labviz-production-web",
+  "containerDefinitions": [
+    {
+      "name": "web",
+      "image": "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/labviz-web@${WEB_IMAGE_DIGEST}",
+      "essential": true,
+      "portMappings": [{"containerPort": 3000, "protocol": "tcp"}],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/labviz/production/web",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "web"
+        }
+      }
+    }
+  ]
+}

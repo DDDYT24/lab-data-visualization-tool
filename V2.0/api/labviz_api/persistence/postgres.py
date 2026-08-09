@@ -512,6 +512,13 @@ class PostgresProjectStore:
     def ping(self) -> bool:
         return self.database.health().ready
 
+    def readiness_error(self) -> str | None:
+        if not self.ping():
+            return "database-unavailable"
+        if not self.storage.ping():
+            return "object-storage-unavailable"
+        return None
+
     def _discard_staged_best_effort(self, staged: StagedObject) -> None:
         """Do not turn a committed result or the original failure into a cleanup failure."""
         try:

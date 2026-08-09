@@ -97,3 +97,15 @@ jobs:
       - name: Stop API integration services
         if: always()
         run: docker compose down -v --remove-orphans
+
+  v2-containers:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: V2.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production API image
+        run: docker build -f api/Dockerfile -t labviz-api:ci api
+      - name: Build production Web image
+        run: docker build -f web/Dockerfile -t labviz-web:ci .

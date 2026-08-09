@@ -1,6 +1,6 @@
 # Phase 6 Production Runtime and Operations
 
-**Status:** Phase 6-0 approved on 2026-08-09; Phase 6A implementation follows as a separate commit.
+**Status:** Phase 6-0 and Phase 6A implemented and verified on 2026-08-09.
 
 Phase 6 turns the verified PostgreSQL/S3 application into a production-deployable website without
 changing `/api/v1`, scientific contracts, immutable revision semantics, or the SQLite reference
@@ -57,8 +57,9 @@ and [Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguid
 
 Required deliverables:
 
-1. Production settings fail closed unless PostgreSQL, S3, HTTPS public/CORS origins, SMTP,
-   secure cookies, and an explicit share-token key ring are configured.
+1. Production settings fail closed unless PostgreSQL and S3 are configured. The API role also
+   requires HTTPS public/CORS origins, SMTP, secure cookies, and an explicit share-token key ring;
+   the Worker role does not receive unused SMTP or share-token secrets.
 2. API readiness verifies both the selected database and object provider. Liveness does not
    depend on external services.
 3. API and Worker expose bounded process health checks suitable for container orchestration.
@@ -71,6 +72,39 @@ Required deliverables:
 Phase 6A does not provision an AWS account or claim a live production release. Cloud-resource IaC,
 SES integration, multi-host abuse protection, backup automation/restore evidence, quotas,
 compliance review, dashboards, alerts, and SLOs remain explicitly deferred.
+
+### Phase 6A implementation
+
+- `Settings` validates an explicit API/Worker runtime role and the production PostgreSQL/S3/TLS
+  boundary without allowing Local, SQLite, insecure origins, custom S3 endpoints, or default API
+  secrets to become production fallbacks.
+- `/health` remains dependency-free liveness. `/api/v1/ready` checks PostgreSQL and the configured
+  object provider with stable, bounded 503 codes. `python -m labviz_api.runtime_health` provides
+  the equivalent direct dependency probe for Worker containers.
+- The API/Worker image installs the hash-locked Python 3.12 runtime and runs as `labviz`. The Web
+  image builds Next.js standalone on Node 24.17 and runs as `node`. Writable local-reference and
+  Matplotlib paths stay under the non-root API user's home.
+- CI builds both images. ECS API, Worker, and Web templates use immutable image-digest placeholders,
+  Secrets Manager references, CloudWatch logging, and role-specific health checks. Worker tasks do
+  not receive SMTP or share-token secrets.
+
+### Phase 6A verification
+
+The final local matrix used Docker Engine 29.6.2, PostgreSQL 17, and the pinned MinIO image:
+
+- Ruff, format checking, and strict MyPy passed across 65 Python files.
+- 165 API tests passed against real PostgreSQL/MinIO; Alembic remained at `0008` head and
+  `alembic check` reported no schema drift.
+- ESLint, TypeScript, 39 Vitest tests, and the Next.js standalone production build passed.
+- Playwright reported 16 passed and two explicitly opt-in live-file/live-API tests skipped.
+- Both container images built. API and Web started as non-root users and returned healthy; API and
+  Worker probes reached real PostgreSQL/MinIO. A missing Worker database configuration returned a
+  non-zero `postgresql-required` result, and production configuration refused a MinIO endpoint.
+- Repository hooks, deployment JSON parsing/secret-boundary tests, and `git diff --check` passed.
+
+MinIO verifies the shared S3 provider contract but is not presented as an AWS production test. A
+real AWS deployment, SES delivery, managed-resource settings, backups, alerts, and restore drill
+remain later-phase acceptance evidence.
 
 ## Later Phase 6 ownership
 

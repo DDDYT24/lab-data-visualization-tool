@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -18,6 +19,7 @@ from labviz_api.auth import AuthService, MemoryEmailSender
 from labviz_api.config import Settings
 from labviz_api.main import create_app
 from labviz_api.models import ChartSpec
+from labviz_api.persistence.sqlite import SqliteProjectStore
 from labviz_api.processing import (
     ProcessingError,
     analyze_chart,
@@ -325,6 +327,89 @@ def test_production_configuration_rejects_console_codes_and_insecure_cookies(
             auth_mode="console",
             cookie_secure=True,
         )
+
+
+def test_production_configuration_requires_the_approved_runtime(tmp_path: Path) -> None:
+    settings = Settings(
+        database_path=tmp_path / "production.db",
+        allowed_origins=("https://labviz.example",),
+        public_web_url="https://labviz.example",
+        environment="production",
+        auth_mode="smtp",
+        smtp_host="email-smtp.example.com",
+        smtp_username="smtp-user",
+        smtp_password="smtp-password",
+        smtp_from="LabViz <noreply@labviz.example>",
+        cookie_secure=True,
+        postgres_url="postgresql+psycopg://user:password@db.example/labviz?sslmode=require",
+        persistence_backend="postgresql",
+        object_storage_backend="s3",
+        s3_bucket="labviz-production",
+        s3_region="us-east-1",
+        share_token_keys=((1, "a-production-share-token-key-with-32-bytes"),),
+    )
+
+    assert settings.persistence_backend == "postgresql"
+    assert settings.object_storage_backend == "s3"
+
+    worker = replace(
+        settings,
+        runtime_role="worker",
+        auth_mode="console",
+        smtp_host=None,
+        smtp_username=None,
+        smtp_password=None,
+        smtp_from="LabViz <noreply@localhost>",
+        cookie_secure=False,
+        public_web_url="http://localhost:3000",
+        allowed_origins=("http://localhost:3000",),
+        share_token_keys=((1, "labviz-development-share-token-key-v1"),),
+    )
+    assert worker.runtime_role == "worker"
+
+    invalid_settings: tuple[tuple[dict[str, object], str], ...] = (
+        ({"persistence_backend": "sqlite"}, "PostgreSQL persistence"),
+        ({"postgres_url": "postgresql+psycopg://user:password@db.example/labviz"}, "sslmode"),
+        ({"object_storage_backend": "local"}, "S3 object storage"),
+        ({"s3_region": None}, "S3_REGION"),
+        ({"s3_endpoint_url": "http://minio:9000"}, "must not use"),
+        ({"public_web_url": "http://labviz.example"}, "public HTTPS"),
+        ({"allowed_origins": ("https://labviz.example/path",)}, "CORS origins"),
+        ({"smtp_host": None}, "SMTP_HOST"),
+        ({"smtp_starttls": False}, "STARTTLS"),
+        ({"smtp_password": None}, "explicit credentials"),
+        ({"smtp_from": "LabViz <noreply@localhost>"}, "sender address"),
+        ({"max_upload_bytes": 50 * 1024 * 1024 + 1}, "50 MB"),
+        ({"runtime_role": "unknown"}, "RUNTIME_ROLE"),
+    )
+    for changes, message in invalid_settings:
+        with pytest.raises(ValueError, match=message):
+            replace(settings, **cast(Any, changes))
+
+
+def test_liveness_is_dependency_free_and_readiness_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        database_path=tmp_path / "health.db",
+        allowed_origins=("http://localhost:3000",),
+        public_web_url="http://localhost:3000",
+    )
+    repository = ProjectRepository(settings.database_path, settings.project_ttl_seconds)
+    store = SqliteProjectStore(repository)
+    monkeypatch.setattr(store, "readiness_error", lambda: "object-storage-unavailable")
+    app = create_app(settings, repository=repository, project_store=store)
+
+    with TestClient(app) as client:
+        assert client.get("/health").json() == {"apiVersion": "v1", "status": "ok"}
+        unavailable = client.get("/api/v1/ready")
+
+    assert unavailable.status_code == 503
+    assert unavailable.json() == {
+        "code": "object-storage-unavailable",
+        "message": "The object storage provider is not ready.",
+    }
     with pytest.raises(ValueError, match="secure cookies"):
         Settings(
             database_path=tmp_path / "production.db",

@@ -5,8 +5,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 DEFAULT_SHARE_TOKEN_KEYS = ((1, "labviz-development-share-token-key-v1"),)
+MAX_CLOUD_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -27,16 +29,37 @@ def _share_token_keys(value: str | None) -> tuple[tuple[int, str], ...]:
     return tuple(pairs)
 
 
+def _is_https_origin(value: str) -> bool:
+    parsed = urlparse(value)
+    return bool(
+        parsed.scheme == "https"
+        and parsed.netloc
+        and parsed.path in {"", "/"}
+        and not parsed.params
+        and not parsed.query
+        and not parsed.fragment
+        and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
+    )
+
+
+def _postgres_requires_tls(value: str | None) -> bool:
+    if not value:
+        return False
+    parameters = parse_qs(urlparse(value).query)
+    return parameters.get("sslmode", [""])[-1] in {"require", "verify-ca", "verify-full"}
+
+
 @dataclass(frozen=True)
 class Settings:
     database_path: Path
     allowed_origins: tuple[str, ...]
     public_web_url: str
     environment: str = "development"
+    runtime_role: str = "api"
     project_ttl_seconds: int = 7_200
     export_ttl_seconds: int = 7_200
     session_ttl_seconds: int = 604_800
-    max_upload_bytes: int = 50 * 1024 * 1024
+    max_upload_bytes: int = MAX_CLOUD_UPLOAD_BYTES
     auth_mode: str = "console"
     smtp_host: str | None = None
     smtp_port: int = 587
@@ -77,11 +100,21 @@ class Settings:
     def __post_init__(self) -> None:
         if self.environment not in {"development", "test", "production"}:
             raise ValueError("LABVIZ_ENVIRONMENT must be 'development', 'test', or 'production'.")
+        if self.runtime_role not in {"api", "worker"}:
+            raise ValueError("LABVIZ_RUNTIME_ROLE must be 'api' or 'worker'.")
         if self.auth_mode not in {"console", "smtp"}:
             raise ValueError("LABVIZ_AUTH_MODE must be 'console' or 'smtp'.")
-        if self.environment == "production" and self.auth_mode == "console":
+        if (
+            self.environment == "production"
+            and self.runtime_role == "api"
+            and self.auth_mode == "console"
+        ):
             raise ValueError("Production must use SMTP authentication delivery.")
-        if self.environment == "production" and not self.cookie_secure:
+        if (
+            self.environment == "production"
+            and self.runtime_role == "api"
+            and not self.cookie_secure
+        ):
             raise ValueError("Production requires secure cookies.")
         if self.persistence_backend not in {"sqlite", "postgresql"}:
             raise ValueError("LABVIZ_PERSISTENCE_BACKEND must be 'sqlite' or 'postgresql'.")
@@ -91,6 +124,40 @@ class Settings:
             raise ValueError("LABVIZ_OBJECT_STORAGE_BACKEND must be 'local' or 's3'.")
         if self.object_storage_backend == "s3" and not self.s3_bucket:
             raise ValueError("LABVIZ_S3_BUCKET is required for S3 object storage.")
+        if self.environment == "production":
+            if self.persistence_backend != "postgresql":
+                raise ValueError("Production requires PostgreSQL persistence.")
+            if not _postgres_requires_tls(self.postgres_url):
+                raise ValueError("Production PostgreSQL requires sslmode=require or stronger.")
+            if self.object_storage_backend != "s3":
+                raise ValueError("Production requires S3 object storage.")
+            if not self.s3_region:
+                raise ValueError("Production requires an explicit LABVIZ_S3_REGION.")
+            if self.s3_endpoint_url:
+                raise ValueError("Production AWS S3 must not use LABVIZ_S3_ENDPOINT_URL.")
+            if self.runtime_role == "api":
+                if not _is_https_origin(self.public_web_url):
+                    raise ValueError(
+                        "Production LABVIZ_PUBLIC_WEB_URL must be a public HTTPS origin."
+                    )
+                if not self.allowed_origins or any(
+                    not _is_https_origin(origin) for origin in self.allowed_origins
+                ):
+                    raise ValueError(
+                        "Production CORS origins must be non-empty public HTTPS origins."
+                    )
+                if not self.smtp_host:
+                    raise ValueError("Production SMTP requires LABVIZ_SMTP_HOST.")
+                if not self.smtp_starttls:
+                    raise ValueError("Production SMTP requires STARTTLS.")
+                if not self.smtp_username or not self.smtp_password:
+                    raise ValueError("Production SMTP requires explicit credentials.")
+                if "@" not in self.smtp_from or "localhost" in self.smtp_from.lower():
+                    raise ValueError("Production requires a non-local SMTP sender address.")
+            if self.max_upload_bytes > MAX_CLOUD_UPLOAD_BYTES:
+                raise ValueError("Production uploads cannot exceed the approved 50 MB limit.")
+        if self.max_upload_bytes < 1:
+            raise ValueError("Upload size limit must be positive.")
         if self.object_storage_cursor_ttl_seconds < 1:
             raise ValueError("Object storage cursor TTL must be positive.")
         if self.s3_multipart_part_size_bytes < 5 * 1024 * 1024:
@@ -108,7 +175,11 @@ class Settings:
             raise ValueError("Share token key versions must be unique positive integers.")
         if any(len(secret.encode("utf-8")) < 32 for _version, secret in self.share_token_keys):
             raise ValueError("Share token keys must contain at least 32 UTF-8 bytes.")
-        if self.environment == "production" and self.share_token_keys == DEFAULT_SHARE_TOKEN_KEYS:
+        if (
+            self.environment == "production"
+            and self.runtime_role == "api"
+            and self.share_token_keys == DEFAULT_SHARE_TOKEN_KEYS
+        ):
             raise ValueError("Production requires an explicit LABVIZ_SHARE_TOKEN_KEYS key ring.")
         if self.worker_batch_size < 1 or self.worker_poll_seconds < 1:
             raise ValueError("Worker batch and poll settings must be positive.")
@@ -152,6 +223,7 @@ class Settings:
                 "/"
             ),
             environment=os.environ.get("LABVIZ_ENVIRONMENT", "development").strip().lower(),
+            runtime_role=os.environ.get("LABVIZ_RUNTIME_ROLE", "api").strip().lower(),
             project_ttl_seconds=int(os.environ.get("LABVIZ_PROJECT_TTL_SECONDS", "7200")),
             export_ttl_seconds=int(os.environ.get("LABVIZ_EXPORT_TTL_SECONDS", "7200")),
             session_ttl_seconds=int(os.environ.get("LABVIZ_SESSION_TTL_SECONDS", "604800")),

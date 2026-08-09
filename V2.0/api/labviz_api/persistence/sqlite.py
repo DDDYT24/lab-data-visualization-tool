@@ -41,6 +41,9 @@ class SqliteProjectStore:
     def ping(self) -> bool:
         return self.repository.ping()
 
+    def readiness_error(self) -> str | None:
+        return None if self.ping() else "database-unavailable"
+
     def cleanup_expired(self) -> None:
         self.repository.cleanup_expired()
 

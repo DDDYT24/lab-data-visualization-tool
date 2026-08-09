@@ -1,0 +1,56 @@
+{
+  "family": "labviz-production-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/labviz-production-execution",
+  "taskRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/labviz-production-api",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/labviz-api@${API_IMAGE_DIGEST}",
+      "essential": true,
+      "portMappings": [{"containerPort": 8000, "protocol": "tcp"}],
+      "environment": [
+        {"name": "LABVIZ_ENVIRONMENT", "value": "production"},
+        {"name": "LABVIZ_RUNTIME_ROLE", "value": "api"},
+        {"name": "LABVIZ_ALLOWED_ORIGINS", "value": "https://${PUBLIC_HOST}"},
+        {"name": "LABVIZ_PUBLIC_WEB_URL", "value": "https://${PUBLIC_HOST}"},
+        {"name": "LABVIZ_AUTH_MODE", "value": "smtp"},
+        {"name": "LABVIZ_SMTP_PORT", "value": "587"},
+        {"name": "LABVIZ_SMTP_STARTTLS", "value": "true"},
+        {"name": "LABVIZ_SMTP_FROM", "value": "LabViz <noreply@${PUBLIC_HOST}>"},
+        {"name": "LABVIZ_COOKIE_SECURE", "value": "true"},
+        {"name": "LABVIZ_PERSISTENCE_BACKEND", "value": "postgresql"},
+        {"name": "LABVIZ_OBJECT_STORAGE_BACKEND", "value": "s3"},
+        {"name": "LABVIZ_S3_BUCKET", "value": "${S3_BUCKET}"},
+        {"name": "LABVIZ_S3_PREFIX", "value": "production"},
+        {"name": "LABVIZ_S3_REGION", "value": "${AWS_REGION}"},
+        {"name": "LABVIZ_SHARE_TOKEN_KEY_VERSION", "value": "1"}
+      ],
+      "secrets": [
+        {"name": "LABVIZ_POSTGRES_URL", "valueFrom": "${POSTGRES_URL_SECRET_ARN}"},
+        {"name": "LABVIZ_SHARE_TOKEN_KEYS", "valueFrom": "${SHARE_KEYS_SECRET_ARN}"},
+        {"name": "LABVIZ_SMTP_HOST", "valueFrom": "${SMTP_HOST_SECRET_ARN}"},
+        {"name": "LABVIZ_SMTP_USERNAME", "valueFrom": "${SMTP_USERNAME_SECRET_ARN}"},
+        {"name": "LABVIZ_SMTP_PASSWORD", "valueFrom": "${SMTP_PASSWORD_SECRET_ARN}"}
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=3).read()\""],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/labviz/production/api",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}
