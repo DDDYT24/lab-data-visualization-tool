@@ -374,9 +374,6 @@ class S3ObjectStorage:
         )
         items: list[ObjectInfo] = []
         for item in response.get("Contents", []):
-            modified = item.get("LastModified")
-            if isinstance(modified, datetime) and modified.astimezone(UTC) > snapshot_at:
-                continue
             logical_key = self._logical_key(str(item["Key"]))
             if not logical_key.endswith(".part"):
                 continue
@@ -392,7 +389,11 @@ class S3ObjectStorage:
                 ) from exc
             if created is not None and created.tzinfo is None:
                 raise ObjectIntegrityError("S3 object creation metadata lacks a timezone.")
-            if created is not None and created > snapshot_at:
+            # S3/MinIO timestamps come from the provider clock, which may be slightly ahead of
+            # the API host. Prefer the application-authored creation timestamp and use the
+            # provider timestamp only for legacy objects that predate that metadata.
+            effective_created_at = created or info.last_modified
+            if effective_created_at is not None and effective_created_at > snapshot_at:
                 continue
             items.append(info)
         has_more = bool(response.get("IsTruncated"))
