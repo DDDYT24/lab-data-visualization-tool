@@ -20,6 +20,12 @@ from matplotlib.figure import Figure
 from scipy.stats import t as student_t
 
 from .models import ChartSpec, JsonScalar
+from .render_contract import (
+    CONFIDENCE_BAND_OPACITY,
+    GRID_COLOR,
+    chart_series_color,
+    matplotlib_line_style,
+)
 
 matplotlib.use("Agg")
 
@@ -1133,31 +1139,15 @@ def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
         )
         for index in range(chart.panel_count)
     ]
-    grayscale_colors = [f"#{value:02X}{value:02X}{value:02X}" for value in (35, 80, 125, 170)]
-    group_colors = [
-        "#2563EB",
-        "#0F766E",
-        "#D97706",
-        "#7C3AED",
-        "#DC2626",
-        "#0891B2",
-        "#4D7C0F",
-        "#C2410C",
-        "#4338CA",
-        "#BE185D",
-        "#0369A1",
-        "#3F6212",
-    ]
     colors = [
-        grayscale_colors[index % len(grayscale_colors)] if export.grayscale_preview else item.color
+        chart_series_color(
+            configured_color=item.color,
+            grayscale=export.grayscale_preview,
+            grouped=False,
+            index=index,
+        )
         for index, item in enumerate(chart.series)
     ]
-    line_styles = {
-        "solid": "-",
-        "dashed": "--",
-        "dotted": ":",
-        "dashdot": "-.",
-    }
     x_field = chart.x_axis.field
     derived = analyze_chart(frame, chart)
     analyses = derived["series"]
@@ -1183,8 +1173,12 @@ def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
         if chart.type in {"line", "scatter", "bar"}:
             if x_field not in frame.columns:
                 raise ProcessingError(f"Chart field is missing: {x_field}", "invalid-chart-fields")
-            panel_analyses = [analysis for analysis in analyses if analysis["panel"] == panel_index]
-            for order, analysis in enumerate(panel_analyses):
+            panel_analyses = [
+                (analysis_index, analysis)
+                for analysis_index, analysis in enumerate(analyses)
+                if analysis["panel"] == panel_index
+            ]
+            for order, (analysis_index, analysis) in enumerate(panel_analyses):
                 item = next(
                     series for _, series in panel_series if series.field == analysis["field"]
                 )
@@ -1196,15 +1190,14 @@ def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
                     if secondary_axis is not None and item.y_axis == "secondary"
                     else axis
                 )
-                color = (
-                    grayscale_colors[order % len(grayscale_colors)]
-                    if export.grayscale_preview
-                    else group_colors[order % len(group_colors)]
-                    if chart.group_field
-                    else item.color
+                color = chart_series_color(
+                    configured_color=item.color,
+                    grayscale=export.grayscale_preview,
+                    grouped=bool(chart.group_field),
+                    index=analysis_index,
                 )
                 label = analysis["label"]
-                style = line_styles[item.line_style]
+                style = matplotlib_line_style(item.line_style)
                 x_values = [point["x"] for point in points]
                 y_values = [point["y"] for point in points]
                 if chart.type == "line":
@@ -1278,7 +1271,7 @@ def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
                                 [point["lower"] for point in band],
                                 [point["upper"] for point in band],
                                 color=color,
-                                alpha=0.15,
+                                alpha=CONFIDENCE_BAND_OPACITY,
                             )
             axis.set_xlabel(_axis_label(chart.x_axis.title, chart.x_axis.unit))
             axis.set_ylabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
@@ -1385,7 +1378,7 @@ def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
         if chart.type not in {"box", "heatmap", "surface3d"}:
             axis.grid(
                 export.grid_visible,
-                color="#D8DEE8",
+                color=GRID_COLOR,
                 linewidth=0.7,
                 alpha=0.8,
             )

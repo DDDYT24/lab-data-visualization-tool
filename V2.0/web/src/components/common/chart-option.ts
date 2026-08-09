@@ -5,33 +5,18 @@ import type {
   DataPreview,
   QualityFinding,
 } from "@/domain/api-contract";
+import {
+  chartLineType,
+  chartSeriesColor,
+  confidenceBandOpacity,
+  gridColor,
+} from "@/domain/chart-render-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
 type SeriesOptionRecord = Record<string, unknown>;
 
-const grayscalePalette = ["#20252D", "#5B616B", "#858B94", "#B0B4BA"];
-const chartPalette = [
-  "#2563EB",
-  "#0F766E",
-  "#D97706",
-  "#7C3AED",
-  "#DC2626",
-  "#0891B2",
-  "#4D7C0F",
-  "#C2410C",
-  "#4338CA",
-  "#BE185D",
-  "#0369A1",
-  "#3F6212",
-];
-
 function axisName(title: string, unit: string) {
   return unit ? `${title} (${unit})` : title;
-}
-
-function lineType(style: ChartSpec["series"][number]["lineStyle"]) {
-  if (style === "dashdot") return [8, 4, 2, 4];
-  return style;
 }
 
 function visibleRows(
@@ -125,9 +110,12 @@ function analysisSeries(
   for (const [resultIndex, result] of analysis.series.entries()) {
     const sourceSeries = spec.series.find((item) => item.field === result.field);
     if (!sourceSeries) continue;
-    const seriesColor = spec.groupField
-      ? chartPalette[resultIndex % chartPalette.length]
-      : sourceSeries.color;
+    const seriesColor = chartSeriesColor({
+      configuredColor: sourceSeries.color,
+      grayscale: spec.export.grayscalePreview,
+      grouped: Boolean(spec.groupField),
+      index: resultIndex,
+    });
     const panelIndex = Math.min(sourceSeries.panel, spec.panelCount) - 1;
     const yAxisIndex =
       sourceSeries.yAxis === "secondary"
@@ -162,7 +150,7 @@ function analysisSeries(
           yAxisIndex,
         });
         derived.push({
-          areaStyle: { color: seriesColor, opacity: 0.16 },
+          areaStyle: { color: seriesColor, opacity: confidenceBandOpacity },
           data: bounded.map((point) => [
             point.x,
             (point.upper ?? 0) - (point.lower ?? 0),
@@ -236,9 +224,13 @@ export function buildChartOption({
   spec: ChartSpec;
 }): EChartsOption {
   const rows = visibleRows(preview, findings, excludedFindingIds);
-  const grayscale = spec.export.grayscalePreview;
   const colors = spec.series.map((series, index) =>
-    grayscale ? grayscalePalette[index % grayscalePalette.length] : series.color,
+    chartSeriesColor({
+      configuredColor: series.color,
+      grayscale: spec.export.grayscalePreview,
+      grouped: false,
+      index,
+    }),
   );
   const common = {
     animation: false,
@@ -380,7 +372,7 @@ export function buildChartOption({
     nameGap: 30,
     nameLocation: "middle" as const,
     splitLine: {
-      lineStyle: { color: "#E8ECF2" },
+      lineStyle: { color: gridColor },
       show: spec.export.gridVisible,
     },
     type: spec.type === "bar" ? ("category" as const) : ("value" as const),
@@ -394,7 +386,7 @@ export function buildChartOption({
       nameGap: 42,
       nameLocation: "middle",
       splitLine: {
-        lineStyle: { color: "#E8ECF2" },
+        lineStyle: { color: gridColor },
         show: spec.export.gridVisible,
       },
       type: "value",
@@ -461,9 +453,12 @@ export function buildChartOption({
               (typeof point[0] === "number" || typeof point[0] === "string") &&
               typeof point[1] === "number",
           );
-    const seriesColor = spec.groupField
-      ? chartPalette[index % chartPalette.length]
-      : colors[Math.max(spec.series.indexOf(series), 0)];
+    const seriesColor = chartSeriesColor({
+      configuredColor: series.color,
+      grayscale: spec.export.grayscalePreview,
+      grouped: Boolean(spec.groupField),
+      index: spec.groupField ? index : Math.max(spec.series.indexOf(series), 0),
+    });
     const barValues = new Map(points.map((point) => [String(point[0]), point[1]]));
     return {
       data:
@@ -474,7 +469,7 @@ export function buildChartOption({
       itemStyle: { color: seriesColor },
       lineStyle: {
         color: seriesColor,
-        type: lineType(series.lineStyle),
+        type: chartLineType(series.lineStyle),
         width: spec.export.lineWidth,
       },
       name: result?.label ?? series.label,

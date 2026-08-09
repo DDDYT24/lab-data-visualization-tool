@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "chart-render-v1",
+  "grayscalePalette": [
+    "#20252D",
+    "#5B616B",
+    "#858B94",
+    "#B0B4BA"
+  ],
+  "groupPalette": [
+    "#2563EB",
+    "#0F766E",
+    "#D97706",
+    "#7C3AED",
+    "#DC2626",
+    "#0891B2",
+    "#4D7C0F",
+    "#C2410C",
+    "#4338CA",
+    "#BE185D",
+    "#0369A1",
+    "#3F6212"
+  ],
+  "gridColor": "#D8DEE8",
+  "confidenceBandOpacity": 0.15,
+  "lineStyles": {
+    "solid": {
+      "echarts": "solid",
+      "matplotlib": "-"
+    },
+    "dashed": {
+      "echarts": "dashed",
+      "matplotlib": "--"
+    },
+    "dotted": {
+      "echarts": "dotted",
+      "matplotlib": ":"
+    },
+    "dashdot": {
+      "echarts": [8, 4, 2, 4],
+      "matplotlib": "-."
+    }
+  }
+}
