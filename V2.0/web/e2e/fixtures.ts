@@ -26,6 +26,13 @@ export const test = base.extend<RuntimeErrorGuard>({
         expectedConsoleErrors.push(expected);
       });
 
+      // Let client queries and their configured retry settle while request routes and runtime
+      // listeners are still active. Otherwise a teardown-edge request can escape the mock route
+      // and reach the Next.js proxy after the test has already been reported as passed.
+      if (!page.isClosed()) {
+        await page.waitForLoadState("networkidle");
+      }
+
       expect(pageErrors, "Unhandled browser page errors").toEqual([]);
 
       const unexpectedConsoleErrors = [...consoleErrors];
