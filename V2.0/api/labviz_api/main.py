@@ -514,8 +514,15 @@ def create_app(
 
     @app.get(f"{API_PREFIX}/ready", response_model=HealthResponse)
     def readiness(repository: ProjectStore = Depends(get_project_store)) -> HealthResponse:
-        if not repository.ping():
+        readiness_error = repository.readiness_error()
+        if readiness_error == "database-unavailable":
             raise ApiProblem(503, "database-unavailable", "The database is not ready.")
+        if readiness_error == "object-storage-unavailable":
+            raise ApiProblem(
+                503,
+                "object-storage-unavailable",
+                "The object storage provider is not ready.",
+            )
         return HealthResponse()
 
     @app.post(

@@ -13,6 +13,20 @@ staging cleanup. The SQLite reference repository remains unchanged.
 Phase 5B-3 adds the shared Local/S3 provider contract, real MinIO verification, bounded multipart
 uploads, provider metadata, and resumable provider-scoped staging inventory.
 
+## Production runtime
+
+Phase 6A uses the same API image for FastAPI, one-shot Alembic migrations, and independently
+leased Workers. Production configuration fails closed unless PostgreSQL with TLS, AWS S3, public
+HTTPS origins, SMTP with STARTTLS, secure cookies, and an explicit share-token key ring are set.
+`/health` is process liveness; `/api/v1/ready` verifies the selected database and object provider.
+Worker containers use `python -m labviz_api.runtime_health` for the same dependency boundary.
+Set `LABVIZ_RUNTIME_ROLE=api` or `worker`; the Worker role deliberately does not require or receive
+the API-only SMTP and share-token secrets.
+
+Build and run examples plus secret-safe ECS templates live in
+[`../deploy/aws`](../deploy/aws/README.md). They are deployment contracts, not proof that an AWS
+account, backups, monitoring, SMTP delivery, or compliance controls have been provisioned.
+
 ## Dependency locking and verification
 
 `requirements.txt` and `requirements-dev.txt` remain the version-range inputs. The committed

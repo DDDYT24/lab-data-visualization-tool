@@ -103,6 +103,13 @@ class S3ObjectStorage:
     def inventory_scope(self) -> str:
         return self._inventory_scope
 
+    def ping(self) -> bool:
+        try:
+            self._call("head_bucket", Bucket=self.bucket)
+        except OSError:
+            return False
+        return True
+
     @staticmethod
     def _normalize_prefix(prefix: str) -> str:
         value = prefix.strip("/")

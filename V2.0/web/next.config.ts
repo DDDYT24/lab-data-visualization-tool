@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: "standalone",
   outputFileTracingRoot: path.resolve(__dirname, ".."),
   turbopack: {
     root: path.resolve(__dirname, ".."),

@@ -108,6 +108,7 @@ def storage_provider(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator
 def test_provider_contract_stage_confirm_open_metadata_and_idempotent_cleanup(
     storage_provider: ObjectStorage,
 ) -> None:
+    assert storage_provider.ping()
     payload = b"provider-contract-bytes"
     sha256 = hashlib.sha256(payload).hexdigest()
     staged = storage_provider.stage(

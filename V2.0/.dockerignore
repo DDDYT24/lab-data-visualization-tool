@@ -1,0 +1,10 @@
+.git
+**/.env
+**/.env.*
+**/.next
+**/node_modules
+**/playwright-report
+**/test-results
+**/*.tsbuildinfo
+api
+*.md

@@ -1,0 +1,13 @@
+.env
+.env.*
+.git
+.labviz
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+*.pyc
+tests
+compose.yaml
+requirements-dev*.txt
