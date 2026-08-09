@@ -2,6 +2,7 @@
 
 from .contracts import ProjectStore
 from .exceptions import (
+    IdempotencyConflict,
     PersistenceConflict,
     PersistenceError,
     PersistenceNotFound,
@@ -10,6 +11,7 @@ from .exceptions import (
 from .factory import build_project_store
 
 __all__ = [
+    "IdempotencyConflict",
     "PersistenceConflict",
     "PersistenceError",
     "PersistenceNotFound",

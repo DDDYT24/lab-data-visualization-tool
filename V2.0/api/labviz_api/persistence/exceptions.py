@@ -13,6 +13,12 @@ class PersistenceConflict(PersistenceError):
     code = "persistence-conflict"
 
 
+class IdempotencyConflict(PersistenceConflict):
+    """The same idempotency key was replayed with a different request."""
+
+    code = "idempotency-key-reused"
+
+
 class PersistenceUnavailable(PersistenceError):
     code = "persistence-unavailable"
 

@@ -260,6 +260,37 @@ def test_real_csv_and_xlsx_uploads_and_stable_errors(
     assert denied.json()["code"] == "authentication-required"
 
 
+def test_upload_idempotency_replays_same_project_and_rejects_changed_payload(
+    api_client: tuple[TestClient, MemoryEmailSender],
+) -> None:
+    client, _sender = api_client
+    upload = b"time,response\n0,1\n1,2\n"
+    first = client.post(
+        "/api/v1/projects",
+        files={"file": ("idempotent.csv", upload, "text/csv")},
+        headers={"Idempotency-Key": "upload-replay-1"},
+    )
+    assert first.status_code == 202
+    first_session = first.json()
+
+    replay = client.post(
+        "/api/v1/projects",
+        files={"file": ("idempotent.csv", upload, "text/csv")},
+        headers={"Idempotency-Key": "upload-replay-1"},
+    )
+    assert replay.status_code == 202
+    assert replay.json()["projectId"] == first_session["projectId"]
+    assert replay.json()["job"]["id"] == first_session["job"]["id"]
+
+    changed = client.post(
+        "/api/v1/projects",
+        files={"file": ("idempotent.csv", b"time,response\n0,99\n1,2\n", "text/csv")},
+        headers={"Idempotency-Key": "upload-replay-1"},
+    )
+    assert changed.status_code == 409
+    assert changed.json()["code"] == "idempotency-key-reused"
+
+
 def test_temporary_projects_are_scoped_to_the_creating_browser(
     api_client: tuple[TestClient, MemoryEmailSender],
 ) -> None:

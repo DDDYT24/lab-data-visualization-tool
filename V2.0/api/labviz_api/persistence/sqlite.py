@@ -9,7 +9,12 @@ from uuid import uuid4
 
 import pandas as pd
 
-from labviz_api.persistence.exceptions import PersistenceNotFound
+from labviz_api.persistence.exceptions import (
+    IdempotencyConflict,
+    PersistenceConflict,
+    PersistenceNotFound,
+)
+from labviz_api.persistence_types import ProjectCreation
 from labviz_api.processing import (
     apply_chart_decisions,
     deserialize_dataframe,
@@ -51,15 +56,24 @@ class SqliteProjectStore:
         source: dict[str, Any],
         source_sha256: str,
         guest_token_digest: str,
-    ) -> None:
-        del source_sha256
-        self.repository.create_project(
-            project_id=project_id,
-            job_id=job_id,
-            title=title,
-            source=source,
-            guest_token_digest=guest_token_digest,
-        )
+        idempotency_key: str | None = None,
+        request_sha256: str | None = None,
+    ) -> ProjectCreation:
+        try:
+            return self.repository.create_project(
+                project_id=project_id,
+                job_id=job_id,
+                title=title,
+                source=source,
+                guest_token_digest=guest_token_digest,
+                idempotency_key=idempotency_key,
+                request_sha256=request_sha256,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message.startswith("idempotency-key-reused:"):
+                raise IdempotencyConflict(message.split(":", 1)[1].strip()) from exc
+            raise PersistenceConflict(message) from exc
 
     def update_job(
         self,

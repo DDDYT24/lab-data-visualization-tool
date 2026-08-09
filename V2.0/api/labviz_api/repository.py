@@ -9,6 +9,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+from labviz_api.persistence_types import ProjectCreation
+
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
@@ -124,6 +126,17 @@ class ProjectRepository:
                     requested_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS upload_idempotency (
+                    guest_token_digest TEXT NOT NULL,
+                    idempotency_key TEXT NOT NULL,
+                    request_sha256 TEXT NOT NULL,
+                    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                    job_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (guest_token_digest, idempotency_key)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_projects_owner
                 ON projects(owner_user_id, updated_at DESC);
 
@@ -138,6 +151,9 @@ class ProjectRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_auth_requests_email
                 ON auth_requests(email, requested_at);
+
+                CREATE INDEX IF NOT EXISTS idx_upload_idempotency_expires
+                ON upload_idempotency(expires_at);
                 """
             )
             job_columns = {
@@ -171,6 +187,7 @@ class ProjectRepository:
             )
             connection.execute("DELETE FROM auth_challenges WHERE expires_at < ?", (now,))
             connection.execute("DELETE FROM auth_sessions WHERE expires_at < ?", (now,))
+            connection.execute("DELETE FROM upload_idempotency WHERE expires_at <= ?", (now,))
             request_cutoff = iso_at(utc_now() - timedelta(hours=1))
             connection.execute(
                 "DELETE FROM auth_requests WHERE requested_at < ?", (request_cutoff,)
@@ -184,9 +201,62 @@ class ProjectRepository:
         title: str,
         source: dict[str, Any],
         guest_token_digest: str,
-    ) -> None:
+        idempotency_key: str | None = None,
+        request_sha256: str | None = None,
+    ) -> ProjectCreation:
         now = iso_now()
+        project_expires_at = expires_in(self.project_ttl_seconds)
         with self._connect() as connection:
+            if idempotency_key is not None:
+                if not 1 <= len(idempotency_key) <= 255:
+                    raise ValueError("Idempotency-Key must contain 1 to 255 characters.")
+                if request_sha256 is None:
+                    raise ValueError("Idempotency-Key requires a request fingerprint.")
+                existing = connection.execute(
+                    """
+                    SELECT request_sha256, project_id, job_id, expires_at
+                    FROM upload_idempotency
+                    WHERE guest_token_digest = ? AND idempotency_key = ?
+                    """,
+                    (guest_token_digest, idempotency_key),
+                ).fetchone()
+                if existing is not None:
+                    if existing["expires_at"] <= now:
+                        connection.execute(
+                            """
+                            DELETE FROM upload_idempotency
+                            WHERE guest_token_digest = ? AND idempotency_key = ?
+                            """,
+                            (guest_token_digest, idempotency_key),
+                        )
+                    else:
+                        project = connection.execute(
+                            "SELECT id FROM projects WHERE id = ?",
+                            (existing["project_id"],),
+                        ).fetchone()
+                        job = connection.execute(
+                            "SELECT id FROM jobs WHERE id = ? AND project_id = ?",
+                            (existing["job_id"], existing["project_id"]),
+                        ).fetchone()
+                        if project is None or job is None:
+                            connection.execute(
+                                """
+                                DELETE FROM upload_idempotency
+                                WHERE guest_token_digest = ? AND idempotency_key = ?
+                                """,
+                                (guest_token_digest, idempotency_key),
+                            )
+                        else:
+                            if existing["request_sha256"] != request_sha256:
+                                raise ValueError(
+                                    "idempotency-key-reused: Idempotency-Key was already used "
+                                    "with a different upload."
+                                )
+                            return ProjectCreation(
+                                project_id=str(existing["project_id"]),
+                                job_id=str(existing["job_id"]),
+                                replayed=True,
+                            )
             connection.execute(
                 """
                 INSERT INTO projects (
@@ -199,7 +269,7 @@ class ProjectRepository:
                     title,
                     json.dumps(source, ensure_ascii=False),
                     guest_token_digest,
-                    expires_in(self.project_ttl_seconds),
+                    project_expires_at,
                     now,
                 ),
             )
@@ -211,6 +281,26 @@ class ProjectRepository:
                 """,
                 (job_id, project_id, now),
             )
+            if idempotency_key is not None:
+                assert request_sha256 is not None
+                connection.execute(
+                    """
+                    INSERT INTO upload_idempotency (
+                        guest_token_digest, idempotency_key, request_sha256,
+                        project_id, job_id, created_at, expires_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        guest_token_digest,
+                        idempotency_key,
+                        request_sha256,
+                        project_id,
+                        job_id,
+                        now,
+                        project_expires_at,
+                    ),
+                )
+            return ProjectCreation(project_id=project_id, job_id=job_id, replayed=False)
 
     def update_job(
         self,
