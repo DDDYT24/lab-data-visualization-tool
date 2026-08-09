@@ -64,6 +64,24 @@ def _ensure_minio_bucket() -> Any:
     return client
 
 
+class FutureListTimestampClient:
+    """Simulate harmless clock skew in S3 list metadata."""
+
+    def __init__(self, client: Any) -> None:
+        self.client = client
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.client, name)
+
+    def list_objects_v2(self, **parameters: Any) -> Any:
+        response = self.client.list_objects_v2(**parameters)
+        response["Contents"] = [
+            {**item, "LastModified": item["LastModified"] + timedelta(minutes=5)}
+            for item in response.get("Contents", [])
+        ]
+        return response
+
+
 @pytest.fixture(params=("local", "minio"))
 def storage_provider(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[ObjectStorage]:
     if request.param == "local":
@@ -272,6 +290,31 @@ def test_provider_contract_empty_boundary_and_expired_cursor(
         storage_provider.list_staged(page_size=2, cursor=expired)
     for item in staged:
         storage_provider.discard(item)
+
+
+def test_minio_inventory_tolerates_provider_clock_ahead() -> None:
+    client = _ensure_minio_bucket()
+    prefix = f"clock-skew/{uuid4().hex}"
+    storage = S3ObjectStorage(
+        bucket=MINIO_BUCKET,
+        prefix=prefix,
+        endpoint_url=MINIO_ENDPOINT,
+        region="us-east-1",
+        multipart_threshold=FIVE_MIB,
+        multipart_part_size=FIVE_MIB,
+        client=FutureListTimestampClient(client),
+    )
+    staged = [
+        storage.stage(f"datasets/{index}.parquet", io.BytesIO(str(index).encode()))
+        for index in range(2)
+    ]
+    try:
+        page = storage.list_staged(page_size=2)
+        assert {item.key for item in page.items} == {item.staging_key for item in staged}
+        assert page.next_cursor is None and not page.has_more
+    finally:
+        for item in staged:
+            storage.discard(item)
 
 
 def test_provider_contract_inventory_excludes_future_overwrite(
