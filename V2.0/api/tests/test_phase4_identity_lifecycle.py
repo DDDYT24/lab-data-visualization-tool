@@ -4,6 +4,7 @@ import hashlib
 import os
 import sqlite3
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -36,8 +37,13 @@ from labviz_api.db.models import (
 )
 from labviz_api.db.session import Database
 from labviz_api.main import create_app
-from labviz_api.persistence.exceptions import PersistenceConflict, PersistenceNotFound
+from labviz_api.persistence.exceptions import (
+    IdempotencyConflict,
+    PersistenceConflict,
+    PersistenceNotFound,
+)
 from labviz_api.persistence.postgres import PostgresProjectStore
+from labviz_api.persistence_types import ProjectCreation
 from labviz_api.processing import build_preview, build_quality_report, default_chart_spec
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 from labviz_api.storage import LocalObjectStorage
@@ -135,6 +141,117 @@ def _add_user(database: Database, email: str) -> UUID:
     with database.session() as session:
         session.add(User(id=user_id, email=email))
     return user_id
+
+
+def test_postgres_upload_idempotency_replays_identity_and_rejects_request_change(
+    tmp_path: Path,
+    postgres_database: Database,
+) -> None:
+    store = PostgresProjectStore(
+        postgres_database,
+        LocalObjectStorage(tmp_path / "objects"),
+        7_200,
+    )
+    source = {
+        "name": "upload.csv",
+        "size": 24,
+        "mediaType": "text/csv",
+        "sheetName": None,
+        "availableSheets": [],
+        "headerRow": 1,
+    }
+    first = store.create_project(
+        project_id=uuid4().hex,
+        job_id=uuid4().hex,
+        title="upload",
+        source=source,
+        source_sha256="b" * 64,
+        guest_token_digest="c" * 64,
+        idempotency_key="postgres-upload-1",
+        request_sha256="a" * 64,
+    )
+    replay = store.create_project(
+        project_id=uuid4().hex,
+        job_id=uuid4().hex,
+        title="upload-retry",
+        source=source,
+        source_sha256="b" * 64,
+        guest_token_digest="c" * 64,
+        idempotency_key="postgres-upload-1",
+        request_sha256="a" * 64,
+    )
+    assert first.replayed is False
+    assert replay.replayed is True
+    assert replay.project_id == first.project_id
+    assert replay.job_id == first.job_id
+
+    with pytest.raises(IdempotencyConflict, match="different upload"):
+        store.create_project(
+            project_id=uuid4().hex,
+            job_id=uuid4().hex,
+            title="changed-upload",
+            source=source,
+            source_sha256="d" * 64,
+            guest_token_digest="c" * 64,
+            idempotency_key="postgres-upload-1",
+            request_sha256="e" * 64,
+        )
+
+    with postgres_database.session() as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(Project)
+                .where(Project.id == UUID(first.project_id))
+            )
+            == 1
+        )
+        record = session.scalar(
+            select(IdempotencyRecord).where(
+                IdempotencyRecord.operation == "project-upload",
+                IdempotencyRecord.idempotency_key == "postgres-upload-1",
+            )
+        )
+        assert record is not None
+        assert record.resource_id == UUID(first.project_id)
+
+
+def test_postgres_upload_idempotency_serializes_concurrent_first_requests(
+    tmp_path: Path,
+    postgres_database: Database,
+) -> None:
+    store = PostgresProjectStore(
+        postgres_database,
+        LocalObjectStorage(tmp_path / "objects"),
+        7_200,
+    )
+    source = {
+        "name": "concurrent.csv",
+        "size": 24,
+        "mediaType": "text/csv",
+        "sheetName": None,
+        "availableSheets": [],
+        "headerRow": 1,
+    }
+
+    def create_attempt(index: int) -> ProjectCreation:
+        return store.create_project(
+            project_id=uuid4().hex,
+            job_id=uuid4().hex,
+            title=f"concurrent-{index}",
+            source=source,
+            source_sha256="f" * 64,
+            guest_token_digest="d" * 64,
+            idempotency_key="postgres-concurrent-upload",
+            request_sha256="e" * 64,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(create_attempt, range(2)))
+
+    assert sorted(result.replayed for result in results) == [False, True]
+    assert len({result.project_id for result in results}) == 1
+    assert len({result.job_id for result in results}) == 1
 
 
 def _project_object_ids(database: Database, project_id: str) -> set[UUID]:

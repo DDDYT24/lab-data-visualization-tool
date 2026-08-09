@@ -55,6 +55,7 @@ from labviz_api.parquet import (
     storage_provenance_metadata,
     write_parquet,
 )
+from labviz_api.persistence_types import ProjectCreation
 from labviz_api.processing import apply_chart_decisions, build_preview
 from labviz_api.project_spec import (
     ProjectCleaningSpec,
@@ -73,6 +74,7 @@ from labviz_api.workers.references import (
 
 from .contracts import ProjectRepository
 from .exceptions import (
+    IdempotencyConflict,
     ObjectConfirmationPending,
     PersistenceConflict,
     PersistenceError,
@@ -159,6 +161,27 @@ def _export_request_sha256(
             "exportContractVersion": EXPORT_CONTRACT_VERSION,
         }
     )
+
+
+def _validate_upload_idempotency(
+    idempotency_key: str | None,
+    request_sha256: str | None,
+) -> None:
+    if idempotency_key is None:
+        return
+    if not 1 <= len(idempotency_key) <= 255:
+        raise PersistenceConflict("Idempotency-Key must contain 1 to 255 characters.")
+    if request_sha256 is None or len(request_sha256) != 64:
+        raise PersistenceConflict("Idempotency-Key requires a request fingerprint.")
+    if any(character not in "0123456789abcdef" for character in request_sha256):
+        raise PersistenceConflict("Idempotency-Key requires a lowercase request fingerprint.")
+
+
+def _lock_upload_identity(session: Session, guest_token_digest: str) -> None:
+    """Serialize anonymous upload creation, including first-session insertion."""
+
+    identity = f"labviz:project-upload:{len(guest_token_digest)}:{guest_token_digest}"
+    session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(identity, 0))))
 
 
 def _validate_export_payload(payload: bytes, format_name: str) -> dict[str, Any]:
@@ -850,11 +873,15 @@ class PostgresProjectStore:
         source: dict[str, Any],
         source_sha256: str,
         guest_token_digest: str,
-    ) -> None:
+        idempotency_key: str | None = None,
+        request_sha256: str | None = None,
+    ) -> ProjectCreation:
+        _validate_upload_idempotency(idempotency_key, request_sha256)
         now = _now()
         try:
             with self._uow() as uow:
                 assert uow.session is not None
+                _lock_upload_identity(uow.session, guest_token_digest)
                 guest_session = uow.session.scalar(
                     select(GuestSession)
                     .where(GuestSession.token_digest == guest_token_digest)
@@ -875,6 +902,37 @@ class PostgresProjectStore:
                     guest_session.revoked_at = None
                     guest_session.expires_at = guest_expiry
                     guest_session.last_seen_at = now
+                uow.session.add(guest_session)
+                uow.session.flush()
+                if idempotency_key is not None:
+                    assert request_sha256 is not None
+                    record = self._find_upload_idempotency_record(
+                        uow.session,
+                        guest_session_id=guest_session.id,
+                        idempotency_key=idempotency_key,
+                        now=now,
+                    )
+                    if record is not None:
+                        if record.request_sha256 != request_sha256:
+                            raise IdempotencyConflict(
+                                "Idempotency-Key was already used with a different upload."
+                            )
+                        existing_project = uow.session.get(Project, record.resource_id)
+                        existing_job = uow.projects.get_run_for_project(record.resource_id.hex)
+                        if (
+                            existing_project is not None
+                            and existing_project.expires_at is not None
+                            and existing_project.expires_at > now
+                            and existing_job is not None
+                        ):
+                            uow.commit()
+                            return ProjectCreation(
+                                project_id=existing_project.id.hex,
+                                job_id=existing_job.id.hex,
+                                replayed=True,
+                            )
+                        uow.session.delete(record)
+                        uow.session.flush()
                 project = Project(
                     id=_uuid(project_id),
                     guest_session=guest_session,
@@ -917,7 +975,31 @@ class PostgresProjectStore:
                     created_at=now,
                 )
                 uow.session.add_all([project, source_file, run])
+                uow.session.flush()
+                if idempotency_key is not None:
+                    assert request_sha256 is not None
+                    uow.session.add(
+                        IdempotencyRecord(
+                            id=uuid4(),
+                            guest_session_id=guest_session.id,
+                            operation="project-upload",
+                            idempotency_key=idempotency_key,
+                            request_sha256=request_sha256,
+                            resource_id=project.id,
+                            response_document={
+                                "projectId": project.id.hex,
+                                "jobId": run.id.hex,
+                            },
+                            created_at=now,
+                            expires_at=project.expires_at,
+                        )
+                    )
                 uow.commit()
+                return ProjectCreation(
+                    project_id=project.id.hex,
+                    job_id=run.id.hex,
+                    replayed=False,
+                )
         except Exception as exc:
             raise _translate_database_error(exc) from exc
 
@@ -2343,6 +2425,29 @@ class PostgresProjectStore:
             "expires_at": iso_at(job.expires_at) if job.expires_at else None,
             "message": job.message,
         }
+
+    @staticmethod
+    def _find_upload_idempotency_record(
+        session: Session,
+        *,
+        guest_session_id: UUID,
+        idempotency_key: str,
+        now: datetime,
+    ) -> IdempotencyRecord | None:
+        record = session.scalar(
+            select(IdempotencyRecord)
+            .where(
+                IdempotencyRecord.guest_session_id == guest_session_id,
+                IdempotencyRecord.operation == "project-upload",
+                IdempotencyRecord.idempotency_key == idempotency_key,
+            )
+            .with_for_update()
+        )
+        if record is not None and record.expires_at is not None and record.expires_at <= now:
+            session.delete(record)
+            session.flush()
+            return None
+        return record
 
     @staticmethod
     def _find_idempotency_record(

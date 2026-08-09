@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import secrets
 import time
@@ -108,6 +109,31 @@ def _guest_token(existing: str | None) -> str:
     if existing and len(existing) >= 40:
         return existing
     return secrets.token_urlsafe(32)
+
+
+def _upload_request_sha256(
+    *,
+    payload: bytes,
+    filename: str,
+    media_type: str,
+    sheet_name: str | None,
+    header_row: int,
+) -> str:
+    document = {
+        "apiContractVersion": "api-v1",
+        "filename": filename,
+        "mediaType": media_type,
+        "sheetName": sheet_name,
+        "headerRow": header_row,
+        "payloadSha256": hashlib.sha256(payload).hexdigest(),
+    }
+    canonical = json.dumps(
+        document,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _set_guest_cookie(response: Response, token: str, settings: Settings) -> None:
@@ -503,6 +529,7 @@ def create_app(
         file: UploadFile = File(...),
         sheet_name: str | None = Form(default=None, alias="sheetName"),
         header_row: int = Form(default=1, alias="headerRow", ge=1, le=1_000),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
         guest_cookie: str | None = Cookie(default=None, alias=GUEST_COOKIE),
         repository: ProjectStore = Depends(get_project_store),
         current_settings: Settings = Depends(get_settings),
@@ -518,30 +545,44 @@ def create_app(
         project_id = uuid4().hex
         job_id = uuid4().hex
         media_type = file.content_type or "application/octet-stream"
+        request_sha256 = (
+            _upload_request_sha256(
+                payload=payload,
+                filename=filename,
+                media_type=media_type,
+                sheet_name=sheet_name,
+                header_row=header_row,
+            )
+            if idempotency_key is not None
+            else None
+        )
         guest_token = _guest_token(guest_cookie)
         _set_guest_cookie(response, guest_token, current_settings)
         source = SourceFile(name=filename, size=len(payload), media_type=media_type)
-        repository.create_project(
+        creation = repository.create_project(
             project_id=project_id,
             job_id=job_id,
             title=Path(filename).stem or "Untitled project",
             source=_model_json(source),
             source_sha256=hashlib.sha256(payload).hexdigest(),
             guest_token_digest=_guest_digest(guest_token),
+            idempotency_key=idempotency_key,
+            request_sha256=request_sha256,
         )
-        background_tasks.add_task(
-            _process_project,
-            repository,
-            current_settings,
-            project_id,
-            job_id,
-            payload,
-            filename,
-            media_type,
-            sheet_name,
-            header_row,
-        )
-        project = _require_project(repository, project_id)
+        if not creation.replayed:
+            background_tasks.add_task(
+                _process_project,
+                repository,
+                current_settings,
+                creation.project_id,
+                creation.job_id,
+                payload,
+                filename,
+                media_type,
+                sheet_name,
+                header_row,
+            )
+        project = _require_project(repository, creation.project_id)
         return _project_session(repository, project)
 
     @app.post(

@@ -17,6 +17,7 @@ from labviz_api.db.models import (
     SourceFile,
     StoredObject,
 )
+from labviz_api.persistence_types import ProjectCreation
 
 
 class ProjectReader(Protocol):
@@ -43,7 +44,9 @@ class ProjectStore(ProjectReader, Protocol):
         source: dict[str, Any],
         source_sha256: str,
         guest_token_digest: str,
-    ) -> None: ...
+        idempotency_key: str | None = None,
+        request_sha256: str | None = None,
+    ) -> ProjectCreation: ...
 
     def update_job(
         self,
