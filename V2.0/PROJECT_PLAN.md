@@ -1,6 +1,6 @@
 # LabViz V2.0 Project Plan
 
-**Status:** Frontend V2.0 alpha implemented; production backend architecture not yet approved
+**Status:** Frontend V2.0 alpha implemented; production data and AWS runtime architecture approved
 **Product source of truth:** [`prd.md`](prd.md)
 **Prototype source of truth:** [LabViz V2.0 — Product Prototype](https://www.figma.com/design/xKdEwynLhAj2dyiqeEw58n)
 
@@ -54,7 +54,12 @@ Folders are created only when they contain real code. A future desktop applicati
 
 ### Processing
 
-The future Python processing API is the source of truth for parsing, missing-value detection, anomaly explanations, cleaning, statistics, fitting, and publication export. The repository currently includes a FastAPI contract/reference service so the frontend can be tested end to end; this does not pre-approve the production backend framework or deployment architecture. The frontend may validate obvious file constraints and render previews, but must not implement a competing scientific calculation path.
+The Python processing API is the source of truth for parsing, missing-value detection, anomaly
+explanations, cleaning, statistics, fitting, and publication export. FastAPI is the approved HTTP
+runtime; independent PostgreSQL-leased Workers own durable maintenance. The initial AWS deployment
+is defined in [`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md). The frontend may validate obvious
+file constraints and render previews, but must not implement a competing scientific calculation
+path.
 
 ### Chart configuration
 
@@ -154,10 +159,22 @@ Feature components must not repeat raw brand colors or invent local spacing scal
 
 **Status:** Frontend alpha and local contract/reference-service flows complete
 for temporary retention, email-code sessions, saved history, and sharing.
-Production backend selection, managed storage, and real SMTP deployment remain.
+Production PostgreSQL/S3 storage and the AWS runtime are approved. Production containerization is
+Phase 6A; real SES delivery and cloud-resource provisioning remain later Phase 6 work.
 
 - Add guest retention, email-code authentication, saved projects, history, and sharing.
 - Add mobile shared views and the remaining responsive states.
+
+### Phase 6 — Production runtime and operations
+
+**Status:** Phase 6-0 architecture approved; implementation proceeds in independently accepted
+6A through 6D commits.
+
+- Phase 6A makes the application container-deployable with fail-closed production configuration
+  and real dependency readiness.
+- Phase 6B closes email, abuse-control, and description-editing product gaps.
+- Phase 6C provisions and operates the approved AWS topology, backups, monitoring, and SLOs.
+- Phase 6D sets quotas, completes market-specific review, and proves launch readiness.
 
 ### Deferred
 
