@@ -131,6 +131,7 @@ test("renders an unknown route without browser runtime errors", async ({
   expectConsoleError,
 }) => {
   expectConsoleError(/Failed to load resource:.*status of 404 \(Not Found\)/);
+  await installMockApi(page);
 
   await page.goto("/this-route-does-not-exist");
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
