@@ -14,11 +14,20 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 - [x] P1-2: bound PostgreSQL and MinIO integration probes so missing local services fail explicitly instead of hanging.
 - [x] P1-3: return stable quality-finding message codes and parameters, and localize their summaries and reasons in the frontend with legacy-text fallback.
 - [x] P1-4: persist HTTP upload `Idempotency-Key` requests, replay the original project/job, reject changed requests, and serialize concurrent first attempts.
+- [x] P2-1: audit every direct frontend/API dependency, retain `httpx2` with an explicit reason, and document why the current stack is not redundant.
+- [x] P2-2: keep ProjectSpec v1 generated from Pydantic and consumed by Zod with shared cross-runtime fixtures.
+- [x] P2-3: define SQLite as the local/reference backend, PostgreSQL plus S3-compatible storage as the production website data route, and prohibit runtime dual-write.
+- [x] P2-4: version shared ECharts/Matplotlib render semantics and test grayscale, grouped-series, fit, confidence-band, line-style, and palette precedence.
+- [x] P2-5: keep Redis, Kafka, and Celery absent until measured load requires a separate queue, with an automated dependency-boundary guard.
 
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
 integration suite. Production hosting, SMTP, cloud-provider, security, quota, and compliance
 decisions remain intentionally open.
+
+The P2 dependency and architecture evidence is recorded in
+[`TECH_STACK_AUDIT.md`](TECH_STACK_AUDIT.md). P2 rendering consistency means shared scientific
+and style semantics, not pixel-identical output from different rendering engines.
 
 ## Website Frontend Progress
 
