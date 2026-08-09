@@ -43,7 +43,10 @@ The CI job runs the same gate and always removes its temporary Compose volumes. 
 Parquet processing records the exact pandas, PyArrow, and writer versions in PostgreSQL
 provenance parameters and provider metadata; those fields remain outside the Parquet v1 schema
 metadata so existing bytes stay reproducible. Any byte-contract change requires a new schema
-version and an explicit migration plan.
+version and an explicit migration plan. Quality findings retain readable v1 summary/reason
+fallbacks and now also carry locale-independent message codes and scalar parameters; the web
+client owns the final English or Simplified Chinese rendering. Existing persisted quality
+documents without those optional fields remain readable.
 
 ## Local PostgreSQL
 

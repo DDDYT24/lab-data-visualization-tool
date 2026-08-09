@@ -74,6 +74,9 @@ export const dataPreviewSchema = z.object({
   sampleStrategy: z.enum(["none", "evenly-distributed"]),
 });
 
+const messageParamSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const messageParamsSchema = z.record(z.string(), messageParamSchema);
+
 export const qualityFindingSchema = z.object({
   id: z.string().min(1),
   kind: z.enum([
@@ -92,6 +95,10 @@ export const qualityFindingSchema = z.object({
   rowIdsTruncated: z.boolean().default(false),
   summary: z.string().min(1),
   reason: z.string().min(1),
+  summaryCode: z.string().min(1).nullable().optional(),
+  summaryParams: messageParamsSchema.nullable().optional(),
+  reasonCode: z.string().min(1).nullable().optional(),
+  reasonParams: messageParamsSchema.nullable().optional(),
 });
 
 export const qualityReportSchema = z.object({

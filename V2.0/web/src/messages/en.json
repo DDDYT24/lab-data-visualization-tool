@@ -162,6 +162,38 @@
       "outside-range": "Outside valid range",
       "trend-inconsistent": "Inconsistent with trend"
     },
+    "findingMessages": {
+      "missing": {
+        "summary": "{count, plural, one {# missing value} other {# missing values}}",
+        "reason": "These cells are empty. LabViz will not replace or remove them without your decision."
+      },
+      "typeConflict": {
+        "summary": "{count, plural, one {# value does not match the numeric column} other {# values do not match the numeric column}}",
+        "reason": "Most values in this column are numeric, but these cells contain other text."
+      },
+      "duplicate": {
+        "summary": "{count, plural, one {# row belongs to a duplicate group} other {# rows belong to duplicate groups}}",
+        "reason": "These rows repeat all values. Confirm whether repetition is expected before removing a cleaned copy."
+      },
+      "outsideRange": {
+        "summary": "{count, plural, one {# value is} other {# values are}} outside the valid range",
+        "reasonBoth": "You defined {minimum} to {maximum} as valid for this column. LabViz has only flagged the values for your review.",
+        "reasonMinimum": "You defined at least {minimum} as valid for this column. LabViz has only flagged the values for your review.",
+        "reasonMaximum": "You defined at most {maximum} as valid for this column. LabViz has only flagged the values for your review."
+      },
+      "extremeValue": {
+        "summary": "{count, plural, one {# value is} other {# values are}} far from the middle range",
+        "reason": "These values fall beyond 1.5 interquartile ranges. This is a review flag, not proof that the measurements are wrong."
+      },
+      "suddenChange": {
+        "summary": "{count, plural, one {# point changes abruptly from the previous row} other {# points change abruptly from the previous row}}",
+        "reason": "The adjacent change is much larger than the typical change in this column. Review the measurements before excluding anything."
+      },
+      "trendInconsistent": {
+        "summary": "{count, plural, one {# point differs} other {# points differ}} from the overall trend",
+        "reason": "A strong linear trend was present across row order (R²={rSquared}), and these residuals were unusually large. This is a review flag, not proof that the measurements are wrong."
+      }
+    },
     "affectedRows": "{count, plural, one {# affected row} other {# affected rows}}",
     "decisionSaveFailed": "The cleaning decision could not be saved.",
     "clearFilters": "Clear issue filters",

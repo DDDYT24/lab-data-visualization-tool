@@ -4,7 +4,7 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 
 ## V2.0 Closeout Gate
 
-**Checkpoint:** 2026-08-08
+**Checkpoint:** 2026-08-09
 
 - [x] P0-1: close frontend runtime-error gaps, enforce pageerror/console-error Playwright guards, and keep UTC rendering deterministic.
 - [x] P0-2: repair Ruff/MyPy gates and commit hash-pinned Python 3.12 runtime/development locks.
@@ -12,6 +12,7 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 - [x] P0-4: document one API verification gate and keep the remaining production decisions explicitly deferred below.
 - [x] P1-1: record exact pandas, PyArrow, and Parquet writer provenance in PostgreSQL processing records and immutable object metadata without changing Parquet v1 bytes.
 - [x] P1-2: bound PostgreSQL and MinIO integration probes so missing local services fail explicitly instead of hanging.
+- [x] P1-3: return stable quality-finding message codes and parameters, and localize their summaries and reasons in the frontend with legacy-text fallback.
 
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
@@ -20,7 +21,7 @@ decisions remain intentionally open.
 
 ## Website Frontend Progress
 
-**Last checkpoint:** 2026-08-08
+**Last checkpoint:** 2026-08-09
 **Architecture:** [`PROJECT_PLAN.md`](PROJECT_PLAN.md)
 
 Completed:
@@ -48,7 +49,7 @@ Completed:
 
 Next:
 
-- [ ] Localize processing-service quality summaries and reasons by returning stable message codes and parameters in the future production API.
+- [x] Localize processing-service quality summaries and reasons by returning stable message codes and parameters in the API and rendering them in the selected frontend locale.
 - [ ] Move to ESLint 10 after the Next.js React lint plugins are compatible; current audit findings are confined to the development-only minimatch/brace-expansion chain.
 
 ## Backend Production Hardening

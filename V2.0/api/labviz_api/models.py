@@ -84,6 +84,13 @@ class QualityFinding(ContractModel):
     row_ids_truncated: bool = False
     summary: str
     reason: str
+    # Optional for backwards compatibility with persisted v1 quality documents.
+    # New processing responses always include stable locale-independent codes and
+    # scalar parameters so clients can render the text in the user's language.
+    summary_code: str | None = None
+    summary_params: dict[str, JsonScalar] | None = None
+    reason_code: str | None = None
+    reason_params: dict[str, JsonScalar] | None = None
 
 
 class QualityReport(VersionedModel):
