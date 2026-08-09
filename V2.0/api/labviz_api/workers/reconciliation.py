@@ -26,6 +26,12 @@ from .leases import LeaseStore, WorkItemLease
 from .safety import PermanentWorkerFailure
 
 
+def _run_finished_at(now: datetime, started_at: datetime | None) -> datetime:
+    """Keep completion timestamps valid when app and PostgreSQL clocks differ."""
+
+    return max(now, started_at) if started_at is not None else now
+
+
 class PendingObjectReconciler:
     """Confirm bytes outside transactions, then finalize through a fenced transaction."""
 
@@ -98,7 +104,7 @@ class PendingObjectReconciler:
                 job.updated_at = now
                 if run is not None:
                     run.status = "succeeded"
-                    run.finished_at = now
+                    run.finished_at = _run_finished_at(now, run.started_at)
                 self.project_store._bind_export_to_shares(session, publication, now)  # noqa: SLF001
 
     def _reconcile_dataset(self, lease: WorkItemLease, leases: LeaseStore) -> None:
@@ -147,7 +153,7 @@ class PendingObjectReconciler:
             stored.lease_until = None
             run.output_dataset_version_id = version.id
             run.status = "succeeded"
-            run.finished_at = now
+            run.finished_at = _run_finished_at(now, run.started_at)
             run.error_code = None
             run.error_message = None
             if run.operation == "parse":

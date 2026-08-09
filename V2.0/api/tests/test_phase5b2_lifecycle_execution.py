@@ -49,7 +49,7 @@ from labviz_api.workers.leases import (
 from labviz_api.workers.lifecycle import ProjectLifecycleHandler
 from labviz_api.workers.metadata_cleanup import MetadataCleanupHandler
 from labviz_api.workers.orphan_staging import OrphanStagingHandler
-from labviz_api.workers.reconciliation import PendingObjectReconciler
+from labviz_api.workers.reconciliation import PendingObjectReconciler, _run_finished_at
 from labviz_api.workers.runner import RunnerConfig, WorkerRunner
 from labviz_api.workers.safety import MaintenanceSafety
 
@@ -58,6 +58,16 @@ POSTGRES_URL = os.environ.get(
     "LABVIZ_TEST_POSTGRES_URL",
     "postgresql+psycopg://labviz:labviz-local@127.0.0.1:54329/labviz_test",
 )
+
+
+def test_reconciliation_finish_time_is_not_before_start() -> None:
+    started_at = datetime(2026, 1, 1, tzinfo=UTC)
+
+    assert _run_finished_at(started_at - timedelta(seconds=1), started_at) == started_at
+    assert _run_finished_at(started_at + timedelta(seconds=1), started_at) == (
+        started_at + timedelta(seconds=1)
+    )
+    assert _run_finished_at(started_at, None) == started_at
 
 
 def _alembic_config() -> Config:
