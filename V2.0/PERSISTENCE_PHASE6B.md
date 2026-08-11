@@ -1,6 +1,8 @@
 # Phase 6B Public-Edge and Account Completion
 
-**Status:** Pending Phase 6-PRE acceptance.
+**Status:** Phase 6-PRE accepted. AWS-independent implementation is active under
+[`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md); final Phase 6B acceptance
+remains pending real SES and staging ALB evidence.
 
 Phase 6B makes the existing application safe and complete at the public application boundary. It
 does not provision long-lived AWS infrastructure; Phase 6C owns Terraform and live service
@@ -18,6 +20,8 @@ adapter.
   [`AGENT_ACCEPTANCE_STANDARD.md`](AGENT_ACCEPTANCE_STANDARD.md).
 - If AWS CLI access, the selected SES Region, a verified sender identity, or a real PostgreSQL 17
   dependency is unavailable, the affected acceptance claim is `BLOCKED`; no mock may replace it.
+- The temporary local execution order and the prohibition on entering Phase 6C/6D early are defined
+  by [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md).
 
 ## 6B-1 — trusted public client identity
 
