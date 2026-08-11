@@ -28,17 +28,25 @@ identical update creates no needless revision.
 
 Phase 6A uses the same API image for FastAPI, one-shot Alembic migrations, and independently
 leased Workers. Production configuration fails closed unless PostgreSQL with TLS, AWS S3, public
-HTTPS origins, SMTP with STARTTLS, secure cookies, and an explicit share-token key ring are set.
+HTTPS origins, Amazon SES v2, secure cookies, and an explicit share-token key ring are set.
 `/health` is process liveness and the API container-health endpoint; `/api/v1/ready` verifies the
 selected database and object provider and is the ALB target-health endpoint. Worker task lifetime
 is owned by its essential process, not by dependency health. Use
 `python -m labviz_api.runtime_health` only as a bounded deployment preflight or operator diagnostic.
 Set `LABVIZ_RUNTIME_ROLE=api` or `worker`; the Worker role deliberately does not require or receive
-the API-only SMTP and share-token secrets.
+the API-only SES configuration and share-token secrets.
+
+Production sets `LABVIZ_AUTH_MODE=ses` plus an explicit `LABVIZ_SES_REGION`, verified
+`LABVIZ_SES_FROM`, and `LABVIZ_SES_CONFIGURATION_SET`. The SES v2 adapter uses the standard AWS
+credential chain and the ECS task role; it has no access-key or SMTP-secret setting. SMTP remains
+available only for non-production compatibility tests. Synchronous send failure deletes the unsent
+challenge and returns `email-delivery-failed`; accepted sends log only provider, challenge ID, and
+SES MessageId. See [`../deploy/aws/README.md`](../deploy/aws/README.md) for the least-privilege
+policy and redacted real-account probe.
 
 Build and run examples plus secret-safe ECS templates live in
 [`../deploy/aws`](../deploy/aws/README.md). They are deployment contracts, not proof that an AWS
-account, backups, monitoring, SMTP delivery, or compliance controls have been provisioned.
+account, backups, monitoring, real SES delivery, or compliance controls have been provisioned.
 
 ## Dependency locking and verification
 

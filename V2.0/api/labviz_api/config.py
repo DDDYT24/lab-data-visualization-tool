@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
+from email.utils import parseaddr
 from ipaddress import ip_network
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -13,6 +15,7 @@ DEFAULT_CLIENT_IDENTITY_KEY = "labviz-development-client-identity-key-v1"
 MAX_CLOUD_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_AUTH_RATE_LIMIT_WINDOW_SECONDS = 86_400
 MAX_AUTH_REQUEST_LIMIT = 10_000
+SES_CONFIGURATION_SET_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -53,6 +56,21 @@ def _postgres_requires_tls(value: str | None) -> bool:
     return parameters.get("sslmode", [""])[-1] in {"require", "verify-ca", "verify-full"}
 
 
+def _valid_email_sender(value: str | None) -> bool:
+    if not value:
+        return False
+    _display_name, address = parseaddr(value)
+    local, separator, domain = address.rpartition("@")
+    return bool(
+        separator
+        and local
+        and "." in domain
+        and not domain.startswith(".")
+        and not domain.endswith(".")
+        and domain.lower() != "localhost"
+    )
+
+
 @dataclass(frozen=True)
 class Settings:
     database_path: Path
@@ -71,6 +89,11 @@ class Settings:
     smtp_password: str | None = None
     smtp_from: str = "LabViz <noreply@localhost>"
     smtp_starttls: bool = True
+    ses_region: str | None = None
+    ses_from: str | None = None
+    ses_configuration_set: str | None = None
+    ses_connect_timeout_seconds: int = 5
+    ses_read_timeout_seconds: int = 15
     cookie_secure: bool = False
     postgres_url: str | None = None
     postgres_echo: bool = False
@@ -112,14 +135,14 @@ class Settings:
             raise ValueError("LABVIZ_ENVIRONMENT must be 'development', 'test', or 'production'.")
         if self.runtime_role not in {"api", "worker"}:
             raise ValueError("LABVIZ_RUNTIME_ROLE must be 'api' or 'worker'.")
-        if self.auth_mode not in {"console", "smtp"}:
-            raise ValueError("LABVIZ_AUTH_MODE must be 'console' or 'smtp'.")
+        if self.auth_mode not in {"console", "smtp", "ses"}:
+            raise ValueError("LABVIZ_AUTH_MODE must be 'console', 'smtp', or 'ses'.")
         if (
             self.environment == "production"
             and self.runtime_role == "api"
-            and self.auth_mode == "console"
+            and self.auth_mode != "ses"
         ):
-            raise ValueError("Production must use SMTP authentication delivery.")
+            raise ValueError("Production API must use Amazon SES v2 authentication delivery.")
         if (
             self.environment == "production"
             and self.runtime_role == "api"
@@ -156,14 +179,18 @@ class Settings:
                     raise ValueError(
                         "Production CORS origins must be non-empty public HTTPS origins."
                     )
-                if not self.smtp_host:
-                    raise ValueError("Production SMTP requires LABVIZ_SMTP_HOST.")
-                if not self.smtp_starttls:
-                    raise ValueError("Production SMTP requires STARTTLS.")
-                if not self.smtp_username or not self.smtp_password:
-                    raise ValueError("Production SMTP requires explicit credentials.")
-                if "@" not in self.smtp_from or "localhost" in self.smtp_from.lower():
-                    raise ValueError("Production requires a non-local SMTP sender address.")
+                if not self.ses_region:
+                    raise ValueError("Production requires LABVIZ_SES_REGION.")
+                if self.ses_region != self.s3_region:
+                    raise ValueError("Production SES and S3 must use the same AWS Region.")
+                if not _valid_email_sender(self.ses_from):
+                    raise ValueError("Production requires a valid LABVIZ_SES_FROM address.")
+                if not self.ses_configuration_set:
+                    raise ValueError("Production requires LABVIZ_SES_CONFIGURATION_SET.")
+                if not SES_CONFIGURATION_SET_PATTERN.fullmatch(self.ses_configuration_set):
+                    raise ValueError("LABVIZ_SES_CONFIGURATION_SET has an invalid name.")
+                if any((self.smtp_host, self.smtp_username, self.smtp_password)):
+                    raise ValueError("Production SES must not configure SMTP credentials.")
             if self.max_upload_bytes > MAX_CLOUD_UPLOAD_BYTES:
                 raise ValueError("Production uploads cannot exceed the approved 50 MB limit.")
         if self.max_upload_bytes < 1:
@@ -176,6 +203,8 @@ class Settings:
             raise ValueError("S3 multipart threshold must be at least the part size.")
         if min(self.s3_connect_timeout_seconds, self.s3_read_timeout_seconds) < 1:
             raise ValueError("S3 connection and read timeouts must be positive.")
+        if min(self.ses_connect_timeout_seconds, self.ses_read_timeout_seconds) < 1:
+            raise ValueError("SES connection and read timeouts must be positive.")
         versions = [version for version, _secret in self.share_token_keys]
         if self.share_token_key_version not in versions:
             raise ValueError(
@@ -252,8 +281,8 @@ class Settings:
             if origin.strip()
         )
         auth_mode = os.environ.get("LABVIZ_AUTH_MODE", "console").strip().lower()
-        if auth_mode not in {"console", "smtp"}:
-            raise ValueError("LABVIZ_AUTH_MODE must be 'console' or 'smtp'.")
+        if auth_mode not in {"console", "smtp", "ses"}:
+            raise ValueError("LABVIZ_AUTH_MODE must be 'console', 'smtp', or 'ses'.")
 
         return cls(
             database_path=db_path,
@@ -274,6 +303,13 @@ class Settings:
             smtp_password=os.environ.get("LABVIZ_SMTP_PASSWORD"),
             smtp_from=os.environ.get("LABVIZ_SMTP_FROM", "LabViz <noreply@localhost>"),
             smtp_starttls=_as_bool(os.environ.get("LABVIZ_SMTP_STARTTLS"), True),
+            ses_region=os.environ.get("LABVIZ_SES_REGION"),
+            ses_from=os.environ.get("LABVIZ_SES_FROM"),
+            ses_configuration_set=os.environ.get("LABVIZ_SES_CONFIGURATION_SET"),
+            ses_connect_timeout_seconds=int(
+                os.environ.get("LABVIZ_SES_CONNECT_TIMEOUT_SECONDS", "5")
+            ),
+            ses_read_timeout_seconds=int(os.environ.get("LABVIZ_SES_READ_TIMEOUT_SECONDS", "15")),
             cookie_secure=_as_bool(os.environ.get("LABVIZ_COOKIE_SECURE")),
             postgres_url=os.environ.get("LABVIZ_POSTGRES_URL"),
             postgres_echo=_as_bool(os.environ.get("LABVIZ_POSTGRES_ECHO")),

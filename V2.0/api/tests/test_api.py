@@ -316,10 +316,10 @@ def test_temporary_projects_are_scoped_to_the_creating_browser(
     assert client.get(f"/api/v1/projects/{project_id}/preview").status_code == 200
 
 
-def test_production_configuration_rejects_console_codes_and_insecure_cookies(
+def test_production_configuration_rejects_non_ses_codes_and_insecure_cookies(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="SMTP"):
+    with pytest.raises(ValueError, match="Amazon SES v2"):
         Settings(
             database_path=tmp_path / "production.db",
             allowed_origins=("https://labviz.example",),
@@ -336,11 +336,10 @@ def test_production_configuration_requires_the_approved_runtime(tmp_path: Path) 
         allowed_origins=("https://labviz.example",),
         public_web_url="https://labviz.example",
         environment="production",
-        auth_mode="smtp",
-        smtp_host="email-smtp.example.com",
-        smtp_username="smtp-user",
-        smtp_password="smtp-password",
-        smtp_from="LabViz <noreply@labviz.example>",
+        auth_mode="ses",
+        ses_region="us-east-1",
+        ses_from="LabViz <noreply@labviz.example>",
+        ses_configuration_set="labviz-production-auth",
         cookie_secure=True,
         postgres_url="postgresql+psycopg://user:password@db.example/labviz?sslmode=require",
         persistence_backend="postgresql",
@@ -360,10 +359,9 @@ def test_production_configuration_requires_the_approved_runtime(tmp_path: Path) 
         settings,
         runtime_role="worker",
         auth_mode="console",
-        smtp_host=None,
-        smtp_username=None,
-        smtp_password=None,
-        smtp_from="LabViz <noreply@localhost>",
+        ses_region=None,
+        ses_from=None,
+        ses_configuration_set=None,
         cookie_secure=False,
         public_web_url="http://localhost:3000",
         allowed_origins=("http://localhost:3000",),
@@ -379,10 +377,14 @@ def test_production_configuration_requires_the_approved_runtime(tmp_path: Path) 
         ({"s3_endpoint_url": "http://minio:9000"}, "must not use"),
         ({"public_web_url": "http://labviz.example"}, "public HTTPS"),
         ({"allowed_origins": ("https://labviz.example/path",)}, "CORS origins"),
-        ({"smtp_host": None}, "SMTP_HOST"),
-        ({"smtp_starttls": False}, "STARTTLS"),
-        ({"smtp_password": None}, "explicit credentials"),
-        ({"smtp_from": "LabViz <noreply@localhost>"}, "sender address"),
+        ({"auth_mode": "smtp"}, "Amazon SES v2"),
+        ({"ses_region": None}, "SES_REGION"),
+        ({"ses_region": "ap-southeast-1"}, "same AWS Region"),
+        ({"ses_from": "LabViz <noreply@localhost>"}, "SES_FROM"),
+        ({"ses_configuration_set": None}, "SES_CONFIGURATION_SET"),
+        ({"ses_configuration_set": "invalid configuration set"}, "invalid name"),
+        ({"smtp_host": "email-smtp.example.com"}, "must not configure SMTP"),
+        ({"ses_connect_timeout_seconds": 0}, "SES connection"),
         ({"max_upload_bytes": 50 * 1024 * 1024 + 1}, "50 MB"),
         ({"trusted_proxy_cidrs": ()}, "trusted proxy"),
         ({"trusted_proxy_hops": 0}, "trusted proxy"),
@@ -491,7 +493,7 @@ def test_liveness_is_dependency_free_and_readiness_fails_closed(
             allowed_origins=("https://labviz.example",),
             public_web_url="https://labviz.example",
             environment="production",
-            auth_mode="smtp",
+            auth_mode="ses",
             cookie_secure=False,
         )
 

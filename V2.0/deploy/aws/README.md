@@ -26,9 +26,33 @@ preflight or operator diagnostic, and monitor Worker heartbeat, backlog, lease, 
 quarantine signals separately. Run the migration as a one-shot task before deploying code that
 requires the new schema; never run Alembic concurrently from every API replica.
 
-Set `LABVIZ_RUNTIME_ROLE=api` or `worker`. The API role owns HTTPS-origin, SMTP, cookie, and share
-key validation. The Worker role deliberately receives no SMTP or share-token secret; it validates
+Set `LABVIZ_RUNTIME_ROLE=api` or `worker`. The API role owns HTTPS-origin, SES, cookie, and share
+key validation. The Worker role deliberately receives no email-provider or share-token secret; it validates
 only its PostgreSQL/S3 production dependencies.
+
+Production authentication email uses the SES v2 API through the ECS task-role credential chain.
+The API task supplies `LABVIZ_SES_REGION`, `LABVIZ_SES_FROM`, and
+`LABVIZ_SES_CONFIGURATION_SET` as non-secret deployment configuration and receives no SMTP or
+static AWS credential. Attach [`api-ses-task-role-policy.example.json`](api-ses-task-role-policy.example.json)
+after replacing its identity/from placeholders; it grants only `ses:SendEmail` for that verified
+identity and sender. The application sends one recipient, uses only `purpose` and `environment`
+tags, and records the returned SES MessageId without the recipient or verification code.
+
+Before public traffic, Phase 6C Terraform must create the configuration-set event destinations for
+send, delivery, reject, rendering failure, delivery delay, hard bounce, and complaint events. It
+must also enable account-level bounce/complaint suppression and alarms. With the complete staging
+production environment and task role loaded, run the probe separately for an accepted mailbox and
+the SES bounce/complaint simulator recipients:
+
+```powershell
+$env:LABVIZ_SES_PROBE_RECIPIENT = "<mailbox-simulator-or-verified-recipient>"
+python -m scripts.probe_ses_delivery
+Remove-Item Env:LABVIZ_SES_PROBE_RECIPIENT
+```
+
+The probe prints only status, provider, and MessageId. Preserve those IDs with the corresponding
+SES event and alarm evidence; never paste recipients, message bodies, credentials, or sign-in URLs
+into an acceptance report.
 
 The API container health check calls dependency-free `/health`. The ALB API target group's health
 check calls `/api/v1/ready`, so a PostgreSQL or S3 outage removes the task from traffic without
@@ -54,7 +78,7 @@ serving during the transition; this prevents post-backfill requests from bypassi
 
 Secrets are referenced from Secrets Manager in `api-task-definition.example.json`; no secret value
 or static AWS access key belongs in a task definition. The task role grants only the selected S3
-prefix and the required KMS operations. Web has no database, object-storage, or SMTP credentials.
+prefix and the required KMS operations. Web has no database, object-storage, or email credentials.
 
 Required Phase 6C resource controls before launch are RDS/S3 encryption, S3 Block Public Access and
 versioning, RDS PITR of at least seven days, 30-day daily logical backups, log retention, alarms,

@@ -23,7 +23,7 @@ This file records explicitly deferred work so it does not expand the V2.0 protot
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
 integration suite. The AWS single-region production runtime is approved in
-[`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md). SMTP delivery, cloud-resource IaC, restore
+[`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md). Real SES evidence, cloud-resource IaC, restore
 evidence, quotas, observability/SLOs, and compliance remain explicit later Phase 6 work.
 
 The P2 dependency and architecture evidence is recorded in
@@ -84,7 +84,7 @@ Next:
 - [x] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
 - [x] Add trusted-proxy client identity and atomic multi-host authentication abuse limits before horizontally scaling the API; real staging ALB chain evidence remains part of final Phase 6B acceptance.
-- [ ] Integrate and test the selected production SES provider, abuse limits, and delivery monitoring.
+- [ ] Complete real-account SES accepted/bounce/complaint, suppression, IAM, and alarm evidence; the SES v2 adapter and abuse limits are locally complete.
 - [x] Store PostgreSQL publication exports and datasets through the selected provider-neutral object-storage boundary; keep SQLite BLOBs only in the local/reference adapter.
 - [x] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.
 - [x] Implement immutable share snapshots pinned to ProjectRevision; links do not expire by default, remain revocable, and never change when the working project is edited.

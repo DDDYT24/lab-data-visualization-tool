@@ -65,8 +65,22 @@ def test_phase6a_images_and_ecs_examples_keep_runtime_boundaries() -> None:
     assert {
         "LABVIZ_POSTGRES_URL",
         "LABVIZ_SHARE_TOKEN_KEYS",
-        "LABVIZ_SMTP_PASSWORD",
+        "LABVIZ_CLIENT_IDENTITY_KEY",
     } <= secret_names
+    assert not {name for name in secret_names if "SMTP" in name or "SES" in name}
+    api_environment = {item["name"]: item["value"] for item in api_container["environment"]}
+    assert api_environment["LABVIZ_AUTH_MODE"] == "ses"
+    assert api_environment["LABVIZ_SES_REGION"] == "${AWS_REGION}"
+    assert api_environment["LABVIZ_SES_CONFIGURATION_SET"] == "${SES_CONFIGURATION_SET}"
+
+    ses_policy = json.loads(
+        (DEPLOY_ROOT / "api-ses-task-role-policy.example.json").read_text(encoding="utf-8")
+    )
+    statements = ses_policy["Statement"]
+    assert len(statements) == 1
+    assert statements[0]["Action"] == "ses:SendEmail"
+    assert statements[0]["Resource"].endswith(":identity/${SES_IDENTITY}")
+    assert set(statements[0]["Condition"]["StringEquals"]) == {"ses:FromAddress"}
 
     worker_definition = next(item for item in definitions if "-worker-" in item["family"])
     worker_container = worker_definition["containerDefinitions"][0]

@@ -22,8 +22,8 @@ The repository establishes these current facts:
 - PostgreSQL leases already run lifecycle, reconciliation, object GC, staging inventory, and
   metadata cleanup independently from FastAPI. Multi-host authentication still needs a trusted
   client-IP boundary and atomic distributed limiting before API horizontal scaling.
-- Production SMTP delivery and monitoring, quotas, restore drills, and target-market compliance
-  remain later Phase 6 work.
+- The SES v2 application adapter is implemented; real delivery/feedback evidence and monitoring,
+  quotas, restore drills, and target-market compliance remain later Phase 6 work.
 
 The historical untracked `PERSISTENCE_PHASE5B3_ADMISSION_PRECHECK.md` is superseded by the
 implemented and verified [`PERSISTENCE_PHASE5B3.md`](PERSISTENCE_PHASE5B3.md). It is not a current
@@ -45,7 +45,7 @@ The initial provider is AWS in one selected region:
 | Schema changes | A one-shot ECS migration task before an API rollout |
 
 Provider-specific resource creation stays outside application code. The application continues to
-depend on PostgreSQL, the `ObjectStorage` contract, SMTP, and environment-backed configuration.
+depend on PostgreSQL, the `ObjectStorage`/`EmailSender` contracts, and environment-backed configuration.
 This keeps another managed provider possible without runtime dual-write or a second scientific
 processing path.
 
@@ -60,8 +60,8 @@ and [Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguid
 Required deliverables:
 
 1. Production settings fail closed unless PostgreSQL and S3 are configured. The API role also
-   requires HTTPS public/CORS origins, SMTP, secure cookies, and an explicit share-token key ring;
-   the Worker role does not receive unused SMTP or share-token secrets.
+   requires HTTPS public/CORS origins, a production email provider, secure cookies, and an explicit
+   share-token key ring; the Worker role does not receive unused email or share-token settings.
 2. API readiness verifies both the selected database and object provider. Liveness does not
    depend on external services.
 3. API and Worker expose bounded process health checks suitable for container orchestration.
@@ -90,7 +90,7 @@ compliance review, dashboards, alerts, and SLOs remain explicitly deferred.
   Matplotlib paths stay under the non-root API user's home.
 - CI builds both images. ECS API, Worker, and Web templates use immutable image-digest placeholders,
   Secrets Manager references, CloudWatch logging, and role-specific health checks. Worker tasks do
-  not receive SMTP or share-token secrets.
+  not receive email-provider or share-token settings.
 
 ### Phase 6A verification
 

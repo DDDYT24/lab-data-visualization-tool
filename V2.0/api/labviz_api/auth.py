@@ -7,10 +7,15 @@ import logging
 import secrets
 import smtplib
 import ssl
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from typing import Any, Literal, Protocol
+from email.utils import make_msgid
+from typing import Any, Literal, Protocol, cast
 from uuid import NAMESPACE_URL, uuid4, uuid5
+
+import boto3
+from botocore.config import Config
 
 from .config import Settings
 from .repository import iso_at
@@ -31,13 +36,19 @@ class AuthError(ValueError):
         self.status_code = status_code
 
 
+@dataclass(frozen=True)
+class EmailDeliveryReceipt:
+    provider: Literal["console", "memory", "smtp", "ses"]
+    message_id: str | None
+
+
 class EmailSender(Protocol):
     @property
     def delivery_mode(self) -> Literal["console", "email"]:
         """Report whether a real email or development console receives the code."""
         ...
 
-    def send_code(self, email: str, code: str) -> None:
+    def send_code(self, email: str, code: str) -> EmailDeliveryReceipt:
         """Deliver one verification code."""
         ...
 
@@ -93,8 +104,9 @@ class ConsoleEmailSender:
 
     delivery_mode: Literal["console"] = "console"
 
-    def send_code(self, email: str, code: str) -> None:
+    def send_code(self, email: str, code: str) -> EmailDeliveryReceipt:
         LOGGER.warning("LabViz sign-in code for %s: %s", email, code)
+        return EmailDeliveryReceipt(provider="console", message_id=None)
 
 
 class SmtpEmailSender:
@@ -106,11 +118,12 @@ class SmtpEmailSender:
         self.settings = settings
         self.host = settings.smtp_host
 
-    def send_code(self, email: str, code: str) -> None:
+    def send_code(self, email: str, code: str) -> EmailDeliveryReceipt:
         message = EmailMessage()
         message["Subject"] = "Your LabViz sign-in code"
         message["From"] = self.settings.smtp_from
         message["To"] = email
+        message["Message-ID"] = make_msgid()
         message.set_content(
             f"Your LabViz verification code is {code}. "
             "It expires in 10 minutes. If you did not request this code, ignore this email."
@@ -121,7 +134,79 @@ class SmtpEmailSender:
                 smtp.starttls(context=ssl.create_default_context())
             if self.settings.smtp_username and self.settings.smtp_password:
                 smtp.login(self.settings.smtp_username, self.settings.smtp_password)
-            smtp.send_message(message)
+            refused = smtp.send_message(message)
+            if refused:
+                raise RuntimeError("SMTP refused the verification recipient.")
+        return EmailDeliveryReceipt(provider="smtp", message_id=message["Message-ID"])
+
+
+class SesV2Client(Protocol):
+    def send_email(self, **kwargs: Any) -> dict[str, Any]: ...
+
+
+class SesV2EmailSender:
+    """Amazon SES v2 sender using only the standard AWS credential chain."""
+
+    delivery_mode: Literal["email"] = "email"
+
+    def __init__(self, settings: Settings, client: SesV2Client | None = None) -> None:
+        if not settings.ses_region:
+            raise ValueError("LABVIZ_SES_REGION is required when SES auth mode is enabled.")
+        if not settings.ses_from:
+            raise ValueError("LABVIZ_SES_FROM is required when SES auth mode is enabled.")
+        if not settings.ses_configuration_set:
+            raise ValueError(
+                "LABVIZ_SES_CONFIGURATION_SET is required when SES auth mode is enabled."
+            )
+        self.region = settings.ses_region
+        self.sender = settings.ses_from
+        self.configuration_set = settings.ses_configuration_set
+        self.environment = settings.environment
+        self.client = client or cast(
+            SesV2Client,
+            boto3.client(
+                "sesv2",
+                region_name=self.region,
+                config=Config(
+                    connect_timeout=settings.ses_connect_timeout_seconds,
+                    read_timeout=settings.ses_read_timeout_seconds,
+                    retries={"max_attempts": 3, "mode": "standard"},
+                ),
+            ),
+        )
+
+    def send_code(self, email: str, code: str) -> EmailDeliveryReceipt:
+        response = self.client.send_email(
+            FromEmailAddress=self.sender,
+            Destination={"ToAddresses": [email]},
+            Content={
+                "Simple": {
+                    "Subject": {
+                        "Data": "Your LabViz sign-in code",
+                        "Charset": "UTF-8",
+                    },
+                    "Body": {
+                        "Text": {
+                            "Data": (
+                                f"Your LabViz verification code is {code}. "
+                                "It expires in 10 minutes. If you did not request this code, "
+                                "ignore this email."
+                            ),
+                            "Charset": "UTF-8",
+                        }
+                    },
+                }
+            },
+            ConfigurationSetName=self.configuration_set,
+            EmailTags=[
+                {"Name": "purpose", "Value": "authentication-code"},
+                {"Name": "environment", "Value": self.environment},
+            ],
+        )
+        message_id = response.get("MessageId")
+        if not isinstance(message_id, str) or not message_id:
+            raise RuntimeError("Amazon SES accepted no message identifier.")
+        return EmailDeliveryReceipt(provider="ses", message_id=message_id)
 
 
 class MemoryEmailSender:
@@ -131,8 +216,9 @@ class MemoryEmailSender:
         self.messages: list[tuple[str, str]] = []
         self.delivery_mode: Literal["email"] = "email"
 
-    def send_code(self, email: str, code: str) -> None:
+    def send_code(self, email: str, code: str) -> EmailDeliveryReceipt:
         self.messages.append((email, code))
+        return EmailDeliveryReceipt(provider="memory", message_id=f"memory-{len(self.messages)}")
 
 
 class AuthService:
@@ -183,10 +269,16 @@ class AuthService:
             resend_at=iso_at(now + timedelta(seconds=self.resend_after_seconds)),
         )
         try:
-            self.sender.send_code(normalized, code)
+            receipt = self.sender.send_code(normalized, code)
         except Exception:
             self.repository.delete_auth_challenge(challenge_id)
             raise
+        LOGGER.info(
+            "authentication-code-delivery-accepted provider=%s message_id=%s challenge_id=%s",
+            receipt.provider,
+            receipt.message_id or "none",
+            challenge_id,
+        )
         return challenge_id, self.challenge_ttl_seconds, self.resend_after_seconds
 
     def verify_code(self, challenge_id: str, code: str) -> tuple[dict[str, str], str]:
@@ -259,7 +351,10 @@ class AuthService:
 
 
 def build_auth_service(settings: Settings, repository: AuthRepository) -> AuthService:
-    sender: EmailSender = (
-        SmtpEmailSender(settings) if settings.auth_mode == "smtp" else ConsoleEmailSender()
-    )
+    if settings.auth_mode == "ses":
+        sender: EmailSender = SesV2EmailSender(settings)
+    elif settings.auth_mode == "smtp":
+        sender = SmtpEmailSender(settings)
+    else:
+        sender = ConsoleEmailSender()
     return AuthService(sender, settings.session_ttl_seconds, repository)
