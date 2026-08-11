@@ -80,8 +80,10 @@ compliance review, dashboards, alerts, and SLOs remain explicitly deferred.
   boundary without allowing Local, SQLite, insecure origins, custom S3 endpoints, or default API
   secrets to become production fallbacks.
 - `/health` remains dependency-free liveness. `/api/v1/ready` checks PostgreSQL and the configured
-  object provider with stable, bounded 503 codes. `python -m labviz_api.runtime_health` provides
-  the equivalent direct dependency probe for Worker containers.
+  object provider with stable, bounded 503 codes. After Phase 6-PRE-2, the API container calls
+  `/health`, the ALB target group calls `/api/v1/ready`, and
+  `python -m labviz_api.runtime_health` is a Worker deployment preflight or operator diagnostic,
+  not an ECS container-health check.
 - The API/Worker image installs the hash-locked Python 3.12 runtime and runs as `labviz`. The Web
   image builds Next.js standalone on Node 24.17 and runs as `node`. Writable local-reference and
   Matplotlib paths stay under the non-root API user's home.
@@ -125,7 +127,7 @@ remain later-phase acceptance evidence.
    detailed 6B/6C/6D contracts, and update the repository roadmap without changing runtime code.
 2. **PRE-2:** separate process liveness from dependency readiness. API container health uses
    `/health`, ALB target readiness uses `/api/v1/ready`, and Worker dependency probes do not create
-   restart storms.
+   restart storms. This boundary is implemented and regression-tested.
 3. **PRE-3:** independently rerun the complete repository, real PostgreSQL/MinIO, migration,
    frontend/browser, image/runtime, hook, scope, and cleanup gates. The verdict must be `PASS`.
 

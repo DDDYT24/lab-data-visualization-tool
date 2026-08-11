@@ -18,8 +18,10 @@ uploads, provider metadata, and resumable provider-scoped staging inventory.
 Phase 6A uses the same API image for FastAPI, one-shot Alembic migrations, and independently
 leased Workers. Production configuration fails closed unless PostgreSQL with TLS, AWS S3, public
 HTTPS origins, SMTP with STARTTLS, secure cookies, and an explicit share-token key ring are set.
-`/health` is process liveness; `/api/v1/ready` verifies the selected database and object provider.
-Worker containers use `python -m labviz_api.runtime_health` for the same dependency boundary.
+`/health` is process liveness and the API container-health endpoint; `/api/v1/ready` verifies the
+selected database and object provider and is the ALB target-health endpoint. Worker task lifetime
+is owned by its essential process, not by dependency health. Use
+`python -m labviz_api.runtime_health` only as a bounded deployment preflight or operator diagnostic.
 Set `LABVIZ_RUNTIME_ROLE=api` or `worker`; the Worker role deliberately does not require or receive
 the API-only SMTP and share-token secrets.
 

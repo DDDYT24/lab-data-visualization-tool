@@ -26,13 +26,6 @@
       "secrets": [
         {"name": "LABVIZ_POSTGRES_URL", "valueFrom": "${POSTGRES_URL_SECRET_ARN}"}
       ],
-      "healthCheck": {
-        "command": ["CMD", "python", "-m", "labviz_api.runtime_health"],
-        "interval": 30,
-        "timeout": 10,
-        "retries": 3,
-        "startPeriod": 30
-      },
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {

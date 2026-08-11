@@ -20,18 +20,22 @@ Worker:    python -m labviz_api.workers.cli <task>
 ```
 
 Create a separate ECS Worker service per existing task so failures and scaling stay isolated.
-Override its image health check with `python -m labviz_api.runtime_health`. Run the migration as a
-one-shot task before deploying code that requires the new schema; never run Alembic concurrently
-from every API replica.
+The essential Worker process owns its task lifetime; do not attach a PostgreSQL/S3 dependency probe
+as its ECS container health check. Use `python -m labviz_api.runtime_health` as a bounded deployment
+preflight or operator diagnostic, and monitor Worker heartbeat, backlog, lease, retry, and
+quarantine signals separately. Run the migration as a one-shot task before deploying code that
+requires the new schema; never run Alembic concurrently from every API replica.
 
 Set `LABVIZ_RUNTIME_ROLE=api` or `worker`. The API role owns HTTPS-origin, SMTP, cookie, and share
 key validation. The Worker role deliberately receives no SMTP or share-token secret; it validates
 only its PostgreSQL/S3 production dependencies.
 
-The ALB routes `/api/v1/*` and `/health` to the API target group and all other paths to Web. TLS
-terminates at the ALB; the database URL must still include `sslmode=require` or stronger. API and
-Workers run in private subnets with an RDS security-group path and an S3 gateway endpoint or NAT.
-Only the ALB is public.
+The API container health check calls dependency-free `/health`. The ALB API target group's health
+check calls `/api/v1/ready`, so a PostgreSQL or S3 outage removes the task from traffic without
+causing ECS restart storms. The ALB routes `/api/v1/*` and `/health` to that target group and all
+other paths to Web. TLS terminates at the ALB; the database URL must still include
+`sslmode=require` or stronger. API and Workers run in private subnets with an RDS security-group
+path and an S3 gateway endpoint or NAT. Only the ALB is public.
 
 Secrets are referenced from Secrets Manager in `api-task-definition.example.json`; no secret value
 or static AWS access key belongs in a task definition. The task role grants only the selected S3
