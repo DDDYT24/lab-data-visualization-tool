@@ -43,6 +43,8 @@ def test_phase6a_images_and_ecs_examples_keep_runtime_boundaries() -> None:
     assert "USER node" in web_dockerfile
     assert 'output: "standalone"' in next_config
     assert "requirements.lock.txt" in api_dockerfile
+    assert "http://127.0.0.1:8000/health" in api_dockerfile
+    assert "http://127.0.0.1:8000/api/v1/ready" not in api_dockerfile
 
     definitions = [
         json.loads(path.read_text(encoding="utf-8"))
@@ -56,7 +58,10 @@ def test_phase6a_images_and_ecs_examples_keep_runtime_boundaries() -> None:
 
     api_definition = next(item for item in definitions if item["family"].endswith("-api"))
     api_container = api_definition["containerDefinitions"][0]
+    api_health_command = " ".join(api_container["healthCheck"]["command"])
     secret_names = {item["name"] for item in api_container["secrets"]}
+    assert "http://127.0.0.1:8000/health" in api_health_command
+    assert "/api/v1/ready" not in api_health_command
     assert {
         "LABVIZ_POSTGRES_URL",
         "LABVIZ_SHARE_TOKEN_KEYS",
@@ -67,5 +72,11 @@ def test_phase6a_images_and_ecs_examples_keep_runtime_boundaries() -> None:
     worker_container = worker_definition["containerDefinitions"][0]
     worker_secret_names = {item["name"] for item in worker_container["secrets"]}
     worker_environment = {item["name"]: item["value"] for item in worker_container["environment"]}
+    assert "healthCheck" not in worker_container
     assert worker_secret_names == {"LABVIZ_POSTGRES_URL"}
     assert worker_environment["LABVIZ_RUNTIME_ROLE"] == "worker"
+
+    deployment_contract = (DEPLOY_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "`/api/v1/ready`" in deployment_contract
+    assert "ECS restart storms" in deployment_contract
+    assert "do not attach a PostgreSQL/S3 dependency probe" in deployment_contract
