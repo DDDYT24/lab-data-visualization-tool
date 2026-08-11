@@ -7,6 +7,7 @@ from .exceptions import (
     PersistenceError,
     PersistenceNotFound,
     PersistenceUnavailable,
+    ProjectRevisionConflict,
 )
 from .factory import build_project_store
 
@@ -16,6 +17,7 @@ __all__ = [
     "PersistenceError",
     "PersistenceNotFound",
     "PersistenceUnavailable",
+    "ProjectRevisionConflict",
     "ProjectStore",
     "build_project_store",
 ]

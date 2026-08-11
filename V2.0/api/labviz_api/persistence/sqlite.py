@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pandas as pd
 
@@ -13,6 +13,7 @@ from labviz_api.persistence.exceptions import (
     IdempotencyConflict,
     PersistenceConflict,
     PersistenceNotFound,
+    ProjectRevisionConflict,
 )
 from labviz_api.persistence_types import ProjectCreation
 from labviz_api.processing import (
@@ -21,7 +22,7 @@ from labviz_api.processing import (
     serialize_dataframe,
 )
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
-from labviz_api.repository import expires_in
+from labviz_api.repository import expires_in, iso_now
 from labviz_api.share_tokens import ShareTokenCodec
 
 
@@ -188,6 +189,77 @@ class SqliteProjectStore:
         del guest_token_digest
         return self.repository.save_project(project_id, owner_user_id)
 
+    def update_project_description(
+        self,
+        *,
+        project_id: str,
+        owner_user_id: str,
+        description: str,
+        expected_revision_id: str,
+    ) -> dict[str, Any]:
+        expected_id = UUID(expected_revision_id).hex
+        with self.repository._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            project = connection.execute(
+                """
+                SELECT id, description, current_revision_id, updated_at
+                FROM projects
+                WHERE id = ? AND storage_mode = 'saved-cloud' AND owner_user_id = ?
+                """,
+                (project_id, owner_user_id),
+            ).fetchone()
+            if project is None or project["current_revision_id"] is None:
+                raise PersistenceNotFound("Active saved project does not exist.")
+            if project["current_revision_id"] != expected_id:
+                raise ProjectRevisionConflict("The project description changed in another session.")
+            current = connection.execute(
+                """
+                SELECT revision_number FROM project_description_revisions
+                WHERE id = ? AND project_id = ?
+                """,
+                (expected_id, project_id),
+            ).fetchone()
+            if current is None:
+                raise ProjectRevisionConflict(
+                    "The project changed before its description could be saved."
+                )
+            if description == project["description"]:
+                return {
+                    "projectId": project_id,
+                    "description": description,
+                    "revisionId": UUID(expected_id),
+                    "revisionNumber": int(current["revision_number"]),
+                    "updatedAt": project["updated_at"],
+                }
+            revision_id = uuid4()
+            revision_number = int(current["revision_number"]) + 1
+            updated_at = iso_now()
+            connection.execute(
+                """
+                INSERT INTO project_description_revisions (
+                    id, project_id, revision_number, description, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (revision_id.hex, project_id, revision_number, description, updated_at),
+            )
+            updated = connection.execute(
+                """
+                UPDATE projects
+                SET description = ?, current_revision_id = ?, updated_at = ?
+                WHERE id = ? AND current_revision_id = ?
+                """,
+                (description, revision_id.hex, updated_at, project_id, expected_id),
+            )
+            if updated.rowcount != 1:
+                raise ProjectRevisionConflict("The project description changed in another session.")
+        return {
+            "projectId": project_id,
+            "description": description,
+            "revisionId": revision_id,
+            "revisionNumber": revision_number,
+            "updatedAt": updated_at,
+        }
+
     def duplicate_project(
         self,
         *,
@@ -330,7 +402,7 @@ class SqliteProjectStore:
                 "token": token,
                 "project_id": project["id"],
                 "title": project["title"],
-                "description": "A figure shared from LabViz.",
+                "description": str(share["description_snapshot"]),
                 "updated_at": project["updated_at"],
                 "chart": chart,
                 "preview": json.loads(project["preview_json"]),

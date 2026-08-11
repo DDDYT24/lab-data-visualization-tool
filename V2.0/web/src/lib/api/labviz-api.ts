@@ -8,6 +8,8 @@ import {
   exportJobSchema,
   processingJobSchema,
   projectListSchema,
+  projectDescriptionResponseSchema,
+  projectDescriptionTextSchema,
   projectSessionSchema,
   projectWorkspaceSchema,
   qualityReportSchema,
@@ -225,6 +227,28 @@ export const labvizApi = {
       `/projects/${encodeURIComponent(projectId)}/save`,
       projectSessionSchema,
       { method: "POST", signal },
+    );
+  },
+
+  updateProjectDescription(
+    projectId: string,
+    description: string,
+    expectedRevisionId: string,
+    signal?: AbortSignal,
+  ) {
+    const validatedDescription = projectDescriptionTextSchema.parse(description);
+    return request(
+      `/projects/${encodeURIComponent(projectId)}/description`,
+      projectDescriptionResponseSchema,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          description: validatedDescription,
+          expectedRevisionId,
+        }),
+        headers: { "Content-Type": "application/json" },
+        signal,
+      },
     );
   },
 

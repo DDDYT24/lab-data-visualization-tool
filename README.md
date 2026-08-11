@@ -69,13 +69,13 @@ V2.0 includes a runnable FastAPI contract/reference service for frontend
 development and end-to-end testing. It accepts CSV, TSV, delimited
 TXT, JSON, and XLSX uploads; builds bounded previews and explained quality
 findings; records user cleaning decisions; renders PNG, SVG, and PDF figures;
-and supports temporary projects, email-code sign-in, saved history, and
-read-only share links. Raw uploaded bytes are processed in memory and are not
+and supports temporary projects, email-code sign-in, saved history, authenticated plain-text
+project descriptions, and read-only revision-pinned share links. Raw uploaded bytes are processed in memory and are not
 written to the SQLite project database.
 
-This reference service is not a decision on the production backend framework.
-Production architecture, cloud storage, job execution, and the email provider
-will be selected separately after the frontend product workflow is approved.
+The approved production route is PostgreSQL 17 plus S3-compatible object storage with separate API,
+Web, and Worker runtimes. AWS deployment and production email evidence are not yet complete, so the
+V2.0 website remains an alpha rather than a production release.
 
 Prerequisites: Python 3.12 or 3.13 and Node.js 22.22.2 or newer. Python 3.12
 and Node.js 24 are used by CI and are the recommended development versions.
@@ -107,8 +107,8 @@ table. The Next.js development server proxies `/api/v1` to
 Local development uses console email delivery: request a sign-in code in the
 website, then copy the six-digit code printed in the API terminal. No email is
 sent in this mode. The reference service supports the documented
-`LABVIZ_SMTP_*` variables for integration testing, but a production provider
-has deliberately not been selected yet.
+`LABVIZ_SMTP_*` variables for integration testing. The approved production provider is Amazon SES,
+but its adapter and real-account delivery/feedback evidence remain Phase 6B work.
 For a separately hosted API, set `NEXT_PUBLIC_LABVIZ_API_URL` before starting
 Next.js and include the website origin in `LABVIZ_ALLOWED_ORIGINS`.
 

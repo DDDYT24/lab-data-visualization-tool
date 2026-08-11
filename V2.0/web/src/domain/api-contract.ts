@@ -3,6 +3,18 @@ import { z } from "zod";
 import { chartSpecSchema } from "./chart-spec";
 
 export const apiVersionSchema = z.literal("v1");
+export const PROJECT_DESCRIPTION_MAX_UTF8_BYTES = 4_000;
+export const projectDescriptionTextSchema = z.string().superRefine((value, ctx) => {
+  if (value.includes("\0")) {
+    ctx.addIssue({ code: "custom", message: "Description must not contain NUL." });
+  }
+  if (new TextEncoder().encode(value).byteLength > PROJECT_DESCRIPTION_MAX_UTF8_BYTES) {
+    ctx.addIssue({
+      code: "custom",
+      message: `Description must not exceed ${PROJECT_DESCRIPTION_MAX_UTF8_BYTES} UTF-8 bytes.`,
+    });
+  }
+});
 const downloadLocationSchema = z.union([
   z.string().url(),
   z.string().startsWith("/api/v1/"),
@@ -38,6 +50,8 @@ export const projectSessionSchema = z.object({
   apiVersion: apiVersionSchema,
   projectId: z.string().min(1),
   storageMode: z.enum(["temporary-cloud", "saved-cloud", "local"]),
+  description: projectDescriptionTextSchema,
+  currentRevisionId: z.string().uuid().nullable(),
   source: sourceFileSchema,
   job: processingJobSchema.nullable(),
   expiresAt: z.string().datetime().nullable(),
@@ -128,6 +142,15 @@ export const savedChartResponseSchema = z.object({
   apiVersion: apiVersionSchema,
   projectId: z.string().min(1),
   chart: chartSpecSchema,
+  updatedAt: z.string().datetime(),
+});
+
+export const projectDescriptionResponseSchema = z.object({
+  apiVersion: apiVersionSchema,
+  projectId: z.string().min(1),
+  description: projectDescriptionTextSchema,
+  revisionId: z.string().uuid(),
+  revisionNumber: z.number().int().positive(),
   updatedAt: z.string().datetime(),
 });
 
@@ -313,6 +336,7 @@ export type PreviewColumn = z.infer<typeof previewColumnSchema>;
 export type PreviewRow = z.infer<typeof previewRowSchema>;
 export type ProcessingJob = z.infer<typeof processingJobSchema>;
 export type ProjectList = z.infer<typeof projectListSchema>;
+export type ProjectDescription = z.infer<typeof projectDescriptionResponseSchema>;
 export type ProjectSession = z.infer<typeof projectSessionSchema>;
 export type ProjectWorkspace = z.infer<typeof projectWorkspaceSchema>;
 export type ProjectSummary = z.infer<typeof projectSummarySchema>;

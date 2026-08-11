@@ -352,6 +352,24 @@
     "close": "关闭",
     "shareFailed": "无法创建分享链接。"
   },
+  "projectDescription": {
+    "title": "项目说明",
+    "body": "为已保存项目添加纯文本说明；已有分享版本和论文导出版本不会改变。",
+    "label": "说明",
+    "placeholder": "说明实验、数据集或图表背景。",
+    "byteCount": "已使用 {bytes} / {limit} 个 UTF-8 字节",
+    "tooLong": "已输入 {bytes} 个字节，最多允许 {limit} 个 UTF-8 字节。",
+    "saveFirst": "请先把项目保存到云端历史，再添加说明。",
+    "loading": "正在载入当前项目修订…",
+    "empty": "尚未添加项目说明。",
+    "save": "保存说明",
+    "saved": "项目说明已保存为新的项目修订。",
+    "conflict": "另一会话已修改项目说明，请重新载入后再编辑。",
+    "reload": "重新载入",
+    "unauthorized": "你已无权编辑此项目。",
+    "deleted": "此项目已删除，无法继续在这里编辑。",
+    "failed": "无法保存项目说明；现有项目未被修改。"
+  },
   "history": {
     "title": "项目历史",
     "description": "继续处理已保存的工作，同时不保留原始上传文件。",

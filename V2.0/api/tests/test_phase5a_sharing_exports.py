@@ -783,6 +783,9 @@ def test_write_intent_recovers_export_across_store_restart(
         assert job is not None and job.status == "rendering"
         assert job.pending_stored_object_id is not None
         assert intent is not None and intent.status == "pending"
+        run = session.get(ProcessingRun, job.current_processing_run_id)
+        assert run is not None
+        run.started_at = datetime.now(UTC) + timedelta(seconds=30)
         job_id = job.id
 
     restarted = PostgresProjectStore(postgres_database, storage, 7_200)
@@ -797,6 +800,9 @@ def test_write_intent_recovers_export_across_store_restart(
         )
         assert job is not None and job.status == "ready"
         assert job.pending_stored_object_id is None
+        run = session.get(ProcessingRun, job.current_processing_run_id)
+        assert run is not None and run.finished_at is not None
+        assert run.started_at is not None and run.finished_at >= run.started_at
         assert intent is not None and intent.status == "completed"
         assert session.get(PublicationExport, job_id) is not None
 

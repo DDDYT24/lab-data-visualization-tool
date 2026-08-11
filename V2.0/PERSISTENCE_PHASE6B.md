@@ -14,7 +14,7 @@ adapter.
 
 - [x] **6B-1:** implemented and locally verified; real staging ALB chain evidence remains pending.
 - [x] **6B-2:** implemented and locally verified; no AWS evidence is required.
-- [ ] **6B-4:** not started.
+- [x] **6B-4:** implemented and locally verified; no AWS evidence is required.
 - [ ] **6B-3 offline portion:** not started; live AWS evidence remains mandatory.
 
 6B-2 also makes the limiter vocabulary consistently client-identity based, permits the client and
@@ -118,6 +118,30 @@ Add a plain-text description editor without weakening revision immutability:
 Acceptance covers PostgreSQL and SQLite contract parity, concurrent stale edits, authorization,
 share immutability, duplicate/delete/restore behavior, schema fixtures, Vitest, and Playwright.
 
+### 6B-4 implemented contract
+
+- `PATCH /api/v1/projects/{project_id}/description` accepts `description` plus
+  `expectedRevisionId`; the shared limit is 4,000 UTF-8 bytes and NUL is rejected.
+- Only the authenticated owner of an active `saved-cloud` project may call it. A temporary project
+  returns `project-must-be-saved`; missing, deleted, and other-owner projects retain the existing
+  non-disclosure boundary.
+- PostgreSQL locks the Project, creates a complete immutable ProjectRevision reusing the current
+  dataset/chart/quality/decision lineage, and advances the working Project atomically. A stale
+  revision may merge only when its description still matches the current description; competing
+  description edits return `project-revision-conflict`. Saving identical text is a no-op.
+- Pinned shares read the description from their ProjectRevision, publication exports remain pinned,
+  restore synchronizes the working description from the restored revision, and duplicate creates
+  an independent revision lineage.
+- SQLite retains API parity with a local immutable description-revision token/table and pinned
+  share snapshots; it does not imitate the production PostgreSQL scientific lineage graph.
+- The English/Chinese editor renders text only and has explicit unsaved, empty, loading, saving,
+  success, conflict/reload, unauthorized, deleted, size-limit, and recoverable-error behavior.
+
+Full regression testing also exposed a pre-existing application/PostgreSQL clock-skew edge in
+pending publication-export recovery. Export ProcessingRun completion now clamps to `started_at`,
+with a deterministic future-start probe, so a healthy recovery cannot violate the database
+`finish_after_start` constraint.
+
 ## Required verification
 
 From `V2.0/api`, with the shared PostgreSQL 17 and pinned MinIO services running:
@@ -151,7 +175,9 @@ link checks, container builds, `git diff --check`, and final status/scope audits
 Phase 6B must not add Redis, Kafka, Celery, billing, Terraform resources, a second production data
 route, mutable shares, regulated-compliance claims, or long-lived AWS credentials.
 
-Rollback is the reverse ordered deployment of 6B-4 through 6B-1. Code requiring migration `0009`
+Rollback is the reverse ordered deployment of 6B-4 through 6B-1. Rolling back 6B-4 removes the
+additive endpoint/UI and stops creating description revisions; it must not rewrite existing
+ProjectRevision specifications or pinned share snapshots. Code requiring migration `0009`
 must be removed before downgrading to `0008`; downgrade is allowed only after the active and retained
 limiter rows are confirmed disposable. SES application rollback restores the previous sender only
 in non-production; production fails closed rather than reverting to console delivery.

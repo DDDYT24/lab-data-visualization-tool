@@ -37,6 +37,8 @@ type WorkspaceState = {
   selectedFile: SelectedFile | null;
   projectId: string | null;
   storageMode: ProjectSession["storageMode"] | null;
+  description: string;
+  currentRevisionId: string | null;
   job: ProcessingJob | null;
   preview: DataPreview | null;
   quality: QualityReport | null;
@@ -54,6 +56,7 @@ type WorkspaceState = {
   setSession: (session: ProjectSession) => void;
   hydrateWorkspace: (workspace: ProjectWorkspace) => void;
   markProjectSaved: (session: ProjectSession) => void;
+  applyProjectDescription: (description: string, revisionId: string) => void;
   addShare: (share: ShareSummary) => void;
   removeShare: (token: string) => void;
   setJob: (job: ProcessingJob) => void;
@@ -77,6 +80,8 @@ const initialState = {
   selectedFile: null,
   projectId: null,
   storageMode: null,
+  description: "",
+  currentRevisionId: null,
   job: null,
   preview: null,
   quality: null,
@@ -98,6 +103,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       selectedFile,
       projectId: null,
       storageMode: null,
+      description: "",
+      currentRevisionId: null,
       job: null,
       preview: null,
       quality: null,
@@ -115,6 +122,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     set({
       projectId,
       storageMode: null,
+      description: "",
+      currentRevisionId: null,
       job: null,
       preview: null,
       quality: null,
@@ -133,6 +142,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       return {
         projectId: session.projectId,
         storageMode: session.storageMode,
+        description: session.description,
+        currentRevisionId: session.currentRevisionId,
         job: session.job,
         selectedFile: {
           ...state.selectedFile,
@@ -152,6 +163,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     set({
       projectId: workspace.session.projectId,
       storageMode: workspace.session.storageMode,
+      description: workspace.session.description,
+      currentRevisionId: workspace.session.currentRevisionId,
       job: workspace.session.job,
       selectedFile: {
         name: workspace.session.source.name,
@@ -182,9 +195,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   markProjectSaved: (session) =>
     set({
       storageMode: session.storageMode,
+      description: session.description,
+      currentRevisionId: session.currentRevisionId,
       job: session.job,
       loadError: null,
     }),
+  applyProjectDescription: (description, currentRevisionId) =>
+    set({ description, currentRevisionId }),
   addShare: (share) =>
     set((state) => ({
       shares: [share, ...state.shares.filter((item) => item.token !== share.token)],

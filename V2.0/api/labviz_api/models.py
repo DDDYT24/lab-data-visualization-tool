@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 API_VERSION: Literal["v1"] = "v1"
+MAX_PROJECT_DESCRIPTION_UTF8_BYTES = 4_000
 JsonScalar = str | int | float | bool | None
 
 
@@ -44,6 +46,8 @@ class ProcessingJob(VersionedModel):
 class ProjectSession(VersionedModel):
     project_id: str
     storage_mode: Literal["temporary-cloud", "saved-cloud", "local"]
+    description: str
+    current_revision_id: UUID | None
     source: SourceFile
     job: ProcessingJob | None = None
     expires_at: str | None = None
@@ -244,6 +248,34 @@ class ChartRequest(ContractModel):
 class SavedChartResponse(VersionedModel):
     project_id: str
     chart: ChartSpec
+    updated_at: str
+
+
+class UpdateProjectDescriptionRequest(ContractModel):
+    description: str
+    expected_revision_id: UUID
+
+    @field_validator("description")
+    @classmethod
+    def validate_plain_text_description(cls, value: str) -> str:
+        if "\x00" in value:
+            raise ValueError("description cannot contain a null character")
+        try:
+            size = len(value.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise ValueError("description must be valid UTF-8 text") from exc
+        if size > MAX_PROJECT_DESCRIPTION_UTF8_BYTES:
+            raise ValueError(
+                f"description cannot exceed {MAX_PROJECT_DESCRIPTION_UTF8_BYTES} UTF-8 bytes"
+            )
+        return value
+
+
+class ProjectDescriptionResponse(VersionedModel):
+    project_id: str
+    description: str
+    revision_id: UUID
+    revision_number: int = Field(ge=1)
     updated_at: str
 
 

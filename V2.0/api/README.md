@@ -6,7 +6,7 @@ changing their `/api/v1` request or response models. The two project backends ar
 dual-written. Phase 3 extends that selected backend through quality reports, immutable cleaning
 decisions, derived Parquet DatasetVersions, and cleaned-data download. Phase 4 adds identity and
 project lifecycle persistence. Phase 5A adds revision-pinned HMAC shares and immutable publication
-exports without changing the SQLite reference repository. Phase 5B-1 adds independent PostgreSQL
+exports while keeping SQLite as the reference adapter. Phase 5B-1 adds independent PostgreSQL
 worker lease, fencing, heartbeat, retry, and quarantine infrastructure. Phase 5B-2 activates
 fenced reconciliation, lifecycle purge, metadata cleanup, StoredObject GC, and two-pass orphan
 staging cleanup. The SQLite reference repository remains unchanged.
@@ -17,6 +17,12 @@ email buckets. PostgreSQL is the multi-host authority; SQLite preserves equivale
 semantics. Configure the bounded window and limits with
 `LABVIZ_AUTH_RATE_LIMIT_WINDOW_SECONDS`, `LABVIZ_AUTH_CLIENT_REQUEST_LIMIT`, and
 `LABVIZ_AUTH_EMAIL_REQUEST_LIMIT`.
+Phase 6B-4 adds authenticated saved-project descriptions through
+`PATCH /api/v1/projects/{project_id}/description`. The request supplies plain-text `description`
+and `expectedRevisionId`; text is limited to 4,000 UTF-8 bytes and cannot contain NUL. PostgreSQL
+creates an immutable ProjectRevision, while SQLite keeps a lightweight immutable description
+revision for contract parity. Existing pinned shares and publication exports do not change, and an
+identical update creates no needless revision.
 
 ## Production runtime
 

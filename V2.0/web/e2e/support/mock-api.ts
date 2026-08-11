@@ -3,6 +3,8 @@ import type { Page, Route } from "@playwright/test";
 const UPDATED_AT = "2030-01-02T03:04:05Z";
 const PROJECT_ID = "project-e2e";
 const JOB_ID = "job-e2e";
+const REVISION_1 = "00000000-0000-4000-8000-000000000001";
+const REVISION_2 = "00000000-0000-4000-8000-000000000002";
 const PNG_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XfW2AAAAAElFTkSuQmCC";
 const SVG_DATA_URL =
@@ -98,6 +100,7 @@ export type MockApiObservations = {
   analysisModels: string[];
   cleaningActions: string[];
   deletedProjects: string[];
+  descriptionUpdates: string[];
   duplicatedProjects: string[];
   exportRequests: number;
   exportFormats: string[];
@@ -112,6 +115,9 @@ type MockApiOptions = {
   deliveryMode?: "console" | "email";
   history?: "empty" | "saved";
   shareExpired?: boolean;
+  authenticated?: boolean;
+  descriptionFailure?: "conflict" | "unauthorized" | "deleted" | "server";
+  descriptionLoading?: boolean;
 };
 
 function json(route: Route, body: unknown, status = 200) {
@@ -142,6 +148,7 @@ export async function installMockApi(
     analysisModels: [],
     cleaningActions: [],
     deletedProjects: [],
+    descriptionUpdates: [],
     duplicatedProjects: [],
     exportRequests: 0,
     exportFormats: [],
@@ -151,6 +158,8 @@ export async function installMockApi(
     verifiedCode: null,
   };
   let historyProjectVisible = options.history !== "empty";
+  let projectDescription = "";
+  let currentRevisionId = REVISION_1;
 
   await page.context().route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -165,6 +174,8 @@ export async function installMockApi(
         apiVersion: "v1",
         projectId: PROJECT_ID,
         storageMode: "temporary-cloud",
+        description: "",
+        currentRevisionId: null,
         source: {
           name: "experiment-1.87mb.csv",
           size: 1_960_000,
@@ -182,6 +193,8 @@ export async function installMockApi(
         apiVersion: "v1",
         projectId: PROJECT_ID,
         storageMode: "temporary-cloud",
+        description: "",
+        currentRevisionId: null,
         source: {
           name: "labviz-sample.csv",
           size: 18_432,
@@ -205,6 +218,8 @@ export async function installMockApi(
           apiVersion: "v1",
           projectId: PROJECT_ID,
           storageMode: "saved-cloud",
+          description: projectDescription,
+          currentRevisionId: options.descriptionLoading ? null : currentRevisionId,
           source: {
             name: "experiment-1.87mb.csv",
             size: 1_960_000,
@@ -239,6 +254,85 @@ export async function installMockApi(
         await new Promise((resolve) => setTimeout(resolve, options.dataDelayMs));
       }
       return json(route, quality);
+    }
+
+    if (method === "GET" && path === `/projects/${PROJECT_ID}`) {
+      return json(route, {
+        apiVersion: "v1",
+        projectId: PROJECT_ID,
+        storageMode: "saved-cloud",
+        description: projectDescription,
+        currentRevisionId: options.descriptionLoading ? null : currentRevisionId,
+        source: {
+          name: "experiment-1.87mb.csv",
+          size: 1_960_000,
+          mediaType: "text/csv",
+          sheetName: null,
+          availableSheets: [],
+          headerRow: 1,
+        },
+        job: processingJob("ready"),
+        expiresAt: null,
+      });
+    }
+
+    if (method === "PATCH" && path === `/projects/${PROJECT_ID}/description`) {
+      if (options.descriptionFailure === "conflict") {
+        return json(
+          route,
+          {
+            code: "project-revision-conflict",
+            message: "The project description changed in another session.",
+          },
+          409,
+        );
+      }
+      if (options.descriptionFailure === "unauthorized") {
+        return json(
+          route,
+          { code: "project-access-denied", message: "Access denied." },
+          403,
+        );
+      }
+      if (options.descriptionFailure === "deleted") {
+        return json(
+          route,
+          { code: "project-not-found", message: "Project not found." },
+          404,
+        );
+      }
+      if (options.descriptionFailure === "server") {
+        return json(
+          route,
+          { code: "description-unavailable", message: "Temporary failure." },
+          500,
+        );
+      }
+      const body = request.postDataJSON() as {
+        description: string;
+        expectedRevisionId: string;
+      };
+      if (body.expectedRevisionId !== currentRevisionId) {
+        return json(
+          route,
+          {
+            code: "project-revision-conflict",
+            message: "The project description changed in another session.",
+          },
+          409,
+        );
+      }
+      projectDescription = body.description;
+      currentRevisionId = REVISION_2;
+      observations.descriptionUpdates.push(body.description);
+      return json(route, {
+        apiVersion: "v1",
+        projectId: PROJECT_ID,
+        description: projectDescription,
+        revisionId: currentRevisionId,
+        revisionNumber: 2,
+        updatedAt: UPDATED_AT,
+      });
     }
 
     if (
@@ -379,8 +473,10 @@ export async function installMockApi(
     if (method === "GET" && path === "/auth/me") {
       return json(route, {
         apiVersion: "v1",
-        authenticated: false,
-        user: null,
+        authenticated: options.authenticated ?? false,
+        user: options.authenticated
+          ? { id: "user-e2e", email: "researcher@example.com" }
+          : null,
       });
     }
 
@@ -408,6 +504,8 @@ export async function installMockApi(
         apiVersion: "v1",
         projectId: "project-copy-e2e",
         storageMode: "saved-cloud",
+        description: projectDescription,
+        currentRevisionId,
         source: {
           name: "experiment.csv",
           size: 18_432,

@@ -53,6 +53,8 @@ class ProjectRepository:
                 CREATE TABLE IF NOT EXISTS projects (
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    current_revision_id TEXT,
                     source_json TEXT NOT NULL,
                     storage_mode TEXT NOT NULL,
                     owner_user_id TEXT,
@@ -88,7 +90,17 @@ class ProjectRepository:
                     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
                     downloads_enabled INTEGER NOT NULL,
                     disabled INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    description_snapshot TEXT NOT NULL DEFAULT ''
+                );
+
+                CREATE TABLE IF NOT EXISTS project_description_revisions (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                    revision_number INTEGER NOT NULL CHECK (revision_number >= 1),
+                    description TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE (project_id, revision_number)
                 );
 
                 CREATE TABLE IF NOT EXISTS exports (
@@ -161,6 +173,9 @@ class ProjectRepository:
                 CREATE INDEX IF NOT EXISTS idx_projects_owner
                 ON projects(owner_user_id, updated_at DESC);
 
+                CREATE INDEX IF NOT EXISTS idx_project_description_revisions_project
+                ON project_description_revisions(project_id, revision_number);
+
                 CREATE INDEX IF NOT EXISTS idx_exports_project
                 ON exports(project_id, created_at DESC);
 
@@ -180,6 +195,54 @@ class ProjectRepository:
                 ON upload_idempotency(expires_at);
                 """
             )
+            project_columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(projects)").fetchall()
+            }
+            if "description" not in project_columns:
+                connection.execute(
+                    "ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+                )
+            if "current_revision_id" not in project_columns:
+                connection.execute("ALTER TABLE projects ADD COLUMN current_revision_id TEXT")
+            share_columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(shares)").fetchall()
+            }
+            description_snapshot_added = "description_snapshot" not in share_columns
+            if description_snapshot_added:
+                connection.execute(
+                    "ALTER TABLE shares ADD COLUMN description_snapshot TEXT NOT NULL DEFAULT ''"
+                )
+            for project in connection.execute(
+                """
+                SELECT id, description, updated_at FROM projects
+                WHERE current_revision_id IS NULL AND storage_mode = 'saved-cloud'
+                """
+            ).fetchall():
+                revision_id = uuid4().hex
+                connection.execute(
+                    """
+                    INSERT INTO project_description_revisions (
+                        id, project_id, revision_number, description, created_at
+                    ) VALUES (?, ?, 1, ?, ?)
+                    """,
+                    (revision_id, project["id"], project["description"], project["updated_at"]),
+                )
+                connection.execute(
+                    "UPDATE projects SET current_revision_id = ? WHERE id = ?",
+                    (revision_id, project["id"]),
+                )
+            if description_snapshot_added:
+                connection.execute(
+                    """
+                    UPDATE shares
+                    SET description_snapshot = COALESCE(
+                        (SELECT description FROM projects WHERE projects.id = shares.project_id),
+                        ''
+                    )
+                    """
+                )
             job_columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(jobs)").fetchall()
             }
@@ -336,14 +399,38 @@ class ProjectRepository:
         message: str,
         error_code: str | None = None,
     ) -> None:
+        updated_at = iso_now()
         with self._connect() as connection:
+            if stage == "ready":
+                project = connection.execute(
+                    """
+                    SELECT projects.id, projects.description, projects.current_revision_id
+                    FROM projects JOIN jobs ON jobs.project_id = projects.id
+                    WHERE jobs.id = ?
+                    """,
+                    (job_id,),
+                ).fetchone()
+                if project is not None and project["current_revision_id"] is None:
+                    revision_id = uuid4().hex
+                    connection.execute(
+                        """
+                        INSERT INTO project_description_revisions (
+                            id, project_id, revision_number, description, created_at
+                        ) VALUES (?, ?, 1, ?, ?)
+                        """,
+                        (revision_id, project["id"], project["description"], updated_at),
+                    )
+                    connection.execute(
+                        "UPDATE projects SET current_revision_id = ? WHERE id = ?",
+                        (revision_id, project["id"]),
+                    )
             connection.execute(
                 """
                 UPDATE jobs
                 SET stage = ?, progress = ?, message = ?, error_code = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (stage, progress, message, error_code, iso_now(), job_id),
+                (stage, progress, message, error_code, updated_at, job_id),
             )
 
     def recover_stale_jobs(self, stale_after_seconds: int = 900) -> int:
@@ -618,14 +705,35 @@ class ProjectRepository:
     def save_project(self, project_id: str, owner_user_id: str) -> str:
         updated_at = iso_now()
         with self._connect() as connection:
+            project = connection.execute(
+                """
+                SELECT description, current_revision_id FROM projects
+                WHERE id = ? AND (owner_user_id IS NULL OR owner_user_id = ?)
+                """,
+                (project_id, owner_user_id),
+            ).fetchone()
+            revision_id: str | None
+            if project is not None and project["current_revision_id"] is None:
+                revision_id = uuid4().hex
+                connection.execute(
+                    """
+                    INSERT INTO project_description_revisions (
+                        id, project_id, revision_number, description, created_at
+                    ) VALUES (?, ?, 1, ?, ?)
+                    """,
+                    (revision_id, project_id, project["description"], updated_at),
+                )
+            else:
+                revision_id = project["current_revision_id"] if project is not None else None
             connection.execute(
                 """
                 UPDATE projects
                 SET storage_mode = 'saved-cloud', owner_user_id = ?,
-                    guest_token_digest = NULL, expires_at = NULL, updated_at = ?
+                    guest_token_digest = NULL, expires_at = NULL, updated_at = ?,
+                    current_revision_id = COALESCE(current_revision_id, ?)
                 WHERE id = ? AND (owner_user_id IS NULL OR owner_user_id = ?)
                 """,
-                (owner_user_id, updated_at, project_id, owner_user_id),
+                (owner_user_id, updated_at, revision_id, project_id, owner_user_id),
             )
         return updated_at
 
@@ -638,6 +746,7 @@ class ProjectRepository:
         owner_user_id: str,
     ) -> None:
         now = iso_now()
+        copy_revision_id = uuid4().hex
         with self._connect() as connection:
             source = connection.execute(
                 "SELECT * FROM projects WHERE id = ?", (source_project_id,)
@@ -647,13 +756,16 @@ class ProjectRepository:
             connection.execute(
                 """
                 INSERT INTO projects (
-                    id, title, source_json, storage_mode, owner_user_id, expires_at,
-                    updated_at, chart_json, preview_json, quality_json, data_blob
-                ) VALUES (?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?)
+                    id, title, description, current_revision_id, source_json, storage_mode,
+                    owner_user_id, expires_at, updated_at, chart_json, preview_json,
+                    quality_json, data_blob
+                ) VALUES (?, ?, ?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
                     f"{source['title']} copy",
+                    source["description"],
+                    copy_revision_id,
                     source["source_json"],
                     owner_user_id,
                     now,
@@ -662,6 +774,14 @@ class ProjectRepository:
                     source["quality_json"],
                     source["data_blob"],
                 ),
+            )
+            connection.execute(
+                """
+                INSERT INTO project_description_revisions (
+                    id, project_id, revision_number, description, created_at
+                ) VALUES (?, ?, 1, ?, ?)
+                """,
+                (copy_revision_id, project_id, source["description"], now),
             )
             connection.execute(
                 """
@@ -705,10 +825,12 @@ class ProjectRepository:
             )
             connection.execute(
                 """
-                INSERT INTO shares (token, project_id, downloads_enabled, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO shares (
+                    token, project_id, downloads_enabled, created_at, description_snapshot
+                )
+                SELECT ?, id, ?, ?, description FROM projects WHERE id = ?
                 """,
-                (token, project_id, int(downloads_enabled), created_at),
+                (token, int(downloads_enabled), created_at, project_id),
             )
         return created_at
 

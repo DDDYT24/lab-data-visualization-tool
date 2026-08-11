@@ -83,6 +83,7 @@ from .exceptions import (
     PersistenceError,
     PersistenceNotFound,
     PersistenceUnavailable,
+    ProjectRevisionConflict,
 )
 
 QUALITY_PROFILER_NAME = "labviz-quality"
@@ -1143,6 +1144,7 @@ class PostgresProjectStore:
                 _id(project.current_revision_id) if project.current_revision_id else None
             ),
             "title": project.title,
+            "description": project.description,
             "source_json": json.dumps(source_document, ensure_ascii=False),
             "storage_mode": project.storage_mode,
             "owner_user_id": _id(project.owner_user_id) if project.owner_user_id else None,
@@ -1303,6 +1305,94 @@ class PostgresProjectStore:
                 )
                 uow.commit()
                 return iso_at(now)
+        except Exception as exc:
+            raise _translate_database_error(exc) from exc
+
+    def update_project_description(
+        self,
+        *,
+        project_id: str,
+        owner_user_id: str,
+        description: str,
+        expected_revision_id: str,
+    ) -> dict[str, Any]:
+        try:
+            with self._uow() as uow:
+                assert uow.session is not None
+                project = uow.projects.get_project(project_id, for_update=True)
+                if (
+                    project is None
+                    or project.storage_mode != "saved-cloud"
+                    or project.owner_user_id != _uuid(owner_user_id)
+                    or project.current_revision_id is None
+                ):
+                    raise PersistenceNotFound("Active saved project does not exist.")
+                current = uow.projects.current_revision(project)
+                expected = uow.session.get(ProjectRevision, _uuid(expected_revision_id))
+                if current is None or expected is None or expected.project_id != project.id:
+                    raise ProjectRevisionConflict(
+                        "The project changed before its description could be saved."
+                    )
+                current_spec = ProjectSpecV1.model_validate(current.spec_document)
+                expected_spec = ProjectSpecV1.model_validate(expected.spec_document)
+                if (
+                    expected.id != current.id
+                    and expected_spec.description != current_spec.description
+                ):
+                    raise ProjectRevisionConflict(
+                        "The project description changed in another session."
+                    )
+                if description == current_spec.description:
+                    uow.commit()
+                    return {
+                        "projectId": project.id.hex,
+                        "description": current_spec.description,
+                        "revisionId": current.id,
+                        "revisionNumber": current.revision_number,
+                        "updatedAt": iso_at(project.updated_at),
+                    }
+
+                now = cast(datetime, uow.session.scalar(select(func.clock_timestamp())))
+                revision_number = (
+                    int(
+                        uow.session.scalar(
+                            select(func.max(ProjectRevision.revision_number)).where(
+                                ProjectRevision.project_id == project.id
+                            )
+                        )
+                        or 0
+                    )
+                    + 1
+                )
+                next_revision = ProjectRevision(
+                    id=uuid4(),
+                    project=project,
+                    active_dataset_version_id=current.active_dataset_version_id,
+                    chart_spec_revision_id=current.chart_spec_revision_id,
+                    quality_report_id=current.quality_report_id,
+                    cleaning_decision_set_id=current.cleaning_decision_set_id,
+                    created_by_user_id=project.owner_user_id,
+                    revision_number=revision_number,
+                    spec_schema_version=current.spec_schema_version,
+                    spec_document=current_spec.model_copy(
+                        update={"description": description}
+                    ).model_dump(mode="json", by_alias=True),
+                    created_at=now,
+                )
+                project.description = description
+                project.current_revision = next_revision
+                project.last_activity_at = now
+                project.updated_at = now
+                project.lock_version += 1
+                uow.session.add(next_revision)
+                uow.commit()
+                return {
+                    "projectId": project.id.hex,
+                    "description": description,
+                    "revisionId": next_revision.id,
+                    "revisionNumber": revision_number,
+                    "updatedAt": iso_at(now),
+                }
         except Exception as exc:
             raise _translate_database_error(exc) from exc
 
@@ -2411,7 +2501,7 @@ class PostgresProjectStore:
                     "token": token,
                     "project_id": _id(project.id),
                     "title": str(chart.spec_document.get("title") or spec.title),
-                    "description": project.description,
+                    "description": spec.description,
                     "updated_at": iso_at(revision.created_at),
                     "chart": chart.spec_document,
                     "preview": version.preview_document,
@@ -2674,7 +2764,7 @@ class PostgresProjectStore:
         job.finished_at = now
         job.updated_at = now
         run.status = "succeeded"
-        run.finished_at = now
+        run.finished_at = max(now, run.started_at) if run.started_at is not None else now
         run.error_code = None
         run.error_message = None
         self._bind_export_to_shares(session, publication, now)
@@ -2933,7 +3023,9 @@ class PostgresProjectStore:
                         )
                     if candidate is not None:
                         run.status = "succeeded"
-                        run.finished_at = now
+                        run.finished_at = (
+                            max(now, run.started_at) if run.started_at is not None else now
+                        )
                         job.status = "ready"
                         job.message = "Your publication-ready figure is ready to download."
                         job.finished_at = now
@@ -4251,6 +4343,7 @@ class PostgresProjectStore:
                 spec = ProjectSpecV1.model_validate(revision.spec_document)
                 project.current_revision = revision
                 project.title = spec.title
+                project.description = spec.description
                 project.last_activity_at = now
                 project.updated_at = now
                 project.lock_version += 1
