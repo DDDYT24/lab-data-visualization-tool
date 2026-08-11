@@ -10,7 +10,8 @@ adapter.
 
 ## Admission and Git object
 
-- Phase 6-PRE-2 must be the direct base and Phase 6-PRE-3 must report `PASS` before work starts.
+- The accepted Phase 6-PRE closeout commit must be the direct base, contain Phase 6-PRE-2, and link
+  a Phase 6-PRE-3 `PASS` report before work starts.
 - Record the exact base and candidate commit for every numbered unit below. Each unit is one local
   commit, is verified before the next unit starts, and is never pushed by an implementation agent.
 - Final Phase 6B acceptance is read-only over the complete ordered 6B range and follows
