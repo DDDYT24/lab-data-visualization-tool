@@ -1,6 +1,7 @@
 # Phase 6 AWS Dependency Matrix
 
-**Status:** Active execution boundary from 2026-08-11.
+**Status:** AWS-independent units completed on 2026-08-12; final Phase 6B remains blocked on the
+real evidence listed in [`PHASE6B_LOCAL_ACCEPTANCE.md`](PHASE6B_LOCAL_ACCEPTANCE.md).
 
 This matrix allows useful Phase 6 work to continue while AWS CLI authentication is unavailable
 without weakening the ordered phase gates or presenting local substitutes as AWS evidence.

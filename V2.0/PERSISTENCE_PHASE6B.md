@@ -2,7 +2,8 @@
 
 **Status:** Phase 6-PRE accepted. AWS-independent implementation is active under
 [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md); final Phase 6B acceptance
-remains pending real SES and staging ALB evidence.
+remains pending real SES and staging ALB evidence. Every local unit has passed; see
+[`PHASE6B_LOCAL_ACCEPTANCE.md`](PHASE6B_LOCAL_ACCEPTANCE.md).
 
 Phase 6B makes the existing application safe and complete at the public application boundary. It
 does not provision long-lived AWS infrastructure; Phase 6C owns Terraform and live service
