@@ -61,8 +61,11 @@ def postgres_database() -> Iterator[Database]:
         database.dispose()
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
     with database.engine.begin() as connection:
-        if "projects" in inspect(connection).get_table_names():
+        tables = set(inspect(connection).get_table_names())
+        if "projects" in tables:
             connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        if "auth_rate_limit_buckets" in tables:
+            connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(_alembic_config(), "base")
     command.upgrade(_alembic_config(), "head")
     try:
@@ -76,6 +79,7 @@ def postgres_database() -> Iterator[Database]:
 def empty_postgres(postgres_database: Database) -> None:
     with postgres_database.engine.begin() as connection:
         connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
         connection.execute(
             text(
                 "UPDATE worker_leases SET lease_owner = NULL, lease_until = NULL, "
@@ -516,6 +520,8 @@ def test_write_intent_is_the_authoritative_export_reconciliation_lease(
 def test_0006_upgrade_downgrade_reupgrade_and_schema_drift(
     postgres_database: Database,
 ) -> None:
+    with postgres_database.engine.begin() as connection:
+        connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     config = _alembic_config()
     command.downgrade(config, "0005_share_publication_exports")
     inspector = inspect(postgres_database.engine)

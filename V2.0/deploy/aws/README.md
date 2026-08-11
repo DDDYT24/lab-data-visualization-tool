@@ -43,6 +43,15 @@ Set `LABVIZ_TRUSTED_PROXY_CIDRS` to the private ALB subnet CIDRs and
 untrusted immediate peer and stores only the keyed client digest; Phase 6C staging must recheck the
 real ALB chain before public traffic.
 
+Authentication request limits use PostgreSQL database-time fixed windows and atomically consume
+the client and normalized-email buckets. Keep the initial production values at the migration-
+backfilled defaults (`3600`, `30`, and `10`) through the first full window after deploying
+migration `0009`; later changes are reviewed configuration releases because changing a window can
+intentionally start a new bucket generation. Limiter failure returns 503 and never sends a code.
+The client and email values are independently tunable within their bounds. Deployment must run
+`0009` before admitting the new API revision and must not keep an old count-based API revision
+serving during the transition; this prevents post-backfill requests from bypassing the new buckets.
+
 Secrets are referenced from Secrets Manager in `api-task-definition.example.json`; no secret value
 or static AWS access key belongs in a task definition. The task role grants only the selected S3
 prefix and the required KMS operations. Web has no database, object-storage, or SMTP credentials.

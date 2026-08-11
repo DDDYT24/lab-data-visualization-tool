@@ -15,7 +15,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.exc import DBAPIError
 
 from labviz_api.auth import AuthService, MemoryEmailSender
@@ -69,7 +69,10 @@ def postgres_database() -> Iterator[Database]:
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
     config = alembic_config(POSTGRES_URL)
     with database.engine.begin() as connection:
+        tables = set(inspect(connection).get_table_names())
         connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        if "auth_rate_limit_buckets" in tables:
+            connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     try:
@@ -81,7 +84,12 @@ def postgres_database() -> Iterator[Database]:
 @pytest.fixture(autouse=True)
 def empty_postgres(postgres_database: Database) -> None:
     with postgres_database.engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        connection.execute(
+            text(
+                "TRUNCATE TABLE users, stored_objects, projects, "
+                "auth_rate_limit_buckets, auth_requests CASCADE"
+            )
+        )
 
 
 def _frame() -> pd.DataFrame:

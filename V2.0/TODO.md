@@ -83,7 +83,7 @@ Next:
 - [x] Activate pending StoredObject confirmation/finalization in the leased reconciliation worker and retire PostgreSQL lifespan recovery after the Phase 5B-2 cross-restart path passes.
 - [x] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
-- [ ] Add trusted-proxy client identity and atomic multi-host authentication abuse limits before horizontally scaling the API; leased lifecycle/reconciliation Workers already run independently.
+- [x] Add trusted-proxy client identity and atomic multi-host authentication abuse limits before horizontally scaling the API; real staging ALB chain evidence remains part of final Phase 6B acceptance.
 - [ ] Integrate and test the selected production SES provider, abuse limits, and delivery monitoring.
 - [x] Store PostgreSQL publication exports and datasets through the selected provider-neutral object-storage boundary; keep SQLite BLOBs only in the local/reference adapter.
 - [x] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.

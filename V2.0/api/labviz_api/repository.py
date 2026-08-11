@@ -8,8 +8,10 @@ from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
+from uuid import uuid4
 
 from labviz_api.persistence_types import ProjectCreation
+from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, fixed_window
 
 
 def utc_now() -> datetime:
@@ -126,6 +128,25 @@ class ProjectRepository:
                     requested_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS auth_rate_limit_buckets (
+                    id TEXT PRIMARY KEY,
+                    scope TEXT NOT NULL CHECK (scope IN ('client', 'email')),
+                    identity_key TEXT NOT NULL,
+                    window_started_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
+                    updated_at TEXT NOT NULL,
+                    CHECK (expires_at > window_started_at),
+                    CHECK (
+                        scope <> 'client' OR (
+                            length(identity_key) = 64
+                            AND identity_key NOT GLOB '*[^0-9a-f]*'
+                        )
+                    ),
+                    CHECK (scope <> 'email' OR identity_key = lower(identity_key)),
+                    UNIQUE (scope, identity_key, window_started_at)
+                );
+
                 CREATE TABLE IF NOT EXISTS upload_idempotency (
                     guest_token_digest TEXT NOT NULL,
                     idempotency_key TEXT NOT NULL,
@@ -151,6 +172,9 @@ class ProjectRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_auth_requests_email
                 ON auth_requests(email, requested_at);
+
+                CREATE INDEX IF NOT EXISTS idx_auth_rate_limit_buckets_expires
+                ON auth_rate_limit_buckets(expires_at);
 
                 CREATE INDEX IF NOT EXISTS idx_upload_idempotency_expires
                 ON upload_idempotency(expires_at);
@@ -192,6 +216,7 @@ class ProjectRepository:
             connection.execute(
                 "DELETE FROM auth_requests WHERE requested_at < ?", (request_cutoff,)
             )
+            connection.execute("DELETE FROM auth_rate_limit_buckets WHERE expires_at <= ?", (now,))
 
     def create_project(
         self,
@@ -349,36 +374,70 @@ class ProjectRepository:
         *,
         client_key: str,
         email: str,
-        ip_limit: int = 30,
+        client_limit: int = 30,
         email_limit: int = 10,
+        window_seconds: int = 3_600,
     ) -> bool:
-        cutoff = iso_at(utc_now() - timedelta(hours=1))
-        now = iso_now()
-        with self._connect() as connection:
-            ip_count = connection.execute(
-                """
-                SELECT COUNT(*) FROM auth_requests
-                WHERE client_key = ? AND requested_at >= ?
-                """,
-                (client_key, cutoff),
-            ).fetchone()[0]
-            email_count = connection.execute(
-                """
-                SELECT COUNT(*) FROM auth_requests
-                WHERE email = ? AND requested_at >= ?
-                """,
-                (email, cutoff),
-            ).fetchone()[0]
-            if ip_count >= ip_limit or email_count >= email_limit:
-                return False
-            connection.execute(
-                """
-                INSERT INTO auth_requests (client_key, email, requested_at)
-                VALUES (?, ?, ?)
-                """,
-                (client_key, email, now),
-            )
-        return True
+        specs = auth_bucket_specs(
+            client_key=client_key,
+            email=email,
+            client_limit=client_limit,
+            email_limit=email_limit,
+            window_seconds=window_seconds,
+        )
+        now_value = utc_now()
+        window_started_at, expires_at = fixed_window(now_value, window_seconds)
+        now = iso_at(now_value)
+        window_start = iso_at(window_started_at)
+        window_end = iso_at(expires_at)
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                for scope, identity_key, _limit in specs:
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO auth_rate_limit_buckets (
+                            id, scope, identity_key, window_started_at,
+                            expires_at, request_count, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, 0, ?)
+                        """,
+                        (uuid4().hex, scope, identity_key, window_start, window_end, now),
+                    )
+                buckets = [
+                    connection.execute(
+                        """
+                        SELECT request_count FROM auth_rate_limit_buckets
+                        WHERE scope = ? AND identity_key = ? AND window_started_at = ?
+                        """,
+                        (scope, identity_key, window_start),
+                    ).fetchone()
+                    for scope, identity_key, _limit in specs
+                ]
+                if any(
+                    bucket is None or int(bucket["request_count"]) >= limit
+                    for bucket, (_scope, _identity_key, limit) in zip(buckets, specs, strict=True)
+                ):
+                    connection.rollback()
+                    return False
+                for scope, identity_key, _limit in specs:
+                    connection.execute(
+                        """
+                        UPDATE auth_rate_limit_buckets
+                        SET request_count = request_count + 1, updated_at = ?
+                        WHERE scope = ? AND identity_key = ? AND window_started_at = ?
+                        """,
+                        (now, scope, identity_key, window_start),
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO auth_requests (client_key, email, requested_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (client_key, email, now),
+                )
+            return True
+        except sqlite3.Error as exc:
+            raise AuthRateLimitUnavailable("Authentication rate limiting is unavailable.") from exc
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         self.cleanup_expired()

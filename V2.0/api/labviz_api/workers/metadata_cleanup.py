@@ -9,6 +9,7 @@ from sqlalchemy import delete, exists, func, or_, select
 
 from labviz_api.db.models import (
     AuthChallenge,
+    AuthRateLimitBucket,
     AuthRequest,
     AuthSession,
     GuestSession,
@@ -36,6 +37,11 @@ class MetadataCleanupHandler:
                 (AuthChallenge, AuthChallenge.id, AuthChallenge.expires_at <= now),
                 (AuthSession, AuthSession.token_digest, AuthSession.expires_at <= now),
                 (AuthRequest, AuthRequest.id, AuthRequest.requested_at < now - timedelta(hours=1)),
+                (
+                    AuthRateLimitBucket,
+                    AuthRateLimitBucket.id,
+                    AuthRateLimitBucket.expires_at <= now,
+                ),
                 (
                     IdempotencyRecord,
                     IdempotencyRecord.id,

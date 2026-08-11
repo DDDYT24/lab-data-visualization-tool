@@ -83,6 +83,7 @@ from .processing import (
     sample_csv_bytes,
     validate_upload,
 )
+from .rate_limits import AuthRateLimitUnavailable
 from .repository import ProjectRepository
 
 LOGGER = logging.getLogger(__name__)
@@ -969,7 +970,17 @@ def create_app(
                 "invalid-client-identity",
                 "The request network path could not be verified.",
             ) from exc
-        if not repository.allow_auth_request(client_key=client_key, email=email):
+        try:
+            allowed = repository.allow_auth_request(
+                client_key=client_key,
+                email=email,
+                client_limit=resolved_settings.auth_client_request_limit,
+                email_limit=resolved_settings.auth_email_request_limit,
+                window_seconds=resolved_settings.auth_rate_limit_window_seconds,
+            )
+        except AuthRateLimitUnavailable as exc:
+            raise ApiProblem(503, exc.code, str(exc)) from exc
+        if not allowed:
             raise ApiProblem(
                 429,
                 "email-rate-limited",

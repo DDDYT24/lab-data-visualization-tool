@@ -13,9 +13,14 @@ adapter.
 ## Local execution status
 
 - [x] **6B-1:** implemented and locally verified; real staging ALB chain evidence remains pending.
-- [ ] **6B-2:** not started.
+- [x] **6B-2:** implemented and locally verified; no AWS evidence is required.
 - [ ] **6B-4:** not started.
 - [ ] **6B-3 offline portion:** not started; live AWS evidence remains mandatory.
+
+6B-2 also makes the limiter vocabulary consistently client-identity based, permits the client and
+email limits to be tuned independently within their documented bounds, skips legacy raw network
+addresses during migration backfill, and refuses downgrade while limiter buckets remain. These are
+intentional safety and maintainability refinements within the approved 6B-2 boundary.
 
 Exact immutable commit IDs and rerun evidence are recorded in the local acceptance report after
 the independent unit commits exist.

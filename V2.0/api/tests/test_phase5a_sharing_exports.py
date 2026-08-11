@@ -74,8 +74,11 @@ def postgres_database() -> Iterator[Database]:
         database.dispose()
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
     with database.engine.begin() as connection:
-        if "projects" in inspect(connection).get_table_names():
+        tables = set(inspect(connection).get_table_names())
+        if "projects" in tables:
             connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        if "auth_rate_limit_buckets" in tables:
+            connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(_alembic_config(), "base")
     command.upgrade(_alembic_config(), "head")
     try:
@@ -88,6 +91,7 @@ def postgres_database() -> Iterator[Database]:
 def empty_postgres(postgres_database: Database) -> None:
     with postgres_database.engine.begin() as connection:
         connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
 
 
 def _frame() -> pd.DataFrame:
@@ -885,9 +889,9 @@ def test_migration_0005_downgrade_fails_closed_with_tracked_artifacts(
         command.downgrade(_alembic_config(), "0004_identity_project_lifecycle")
     with postgres_database.engine.connect() as connection:
         # Alembic runs the requested multi-revision downgrade transactionally;
-        # 0005's fail-closed guard therefore restores the 0006 starting head too.
+        # 0005's fail-closed guard therefore restores the 0009 starting head too.
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0008_phase5b3_storage_inventory"
+            "0009_atomic_auth_rate_limits"
         )
 
 
@@ -896,6 +900,7 @@ def test_empty_database_migrates_0005_to_0004_and_back(
 ) -> None:
     with postgres_database.engine.begin() as connection:
         connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     config = _alembic_config()
     command.downgrade(config, "0004_identity_project_lifecycle")
     with postgres_database.engine.connect() as connection:
@@ -906,7 +911,7 @@ def test_empty_database_migrates_0005_to_0004_and_back(
     command.check(config)
     with postgres_database.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0008_phase5b3_storage_inventory"
+            "0009_atomic_auth_rate_limits"
         )
 
 

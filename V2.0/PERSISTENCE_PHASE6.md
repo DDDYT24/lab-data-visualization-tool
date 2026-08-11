@@ -1,7 +1,7 @@
 # Phase 6 Production Runtime and Operations
 
 **Status:** Phase 6-0 and Phase 6A were verified on 2026-08-09. Phase 6-PRE was accepted on
-2026-08-11; Phase 6B is admitted but not started. See
+2026-08-11; Phase 6B local implementation is active under the AWS dependency matrix. See
 [`PHASE6_PRE_ACCEPTANCE.md`](PHASE6_PRE_ACCEPTANCE.md).
 
 Phase 6 turns the verified PostgreSQL/S3 application into a production-deployable website without

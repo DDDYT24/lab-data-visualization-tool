@@ -210,15 +210,18 @@ MB, and email codes are printed only in the API terminal. Relevant variables:
 | `LABVIZ_PUBLIC_WEB_URL` | `http://localhost:3000` | Base URL for generated share links |
 | `LABVIZ_MAX_UPLOAD_BYTES` | `52428800` | Cloud upload limit in bytes |
 | `LABVIZ_AUTH_MODE` | `console` | `console` for development or `smtp` for email delivery |
+| `LABVIZ_AUTH_RATE_LIMIT_WINDOW_SECONDS` | `3600` | Fixed authentication limit window; allowed range is 60–86400 seconds |
+| `LABVIZ_AUTH_CLIENT_REQUEST_LIMIT` | `30` | Maximum requests per keyed client identity and window |
+| `LABVIZ_AUTH_EMAIL_REQUEST_LIMIT` | `10` | Maximum requests per normalized email and window |
 | `LABVIZ_SMTP_HOST`, `LABVIZ_SMTP_PORT` | unset, `587` | SMTP connection |
 | `LABVIZ_SMTP_USERNAME`, `LABVIZ_SMTP_PASSWORD` | unset | Optional SMTP credentials |
 | `LABVIZ_SMTP_FROM` | `LabViz <noreply@localhost>` | Sender displayed in verification emails |
 | `LABVIZ_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
 
-Verification challenges, rate-limit records, and login sessions are persisted
-in the reference SQLite database with expiry. A production multi-host
-deployment must replace or formally validate this storage as part of the later
-backend architecture decision.
+Verification challenges, rate-limit records, and login sessions are persisted with expiry. The
+SQLite reference adapter serializes limiter writes with `BEGIN IMMEDIATE`; production PostgreSQL
+uses database-time fixed-window buckets and row locks to atomically enforce both client and email
+limits across API hosts. Limiter storage failures return 503 and never send a verification code.
 
 ## 💻 Command Line
 

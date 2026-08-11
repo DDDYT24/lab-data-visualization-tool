@@ -9,17 +9,19 @@ import secrets
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pandas as pd
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from labviz_api.db.models import (
     AuthChallenge,
+    AuthRateLimitBucket,
     AuthRequest,
     AuthSession,
     ChartSpecRevision,
@@ -62,6 +64,7 @@ from labviz_api.project_spec import (
     ProjectSourceSpec,
     ProjectSpecV1,
 )
+from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, fixed_window
 from labviz_api.repository import iso_at
 from labviz_api.share_tokens import ShareTokenCodec
 from labviz_api.storage import ObjectStorage, StagedObject
@@ -542,46 +545,75 @@ class PostgresProjectStore:
         *,
         client_key: str,
         email: str,
-        ip_limit: int = 30,
+        client_limit: int = 30,
         email_limit: int = 10,
+        window_seconds: int = 3_600,
     ) -> bool:
-        now = _now()
-        cutoff = now - timedelta(hours=1)
+        specs = auth_bucket_specs(
+            client_key=client_key,
+            email=email,
+            client_limit=client_limit,
+            email_limit=email_limit,
+            window_seconds=window_seconds,
+        )
         try:
             with self._uow() as uow:
                 assert uow.session is not None
-                ip_count = int(
-                    uow.session.scalar(
-                        select(func.count())
-                        .select_from(AuthRequest)
-                        .where(
-                            AuthRequest.client_key == client_key,
-                            AuthRequest.requested_at >= cutoff,
-                        )
-                    )
-                    or 0
+                database_now = cast(
+                    datetime,
+                    uow.session.scalar(select(func.statement_timestamp())),
                 )
-                email_count = int(
-                    uow.session.scalar(
-                        select(func.count())
-                        .select_from(AuthRequest)
-                        .where(
-                            AuthRequest.email == email,
-                            AuthRequest.requested_at >= cutoff,
+                window_started_at, expires_at = fixed_window(database_now, window_seconds)
+                for scope, identity_key, _limit in specs:
+                    uow.session.execute(
+                        pg_insert(AuthRateLimitBucket)
+                        .values(
+                            id=uuid4(),
+                            scope=scope,
+                            identity_key=identity_key,
+                            window_started_at=window_started_at,
+                            expires_at=expires_at,
+                            request_count=0,
+                            updated_at=database_now,
                         )
+                        .on_conflict_do_nothing(constraint="uq_auth_rate_limit_bucket_window")
                     )
-                    or 0
-                )
-                if ip_count >= ip_limit or email_count >= email_limit:
-                    uow.commit()
+
+                buckets: list[AuthRateLimitBucket] = []
+                for scope, identity_key, _limit in specs:
+                    bucket = uow.session.scalar(
+                        select(AuthRateLimitBucket)
+                        .where(
+                            AuthRateLimitBucket.scope == scope,
+                            AuthRateLimitBucket.identity_key == identity_key,
+                            AuthRateLimitBucket.window_started_at == window_started_at,
+                        )
+                        .with_for_update()
+                    )
+                    if bucket is None:
+                        raise RuntimeError("Authentication limiter bucket was not created.")
+                    buckets.append(bucket)
+
+                if any(
+                    bucket.request_count >= limit
+                    for bucket, (_scope, _identity_key, limit) in zip(buckets, specs, strict=True)
+                ):
                     return False
+                for bucket in buckets:
+                    bucket.request_count += 1
+                    bucket.updated_at = database_now
                 uow.session.add(
-                    AuthRequest(id=uuid4(), client_key=client_key, email=email, requested_at=now)
+                    AuthRequest(
+                        id=uuid4(),
+                        client_key=client_key,
+                        email=email,
+                        requested_at=database_now,
+                    )
                 )
                 uow.commit()
                 return True
-        except Exception as exc:
-            raise _translate_database_error(exc) from exc
+        except (SQLAlchemyError, RuntimeError) as exc:
+            raise AuthRateLimitUnavailable("Authentication rate limiting is unavailable.") from exc
 
     def latest_auth_challenge(self, email: str) -> dict[str, Any] | None:
         with self._uow() as uow:
