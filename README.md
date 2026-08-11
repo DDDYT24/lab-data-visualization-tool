@@ -107,8 +107,9 @@ table. The Next.js development server proxies `/api/v1` to
 Local development uses console email delivery: request a sign-in code in the
 website, then copy the six-digit code printed in the API terminal. No email is
 sent in this mode. The reference service supports the documented
-`LABVIZ_SMTP_*` variables for integration testing. The approved production provider is Amazon SES,
-but its adapter and real-account delivery/feedback evidence remain Phase 6B work.
+`LABVIZ_SMTP_*` variables for non-production integration testing. Production uses the implemented
+Amazon SES v2 adapter through the ECS task role; real-account delivery/feedback evidence remains a
+Phase 6B launch blocker.
 For a separately hosted API, set `NEXT_PUBLIC_LABVIZ_API_URL` before starting
 Next.js and include the website origin in `LABVIZ_ALLOWED_ORIGINS`.
 
@@ -209,13 +210,16 @@ MB, and email codes are printed only in the API terminal. Relevant variables:
 | `LABVIZ_ALLOWED_ORIGINS` | localhost and 127.0.0.1 on port 3000 | Comma-separated CORS origins |
 | `LABVIZ_PUBLIC_WEB_URL` | `http://localhost:3000` | Base URL for generated share links |
 | `LABVIZ_MAX_UPLOAD_BYTES` | `52428800` | Cloud upload limit in bytes |
-| `LABVIZ_AUTH_MODE` | `console` | `console` for development or `smtp` for email delivery |
+| `LABVIZ_AUTH_MODE` | `console` | `console` locally, `smtp` for non-production compatibility, or production `ses` |
 | `LABVIZ_AUTH_RATE_LIMIT_WINDOW_SECONDS` | `3600` | Fixed authentication limit window; allowed range is 60–86400 seconds |
 | `LABVIZ_AUTH_CLIENT_REQUEST_LIMIT` | `30` | Maximum requests per keyed client identity and window |
 | `LABVIZ_AUTH_EMAIL_REQUEST_LIMIT` | `10` | Maximum requests per normalized email and window |
 | `LABVIZ_SMTP_HOST`, `LABVIZ_SMTP_PORT` | unset, `587` | SMTP connection |
 | `LABVIZ_SMTP_USERNAME`, `LABVIZ_SMTP_PASSWORD` | unset | Optional SMTP credentials |
 | `LABVIZ_SMTP_FROM` | `LabViz <noreply@localhost>` | Sender displayed in verification emails |
+| `LABVIZ_SES_REGION` | unset | Required production SES Region; must match the S3 Region |
+| `LABVIZ_SES_FROM` | unset | Required verified production sender |
+| `LABVIZ_SES_CONFIGURATION_SET` | unset | Required delivery/feedback configuration set |
 | `LABVIZ_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
 
 Verification challenges, rate-limit records, and login sessions are persisted with expiry. The
@@ -469,10 +473,11 @@ Python 3.12 锁文件，CI 和可复现验证使用它们；两个范围文件�
 本地默认数据库为 `V2.0/api/.labviz/labviz-v2.db`；临时项目和导出结果按最后
 一次项目操作保留 2 小时；网站上传上限为 50 MB；验证码使用终端输出模式。
 参考服务可设置 `LABVIZ_AUTH_MODE=smtp` 以及 `LABVIZ_SMTP_HOST`、端口、账号、
-密码和发件人变量来做集成测试；当前尚未选择正式邮件供应商，因此默认模式不会
-真正发送邮件。生产 HTTPS 环境还应设置 `LABVIZ_COOKIE_SECURE=true`。验证码挑战、
-频率限制记录和登录会话会带过期时间地保存在参考 SQLite 数据库；生产多主机部署
-仍需在后端架构阶段选择合适的共享存储。
+密码和发件人变量来做非生产集成测试；正式环境使用 `LABVIZ_AUTH_MODE=ses`、SES
+Region、已验证发件人和 Configuration Set，并通过 ECS task role 的标准 AWS 凭证链
+调用 SES v2，不使用静态访问密钥或 SMTP 密钥。生产 HTTPS 环境还应设置
+`LABVIZ_COOKIE_SECURE=true`。验证码挑战、原子频率限制和登录会话由所选
+SQLite/PostgreSQL 后端持久化；生产多主机由 PostgreSQL 协调。
 
 ### 💻 命令行示例
 

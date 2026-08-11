@@ -1020,7 +1020,10 @@ def create_app(
         except AuthError:
             raise
         except Exception as exc:
-            LOGGER.exception("Could not deliver a LabViz verification email")
+            LOGGER.warning(
+                "authentication-code-delivery-failed error_type=%s",
+                type(exc).__name__,
+            )
             raise ApiProblem(
                 503,
                 "email-delivery-failed",

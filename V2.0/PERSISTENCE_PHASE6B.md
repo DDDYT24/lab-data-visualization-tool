@@ -15,7 +15,7 @@ adapter.
 - [x] **6B-1:** implemented and locally verified; real staging ALB chain evidence remains pending.
 - [x] **6B-2:** implemented and locally verified; no AWS evidence is required.
 - [x] **6B-4:** implemented and locally verified; no AWS evidence is required.
-- [ ] **6B-3 offline portion:** not started; live AWS evidence remains mandatory.
+- [x] **6B-3 offline portion:** implemented and locally verified; live SES evidence remains mandatory.
 
 6B-2 also makes the limiter vocabulary consistently client-identity based, permits the client and
 email limits to be tuned independently within their documented bounds, skips legacy raw network
@@ -100,6 +100,24 @@ Required behavior:
 Acceptance uses the real SES mailbox simulator or verified test recipient in `ap-southeast-1`,
 observes accepted delivery plus bounce/complaint events, proves that the console sender cannot be
 selected in production, and verifies that API/Worker task roles receive no unrelated permissions.
+
+### 6B-3 offline implementation
+
+- Production accepts only `LABVIZ_AUTH_MODE=ses`; it requires an explicit SES Region matching S3,
+  a valid sender, a configuration-set name, bounded client timeouts, and no SMTP credentials.
+- `SesV2EmailSender` calls SES v2 with the standard AWS credential chain, one recipient, UTF-8
+  content, and only non-PII `purpose`/`environment` tags. Missing MessageId is a failed delivery.
+- Accepted delivery records provider, challenge ID, and MessageId. SES/API failure logs contain
+  only a stable event and error type—never recipient, verification code, body, credential, or raw
+  provider error. Synchronous failure deletes the unsent challenge and retains the stable 503 API.
+- The ECS example contains no SES/SMTP secret. Its additive task-role policy grants only
+  `ses:SendEmail` for the selected verified identity and From address; Workers receive no email
+  permission or configuration.
+- `python -m scripts.probe_ses_delivery` is ready for accepted, bounce, and complaint evidence and
+  emits only provider/status/MessageId. It has not been run because AWS authentication is blocked.
+- Phase 6C still owns the configuration-set destinations, account suppression, CloudWatch alarms,
+  and Terraform. Final 6B remains `BLOCKED` until those real events and the staging ALB chain are
+  observed; local fakes are not acceptance evidence.
 
 ## 6B-4 — authenticated project-description editing
 

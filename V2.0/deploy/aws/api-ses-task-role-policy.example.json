@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SendLabVizAuthenticationEmail",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "arn:aws:ses:${AWS_REGION}:${ACCOUNT_ID}:identity/${SES_IDENTITY}",
+      "Condition": {
+        "StringEquals": {
+          "ses:FromAddress": "${SES_FROM_ADDRESS}"
+        }
+      }
+    }
+  ]
+}

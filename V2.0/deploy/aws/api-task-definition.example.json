@@ -17,10 +17,10 @@
         {"name": "LABVIZ_RUNTIME_ROLE", "value": "api"},
         {"name": "LABVIZ_ALLOWED_ORIGINS", "value": "https://${PUBLIC_HOST}"},
         {"name": "LABVIZ_PUBLIC_WEB_URL", "value": "https://${PUBLIC_HOST}"},
-        {"name": "LABVIZ_AUTH_MODE", "value": "smtp"},
-        {"name": "LABVIZ_SMTP_PORT", "value": "587"},
-        {"name": "LABVIZ_SMTP_STARTTLS", "value": "true"},
-        {"name": "LABVIZ_SMTP_FROM", "value": "LabViz <noreply@${PUBLIC_HOST}>"},
+        {"name": "LABVIZ_AUTH_MODE", "value": "ses"},
+        {"name": "LABVIZ_SES_REGION", "value": "${AWS_REGION}"},
+        {"name": "LABVIZ_SES_FROM", "value": "LabViz <noreply@${PUBLIC_HOST}>"},
+        {"name": "LABVIZ_SES_CONFIGURATION_SET", "value": "${SES_CONFIGURATION_SET}"},
         {"name": "LABVIZ_COOKIE_SECURE", "value": "true"},
         {"name": "LABVIZ_PERSISTENCE_BACKEND", "value": "postgresql"},
         {"name": "LABVIZ_OBJECT_STORAGE_BACKEND", "value": "s3"},
@@ -37,10 +37,7 @@
       "secrets": [
         {"name": "LABVIZ_POSTGRES_URL", "valueFrom": "${POSTGRES_URL_SECRET_ARN}"},
         {"name": "LABVIZ_SHARE_TOKEN_KEYS", "valueFrom": "${SHARE_KEYS_SECRET_ARN}"},
-        {"name": "LABVIZ_CLIENT_IDENTITY_KEY", "valueFrom": "${CLIENT_IDENTITY_KEY_SECRET_ARN}"},
-        {"name": "LABVIZ_SMTP_HOST", "valueFrom": "${SMTP_HOST_SECRET_ARN}"},
-        {"name": "LABVIZ_SMTP_USERNAME", "valueFrom": "${SMTP_USERNAME_SECRET_ARN}"},
-        {"name": "LABVIZ_SMTP_PASSWORD", "valueFrom": "${SMTP_PASSWORD_SECRET_ARN}"}
+        {"name": "LABVIZ_CLIENT_IDENTITY_KEY", "valueFrom": "${CLIENT_IDENTITY_KEY_SECRET_ARN}"}
       ],
       "healthCheck": {
         "command": ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""],
