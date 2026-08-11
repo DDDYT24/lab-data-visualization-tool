@@ -1,7 +1,8 @@
 # Phase 6 Production Runtime and Operations
 
-**Status:** Phase 6-0 and Phase 6A implemented and verified on 2026-08-09. Phase 6-PRE is the
-mandatory admission gate before Phase 6B.
+**Status:** Phase 6-0 and Phase 6A were verified on 2026-08-09. Phase 6-PRE was accepted on
+2026-08-11; Phase 6B is admitted but not started. See
+[`PHASE6_PRE_ACCEPTANCE.md`](PHASE6_PRE_ACCEPTANCE.md).
 
 Phase 6 turns the verified PostgreSQL/S3 application into a production-deployable website without
 changing `/api/v1`, scientific contracts, immutable revision semantics, or the SQLite reference
@@ -129,7 +130,8 @@ remain later-phase acceptance evidence.
    `/health`, ALB target readiness uses `/api/v1/ready`, and Worker dependency probes do not create
    restart storms. This boundary is implemented and regression-tested.
 3. **PRE-3:** independently rerun the complete repository, real PostgreSQL/MinIO, migration,
-   frontend/browser, image/runtime, hook, scope, and cleanup gates. The verdict must be `PASS`.
+   frontend/browser, image/runtime, hook, scope, and cleanup gates. The recorded verdict is `PASS`
+   in [`PHASE6_PRE_ACCEPTANCE.md`](PHASE6_PRE_ACCEPTANCE.md).
 
 Phase 6B may not begin until all three admission steps pass. Every numbered implementation unit is
 an independent commit and must be accepted against
