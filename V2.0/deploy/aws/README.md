@@ -37,6 +37,12 @@ other paths to Web. TLS terminates at the ALB; the database URL must still inclu
 `sslmode=require` or stronger. API and Workers run in private subnets with an RDS security-group
 path and an S3 gateway endpoint or NAT. Only the ALB is public.
 
+Set `LABVIZ_TRUSTED_PROXY_CIDRS` to the private ALB subnet CIDRs and
+`LABVIZ_TRUSTED_PROXY_HOPS=1` for the direct append-mode ALB path. Store the independent
+`LABVIZ_CLIENT_IDENTITY_KEY` in Secrets Manager. The API ignores `X-Forwarded-For` from an
+untrusted immediate peer and stores only the keyed client digest; Phase 6C staging must recheck the
+real ALB chain before public traffic.
+
 Secrets are referenced from Secrets Manager in `api-task-definition.example.json`; no secret value
 or static AWS access key belongs in a task definition. The task role grants only the selected S3
 prefix and the required KMS operations. Web has no database, object-storage, or SMTP credentials.

@@ -27,11 +27,14 @@
         {"name": "LABVIZ_S3_BUCKET", "value": "${S3_BUCKET}"},
         {"name": "LABVIZ_S3_PREFIX", "value": "production"},
         {"name": "LABVIZ_S3_REGION", "value": "${AWS_REGION}"},
-        {"name": "LABVIZ_SHARE_TOKEN_KEY_VERSION", "value": "1"}
+        {"name": "LABVIZ_SHARE_TOKEN_KEY_VERSION", "value": "1"},
+        {"name": "LABVIZ_TRUSTED_PROXY_CIDRS", "value": "${ALB_SUBNET_CIDRS}"},
+        {"name": "LABVIZ_TRUSTED_PROXY_HOPS", "value": "1"}
       ],
       "secrets": [
         {"name": "LABVIZ_POSTGRES_URL", "valueFrom": "${POSTGRES_URL_SECRET_ARN}"},
         {"name": "LABVIZ_SHARE_TOKEN_KEYS", "valueFrom": "${SHARE_KEYS_SECRET_ARN}"},
+        {"name": "LABVIZ_CLIENT_IDENTITY_KEY", "valueFrom": "${CLIENT_IDENTITY_KEY_SECRET_ARN}"},
         {"name": "LABVIZ_SMTP_HOST", "valueFrom": "${SMTP_HOST_SECRET_ARN}"},
         {"name": "LABVIZ_SMTP_USERNAME", "valueFrom": "${SMTP_USERNAME_SECRET_ARN}"},
         {"name": "LABVIZ_SMTP_PASSWORD", "valueFrom": "${SMTP_PASSWORD_SECRET_ARN}"}

@@ -347,6 +347,9 @@ def test_production_configuration_requires_the_approved_runtime(tmp_path: Path) 
         s3_bucket="labviz-production",
         s3_region="us-east-1",
         share_token_keys=((1, "a-production-share-token-key-with-32-bytes"),),
+        trusted_proxy_cidrs=("10.0.0.0/8",),
+        trusted_proxy_hops=1,
+        client_identity_key="a-separate-production-client-identity-key-32-bytes",
     )
 
     assert settings.persistence_backend == "postgresql"
@@ -380,6 +383,14 @@ def test_production_configuration_requires_the_approved_runtime(tmp_path: Path) 
         ({"smtp_password": None}, "explicit credentials"),
         ({"smtp_from": "LabViz <noreply@localhost>"}, "sender address"),
         ({"max_upload_bytes": 50 * 1024 * 1024 + 1}, "50 MB"),
+        ({"trusted_proxy_cidrs": ()}, "trusted proxy"),
+        ({"trusted_proxy_hops": 0}, "trusted proxy"),
+        ({"trusted_proxy_cidrs": ("0.0.0.0/0",)}, "private network"),
+        ({"client_identity_key": "short"}, "CLIENT_IDENTITY_KEY"),
+        (
+            {"client_identity_key": "a-production-share-token-key-with-32-bytes"},
+            "must be different",
+        ),
         ({"runtime_role": "unknown"}, "RUNTIME_ROLE"),
     )
     for changes, message in invalid_settings:

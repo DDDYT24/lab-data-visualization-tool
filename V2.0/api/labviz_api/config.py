@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from ipaddress import ip_network
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 DEFAULT_SHARE_TOKEN_KEYS = ((1, "labviz-development-share-token-key-v1"),)
+DEFAULT_CLIENT_IDENTITY_KEY = "labviz-development-client-identity-key-v1"
 MAX_CLOUD_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
@@ -84,6 +86,9 @@ class Settings:
     persistence_backend: str = "sqlite"
     share_token_key_version: int = 1
     share_token_keys: tuple[tuple[int, str], ...] = DEFAULT_SHARE_TOKEN_KEYS
+    trusted_proxy_cidrs: tuple[str, ...] = ()
+    trusted_proxy_hops: int = 0
+    client_identity_key: str = DEFAULT_CLIENT_IDENTITY_KEY
     worker_batch_size: int = 25
     worker_lease_seconds: int = 60
     worker_heartbeat_seconds: int = 20
@@ -181,6 +186,29 @@ class Settings:
             and self.share_token_keys == DEFAULT_SHARE_TOKEN_KEYS
         ):
             raise ValueError("Production requires an explicit LABVIZ_SHARE_TOKEN_KEYS key ring.")
+        if not 0 <= self.trusted_proxy_hops <= 8:
+            raise ValueError("LABVIZ_TRUSTED_PROXY_HOPS must be between zero and eight.")
+        try:
+            trusted_proxy_networks = tuple(
+                ip_network(value, strict=False) for value in self.trusted_proxy_cidrs
+            )
+        except ValueError as exc:
+            raise ValueError("LABVIZ_TRUSTED_PROXY_CIDRS contains an invalid network.") from exc
+        if len(self.client_identity_key.encode("utf-8")) < 32:
+            raise ValueError("LABVIZ_CLIENT_IDENTITY_KEY must contain at least 32 UTF-8 bytes.")
+        if self.environment == "production" and self.runtime_role == "api":
+            if not self.trusted_proxy_cidrs or self.trusted_proxy_hops < 1:
+                raise ValueError(
+                    "Production API requires trusted proxy CIDRs and a positive proxy-hop count."
+                )
+            if any(
+                network.prefixlen == 0 or network.is_global for network in trusted_proxy_networks
+            ):
+                raise ValueError("Production trusted proxy CIDRs must be private network ranges.")
+            if self.client_identity_key == DEFAULT_CLIENT_IDENTITY_KEY:
+                raise ValueError("Production requires an explicit LABVIZ_CLIENT_IDENTITY_KEY.")
+            if self.client_identity_key in {secret for _version, secret in self.share_token_keys}:
+                raise ValueError("Client identity and share-token keys must be different.")
         if self.worker_batch_size < 1 or self.worker_poll_seconds < 1:
             raise ValueError("Worker batch and poll settings must be positive.")
         if self.worker_lease_seconds < 2:
@@ -266,6 +294,15 @@ class Settings:
             .lower(),
             share_token_key_version=int(os.environ.get("LABVIZ_SHARE_TOKEN_KEY_VERSION", "1")),
             share_token_keys=_share_token_keys(os.environ.get("LABVIZ_SHARE_TOKEN_KEYS")),
+            trusted_proxy_cidrs=tuple(
+                value.strip()
+                for value in os.environ.get("LABVIZ_TRUSTED_PROXY_CIDRS", "").split(",")
+                if value.strip()
+            ),
+            trusted_proxy_hops=int(os.environ.get("LABVIZ_TRUSTED_PROXY_HOPS", "0")),
+            client_identity_key=os.environ.get(
+                "LABVIZ_CLIENT_IDENTITY_KEY", DEFAULT_CLIENT_IDENTITY_KEY
+            ),
             worker_batch_size=int(os.environ.get("LABVIZ_WORKER_BATCH_SIZE", "25")),
             worker_lease_seconds=int(os.environ.get("LABVIZ_WORKER_LEASE_SECONDS", "60")),
             worker_heartbeat_seconds=int(os.environ.get("LABVIZ_WORKER_HEARTBEAT_SECONDS", "20")),
