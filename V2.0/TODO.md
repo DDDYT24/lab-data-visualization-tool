@@ -102,6 +102,7 @@ Next:
 - [x] Phase 6-PRE-1: track the acceptance standard and establish complete Phase 6B/6C/6D implementation, evidence, failure, and rollback contracts.
 - [x] Phase 6-PRE-2: separate process liveness, dependency readiness, and Worker operational probes.
 - [x] Phase 6-PRE-3: independently rerun the complete admission matrix and record `PASS` in [`PHASE6_PRE_ACCEPTANCE.md`](PHASE6_PRE_ACCEPTANCE.md).
+- [x] Phase 6 AWS dependency boundary: continue only locally provable 6B units; retain real SES/ALB evidence as blockers and do not enter 6C/6D early. See [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md).
 - [ ] Phase 6B: add multi-host abuse protection, SES delivery/monitoring, and project-description editing. See [`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md).
 - [ ] Phase 6C: add production IaC, encrypted backup/restore automation and evidence, CloudWatch operations, runbooks, alerts, SLOs, CI/CD, and rollback. See [`PERSISTENCE_PHASE6C.md`](PERSISTENCE_PHASE6C.md).
 - [ ] Phase 6D: add quotas, privacy/compliance review, load and recovery drills, and production-launch acceptance. See [`PERSISTENCE_PHASE6D.md`](PERSISTENCE_PHASE6D.md).
