@@ -7,6 +7,7 @@ import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import {
   Alert,
   Button,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -24,6 +25,7 @@ import { useState } from "react";
 import { EmailCodeDialog } from "@/features/auth/email-code-dialog";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
+import { ProjectDescriptionEditor } from "./project-description-editor";
 import { useWorkspaceStore } from "./workspace-store";
 
 export function CloudProjectActions() {
@@ -142,6 +144,8 @@ export function CloudProjectActions() {
               : t("saveFailed")}
           </Alert>
         ) : null}
+        <Divider />
+        <ProjectDescriptionEditor />
       </Stack>
 
       <EmailCodeDialog

@@ -70,7 +70,7 @@ Next:
 - [x] Approve the production data route: PostgreSQL metadata and revisions, S3-compatible object storage, and immutable Parquet dataset versions. See [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md).
 - [x] Approve AWS ECS/Fargate, RDS PostgreSQL 17, S3, SES, Secrets Manager/KMS, CloudWatch, and one-region deployment as the initial production runtime. See [`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md).
 - [x] Implement versioned `ProjectSpec` v1 in frontend Zod and backend Pydantic, backed by immutable ProjectRevision records and cross-contract fixtures.
-- [ ] Add authenticated project-description editing API/UI; persistence, ProjectSpec, and shared-chart reads already support the optional field without speculative Experiment entities.
+- [x] Add authenticated project-description editing API/UI with immutable revision updates, pinned-share behavior, UTF-8 limits, and no speculative Experiment entities.
 - [x] Add the phase 1 SQLAlchemy 2 persistence boundary, PostgreSQL development/test environment, provider-neutral object-storage interface, first nine core models, and reversible Alembic migration.
 - [x] Add Phase 2 Repository/Unit of Work boundaries, selectable SQLite/PostgreSQL project persistence, ProjectSpec v1, Parquet v1, and the approved six-entity project revision slice without runtime dual-write.
 - [x] Add Phase 3 immutable QualityReport/Finding and CleaningDecisionSet/Decision lineage, derived Parquet DatasetVersions, copied chart revisions, API parity, and object compensation.

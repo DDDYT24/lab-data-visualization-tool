@@ -101,6 +101,15 @@ class ProjectStore(ProjectReader, Protocol):
         guest_token_digest: str | None,
     ) -> str: ...
 
+    def update_project_description(
+        self,
+        *,
+        project_id: str,
+        owner_user_id: str,
+        description: str,
+        expected_revision_id: str,
+    ) -> dict[str, Any]: ...
+
     def duplicate_project(
         self,
         *,

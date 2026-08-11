@@ -17,8 +17,8 @@ The repository establishes these current facts:
 - S3-compatible storage is the production object route. PostgreSQL dataset versions and
   publication exports already use `StoredObject`; the older publication-export backlog item was
   stale. SQLite BLOB exports intentionally remain part of the reference adapter.
-- `Project.description` already exists in persistence, ProjectSpec, and shared-chart reads. Only
-  an authenticated editing API and matching UI remain.
+- Authenticated saved-project description editing is implemented in Phase 6B-4 with immutable
+  ProjectRevision updates, pinned-share semantics, and bilingual plain-text UI behavior.
 - PostgreSQL leases already run lifecycle, reconciliation, object GC, staging inventory, and
   metadata cleanup independently from FastAPI. Multi-host authentication still needs a trusted
   client-IP boundary and atomic distributed limiting before API horizontal scaling.

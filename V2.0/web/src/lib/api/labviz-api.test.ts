@@ -6,6 +6,8 @@ const readySession = {
   apiVersion: "v1",
   projectId: "project-regression",
   storageMode: "temporary-cloud",
+  description: "",
+  currentRevisionId: "00000000-0000-4000-8000-000000000001",
   source: {
     name: "experiment.csv",
     size: 1_960_000,
@@ -89,6 +91,38 @@ describe("LabViz API client contract", () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(init.headers).toMatchObject({ "Idempotency-Key": "upload-key-1" });
     expect(init.headers).not.toHaveProperty("Content-Type");
+  });
+
+  it("updates a project description with optimistic revision concurrency", async () => {
+    const response = {
+      apiVersion: "v1",
+      projectId: "project-regression",
+      description: "A plain-text project description.",
+      revisionId: "00000000-0000-4000-8000-000000000002",
+      revisionNumber: 2,
+      updatedAt: "2030-01-02T05:04:06Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(response));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await labvizApi.updateProjectDescription(
+      "project-regression",
+      response.description,
+      readySession.currentRevisionId,
+    );
+
+    expect(result).toEqual(response);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/projects/project-regression/description",
+      expect.objectContaining({
+        body: JSON.stringify({
+          description: response.description,
+          expectedRevisionId: readySession.currentRevisionId,
+        }),
+        credentials: "include",
+        method: "PATCH",
+      }),
+    );
   });
 
   it("reports malformed successful responses as a Contract error", async () => {

@@ -545,6 +545,7 @@ def _exercise_migrated_api(settings: Settings) -> dict[str, Any]:
 def _without_dynamic_fields(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
     normalized.pop("projectId", None)
+    normalized.pop("currentRevisionId", None)
     normalized.pop("expiresAt", None)
     normalized.pop("updatedAt", None)
     job = normalized.get("job")

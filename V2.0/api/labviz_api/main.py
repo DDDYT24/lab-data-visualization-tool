@@ -47,6 +47,7 @@ from .models import (
     ExportJob,
     HealthResponse,
     ProcessingJob,
+    ProjectDescriptionResponse,
     ProjectList,
     ProjectSession,
     ProjectSummary,
@@ -61,6 +62,7 @@ from .models import (
     ShareLink,
     ShareSummary,
     SourceFile,
+    UpdateProjectDescriptionRequest,
     UpdateShareRequest,
     VerifyEmailCode,
     VerifyEmailCodeResponse,
@@ -166,6 +168,8 @@ def _project_session(repository: ProjectReader, project: dict[str, Any]) -> Proj
     return ProjectSession(
         project_id=project["id"],
         storage_mode=project["storage_mode"],
+        description=project.get("description", ""),
+        current_revision_id=project.get("current_revision_id"),
         source=SourceFile.model_validate_json(project["source_json"]),
         job=_job_from_row(job_row) if job_row else None,
         expires_at=project["expires_at"],
@@ -678,6 +682,31 @@ def create_app(
         )
         saved = _require_project_access(repository, project_id, user, guest_token, ready=True)
         return _project_session(repository, saved)
+
+    @app.patch(
+        f"{API_PREFIX}/projects/{{project_id}}/description",
+        response_model=ProjectDescriptionResponse,
+    )
+    def update_project_description(
+        project_id: str,
+        body: UpdateProjectDescriptionRequest,
+        user: dict[str, str] = Depends(required_user),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> ProjectDescriptionResponse:
+        project = _require_project_access(repository, project_id, user, None, ready=True)
+        if project["storage_mode"] != "saved-cloud":
+            raise ApiProblem(
+                409,
+                "project-must-be-saved",
+                "Save this project before editing its description.",
+            )
+        updated = repository.update_project_description(
+            project_id=project_id,
+            owner_user_id=user["id"],
+            description=body.description,
+            expected_revision_id=body.expected_revision_id.hex,
+        )
+        return ProjectDescriptionResponse.model_validate(updated)
 
     @app.post(
         f"{API_PREFIX}/projects/{{project_id}}/duplicate",

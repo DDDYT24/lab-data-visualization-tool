@@ -352,6 +352,24 @@
     "close": "Close",
     "shareFailed": "The share link could not be created."
   },
+  "projectDescription": {
+    "title": "Project description",
+    "body": "Add plain text that explains this saved project. Existing shared and publication versions stay unchanged.",
+    "label": "Description",
+    "placeholder": "Describe the experiment, dataset, or figure context.",
+    "byteCount": "{bytes} / {limit} UTF-8 bytes",
+    "tooLong": "{bytes} bytes entered; the limit is {limit} UTF-8 bytes.",
+    "saveFirst": "Save this project to your cloud history before adding a description.",
+    "loading": "Loading the current project revision…",
+    "empty": "No description has been added yet.",
+    "save": "Save description",
+    "saved": "Description saved as a new project revision.",
+    "conflict": "The description changed in another session. Reload it before editing again.",
+    "reload": "Reload",
+    "unauthorized": "You no longer have permission to edit this project.",
+    "deleted": "This project was deleted and can no longer be edited here.",
+    "failed": "The description could not be saved. Your existing project is unchanged."
+  },
   "history": {
     "title": "Project history",
     "description": "Continue saved work without storing the original uploaded file.",

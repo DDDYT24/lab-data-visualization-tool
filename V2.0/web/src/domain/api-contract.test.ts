@@ -4,6 +4,7 @@ import {
   chartAnalysisSchema,
   dataPreviewSchema,
   exportJobSchema,
+  projectDescriptionTextSchema,
   processingJobSchema,
   qualityReportSchema,
 } from "./api-contract";
@@ -135,5 +136,17 @@ describe("LabViz API v1 contract", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("enforces the project-description UTF-8 byte and NUL contract", () => {
+    expect(
+      projectDescriptionTextSchema.safeParse(`${"a".repeat(3_997)}研`).success,
+    ).toBe(true);
+    expect(projectDescriptionTextSchema.safeParse("研".repeat(1_334)).success).toBe(
+      false,
+    );
+    expect(projectDescriptionTextSchema.safeParse("invalid\0text").success).toBe(
+      false,
+    );
   });
 });
