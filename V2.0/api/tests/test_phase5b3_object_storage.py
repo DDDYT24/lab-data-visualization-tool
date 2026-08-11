@@ -149,6 +149,7 @@ def postgres_database() -> Iterator[Database]:
     finally:
         with database.engine.begin() as connection:
             connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+            connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
             connection.execute(text("TRUNCATE TABLE storage_inventory_checkpoints"))
             connection.execute(text("TRUNCATE TABLE orphan_staging_candidates"))
         database.dispose()
@@ -158,6 +159,7 @@ def postgres_database() -> Iterator[Database]:
 def clean_postgres(postgres_database: Database) -> None:
     with postgres_database.engine.begin() as connection:
         connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
         connection.execute(text("TRUNCATE TABLE storage_inventory_checkpoints"))
         connection.execute(text("TRUNCATE TABLE orphan_staging_candidates"))
         connection.execute(

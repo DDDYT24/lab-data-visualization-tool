@@ -12,6 +12,11 @@ fenced reconciliation, lifecycle purge, metadata cleanup, StoredObject GC, and t
 staging cleanup. The SQLite reference repository remains unchanged.
 Phase 5B-3 adds the shared Local/S3 provider contract, real MinIO verification, bounded multipart
 uploads, provider metadata, and resumable provider-scoped staging inventory.
+Phase 6B-2 replaces the authentication count-then-insert race with atomic database-time client and
+email buckets. PostgreSQL is the multi-host authority; SQLite preserves equivalent reference
+semantics. Configure the bounded window and limits with
+`LABVIZ_AUTH_RATE_LIMIT_WINDOW_SECONDS`, `LABVIZ_AUTH_CLIENT_REQUEST_LIMIT`, and
+`LABVIZ_AUTH_EMAIL_REQUEST_LIMIT`.
 
 ## Production runtime
 
@@ -152,6 +157,15 @@ Rollback and reapply only the Phase 5B-2 staging-inventory schema:
 ```powershell
 python -m alembic downgrade 0006_worker_leases
 python -m alembic upgrade head
+```
+
+Rollback and reapply the Phase 6B-2 limiter schema only after explicitly confirming that its
+short-lived bucket state is disposable. Migration 0009 fails closed while any bucket remains:
+
+```powershell
+python -m alembic downgrade 0008_phase5b3_storage_inventory
+python -m alembic upgrade head
+python -m alembic check
 ```
 
 Run a worker as an independent process. Reconciliation may finalize already-persisted writes;

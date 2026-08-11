@@ -29,7 +29,10 @@
         {"name": "LABVIZ_S3_REGION", "value": "${AWS_REGION}"},
         {"name": "LABVIZ_SHARE_TOKEN_KEY_VERSION", "value": "1"},
         {"name": "LABVIZ_TRUSTED_PROXY_CIDRS", "value": "${ALB_SUBNET_CIDRS}"},
-        {"name": "LABVIZ_TRUSTED_PROXY_HOPS", "value": "1"}
+        {"name": "LABVIZ_TRUSTED_PROXY_HOPS", "value": "1"},
+        {"name": "LABVIZ_AUTH_RATE_LIMIT_WINDOW_SECONDS", "value": "3600"},
+        {"name": "LABVIZ_AUTH_CLIENT_REQUEST_LIMIT", "value": "30"},
+        {"name": "LABVIZ_AUTH_EMAIL_REQUEST_LIMIT", "value": "10"}
       ],
       "secrets": [
         {"name": "LABVIZ_POSTGRES_URL", "valueFrom": "${POSTGRES_URL_SECRET_ARN}"},

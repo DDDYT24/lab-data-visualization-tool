@@ -68,8 +68,11 @@ def postgres_database() -> Iterator[Database]:
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
     config = alembic_config(POSTGRES_URL)
     with database.engine.begin() as connection:
-        if "projects" in inspect(connection).get_table_names():
+        tables = set(inspect(connection).get_table_names())
+        if "projects" in tables:
             connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        if "auth_rate_limit_buckets" in tables:
+            connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     try:
@@ -81,7 +84,12 @@ def postgres_database() -> Iterator[Database]:
 @pytest.fixture(autouse=True)
 def empty_postgres(postgres_database: Database) -> None:
     with postgres_database.engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        connection.execute(
+            text(
+                "TRUNCATE TABLE users, stored_objects, projects, "
+                "auth_rate_limit_buckets, auth_requests CASCADE"
+            )
+        )
 
 
 @pytest.fixture(params=["sqlite", "postgresql"])

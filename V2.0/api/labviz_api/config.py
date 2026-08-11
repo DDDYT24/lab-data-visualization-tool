@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlparse
 DEFAULT_SHARE_TOKEN_KEYS = ((1, "labviz-development-share-token-key-v1"),)
 DEFAULT_CLIENT_IDENTITY_KEY = "labviz-development-client-identity-key-v1"
 MAX_CLOUD_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_AUTH_RATE_LIMIT_WINDOW_SECONDS = 86_400
+MAX_AUTH_REQUEST_LIMIT = 10_000
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -89,6 +91,9 @@ class Settings:
     trusted_proxy_cidrs: tuple[str, ...] = ()
     trusted_proxy_hops: int = 0
     client_identity_key: str = DEFAULT_CLIENT_IDENTITY_KEY
+    auth_rate_limit_window_seconds: int = 3_600
+    auth_client_request_limit: int = 30
+    auth_email_request_limit: int = 10
     worker_batch_size: int = 25
     worker_lease_seconds: int = 60
     worker_heartbeat_seconds: int = 20
@@ -209,6 +214,12 @@ class Settings:
                 raise ValueError("Production requires an explicit LABVIZ_CLIENT_IDENTITY_KEY.")
             if self.client_identity_key in {secret for _version, secret in self.share_token_keys}:
                 raise ValueError("Client identity and share-token keys must be different.")
+        if not 60 <= self.auth_rate_limit_window_seconds <= MAX_AUTH_RATE_LIMIT_WINDOW_SECONDS:
+            raise ValueError("LABVIZ_AUTH_RATE_LIMIT_WINDOW_SECONDS must be between 60 and 86400.")
+        if not 1 <= self.auth_client_request_limit <= MAX_AUTH_REQUEST_LIMIT:
+            raise ValueError("LABVIZ_AUTH_CLIENT_REQUEST_LIMIT must be between 1 and 10000.")
+        if not 1 <= self.auth_email_request_limit <= MAX_AUTH_REQUEST_LIMIT:
+            raise ValueError("LABVIZ_AUTH_EMAIL_REQUEST_LIMIT must be between 1 and 10000.")
         if self.worker_batch_size < 1 or self.worker_poll_seconds < 1:
             raise ValueError("Worker batch and poll settings must be positive.")
         if self.worker_lease_seconds < 2:
@@ -303,6 +314,11 @@ class Settings:
             client_identity_key=os.environ.get(
                 "LABVIZ_CLIENT_IDENTITY_KEY", DEFAULT_CLIENT_IDENTITY_KEY
             ),
+            auth_rate_limit_window_seconds=int(
+                os.environ.get("LABVIZ_AUTH_RATE_LIMIT_WINDOW_SECONDS", "3600")
+            ),
+            auth_client_request_limit=int(os.environ.get("LABVIZ_AUTH_CLIENT_REQUEST_LIMIT", "30")),
+            auth_email_request_limit=int(os.environ.get("LABVIZ_AUTH_EMAIL_REQUEST_LIMIT", "10")),
             worker_batch_size=int(os.environ.get("LABVIZ_WORKER_BATCH_SIZE", "25")),
             worker_lease_seconds=int(os.environ.get("LABVIZ_WORKER_LEASE_SECONDS", "60")),
             worker_heartbeat_seconds=int(os.environ.get("LABVIZ_WORKER_HEARTBEAT_SECONDS", "20")),

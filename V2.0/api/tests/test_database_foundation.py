@@ -47,6 +47,7 @@ CORE_TABLES = {
     "auth_challenges",
     "auth_sessions",
     "auth_requests",
+    "auth_rate_limit_buckets",
     "project_claims",
     "project_origins",
     "project_lifecycle_events",
@@ -80,8 +81,11 @@ def postgres_database() -> Iterator[Database]:
 
     config = alembic_config(database.engine.url.render_as_string(hide_password=False))
     with database.engine.begin() as connection:
-        if "projects" in inspect(connection).get_table_names():
+        tables = set(inspect(connection).get_table_names())
+        if "projects" in tables:
             connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
+        if "auth_rate_limit_buckets" in tables:
+            connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     try:
@@ -112,6 +116,8 @@ def test_initial_migration_is_upgradeable_reversible_and_current(
     postgres_database: Database,
 ) -> None:
     config = alembic_config(postgres_database.engine.url.render_as_string(hide_password=False))
+    with postgres_database.engine.begin() as connection:
+        connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(config, "base")
     assert not CORE_TABLES.intersection(inspect(postgres_database.engine).get_table_names())
 

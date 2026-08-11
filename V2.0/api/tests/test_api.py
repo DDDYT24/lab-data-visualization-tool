@@ -27,6 +27,7 @@ from labviz_api.processing import (
     build_quality_report,
     render_chart,
 )
+from labviz_api.rate_limits import AuthRateLimitUnavailable
 from labviz_api.repository import ProjectRepository
 
 
@@ -391,11 +392,74 @@ def test_production_configuration_requires_the_approved_runtime(tmp_path: Path) 
             {"client_identity_key": "a-production-share-token-key-with-32-bytes"},
             "must be different",
         ),
+        ({"auth_rate_limit_window_seconds": 59}, "WINDOW_SECONDS"),
+        ({"auth_rate_limit_window_seconds": 86_401}, "WINDOW_SECONDS"),
+        ({"auth_client_request_limit": 0}, "CLIENT_REQUEST_LIMIT"),
+        ({"auth_email_request_limit": 10_001}, "EMAIL_REQUEST_LIMIT"),
         ({"runtime_role": "unknown"}, "RUNTIME_ROLE"),
     )
     for changes, message in invalid_settings:
         with pytest.raises(ValueError, match=message):
             replace(settings, **cast(Any, changes))
+
+
+def test_auth_limiter_failure_returns_a_stable_unavailable_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        database_path=tmp_path / "limiter-unavailable.db",
+        allowed_origins=("http://localhost:3000",),
+        public_web_url="http://localhost:3000",
+    )
+    repository = ProjectRepository(settings.database_path, settings.project_ttl_seconds)
+    sender = MemoryEmailSender()
+    auth = AuthService(sender, settings.session_ttl_seconds, repository)
+
+    def unavailable(**_kwargs: object) -> bool:
+        raise AuthRateLimitUnavailable("Authentication rate limiting is unavailable.")
+
+    monkeypatch.setattr(repository, "allow_auth_request", unavailable)
+    with TestClient(create_app(settings, repository, auth)) as client:
+        response = client.post(
+            "/api/v1/auth/email-code",
+            json={"email": "unavailable@example.com"},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": "auth-rate-limit-unavailable",
+        "message": "Authentication rate limiting is unavailable.",
+    }
+    assert sender.messages == []
+
+
+def test_api_uses_the_configured_atomic_authentication_limits(tmp_path: Path) -> None:
+    settings = Settings(
+        database_path=tmp_path / "configured-limiter.db",
+        allowed_origins=("http://localhost:3000",),
+        public_web_url="http://localhost:3000",
+        auth_client_request_limit=1,
+        auth_email_request_limit=1,
+    )
+    repository = ProjectRepository(settings.database_path, settings.project_ttl_seconds)
+    sender = MemoryEmailSender()
+    auth = AuthService(sender, settings.session_ttl_seconds, repository)
+
+    with TestClient(create_app(settings, repository, auth)) as client:
+        accepted = client.post(
+            "/api/v1/auth/email-code",
+            json={"email": "first-limit@example.com"},
+        )
+        limited = client.post(
+            "/api/v1/auth/email-code",
+            json={"email": "second-limit@example.com"},
+        )
+
+    assert accepted.status_code == 200
+    assert limited.status_code == 429
+    assert limited.json()["code"] == "email-rate-limited"
+    assert len(sender.messages) == 1
 
 
 def test_liveness_is_dependency_free_and_readiness_fails_closed(

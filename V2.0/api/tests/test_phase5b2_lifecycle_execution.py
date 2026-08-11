@@ -83,12 +83,15 @@ def postgres_database() -> Iterator[Database]:
         database.dispose()
         pytest.skip("Local PostgreSQL is not running; start it with docker compose.")
     with database.engine.begin() as connection:
-        if "projects" in inspect(connection).get_table_names():
+        tables = set(inspect(connection).get_table_names())
+        if "projects" in tables:
             connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
-        if "storage_inventory_checkpoints" in inspect(connection).get_table_names():
+        if "storage_inventory_checkpoints" in tables:
             connection.execute(text("TRUNCATE TABLE storage_inventory_checkpoints"))
-        if "orphan_staging_candidates" in inspect(connection).get_table_names():
+        if "orphan_staging_candidates" in tables:
             connection.execute(text("TRUNCATE TABLE orphan_staging_candidates"))
+        if "auth_rate_limit_buckets" in tables:
+            connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(_alembic_config(), "base")
     command.upgrade(_alembic_config(), "head")
     try:
@@ -106,7 +109,10 @@ def empty_postgres(postgres_database: Database) -> None:
     with postgres_database.engine.begin() as connection:
         connection.execute(text("TRUNCATE TABLE users, stored_objects, projects CASCADE"))
         connection.execute(
-            text("TRUNCATE TABLE auth_challenges, auth_requests, guest_sessions CASCADE")
+            text(
+                "TRUNCATE TABLE auth_rate_limit_buckets, auth_challenges, "
+                "auth_requests, guest_sessions CASCADE"
+            )
         )
         connection.execute(text("TRUNCATE TABLE orphan_staging_candidates"))
         connection.execute(text("TRUNCATE TABLE storage_inventory_checkpoints"))
@@ -139,6 +145,8 @@ def test_0007_upgrade_downgrade_reupgrade_and_schema_drift(
     inspector = inspect(postgres_database.engine)
     assert "orphan_staging_candidates" in inspector.get_table_names()
 
+    with postgres_database.engine.begin() as connection:
+        connection.execute(text("TRUNCATE TABLE auth_rate_limit_buckets, auth_requests"))
     command.downgrade(config, "0006_worker_leases")
     assert "orphan_staging_candidates" not in inspect(postgres_database.engine).get_table_names()
 

@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -149,6 +150,40 @@ class AuthRequest(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class AuthRateLimitBucket(Base):
+    __tablename__ = "auth_rate_limit_buckets"
+    __table_args__ = (
+        CheckConstraint("scope IN ('client', 'email')", name="scope"),
+        CheckConstraint(
+            "scope <> 'client' OR identity_key ~ '^[0-9a-f]{64}$'",
+            name="client_identity_lower_hex",
+        ),
+        CheckConstraint(
+            "scope <> 'email' OR identity_key = lower(identity_key)",
+            name="email_identity_normalized",
+        ),
+        CheckConstraint("request_count >= 0", name="request_count_nonnegative"),
+        CheckConstraint("expires_at > window_started_at", name="window_order"),
+        UniqueConstraint(
+            "scope",
+            "identity_key",
+            "window_started_at",
+            name="uq_auth_rate_limit_bucket_window",
+        ),
+        Index("ix_auth_rate_limit_buckets_expires", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    identity_key: Mapped[str] = mapped_column(String(320), nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
 
 

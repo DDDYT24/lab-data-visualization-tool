@@ -82,8 +82,9 @@ class AuthRepository(Protocol):
         *,
         client_key: str,
         email: str,
-        ip_limit: int = 30,
+        client_limit: int = 30,
         email_limit: int = 10,
+        window_seconds: int = 3_600,
     ) -> bool: ...
 
 
