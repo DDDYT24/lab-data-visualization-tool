@@ -84,14 +84,14 @@ Next:
 - [x] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
 - [ ] Add trusted-proxy client identity and atomic multi-host authentication abuse limits before horizontally scaling the API; leased lifecycle/reconciliation Workers already run independently.
-- [ ] Integrate and test the selected production SMTP provider, abuse limits, and delivery monitoring.
+- [ ] Integrate and test the selected production SES provider, abuse limits, and delivery monitoring.
 - [x] Store PostgreSQL publication exports and datasets through the selected provider-neutral object-storage boundary; keep SQLite BLOBs only in the local/reference adapter.
 - [x] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.
 - [x] Implement immutable share snapshots pinned to ProjectRevision; links do not expire by default, remain revocable, and never change when the working project is edited.
 - [x] Retain saved-project publication exports for the lifetime of the project and remove them only after permanent project purge.
 - [x] Implement 24-hour saved-project soft-delete recovery; suspend access immediately and purge database/object data after the window.
 - [ ] Enforce the production baseline for TLS, managed encryption at rest, environment-separated secrets and KMS keys, seven-day-or-longer PITR, 30-day daily backup retention, and quarterly restore drills.
-- [ ] Select the initial cloud provider and single deployment/data region before public production launch; keep database, objects, workers, and backups co-located.
+- [x] Select AWS `ap-southeast-1` as the initial deployment/data Region; keep database, objects, workers, and backups co-located.
 - [ ] Finalize configurable saved-project count and total-storage quota values before public launch; keep the approved 50 MB per-upload limit.
 - [ ] Complete target-market privacy and compliance review before making GDPR, PIPL, HIPAA, GLP, GxP, or similar claims.
 
@@ -99,9 +99,12 @@ Next:
 
 - [x] Phase 6-0: reconcile repository facts, approve the AWS production topology, preserve cloud-provider boundaries, and assign every remaining responsibility to a subphase.
 - [x] Phase 6A: add fail-closed production settings, dependency readiness, process health checks, non-root API/Worker and standalone Next.js images, and deployment-safe examples.
-- [ ] Phase 6B: add multi-host abuse protection, SES delivery/monitoring, and project-description editing.
-- [ ] Phase 6C: add production IaC, encrypted backup/restore automation and evidence, CloudWatch operations, runbooks, alerts, and SLOs.
-- [ ] Phase 6D: add quotas, privacy/compliance review, load and recovery drills, and production-launch acceptance.
+- [x] Phase 6-PRE-1: track the acceptance standard and establish complete Phase 6B/6C/6D implementation, evidence, failure, and rollback contracts.
+- [ ] Phase 6-PRE-2: separate process liveness, dependency readiness, and Worker operational probes.
+- [ ] Phase 6-PRE-3: independently rerun the complete admission matrix and require `PASS` before Phase 6B.
+- [ ] Phase 6B: add multi-host abuse protection, SES delivery/monitoring, and project-description editing. See [`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md).
+- [ ] Phase 6C: add production IaC, encrypted backup/restore automation and evidence, CloudWatch operations, runbooks, alerts, SLOs, CI/CD, and rollback. See [`PERSISTENCE_PHASE6C.md`](PERSISTENCE_PHASE6C.md).
+- [ ] Phase 6D: add quotas, privacy/compliance review, load and recovery drills, and production-launch acceptance. See [`PERSISTENCE_PHASE6D.md`](PERSISTENCE_PHASE6D.md).
 
 ## Deferred Scientific Domain Model
 

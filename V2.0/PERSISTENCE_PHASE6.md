@@ -1,6 +1,7 @@
 # Phase 6 Production Runtime and Operations
 
-**Status:** Phase 6-0 and Phase 6A implemented and verified on 2026-08-09.
+**Status:** Phase 6-0 and Phase 6A implemented and verified on 2026-08-09. Phase 6-PRE is the
+mandatory admission gate before Phase 6B.
 
 Phase 6 turns the verified PostgreSQL/S3 application into a production-deployable website without
 changing `/api/v1`, scientific contracts, immutable revision semantics, or the SQLite reference
@@ -109,12 +110,26 @@ remain later-phase acceptance evidence.
 ## Later Phase 6 ownership
 
 - **Phase 6B:** trusted-proxy client identity, atomic multi-host abuse limits, SES delivery,
-  bounce/complaint monitoring, and project-description editing.
+  bounce/complaint monitoring, and project-description editing. The exact contract is
+  [`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md).
 - **Phase 6C:** IaC for network/ECS/RDS/S3/KMS/Secrets Manager, backup and restore automation,
-  CloudWatch dashboards/alarms, runbooks, and measured SLOs.
+  CloudWatch dashboards/alarms, runbooks, measured SLOs, CI/CD, and rollback. The exact contract is
+  [`PERSISTENCE_PHASE6C.md`](PERSISTENCE_PHASE6C.md).
 - **Phase 6D:** configurable project/storage quotas, retention review, target-market privacy and
-  compliance assessment, staging load tests, disaster-recovery drill, and launch acceptance.
+  compliance assessment, staging load tests, disaster-recovery drill, and launch acceptance. The
+  exact contract is [`PERSISTENCE_PHASE6D.md`](PERSISTENCE_PHASE6D.md).
 
-Every subphase is an independent commit and must be accepted against
+## Phase 6-PRE admission sequence
+
+1. **PRE-1:** track [`AGENT_ACCEPTANCE_STANDARD.md`](AGENT_ACCEPTANCE_STANDARD.md), establish the
+   detailed 6B/6C/6D contracts, and update the repository roadmap without changing runtime code.
+2. **PRE-2:** separate process liveness from dependency readiness. API container health uses
+   `/health`, ALB target readiness uses `/api/v1/ready`, and Worker dependency probes do not create
+   restart storms.
+3. **PRE-3:** independently rerun the complete repository, real PostgreSQL/MinIO, migration,
+   frontend/browser, image/runtime, hook, scope, and cleanup gates. The verdict must be `PASS`.
+
+Phase 6B may not begin until all three admission steps pass. Every numbered implementation unit is
+an independent commit and must be accepted against
 [`AGENT_ACCEPTANCE_STANDARD.md`](AGENT_ACCEPTANCE_STANDARD.md). A later phase may add stricter
 evidence but may not weaken existing API, persistence, integrity, recovery, or security invariants.
