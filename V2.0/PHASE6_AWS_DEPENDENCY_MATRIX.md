@@ -29,6 +29,8 @@ an independent commit and is verified before the next begins.
 
 AWS CLI authentication failure is therefore an evidence blocker, not permission to use mocks as
 integration proof, weaken production settings, add static credentials, or claim Phase 6 complete.
-Every locally completed unit must update its status and exact commit in
-[`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md). The remaining AWS evidence will be resumed from
-that documented boundary without rewriting accepted local commits.
+Every locally completed unit updates its status in
+[`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md). Because a commit cannot contain its own future
+hash, the final local acceptance report records the exact immutable commit for every unit. The
+remaining AWS evidence will be resumed from that documented boundary without rewriting accepted
+local commits.

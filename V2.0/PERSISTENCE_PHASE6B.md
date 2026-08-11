@@ -10,6 +10,16 @@ deployment. Phase 6B must preserve `/api/v1` compatibility, immutable ProjectRev
 semantics, PostgreSQL as the production coordination store, and SQLite as the local/reference
 adapter.
 
+## Local execution status
+
+- [x] **6B-1:** implemented and locally verified; real staging ALB chain evidence remains pending.
+- [ ] **6B-2:** not started.
+- [ ] **6B-4:** not started.
+- [ ] **6B-3 offline portion:** not started; live AWS evidence remains mandatory.
+
+Exact immutable commit IDs and rerun evidence are recorded in the local acceptance report after
+the independent unit commits exist.
+
 ## Admission and Git object
 
 - The accepted Phase 6-PRE closeout commit must be the direct base, contain Phase 6-PRE-2, and link
@@ -30,6 +40,8 @@ headers:
 
 - accept proxy headers only when the immediate peer is inside an explicit production trusted-proxy
   CIDR allowlist and the configured proxy-hop count is positive;
+- reject globally routed/default trusted-proxy ranges in production; the allowlist represents only
+  the private network path to the application;
 - use the nearest untrusted address from the right side of the ALB `X-Forwarded-For` chain when the
   ALB is configured in append mode;
 - normalize IPv4, IPv4-with-port, bracketed IPv6, and IPv4-mapped IPv6 before use;

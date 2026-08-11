@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .auth import AuthError, AuthRepository, AuthService, build_auth_service
+from .client_identity import ClientIdentityError, ClientIdentityResolver
 from .config import Settings
 from .models import (
     AuthenticatedUser,
@@ -368,6 +369,7 @@ def create_app(
         ),
     )
     resolved_auth = auth_service or build_auth_service(resolved_settings, resolved_auth_repository)
+    client_identity = ClientIdentityResolver(resolved_settings)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> Any:
@@ -959,7 +961,14 @@ def create_app(
         repository: AuthRepository = Depends(get_auth_repository),
     ) -> RequestEmailCodeResponse:
         email = str(body.email).strip().lower()
-        client_key = request.client.host if request.client else "unknown"
+        try:
+            client_key = client_identity.resolve_request(request)
+        except ClientIdentityError as exc:
+            raise ApiProblem(
+                400,
+                "invalid-client-identity",
+                "The request network path could not be verified.",
+            ) from exc
         if not repository.allow_auth_request(client_key=client_key, email=email):
             raise ApiProblem(
                 429,
