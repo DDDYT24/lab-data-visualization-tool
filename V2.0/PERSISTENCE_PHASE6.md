@@ -1,8 +1,13 @@
 # Phase 6 Production Runtime and Operations
 
 **Status:** Phase 6-0 and Phase 6A were verified on 2026-08-09. Phase 6-PRE was accepted on
-2026-08-11; Phase 6B local implementation is active under the AWS dependency matrix. See
-[`PHASE6_PRE_ACCEPTANCE.md`](PHASE6_PRE_ACCEPTANCE.md).
+2026-08-11; Phase 6B application implementation passed on 2026-08-12. The 2026-08-17 boundary
+correction admits Phase 6C while keeping all real AWS evidence blocking for Phase 6C acceptance.
+See [`PHASE6B_LOCAL_ACCEPTANCE.md`](PHASE6B_LOCAL_ACCEPTANCE.md).
+
+The versioned [`contracts/phase6-gates-v1.json`](contracts/phase6-gates-v1.json) contract encodes
+the acyclic PRE -> 6B application -> 6C cloud -> 6D launch dependency and the ownership of
+transferred real-service evidence. CI tests this governance boundary.
 
 Phase 6 turns the verified PostgreSQL/S3 application into a production-deployable website without
 changing `/api/v1`, scientific contracts, immutable revision semantics, or the SQLite reference
@@ -39,7 +44,7 @@ The initial provider is AWS in one selected region:
 | Routing and TLS | ALB or equivalent managed ingress; HTTPS is the only public production scheme |
 | Database | Amazon RDS for PostgreSQL 17, private networking, managed encryption, PITR >= 7 days |
 | Objects | Amazon S3, Block Public Access, encryption at rest, versioning, lifecycle policy |
-| Email | Amazon SES, implemented and accepted in Phase 6B |
+| Email | Amazon SES application adapter accepted in Phase 6B; real service evidence is Phase 6C |
 | Secrets and keys | AWS Secrets Manager and KMS; no deployment secret in Git or task JSON |
 | Logs and metrics | CloudWatch; alarms and SLOs are Phase 6C |
 | Schema changes | A one-shot ECS migration task before an API rollout |
@@ -112,11 +117,12 @@ remain later-phase acceptance evidence.
 
 ## Later Phase 6 ownership
 
-- **Phase 6B:** trusted-proxy client identity, atomic multi-host abuse limits, SES delivery,
-  bounce/complaint monitoring, and project-description editing. The exact contract is
+- **Phase 6B:** trusted-proxy client identity, atomic multi-host abuse limits, the SES v2
+  application boundary, and project-description editing. The exact contract is
   [`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md).
 - **Phase 6C:** IaC for network/ECS/RDS/S3/KMS/Secrets Manager, backup and restore automation,
-  CloudWatch dashboards/alarms, runbooks, measured SLOs, CI/CD, and rollback. The exact contract is
+  real SES/IAM/ALB evidence, CloudWatch dashboards/alarms, runbooks, measured SLOs, CI/CD, and
+  rollback. The exact contract is
   [`PERSISTENCE_PHASE6C.md`](PERSISTENCE_PHASE6C.md).
 - **Phase 6D:** configurable project/storage quotas, retention review, target-market privacy and
   compliance assessment, staging load tests, disaster-recovery drill, and launch acceptance. The

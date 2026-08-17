@@ -83,8 +83,8 @@ Next:
 - [x] Activate pending StoredObject confirmation/finalization in the leased reconciliation worker and retire PostgreSQL lifespan recovery after the Phase 5B-2 cross-restart path passes.
 - [x] Record exact pandas, PyArrow, and Parquet writer versions as processing/object provenance; require Parquet schema v2 for any change to the v1 byte contract.
 - [x] Select authentication persistence with the configured SQLite/PostgreSQL backend without runtime dual-write.
-- [x] Add trusted-proxy client identity and atomic multi-host authentication abuse limits before horizontally scaling the API; real staging ALB chain evidence remains part of final Phase 6B acceptance.
-- [ ] Complete real-account SES accepted/bounce/complaint, suppression, IAM, and alarm evidence; the SES v2 adapter and abuse limits are locally complete.
+- [x] Add trusted-proxy client identity and atomic multi-host authentication abuse limits before horizontally scaling the API; real staging ALB chain evidence is a Phase 6C acceptance requirement.
+- [ ] Complete real-account SES accepted/bounce/complaint, suppression, deployed-IAM, and alarm evidence in Phase 6C; the SES v2 adapter and abuse limits are accepted application code.
 - [x] Store PostgreSQL publication exports and datasets through the selected provider-neutral object-storage boundary; keep SQLite BLOBs only in the local/reference adapter.
 - [x] Add an explicit authenticated “Save to Cloud” endpoint independent of link sharing.
 - [x] Implement immutable share snapshots pinned to ProjectRevision; links do not expire by default, remain revocable, and never change when the working project is edited.
@@ -102,8 +102,8 @@ Next:
 - [x] Phase 6-PRE-1: track the acceptance standard and establish complete Phase 6B/6C/6D implementation, evidence, failure, and rollback contracts.
 - [x] Phase 6-PRE-2: separate process liveness, dependency readiness, and Worker operational probes.
 - [x] Phase 6-PRE-3: independently rerun the complete admission matrix and record `PASS` in [`PHASE6_PRE_ACCEPTANCE.md`](PHASE6_PRE_ACCEPTANCE.md).
-- [x] Phase 6 AWS dependency boundary: continue only locally provable 6B units; retain real SES/ALB evidence as blockers and do not enter 6C/6D early. See [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md).
-- [ ] Phase 6B: add multi-host abuse protection, SES delivery/monitoring, and project-description editing. See [`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md).
+- [x] Phase 6 AWS dependency boundary: accept 6B application code, move infrastructure-dependent SES/IAM/ALB/CloudWatch evidence to the blocking 6C staging gate, and prohibit 6D before 6C acceptance. See [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md).
+- [x] Phase 6B: add multi-host abuse protection, the SES v2 application boundary, and project-description editing. See [`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md).
 - [ ] Phase 6C: add production IaC, encrypted backup/restore automation and evidence, CloudWatch operations, runbooks, alerts, SLOs, CI/CD, and rollback. See [`PERSISTENCE_PHASE6C.md`](PERSISTENCE_PHASE6C.md).
 - [ ] Phase 6D: add quotas, privacy/compliance review, load and recovery drills, and production-launch acceptance. See [`PERSISTENCE_PHASE6D.md`](PERSISTENCE_PHASE6D.md).
 

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "stages": {
+    "phase6_pre": {
+      "requires": [],
+      "unlocks": ["phase6b_application"]
+    },
+    "phase6b_application": {
+      "requires": ["phase6_pre"],
+      "unlocks": ["phase6c_cloud"]
+    },
+    "phase6c_cloud": {
+      "requires": ["phase6b_application"],
+      "unlocks": ["phase6d_launch"]
+    },
+    "phase6d_launch": {
+      "requires": ["phase6c_cloud"],
+      "unlocks": []
+    }
+  },
+  "transferredEvidence": {
+    "alb_forwarding_chain": {
+      "implementedBy": "phase6b_application",
+      "acceptedBy": "phase6c_cloud",
+      "realServiceRequired": true
+    },
+    "deployed_iam_roles": {
+      "implementedBy": "phase6b_application",
+      "acceptedBy": "phase6c_cloud",
+      "realServiceRequired": true
+    },
+    "ses_delivery_feedback": {
+      "implementedBy": "phase6b_application",
+      "acceptedBy": "phase6c_cloud",
+      "realServiceRequired": true
+    },
+    "ses_operational_alarms": {
+      "implementedBy": "phase6b_application",
+      "acceptedBy": "phase6c_cloud",
+      "realServiceRequired": true
+    }
+  }
+}

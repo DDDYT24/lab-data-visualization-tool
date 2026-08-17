@@ -1,15 +1,18 @@
-LOCAL PASS
+PASS
 
-# Phase 6B AWS-independent Acceptance
+# Phase 6B Application-Implementation Acceptance
 
 - **Accepted locally on:** 2026-08-12
+- **Phase-boundary correction:** 2026-08-17
 - **Branch:** `codex/v2-closeout-p0-1-runtime-errors`
 - **Offline-boundary base:** `3226742542d309822cfcdc3753e8c7c0ef24f7f6`
 - **Local candidate:** `2da381d6b08454549a74884775909b4a7ac71bb2`
-- **Final Phase 6B verdict:** `BLOCKED` on real AWS evidence only
+- **Phase 6B application verdict:** `PASS`
 
-This report accepts every implementation and test that does not require an AWS account. It is not
-an SES delivery claim, staging ALB claim, production-release approval, or admission to Phase 6C.
+This report accepts the complete Phase 6B application implementation and admits Phase 6C
+infrastructure work. It is not an SES delivery claim, staging ALB claim, Phase 6C acceptance, or
+production-release approval. Real SES, deployed IAM, ALB, and CloudWatch evidence belongs to the
+Phase 6C staging gate because Phase 6C creates the infrastructure required to produce that evidence.
 
 ## Exact implementation chain
 
@@ -44,7 +47,7 @@ The API image also exited nonzero when production SES configuration was absent. 
 built during 6B-4 and remained source-identical during the API/deployment-only 6B-3 unit. No test
 assertion was weakened and no new skip or `xfail` was introduced.
 
-## Required AWS evidence before final Phase 6B PASS
+## Transferred AWS evidence required before Phase 6C PASS
 
 1. Send through the real `ap-southeast-1` SES v2 API using the staging ECS task role and preserve
    the accepted MessageId plus delivery event.
@@ -56,7 +59,23 @@ assertion was weakened and no new skip or `xfail` was introduced.
    nearest untrusted client and reject forged or malformed forwarding headers.
 
 Use `python -m scripts.probe_ses_delivery` for each SES evidence case. Until all four items pass,
-Phase 6B remains `BLOCKED` and Phase 6C must not start.
+Phase 6C cannot receive `PASS` and Phase 6D must not start. This transfer changes evidence ownership,
+not the required evidence or the public-launch standard.
+
+## Boundary-correction verification
+
+The 2026-08-17 correction changes governance documentation, adds the versioned
+`contracts/phase6-gates-v1.json` contract, and extends the architecture-boundary test. It does not
+change application runtime code, migrations, deployment configuration, or AWS resources.
+
+- Ruff, format checking, and strict MyPy passed across 74 Python files.
+- The full API suite passed 203 tests against PostgreSQL 17 and the pinned MinIO provider.
+- Alembic reported the unique/current `0009` head and no schema drift.
+- ESLint, TypeScript, 41 Vitest tests, and the Next.js production build passed.
+- Playwright passed 22 tests with the same two explicit opt-in live tests skipped.
+- Pre-commit, JSON, changed-Markdown links, stale-gate wording, credential, and diff checks passed.
+- Compose was stopped without `-v`, the PostgreSQL/MinIO named volumes were preserved, verification
+  ports were free, and the Docker Desktop instance started for this rerun was stopped.
 
 ## Environment and cleanup
 

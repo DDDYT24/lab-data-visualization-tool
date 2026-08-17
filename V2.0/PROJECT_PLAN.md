@@ -167,13 +167,14 @@ Phase 6A; real SES delivery and cloud-resource provisioning remain later Phase 6
 
 ### Phase 6 — Production runtime and operations
 
-**Status:** Phase 6-0 architecture approved; implementation proceeds in independently accepted
-6A through 6D commits.
+**Status:** Phase 6-0, 6A, and the Phase 6B application implementation are accepted. Phase 6C is
+admitted and owns all real AWS/staging evidence; Phase 6D remains gated on Phase 6C acceptance.
 
 - Phase 6A makes the application container-deployable with fail-closed production configuration
   and real dependency readiness.
-- Phase 6B closes email, abuse-control, and description-editing product gaps.
-- Phase 6C provisions and operates the approved AWS topology, backups, monitoring, and SLOs.
+- Phase 6B closes the email-adapter, abuse-control, and description-editing application gaps.
+- Phase 6C provisions and operates the approved AWS topology and proves real SES/IAM/ALB behavior,
+  backups, monitoring, and SLOs.
 - Phase 6D sets quotas, completes market-specific review, and proves launch readiness.
 
 ### Deferred
