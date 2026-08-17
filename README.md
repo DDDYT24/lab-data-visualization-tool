@@ -109,7 +109,7 @@ website, then copy the six-digit code printed in the API terminal. No email is
 sent in this mode. The reference service supports the documented
 `LABVIZ_SMTP_*` variables for non-production integration testing. Production uses the implemented
 Amazon SES v2 adapter through the ECS task role; real-account delivery/feedback evidence remains a
-Phase 6B launch blocker.
+blocking Phase 6C staging acceptance requirement.
 For a separately hosted API, set `NEXT_PUBLIC_LABVIZ_API_URL` before starting
 Next.js and include the website origin in `LABVIZ_ALLOWED_ORIGINS`.
 

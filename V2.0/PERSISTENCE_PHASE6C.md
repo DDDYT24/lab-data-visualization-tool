@@ -1,6 +1,10 @@
 # Phase 6C AWS Infrastructure and Operations
 
-**Status:** Pending Phase 6B acceptance.
+**Status:** Admitted by the Phase 6B application `PASS`; implementation may start. Final acceptance
+requires the complete real staging evidence defined below.
+
+The versioned [`contracts/phase6-gates-v1.json`](contracts/phase6-gates-v1.json) contract makes this
+stage depend on the Phase 6B application gate and makes its `PASS` the only path into Phase 6D.
 
 Phase 6C creates the reproducible AWS staging and production runtime for the accepted application.
 The selected production/data Region is `ap-southeast-1`. Staging and production must use isolated
@@ -10,8 +14,9 @@ blocks live apply; no value is guessed and no placeholder is presented as deploy
 
 ## Admission and Git object
 
-- The accepted Phase 6B range is the exact base. Record every unit's base, candidate, and direct
-  parent before acceptance.
+- The accepted Phase 6B application range plus the tracked phase-boundary correction is the exact
+  base. Record the correction commit as the first 6C unit's direct parent, then record every unit's
+  base, candidate, and direct parent before acceptance.
 - Each numbered unit is an independent local commit and is verified before the next starts.
 - Terraform and AWS provider versions are constrained and locked at implementation time; dependency
   upgrades are separate reviewed changes.
@@ -118,6 +123,20 @@ Acceptance requires a real staging apply, a post-apply plan with no unexplained 
 network reachability proof, TLS/DNS and trusted-client-header proof, forced failed-deployment
 rollback, alarm delivery, RDS PITR and logical restore evidence, S3 version recovery, SES event
 evidence, and successful Web/API/Worker smoke flows.
+
+The following evidence was intentionally transferred from the Phase 6B application gate because
+only the Phase 6C staging environment can produce it. Every item is blocking for Phase 6C `PASS`:
+
+1. accepted SES v2 send through the staging API ECS task role, with MessageId and delivery event;
+2. separate SES bounce and complaint simulator events, account suppression, and alarm delivery;
+3. deployed-role inspection proving identity-scoped `ses:SendEmail` only on the API role, no email
+   permission on Worker roles, and no unrelated permissions;
+4. real append-mode ALB forwarding-chain proof for the configured private trusted peer/hop path,
+   including rejection of forged and malformed forwarding headers.
+
+These requirements may not be satisfied by mocks, local task-definition examples, policy text, or
+provider SDK-model tests. Missing AWS authentication or staging resources returns `BLOCKED` for
+Phase 6C acceptance and does not reopen or invalidate the accepted Phase 6B application code.
 
 ## Required commands and prohibited scope
 

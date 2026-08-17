@@ -1,9 +1,11 @@
 # Phase 6B Public-Edge and Account Completion
 
-**Status:** Phase 6-PRE accepted. AWS-independent implementation is active under
-[`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md); final Phase 6B acceptance
-remains pending real SES and staging ALB evidence. Every local unit has passed; see
+**Status:** Application implementation accepted on 2026-08-12. The 2026-08-17 boundary correction
+moves real SES, deployed IAM, staging ALB, and CloudWatch evidence to Phase 6C acceptance. See
 [`PHASE6B_LOCAL_ACCEPTANCE.md`](PHASE6B_LOCAL_ACCEPTANCE.md).
+
+The versioned [`contracts/phase6-gates-v1.json`](contracts/phase6-gates-v1.json) contract records
+that this application `PASS` unlocks Phase 6C while real-service evidence is accepted only by 6C.
 
 Phase 6B makes the existing application safe and complete at the public application boundary. It
 does not provision long-lived AWS infrastructure; Phase 6C owns Terraform and live service
@@ -11,19 +13,20 @@ deployment. Phase 6B must preserve `/api/v1` compatibility, immutable ProjectRev
 semantics, PostgreSQL as the production coordination store, and SQLite as the local/reference
 adapter.
 
-## Local execution status
+## Application implementation status
 
-- [x] **6B-1:** implemented and locally verified; real staging ALB chain evidence remains pending.
+- [x] **6B-1:** implemented and locally verified; real staging ALB chain evidence is owned by 6C.
 - [x] **6B-2:** implemented and locally verified; no AWS evidence is required.
 - [x] **6B-4:** implemented and locally verified; no AWS evidence is required.
-- [x] **6B-3 offline portion:** implemented and locally verified; live SES evidence remains mandatory.
+- [x] **6B-3:** application adapter and provider boundary implemented and locally verified; live SES
+  and deployed-IAM evidence remains mandatory for 6C acceptance.
 
 6B-2 also makes the limiter vocabulary consistently client-identity based, permits the client and
 email limits to be tuned independently within their documented bounds, skips legacy raw network
 addresses during migration backfill, and refuses downgrade while limiter buckets remain. These are
 intentional safety and maintainability refinements within the approved 6B-2 boundary.
 
-Exact immutable commit IDs and rerun evidence are recorded in the local acceptance report after
+Exact immutable commit IDs and rerun evidence are recorded in the application acceptance report after
 the independent unit commits exist.
 
 ## Admission and Git object
@@ -34,10 +37,11 @@ the independent unit commits exist.
   commit, is verified before the next unit starts, and is never pushed by an implementation agent.
 - Final Phase 6B acceptance is read-only over the complete ordered 6B range and follows
   [`AGENT_ACCEPTANCE_STANDARD.md`](AGENT_ACCEPTANCE_STANDARD.md).
-- If AWS CLI access, the selected SES Region, a verified sender identity, or a real PostgreSQL 17
-  dependency is unavailable, the affected acceptance claim is `BLOCKED`; no mock may replace it.
-- The temporary local execution order and the prohibition on entering Phase 6C/6D early are defined
-  by [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md).
+- Phase 6B application acceptance requires real PostgreSQL 17 where specified but does not claim
+  real AWS integration. Missing AWS CLI access, the selected SES Region, or a verified sender blocks
+  the corresponding Phase 6C evidence; no mock may replace it.
+- The corrected evidence ownership and the prohibition on entering Phase 6D early are defined by
+  [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md).
 
 ## 6B-1 — trusted public client identity
 
@@ -98,11 +102,13 @@ Required behavior:
   bounces, and complaints; Phase 6C codifies the SES/SNS/CloudWatch resources in Terraform;
 - account-level suppression and operational alarms are mandatory before public launch.
 
-Acceptance uses the real SES mailbox simulator or verified test recipient in `ap-southeast-1`,
-observes accepted delivery plus bounce/complaint events, proves that the console sender cannot be
-selected in production, and verifies that API/Worker task roles receive no unrelated permissions.
+Phase 6B application acceptance proves that the console sender cannot be selected in production
+and validates the SES v2 request, response, failure, redaction, and task-role policy boundaries.
+Phase 6C acceptance uses the real SES mailbox simulator or verified test recipient in
+`ap-southeast-1`, observes accepted delivery plus bounce/complaint events, and verifies that the
+deployed API/Worker task roles receive no unrelated permissions.
 
-### 6B-3 offline implementation
+### 6B-3 implemented application contract
 
 - Production accepts only `LABVIZ_AUTH_MODE=ses`; it requires an explicit SES Region matching S3,
   a valid sender, a configuration-set name, bounded client timeouts, and no SMTP credentials.
@@ -116,9 +122,9 @@ selected in production, and verifies that API/Worker task roles receive no unrel
   permission or configuration.
 - `python -m scripts.probe_ses_delivery` is ready for accepted, bounce, and complaint evidence and
   emits only provider/status/MessageId. It has not been run because AWS authentication is blocked.
-- Phase 6C still owns the configuration-set destinations, account suppression, CloudWatch alarms,
-  and Terraform. Final 6B remains `BLOCKED` until those real events and the staging ALB chain are
-  observed; local fakes are not acceptance evidence.
+- Phase 6C owns the configuration-set destinations, account suppression, CloudWatch alarms,
+  Terraform, and real staging evidence. Phase 6C cannot pass until those real events and the staging
+  ALB chain are observed; local fakes are not acceptance evidence.
 
 ## 6B-4 — authenticated project-description editing
 
@@ -184,10 +190,10 @@ npm run verify
 npm run test:e2e
 ```
 
-Run the real SES probe added by 6B against the selected test identity without printing recipients,
-message bodies, credentials, or authorization URLs. Run repository hooks, JSON/YAML and Markdown
-link checks, container builds, `git diff --check`, and final status/scope audits. No new skip or
-`xfail` is permitted unless this document is amended before implementation.
+Phase 6B runs repository hooks, JSON/YAML and Markdown link checks, container builds,
+`git diff --check`, and final status/scope audits. No new skip or `xfail` is permitted unless this
+document is amended before implementation. Phase 6C runs the real SES probe against the selected
+test identity without printing recipients, message bodies, credentials, or authorization URLs.
 
 ## Prohibited scope and rollback
 

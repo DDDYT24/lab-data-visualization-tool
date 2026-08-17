@@ -2,6 +2,9 @@
 
 **Status:** Pending Phase 6C acceptance and live staging evidence.
 
+The versioned [`contracts/phase6-gates-v1.json`](contracts/phase6-gates-v1.json) contract prohibits
+entry into this stage until the Phase 6C cloud gate passes with all required real-service evidence.
+
 Phase 6D is the public-launch gate. It adds bounded product quotas, completes retention/privacy
 decisions, measures capacity and security, performs disaster-recovery exercises, and accepts one
 exact release candidate. Completing code without live evidence is not Phase 6D completion.
