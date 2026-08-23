@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from labviz_api.config import Settings
@@ -9,6 +10,7 @@ V2_ROOT = Path(__file__).resolve().parents[2]
 FORBIDDEN_INFRASTRUCTURE = {"celery", "kafka-python", "redis"}
 DEPLOY_ROOT = V2_ROOT / "deploy" / "aws"
 PHASE6_GATE_CONTRACT = V2_ROOT / "contracts" / "phase6-gates-v1.json"
+TERRAFORM_ROOT = DEPLOY_ROOT / "terraform"
 
 
 def test_sqlite_remains_the_local_reference_default() -> None:
@@ -151,3 +153,117 @@ def test_phase6a_images_and_ecs_examples_keep_runtime_boundaries() -> None:
     assert "`/api/v1/ready`" in deployment_contract
     assert "ECS restart storms" in deployment_contract
     assert "do not attach a PostgreSQL/S3 dependency probe" in deployment_contract
+
+
+def test_phase6c0_terraform_layout_and_state_boundaries_are_tracked() -> None:
+    expected_modules = {
+        "network",
+        "security",
+        "data",
+        "compute",
+        "edge",
+        "email",
+        "observability",
+        "backup",
+    }
+    assert {path.name for path in (TERRAFORM_ROOT / "modules").iterdir() if path.is_dir()} == (
+        expected_modules
+    )
+
+    roots = {
+        "bootstrap": TERRAFORM_ROOT / "bootstrap",
+        "account": TERRAFORM_ROOT / "account",
+        "staging": TERRAFORM_ROOT / "environments" / "staging",
+        "production": TERRAFORM_ROOT / "environments" / "production",
+    }
+    assert all(path.is_dir() for path in roots.values())
+
+    backends = {
+        name: (path / "versions.tf").read_text(encoding="utf-8")
+        for name, path in roots.items()
+        if name != "bootstrap"
+    }
+    expected_keys = {
+        "account": "account/terraform.tfstate",
+        "staging": "staging/terraform.tfstate",
+        "production": "production/terraform.tfstate",
+    }
+    for name, config in backends.items():
+        assert f'key          = "{expected_keys[name]}"' in config
+        assert 'region       = "ap-southeast-1"' in config
+        assert "encrypt      = true" in config
+        assert "use_lockfile = true" in config
+        assert "bucket" not in config
+        assert "access_key" not in config
+        assert "secret_key" not in config
+
+
+def test_phase6c0_state_bootstrap_is_protected_and_state_access_is_least_privilege() -> None:
+    bootstrap_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((TERRAFORM_ROOT / "bootstrap").glob("*.tf"))
+    )
+
+    assert 'resource "aws_s3_bucket" "terraform_state"' in bootstrap_text
+    assert "force_destroy = false" in bootstrap_text
+    assert "prevent_destroy = true" in bootstrap_text
+    assert 'sse_algorithm = "AES256"' in bootstrap_text
+    assert 'status = "Enabled"' in bootstrap_text
+    assert all(
+        setting in bootstrap_text
+        for setting in (
+            "block_public_acls       = true",
+            "block_public_policy     = true",
+            "ignore_public_acls      = true",
+            "restrict_public_buckets = true",
+        )
+    )
+    assert 'variable = "aws:SecureTransport"' in bootstrap_text
+    assert 'values   = ["false"]' in bootstrap_text
+
+    assert 'url = "https://token.actions.githubusercontent.com"' in bootstrap_text
+    assert 'client_id_list = ["sts.amazonaws.com"]' in bootstrap_text
+    assert 'variable = "token.actions.githubusercontent.com:aud"' in bootstrap_text
+    assert 'variable = "token.actions.githubusercontent.com:sub"' in bootstrap_text
+    assert "repo:${var.github_repository}:environment:staging" in bootstrap_text
+    assert "repo:${var.github_repository}:environment:production" in bootstrap_text
+    assert "max_session_duration = 3600" in bootstrap_text
+
+    delete_object_lines = [
+        line for line in bootstrap_text.splitlines() if "s3:DeleteObject" in line
+    ]
+    assert len(delete_object_lines) == 1
+    lock_statement = bootstrap_text.split('sid     = "ManageSelectedLockFiles"', maxsplit=1)[1]
+    assert "s3:DeleteObject" in lock_statement
+    assert "terraform.tfstate.tflock" in lock_statement
+
+
+def test_phase6c0_account_guardrails_and_secret_hygiene() -> None:
+    terraform_files = sorted(TERRAFORM_ROOT.rglob("*.tf"))
+    terraform_text = "\n".join(path.read_text(encoding="utf-8") for path in terraform_files)
+    account_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((TERRAFORM_ROOT / "account").glob("*.tf"))
+    )
+
+    assert 'name         = "labviz-monthly-cost-usd-30"' in account_text
+    assert 'limit_amount = "30"' in account_text
+    assert "include_credit = false" in account_text
+    assert "include_refund = false" in account_text
+    assert 'resource "aws_ce_anomaly_subscription" "daily"' in account_text
+    assert 'resource "aws_cloudtrail" "account"' in account_text
+    assert "is_multi_region_trail         = true" in account_text
+    assert "enable_log_file_validation    = true" in account_text
+    assert 'variable = "aws:MultiFactorAuthPresent"' in account_text
+    assert "max_session_duration = 3600" in account_text
+
+    assert "AWS_ACCESS_KEY_ID" not in terraform_text
+    assert "AWS_SECRET_ACCESS_KEY" not in terraform_text
+    assert re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", terraform_text) is None
+    assert re.search(r"\b\d{12}\b", terraform_text) is None
+
+    gitignore = (V2_ROOT.parent / ".gitignore").read_text(encoding="utf-8")
+    assert "*.tfstate" in gitignore
+    assert "*.tfplan" in gitignore
+    assert "*.tfvars" in gitignore
+    assert ".terraform.lock.hcl" not in gitignore

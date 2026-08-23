@@ -4,6 +4,10 @@ Phase 6A provides deployable images and ECS task-definition templates; it does n
 an AWS account. Replace every `${...}` placeholder in CI/CD, register immutable image digests, run
 the migration task, then update the API, Worker, and Web services.
 
+Phase 6C infrastructure starts in [`terraform/README.md`](terraform/README.md). The `bootstrap`,
+`account`, `staging`, and `production` roots have separate state and destruction boundaries. Never
+run an application-environment destroy against the bootstrap root.
+
 Build from `V2.0`:
 
 ```powershell

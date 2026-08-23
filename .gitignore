@@ -45,3 +45,14 @@ test-results/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Terraform runtime artifacts (provider lock files remain tracked)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
