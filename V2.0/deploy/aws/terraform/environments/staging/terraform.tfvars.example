@@ -1,1 +1,6 @@
-owner = "replace-with-accountable-owner"
+owner           = "replace-with-accountable-owner"
+domain_name     = "staging.example.com"
+route53_zone_id = "replace-with-public-hosted-zone-id"
+
+# WAF has recurring charges. Keep false until the cost is explicitly approved.
+enable_waf = false

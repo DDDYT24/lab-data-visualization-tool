@@ -13,6 +13,13 @@ PHASE6_GATE_CONTRACT = V2_ROOT / "contracts" / "phase6-gates-v1.json"
 TERRAFORM_ROOT = DEPLOY_ROOT / "terraform"
 
 
+def _terraform_module_text(name: str) -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((TERRAFORM_ROOT / "modules" / name).glob("*.tf"))
+    )
+
+
 def test_sqlite_remains_the_local_reference_default() -> None:
     settings = Settings(
         database_path=V2_ROOT / "api" / ".labviz" / "test.db",
@@ -267,3 +274,99 @@ def test_phase6c0_account_guardrails_and_secret_hygiene() -> None:
     assert "*.tfplan" in gitignore
     assert "*.tfvars" in gitignore
     assert ".terraform.lock.hcl" not in gitignore
+
+
+def test_phase6c1_network_and_security_keep_workloads_private() -> None:
+    network = _terraform_module_text("network")
+    security = _terraform_module_text("security")
+
+    assert 'resource "aws_vpc" "this"' in network
+    assert "slice(sort(data.aws_availability_zones.available.names), 0, 2)" in network
+    assert network.count("map_public_ip_on_launch = false") == 3
+    assert network.count('destination_cidr_block = "0.0.0.0/0"') == 1
+    assert 'resource "aws_nat_gateway"' not in network
+    assert 'resource "aws_eip"' not in network
+
+    for service in ("ecr.api", "ecr.dkr", "logs", "secretsmanager", "kms", "email"):
+        assert f'"{service}" =' in security or f"{service} =" in security
+    assert 'vpc_endpoint_type   = "Interface"' in security
+    assert "private_dns_enabled = true" in security
+    assert 'service_name        = "com.amazonaws.${var.aws_region}.${each.key}"' in security
+    assert 'ip_protocol = "-1"' not in security
+    assert security.count('cidr_ipv4         = "0.0.0.0/0"') == 2
+    assert "database_from_api" in security
+    assert "database_from_worker" in security
+
+
+def test_phase6c1_data_controls_encrypt_retain_and_prevent_public_access() -> None:
+    data = _terraform_module_text("data")
+
+    assert 'engine_version = "17"' in data
+    assert 'family = "postgres17"' in data
+    assert 'name         = "rds.force_ssl"' in data
+    assert re.search(r"manage_master_user_password\s*=\s*true", data)
+    assert "publicly_accessible    = false" in data
+    assert "storage_encrypted     = true" in data
+    assert re.search(r"backup_retention_period\s*=\s*var\.database_backup_retention_days", data)
+    assert re.search(r"monitoring_interval\s*=\s*60", data)
+    assert re.search(r"performance_insights_enabled\s*=\s*true", data)
+    assert re.search(r"deletion_protection\s*=\s*var\.database_deletion_protection", data)
+    assert re.search(r"skip_final_snapshot\s*=\s*false", data)
+    assert data.count("prevent_destroy = true") == 2
+
+    assert 'sse_algorithm     = "aws:kms"' in data
+    assert "bucket_key_enabled = true" in data
+    assert 'status = "Enabled"' in data
+    assert "abort_incomplete_multipart_upload" in data
+    assert "noncurrent_version_expiration" in data
+    assert 'variable = "aws:SecureTransport"' in data
+    assert all(
+        setting in data
+        for setting in (
+            "block_public_acls       = true",
+            "block_public_policy     = true",
+            "ignore_public_acls      = true",
+            "restrict_public_buckets = true",
+        )
+    )
+    assert 'vpc_endpoint_type = "Gateway"' in data
+    assert "prod-${var.aws_region}-starport-layer-bucket" in data
+    assert '"${aws_s3_bucket.data.arn}/${var.object_prefix}*"' in data
+
+
+def test_phase6c1_edge_and_environment_differences_are_explicit() -> None:
+    edge = _terraform_module_text("edge")
+    staging_root = (TERRAFORM_ROOT / "environments" / "staging" / "main.tf").read_text(
+        encoding="utf-8"
+    )
+    production_root = (TERRAFORM_ROOT / "environments" / "production" / "main.tf").read_text(
+        encoding="utf-8"
+    )
+    production_variables = (
+        TERRAFORM_ROOT / "environments" / "production" / "variables.tf"
+    ).read_text(encoding="utf-8")
+
+    assert 'validation_method = "DNS"' in edge
+    assert 'resource "aws_route53_record" "certificate_validation"' in edge
+    assert 'resource "aws_route53_record" "application"' in edge
+    assert "drop_invalid_header_fields       = true" in edge
+    assert 'desync_mitigation_mode           = "strictest"' in edge
+    assert 'xff_header_processing_mode       = "append"' in edge
+    assert "enable_waf_fail_open             = false" in edge
+    assert 'path                = "/api/v1/ready"' in edge
+    assert 'values = ["/api/v1/*", "/health"]' in edge
+    assert 'status_code = "HTTP_301"' in edge
+    assert "default_action {\n    block {}" in edge
+
+    assert re.search(r'vpc_cidr\s*=\s*"10\.20\.0\.0/16"', staging_root)
+    assert re.search(r"database_multi_az\s*=\s*false", staging_root)
+    assert re.search(r"database_backup_retention_days\s*=\s*7", staging_root)
+    assert re.search(r'vpc_cidr\s*=\s*"10\.30\.0\.0/16"', production_root)
+    assert re.search(r"database_multi_az\s*=\s*true", production_root)
+    assert re.search(r"database_backup_retention_days\s*=\s*14", production_root)
+    assert "default     = true" in production_variables.split('variable "enable_waf"', 1)[1]
+
+    for environment in ("staging", "production"):
+        test_file = TERRAFORM_ROOT / "environments" / environment / "phase6c1.tftest.hcl"
+        assert test_file.is_file()
+        assert "command = plan" in test_file.read_text(encoding="utf-8")
