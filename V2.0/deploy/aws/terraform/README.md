@@ -4,6 +4,12 @@ This directory implements Phase 6C in `ap-southeast-1`. Phase 6C-0 establishes r
 identity, audit, and cost-control boundaries only. It does not prove that staging exists and it does
 not satisfy the Phase 6C acceptance gate.
 
+Phase 6C-1 adds the network, security, data, and edge modules. The application and database subnets
+have no internet route and never auto-assign public IPs. Private application tasks reach ECR,
+CloudWatch Logs, Secrets Manager, KMS, and the SES API through interface endpoints and reach S3
+through a gateway endpoint. Only the ALB subnets route to the internet gateway; no NAT resource is
+created.
+
 ## Roots and destruction boundaries
 
 | Root | State key | Ownership |
@@ -72,3 +78,25 @@ terraform -chdir=V2.0/deploy/aws/terraform/environments/production validate
 
 A complete environment plan remains blocked until bootstrap has been applied and its bucket exists.
 No plan, local state, or provider cache is release evidence.
+
+For a backend-independent code plan, Terraform's native tests exercise both environment graphs
+without applying resources:
+
+```powershell
+$env:AWS_PROFILE = "labviz-bootstrap"
+terraform -chdir=V2.0/deploy/aws/terraform/environments/staging test -filter=phase6c1.tftest.hcl
+terraform -chdir=V2.0/deploy/aws/terraform/environments/production test -filter=phase6c1.tftest.hcl
+```
+
+The test domain and hosted-zone ID are reserved non-deployment values. They are never accepted as
+live evidence. Real apply remains blocked until the public DNS authority described in
+[`PHASE6C_EXTERNAL_PREREQUISITES.md`](../../../PHASE6C_EXTERNAL_PREREQUISITES.md) is configured.
+
+## Cost boundary
+
+This topology optimizes for private networking and the Phase 6 contract, not for a USD 30 monthly
+runtime. Six interface endpoint services across two Availability Zones are billed per endpoint-AZ
+hour before ALB, RDS, ECS, WAF, KMS, logging, storage, and data transfer. The monthly budget is an
+alert, not permission to apply. Obtain a current AWS Pricing Calculator estimate and explicit cost
+approval before any environment apply. Staging WAF defaults off solely to avoid its recurring cost;
+all TLS, header, encryption, public-access, database, and identity controls remain unchanged.

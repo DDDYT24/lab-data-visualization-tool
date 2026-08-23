@@ -1,1 +1,6 @@
-owner = "replace-with-accountable-owner"
+owner           = "replace-with-accountable-owner"
+domain_name     = "app.example.com"
+route53_zone_id = "replace-with-public-hosted-zone-id"
+
+# Production defaults to the fail-closed WAF. Disable only through reviewed cost/security approval.
+enable_waf = true
