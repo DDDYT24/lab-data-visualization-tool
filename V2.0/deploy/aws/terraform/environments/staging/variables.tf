@@ -67,6 +67,29 @@ variable "enable_worker_delete_permission" {
   default     = false
 }
 
+variable "backup_image_digest" {
+  description = "Immutable logical-backup image digest selected by the release workflow."
+  type        = string
+}
+
+variable "notification_email" {
+  description = "Operator mailbox for SES events and CloudWatch alarms; SNS confirmation is external."
+  type        = string
+  sensitive   = true
+}
+
+variable "activate_logical_backup_schedule" {
+  description = "Enable only after backup image, secret, alarm, and cost gates pass."
+  type        = bool
+  default     = false
+}
+
+variable "enable_restore_testing" {
+  description = "Enable quarterly AWS Backup restore testing after recurring cost approval."
+  type        = bool
+  default     = false
+}
+
 locals {
   name_prefix = "labviz"
   required_tags = {

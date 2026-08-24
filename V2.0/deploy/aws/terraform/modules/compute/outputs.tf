@@ -10,3 +10,4 @@ output "postgres_url_secret_arn" { value = aws_secretsmanager_secret.postgres_ur
 output "share_token_keys_secret_arn" { value = aws_secretsmanager_secret.share_token_keys.arn }
 output "client_identity_key_secret_arn" { value = aws_secretsmanager_secret.client_identity_key.arn }
 output "log_group_names" { value = { for name, group in aws_cloudwatch_log_group.workloads : name => group.name } }
+output "secrets_kms_key_arn" { value = aws_kms_key.secrets.arn }

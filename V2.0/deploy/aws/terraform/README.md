@@ -15,6 +15,11 @@ Web, and worker services, the one-shot migration task, least-privilege runtime r
 Secrets Manager metadata. Services default off. Terraform deliberately does not own application
 secret values; see [`modules/compute/README.md`](modules/compute/README.md) for the release order.
 
+Phase 6C-3 adds SES operational resources, dashboards/alarms, continuous and daily managed backup,
+an encrypted 30-day logical-backup path, opt-in quarterly restore testing, and operator runbooks.
+Notification confirmation, schedule activation, and all real restore/alarm evidence remain explicit
+post-apply gates.
+
 ## Roots and destruction boundaries
 
 | Root | State key | Ownership |

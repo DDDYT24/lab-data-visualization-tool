@@ -18,6 +18,18 @@ output "database_address" {
   value = aws_db_instance.postgres.address
 }
 
+output "database_arn" {
+  value = aws_db_instance.postgres.arn
+}
+
+output "database_identifier" {
+  value = aws_db_instance.postgres.identifier
+}
+
+output "database_subnet_group_name" {
+  value = aws_db_subnet_group.this.name
+}
+
 output "database_port" {
   value = aws_db_instance.postgres.port
 }

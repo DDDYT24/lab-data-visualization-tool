@@ -64,7 +64,29 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
     }
   }
 
+  rule {
+    id     = "expire-logical-backups-after-30-days"
+    status = "Enabled"
+
+    filter {
+      prefix = "backups/logical/"
+    }
+
+    expiration {
+      days = 30
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
   depends_on = [aws_s3_bucket_versioning.data]
+}
+
+resource "aws_s3_bucket_metric" "entire_bucket" {
+  bucket = aws_s3_bucket.data.id
+  name   = "EntireBucket"
 }
 
 data "aws_iam_policy_document" "data_bucket" {
