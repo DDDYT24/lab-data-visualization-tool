@@ -54,3 +54,33 @@ module "edge" {
   enable_deletion_protection = true
   enable_waf                 = var.enable_waf
 }
+
+module "compute" {
+  source = "../../modules/compute"
+
+  name_prefix                     = local.name_prefix
+  environment                     = "production"
+  aws_region                      = var.aws_region
+  domain_name                     = var.domain_name
+  application_subnet_ids          = module.network.application_subnet_ids
+  api_security_group_id           = module.security.api_security_group_id
+  web_security_group_id           = module.security.web_security_group_id
+  worker_security_group_id        = module.security.worker_security_group_id
+  api_target_group_arn            = module.edge.api_target_group_arn
+  web_target_group_arn            = module.edge.web_target_group_arn
+  alb_arn_suffix                  = module.edge.alb_arn_suffix
+  api_target_group_arn_suffix     = module.edge.api_target_group_arn_suffix
+  web_target_group_arn_suffix     = module.edge.web_target_group_arn_suffix
+  trusted_proxy_cidrs             = module.network.public_subnet_cidrs
+  data_bucket_name                = module.data.bucket_name
+  data_bucket_arn                 = module.data.bucket_arn
+  object_prefix                   = module.data.object_prefix
+  object_kms_key_arn              = module.data.object_kms_key_arn
+  ses_identity_name               = var.ses_identity_name
+  ses_from_address                = var.ses_from_address
+  ses_configuration_set_name      = "${local.name_prefix}-production"
+  api_image_digest                = var.api_image_digest
+  web_image_digest                = var.web_image_digest
+  activate_services               = var.activate_services
+  enable_worker_delete_permission = var.enable_worker_delete_permission
+}

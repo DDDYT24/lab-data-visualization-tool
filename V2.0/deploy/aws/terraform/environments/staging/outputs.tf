@@ -19,3 +19,24 @@ output "database_master_secret_arn" {
   value     = module.data.database_master_secret_arn
   sensitive = true
 }
+
+output "ecs_cluster_name" {
+  value = module.compute.cluster_name
+}
+
+output "api_repository_url" {
+  value = module.compute.api_repository_url
+}
+
+output "web_repository_url" {
+  value = module.compute.web_repository_url
+}
+
+output "application_secret_arns" {
+  value = {
+    postgres_url        = module.compute.postgres_url_secret_arn
+    share_token_keys    = module.compute.share_token_keys_secret_arn
+    client_identity_key = module.compute.client_identity_key_secret_arn
+  }
+  sensitive = true
+}

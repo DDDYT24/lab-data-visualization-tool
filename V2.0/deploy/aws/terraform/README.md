@@ -10,6 +10,11 @@ CloudWatch Logs, Secrets Manager, KMS, and the SES API through interface endpoin
 through a gateway endpoint. Only the ALB subnets route to the internet gateway; no NAT resource is
 created.
 
+Phase 6C-2 adds immutable image repositories, digest-pinned ECS task definitions, independent API,
+Web, and worker services, the one-shot migration task, least-privilege runtime roles, and
+Secrets Manager metadata. Services default off. Terraform deliberately does not own application
+secret values; see [`modules/compute/README.md`](modules/compute/README.md) for the release order.
+
 ## Roots and destruction boundaries
 
 | Root | State key | Ownership |

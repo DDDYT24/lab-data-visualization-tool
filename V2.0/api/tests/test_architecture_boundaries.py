@@ -370,3 +370,62 @@ def test_phase6c1_edge_and_environment_differences_are_explicit() -> None:
         test_file = TERRAFORM_ROOT / "environments" / environment / "phase6c1.tftest.hcl"
         assert test_file.is_file()
         assert "command = plan" in test_file.read_text(encoding="utf-8")
+
+
+def test_phase6c2_images_tasks_and_services_fail_closed() -> None:
+    compute = _terraform_module_text("compute")
+
+    assert compute.count('image_tag_mutability = "IMMUTABLE"') == 2
+    assert compute.count("scan_on_push = true") == 2
+    assert 'encryption_type = "KMS"' in compute
+    assert 'identifiers = ["logs.${var.aws_region}.amazonaws.com"]' in compute
+    assert 'variable = "kms:EncryptionContext:aws:logs:arn"' in compute
+    assert '"${aws_ecr_repository.api.repository_url}@${var.api_image_digest}"' in compute
+    assert '"${aws_ecr_repository.web.repository_url}@${var.web_image_digest}"' in compute
+    assert "readonlyRootFilesystem = true" in compute
+    assert 'containerPath = "/tmp"' in compute
+    assert "http://127.0.0.1:8000/health" in compute
+    assert "http://127.0.0.1:8000/api/v1/ready" not in compute
+    assert '["python", "-m", "alembic", "upgrade", "head"]' in compute
+    assert len(re.findall(r"desired_count\s*=\s*var\.activate_services \? 1 : 0", compute)) == 3
+    assert compute.count("assign_public_ip = false") == 3
+    assert compute.count("deployment_circuit_breaker") == 3
+    assert compute.count("rollback = true") >= 3
+
+
+def test_phase6c2_workers_and_runtime_permissions_are_separated() -> None:
+    compute = _terraform_module_text("compute")
+
+    for worker in (
+        "metadata-cleanup",
+        "orphan-staging-inventory",
+        "pending-reconciliation",
+        "project-lifecycle",
+        "stored-object-gc",
+    ):
+        assert f'"{worker}"' in compute
+
+    assert (
+        'command                = ["python", "-m", "labviz_api.workers.cli", each.key]' in compute
+    )
+    assert '{ name = "LABVIZ_WORKER_DESTRUCTIVE_MAINTENANCE", value = "false" }' in compute
+    assert '{ name = "LABVIZ_WORKER_DRY_RUN", value = "true" }' in compute
+    assert '{ name = "LABVIZ_WORKER_DELETE_ENABLED", value = "false" }' in compute
+    assert 'each.key == "worker" && var.enable_worker_delete_permission' in compute
+    assert 'role   = aws_iam_role.task["api"].id' in compute
+    assert compute.count('actions   = ["ses:SendEmail"]') == 1
+
+
+def test_phase6c2_secret_values_never_enter_terraform() -> None:
+    compute = _terraform_module_text("compute")
+    terraform_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(TERRAFORM_ROOT.rglob("*.tf"))
+    )
+
+    assert compute.count('resource "aws_secretsmanager_secret"') == 3
+    assert 'resource "aws_secretsmanager_secret_version"' not in terraform_text
+    assert "secret_string" not in terraform_text
+    assert "secret_binary" not in terraform_text
+    assert 'name      = "LABVIZ_POSTGRES_URL"' in compute
+    assert "AWS_ACCESS_KEY_ID" not in terraform_text
+    assert "AWS_SECRET_ACCESS_KEY" not in terraform_text
