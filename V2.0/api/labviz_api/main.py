@@ -1010,6 +1010,7 @@ def create_app(
         except AuthRateLimitUnavailable as exc:
             raise ApiProblem(503, exc.code, str(exc)) from exc
         if not allowed:
+            LOGGER.warning("authentication-request-rate-limited")
             raise ApiProblem(
                 429,
                 "email-rate-limited",

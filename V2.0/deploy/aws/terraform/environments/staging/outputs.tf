@@ -40,3 +40,15 @@ output "application_secret_arns" {
   }
   sensitive = true
 }
+
+output "ses_dkim_tokens" {
+  value = module.email.dkim_tokens
+}
+
+output "operations_dashboard_name" {
+  value = module.observability.dashboard_name
+}
+
+output "logical_backup_repository_url" {
+  value = module.backup.logical_backup_repository_url
+}

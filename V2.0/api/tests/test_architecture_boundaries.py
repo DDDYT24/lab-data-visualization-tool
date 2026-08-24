@@ -429,3 +429,96 @@ def test_phase6c2_secret_values_never_enter_terraform() -> None:
     assert 'name      = "LABVIZ_POSTGRES_URL"' in compute
     assert "AWS_ACCESS_KEY_ID" not in terraform_text
     assert "AWS_SECRET_ACCESS_KEY" not in terraform_text
+
+
+def test_phase6c3_email_and_alarm_paths_are_operationally_scoped() -> None:
+    email = _terraform_module_text("email")
+    observability = _terraform_module_text("observability")
+
+    assert 'tls_policy = "REQUIRE"' in email
+    assert 'suppressed_reasons = ["BOUNCE", "COMPLAINT"]' in email
+    assert 'dimension_name          = "environment"' in email
+    assert 'identifiers = ["ses.amazonaws.com"]' in email
+    assert 'variable = "AWS:SourceAccount"' in email
+    for event in ("BOUNCE", "COMPLAINT", "DELIVERY", "DELIVERY_DELAY", "REJECT", "SEND"):
+        assert f'"{event}"' in email
+
+    for signal in (
+        "TargetResponseTime",
+        "UnHealthyHostCount",
+        "HTTPCode_ELB_5XX_Count",
+        "RejectedConnectionCount",
+        "DesiredTaskCount",
+        "RunningTaskCount",
+        "CPUUtilization",
+        "MemoryUtilization",
+        "DatabaseConnections",
+        "FreeStorageSpace",
+        "NumberOfBackupJobsFailed",
+        "Reputation.BounceRate",
+        "Reputation.ComplaintRate",
+    ):
+        assert f'"{signal}"' in observability
+    assert 'source        = ["aws.s3", "aws.kms"]' in observability
+    assert 'errorCode = [{ prefix = "AccessDenied" }]' in observability
+
+
+def test_phase6c3_backup_has_continuous_daily_and_isolated_restore_paths() -> None:
+    backup = _terraform_module_text("backup")
+    data = _terraform_module_text("data")
+    script = (DEPLOY_ROOT / "backup" / "logical_backup.py").read_text(encoding="utf-8")
+
+    assert re.search(r"enable_continuous_backup\s*=\s*true", backup)
+    assert "delete_after = 30" in backup
+    assert "resources    = [var.database_arn, var.data_bucket_arn]" in backup
+    assert 'resource "aws_backup_restore_testing_plan" "quarterly"' in backup
+    assert "count = var.enable_restore_testing ? 1 : 0" in backup
+    assert 'description = "No-ingress isolated RDS restore-testing group"' in backup
+    assert re.search(r'PubliclyAccessible\s*=\s*"false"', backup)
+    assert 'resource "aws_scheduler_schedule" "logical_backup"' in backup
+    assert "count = var.activate_logical_backup_schedule ? 1 : 0" in backup
+    assert "readonlyRootFilesystem = true" in backup
+    assert "assign_public_ip = false" in backup
+    assert (
+        '"${aws_ecr_repository.logical_backup.repository_url}@${var.backup_image_digest}"' in backup
+    )
+    assert 'prefix = "backups/logical/"' in data
+    assert data.count("noncurrent_days = 30") == 1
+    assert 'resource "aws_s3_bucket_metric" "entire_bucket"' in data
+
+    assert "PGPASSWORD" in script
+    assert '"--no-owner"' in script
+    assert '"--no-acl"' in script
+    assert '"--sse-kms-key-id"' in script
+    assert "logical-backup-failed" in script
+    assert "raw_url" not in script.split("print", maxsplit=1)[-1]
+
+
+def test_phase6c3_runbooks_cover_required_incidents_and_measured_objectives() -> None:
+    runbook_root = V2_ROOT / "runbooks"
+    runbook_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(runbook_root.glob("*.md"))
+    )
+
+    assert "availability `>=99.9%`" in runbook_text
+    assert "RPO `<=15 minutes`" in runbook_text
+    assert "RTO `<=4 hours`" in runbook_text
+    for topic in (
+        "Migration failure",
+        "RDS",
+        "S3",
+        "SES",
+        "KMS",
+        "task exhaustion",
+        "Worker quarantine",
+        "Credential",
+        "Backup restoration",
+        "Security incident",
+        "Enable destructive work",
+    ):
+        assert topic.lower() in runbook_text.lower()
+
+
+def test_phase6c3_application_emits_non_sensitive_rate_limit_signal() -> None:
+    main = (V2_ROOT / "api" / "labviz_api" / "main.py").read_text(encoding="utf-8")
+    assert 'LOGGER.warning("authentication-request-rate-limited")' in main
