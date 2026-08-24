@@ -33,6 +33,7 @@ resource "aws_iam_role" "rds_monitoring" {
   name                 = "${var.name_prefix}-${var.environment}-rds-monitoring"
   assume_role_policy   = data.aws_iam_policy_document.rds_monitoring_assume.json
   max_session_duration = 3600
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 resource "aws_iam_role_policy_attachment" "rds_monitoring" {

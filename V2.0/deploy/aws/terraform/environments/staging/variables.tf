@@ -90,6 +90,16 @@ variable "enable_restore_testing" {
   default     = false
 }
 
+variable "permissions_boundary_arn" {
+  description = "Staging runtime-role permissions boundary created by the bootstrap root."
+  type        = string
+
+  validation {
+    condition     = can(regex(":policy/labviz-staging-runtime-boundary$", var.permissions_boundary_arn))
+    error_message = "Staging must use the staging LabViz runtime permissions boundary."
+  }
+}
+
 locals {
   name_prefix = "labviz"
   required_tags = {

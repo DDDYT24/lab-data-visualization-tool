@@ -19,6 +19,7 @@ variable "object_kms_key_arn" { type = string }
 variable "ses_identity_name" { type = string }
 variable "ses_from_address" { type = string }
 variable "ses_configuration_set_name" { type = string }
+variable "permissions_boundary_arn" { type = string }
 
 variable "api_image_digest" {
   type = string

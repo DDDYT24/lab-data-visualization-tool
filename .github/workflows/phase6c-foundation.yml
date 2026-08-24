@@ -1,0 +1,110 @@
+name: Phase 6C foundation apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected environment to create with all workloads disabled
+        required: true
+        type: choice
+        options: [staging, production]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: phase6c-foundation-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  TERRAFORM_VERSION: 1.15.8
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_owner: ${{ vars.OWNER }}
+  TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+  TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID }}
+  TF_VAR_ses_identity_name: ${{ vars.SES_IDENTITY_NAME }}
+  TF_VAR_ses_from_address: ${{ vars.SES_FROM_ADDRESS }}
+  TF_VAR_notification_email: ${{ secrets.NOTIFICATION_EMAIL }}
+  TF_VAR_permissions_boundary_arn: ${{ vars.PERMISSIONS_BOUNDARY_ARN }}
+  TF_VAR_api_image_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  TF_VAR_web_image_digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  TF_VAR_backup_image_digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+  TF_VAR_activate_services: "false"
+  TF_VAR_activate_logical_backup_schedule: "false"
+  TF_VAR_enable_restore_testing: "false"
+
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: phase6c-foundation-${{ inputs.environment }}
+      - name: Verify caller and required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ vars.TF_STATE_BUCKET }}"
+          test -n "$TF_VAR_domain_name"
+          test -n "$TF_VAR_route53_zone_id"
+          test -n "$TF_VAR_permissions_boundary_arn"
+          aws sts get-caller-identity > /dev/null
+      - name: Plan foundation with workloads disabled
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="V2.0/deploy/aws/terraform/environments/${{ inputs.environment }}"
+          terraform -chdir="$root" init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          terraform -chdir="$root" plan -input=false -lock-timeout=5m -out=foundation.tfplan
+      - name: Apply reviewed foundation plan
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="V2.0/deploy/aws/terraform/environments/${{ inputs.environment }}"
+          terraform -chdir="$root" apply -input=false -lock-timeout=5m foundation.tfplan
+      - name: Verify disabled workloads and capture non-secret evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="V2.0/deploy/aws/terraform/environments/${{ inputs.environment }}"
+          runtime=$(terraform -chdir="$root" output -json release_runtime)
+          cluster=$(jq -r '.cluster_arn' <<<"$runtime")
+          services=$(jq -r '[.api_service_name,.web_service_name]+.worker_service_names | .[]' <<<"$runtime")
+          while IFS= read -r service; do
+            desired=$(aws ecs describe-services --cluster "$cluster" --services "$service" --query 'services[0].desiredCount' --output text)
+            test "$desired" = "0"
+          done <<<"$services"
+          jq -n \
+            --arg environment "${{ inputs.environment }}" \
+            --arg commit "$GITHUB_SHA" \
+            --arg utc "$(date -u +%FT%TZ)" \
+            --arg cluster "$cluster" \
+            '{schemaVersion:1,kind:"phase6c-foundation",environment:$environment,commit:$commit,verifiedAt:$utc,clusterArn:$cluster,workloadsDisabled:true}' \
+            > "$RUNNER_TEMP/foundation-evidence.json"
+      - name: Require no unexplained post-apply drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="V2.0/deploy/aws/terraform/environments/${{ inputs.environment }}"
+          terraform -chdir="$root" plan -input=false -lock-timeout=5m -detailed-exitcode
+      - name: Upload foundation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6c-foundation-${{ inputs.environment }}-${{ github.sha }}
+          path: ${{ runner.temp }}/foundation-evidence.json
+          retention-days: 30
+          if-no-files-found: error

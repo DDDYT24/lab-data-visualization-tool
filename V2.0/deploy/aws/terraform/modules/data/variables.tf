@@ -52,6 +52,10 @@ variable "database_backup_retention_days" {
   }
 }
 
+variable "permissions_boundary_arn" {
+  type = string
+}
+
 variable "object_prefix" {
   type    = string
   default = "labviz/"

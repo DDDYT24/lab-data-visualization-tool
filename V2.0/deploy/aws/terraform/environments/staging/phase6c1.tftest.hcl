@@ -1,3 +1,53 @@
+mock_provider "aws" {
+  override_during = plan
+
+  mock_data "aws_availability_zones" {
+    defaults = {
+      names = ["ap-southeast-1a", "ap-southeast-1b"]
+    }
+  }
+
+  mock_data "aws_caller_identity" {
+    defaults = {
+      account_id = "000000000000"
+      arn        = "arn:aws:iam::000000000000:user/terraform-test"
+      user_id    = "terraform-test"
+    }
+  }
+
+  mock_data "aws_partition" {
+    defaults = {
+      partition  = "aws"
+      dns_suffix = "amazonaws.com"
+    }
+  }
+
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  mock_resource "aws_acm_certificate" {
+    defaults = {
+      arn = "arn:aws:acm:ap-southeast-1:000000000000:certificate/00000000-0000-0000-0000-000000000000"
+      domain_validation_options = [{
+        domain_name           = "staging.example.com"
+        resource_record_name  = "_mock.staging.example.com"
+        resource_record_type  = "CNAME"
+        resource_record_value = "mock.acm-validations.aws"
+      }]
+    }
+  }
+
+  mock_resource "aws_acm_certificate_validation" {
+    defaults = {
+      certificate_arn = "arn:aws:acm:ap-southeast-1:000000000000:certificate/00000000-0000-0000-0000-000000000000"
+    }
+  }
+
+}
+
 run "phase6c1_staging_plan" {
   command = plan
 
@@ -15,6 +65,7 @@ run "phase6c1_staging_plan" {
     activate_services                = false
     activate_logical_backup_schedule = true
     enable_restore_testing           = true
+    permissions_boundary_arn         = "arn:aws:iam::000000000000:policy/labviz-staging-runtime-boundary"
   }
 
   assert {

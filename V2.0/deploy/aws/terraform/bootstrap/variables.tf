@@ -30,6 +30,19 @@ variable "github_repository" {
   }
 }
 
+variable "route53_zone_ids" {
+  description = "Exact hosted-zone IDs the staging and production OIDC roles may change."
+  type        = map(string)
+
+  validation {
+    condition = (
+      toset(keys(var.route53_zone_ids)) == toset(["staging", "production"]) &&
+      alltrue([for id in values(var.route53_zone_ids) : can(regex("^Z[A-Z0-9]+$", id))])
+    )
+    error_message = "route53_zone_ids must contain valid staging and production hosted-zone IDs."
+  }
+}
+
 locals {
   name_prefix = "labviz"
   required_tags = {

@@ -1,1 +1,5 @@
 budget_owner = "replace-with-accountable-owner"
+route53_zone_ids = {
+  staging    = "ZREPLACEWITHSTAGINGZONE"
+  production = "ZREPLACEWITHPRODUCTIONZONE"
+}

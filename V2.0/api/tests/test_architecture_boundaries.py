@@ -522,3 +522,92 @@ def test_phase6c3_runbooks_cover_required_incidents_and_measured_objectives() ->
 def test_phase6c3_application_emits_non_sensitive_rate_limit_signal() -> None:
     main = (V2_ROOT / "api" / "labviz_api" / "main.py").read_text(encoding="utf-8")
     assert 'LOGGER.warning("authentication-request-rate-limited")' in main
+
+
+def test_phase6c4_oidc_state_and_permissions_boundaries_fail_closed() -> None:
+    bootstrap = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((TERRAFORM_ROOT / "bootstrap").glob("*.tf"))
+    )
+    runtime_modules = "\n".join(
+        _terraform_module_text(name) for name in ("backup", "compute", "data")
+    )
+
+    assert "repo:${var.github_repository}:pull_request" not in bootstrap
+    assert "repo:${var.github_repository}:ref:refs/heads/main" in bootstrap
+    assert "repo:${var.github_repository}:environment:staging" in bootstrap
+    assert "repo:${var.github_repository}:environment:production" in bootstrap
+    assert 'resource "aws_iam_policy" "runtime_boundary"' in bootstrap
+    assert 'variable = "iam:PermissionsBoundary"' in bootstrap
+    assert 'data "aws_iam_policy_document" "github_plan_read"' in bootstrap
+    assert "ReadOnlyAccess" not in bootstrap
+    assert 'sid       = "ChangeApprovedHostedZoneOnly"' in bootstrap
+    assert "var.route53_zone_ids[each.key]" in bootstrap
+    regional_permissions = bootstrap.split("ManageRegionalLabVizInfrastructure", maxsplit=1)[1]
+    regional_permissions = regional_permissions.split(
+        "ManageEnvironmentDataBucketsOnly", maxsplit=1
+    )[0]
+    assert '"s3:*"' not in regional_permissions
+    assert runtime_modules.count("permissions_boundary = var.permissions_boundary_arn") == 8
+    assert "AdministratorAccess" not in bootstrap
+
+
+def test_phase6c4_workflows_enforce_ci_migration_before_apply_and_rollback() -> None:
+    workflows = V2_ROOT.parent / ".github" / "workflows"
+    infrastructure = (workflows / "phase6c-infrastructure.yml").read_text(encoding="utf-8")
+    foundation = (workflows / "phase6c-foundation.yml").read_text(encoding="utf-8")
+    release = (workflows / "phase6c-release.yml").read_text(encoding="utf-8")
+
+    assert "pull_request:" in infrastructure
+    assert "init -backend=false" in infrastructure
+    assert "id-token: write" in infrastructure
+    assert "github.event_name != 'pull_request'" in infrastructure
+    assert "role-to-assume:" in infrastructure
+
+    assert 'TF_VAR_activate_services: "false"' in foundation
+    assert 'TF_VAR_activate_logical_backup_schedule: "false"' in foundation
+    assert "workloadsDisabled:true" in foundation
+
+    order = [
+        "Require successful full CI for the exact commit",
+        "Build and push immutable candidate images",
+        "Scan API candidate",
+        "Sign accepted digests with GitHub OIDC",
+        "Create the reviewed release plan",
+        "Capture current services and run candidate migration",
+        "Apply only after successful migration",
+        "Wait for every service and verify HTTPS",
+        "Fail on active operational alarms",
+        "Require no unexplained post-apply drift",
+    ]
+    positions = [release.index(item) for item in order]
+    assert positions == sorted(positions)
+    assert "cosign verify" in release
+    assert '--image-ids imageTag="$GITHUB_SHA"' in release
+    assert 'terraform -chdir="$TF_ROOT" apply' in release
+    assert "if: failure()" in release
+    assert "aws ecs update-service" in release
+    assert "AWS_ACCESS_KEY_ID" not in infrastructure + foundation + release
+    assert "AWS_SECRET_ACCESS_KEY" not in infrastructure + foundation + release
+
+
+def test_phase6c4_live_evidence_contract_cannot_be_satisfied_by_code() -> None:
+    evidence_path = V2_ROOT / "contracts" / "phase6c-evidence-v1.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert evidence["schemaVersion"] == 1
+    assert evidence["phase"] == "6C"
+    assert evidence["codeEvidenceIsAcceptance"] is False
+    required = evidence["requiredLiveEvidence"]
+    assert set(required) == {
+        "terraform_apply",
+        "private_network",
+        "tls_dns_alb",
+        "deployment_rollback",
+        "backup_restore",
+        "ses",
+        "deployed_iam",
+        "application",
+    }
+    assert all(item["required"] is True and item["artifacts"] for item in required.values())
+    assert "terraform-state" in evidence["redactions"]

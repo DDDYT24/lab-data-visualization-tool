@@ -29,6 +29,10 @@ resource "aws_sesv2_configuration_set" "this" {
 resource "aws_sesv2_email_identity" "this" {
   email_identity         = var.identity_name
   configuration_set_name = aws_sesv2_configuration_set.this.configuration_set_name
+
+  dkim_signing_attributes {
+    next_signing_key_length = "RSA_2048_BIT"
+  }
 }
 
 resource "aws_sns_topic" "events" {

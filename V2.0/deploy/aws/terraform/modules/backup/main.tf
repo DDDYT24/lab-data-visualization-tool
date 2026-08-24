@@ -90,8 +90,9 @@ data "aws_iam_policy_document" "backup_assume" {
 }
 
 resource "aws_iam_role" "backup" {
-  name               = "${var.name_prefix}-${var.environment}-aws-backup"
-  assume_role_policy = data.aws_iam_policy_document.backup_assume.json
+  name                 = "${var.name_prefix}-${var.environment}-aws-backup"
+  assume_role_policy   = data.aws_iam_policy_document.backup_assume.json
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 resource "aws_iam_role_policy_attachment" "backup" {
@@ -142,8 +143,9 @@ resource "aws_backup_restore_testing_plan" "quarterly" {
 }
 
 resource "aws_iam_role" "restore_testing" {
-  name               = "${var.name_prefix}-${var.environment}-restore-testing"
-  assume_role_policy = data.aws_iam_policy_document.backup_assume.json
+  name                 = "${var.name_prefix}-${var.environment}-restore-testing"
+  assume_role_policy   = data.aws_iam_policy_document.backup_assume.json
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 resource "aws_iam_role_policy_attachment" "restore_testing" {

@@ -52,3 +52,18 @@ output "operations_dashboard_name" {
 output "logical_backup_repository_url" {
   value = module.backup.logical_backup_repository_url
 }
+
+output "release_runtime" {
+  description = "Non-secret ECS identifiers consumed by the protected release workflow."
+  value = {
+    cluster_arn                        = module.compute.cluster_arn
+    application_subnet_ids             = module.network.application_subnet_ids
+    api_security_group_id              = module.security.api_security_group_id
+    migration_task_definition_arn      = module.compute.migration_task_definition_arn
+    api_service_name                   = module.compute.api_service_name
+    web_service_name                   = module.compute.web_service_name
+    worker_service_names               = values(module.compute.worker_service_names)
+    logical_backup_task_definition_arn = module.backup.logical_backup_task_definition_arn
+    alarm_names                        = module.observability.alarm_names
+  }
+}

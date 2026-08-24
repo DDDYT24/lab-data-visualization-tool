@@ -12,6 +12,7 @@ variable "object_kms_key_arn" { type = string }
 variable "database_arn" { type = string }
 variable "postgres_url_secret_arn" { type = string }
 variable "secrets_kms_key_arn" { type = string }
+variable "permissions_boundary_arn" { type = string }
 
 variable "backup_image_digest" {
   type = string
