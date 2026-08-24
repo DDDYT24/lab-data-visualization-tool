@@ -89,17 +89,17 @@ terraform -chdir=V2.0/deploy/aws/terraform/environments/production validate
 A complete environment plan remains blocked until bootstrap has been applied and its bucket exists.
 No plan, local state, or provider cache is release evidence.
 
-For a backend-independent code plan, Terraform's native tests exercise both environment graphs
-without applying resources:
+For a backend-independent code plan, Terraform's native tests use an explicit mock AWS provider to
+exercise both complete environment graphs without credentials, state access, or resource changes:
 
 ```powershell
-$env:AWS_PROFILE = "labviz-bootstrap"
 terraform -chdir=V2.0/deploy/aws/terraform/environments/staging test -filter=phase6c1.tftest.hcl
 terraform -chdir=V2.0/deploy/aws/terraform/environments/production test -filter=phase6c1.tftest.hcl
 ```
 
-The test domain and hosted-zone ID are reserved non-deployment values. They are never accepted as
-live evidence. Real apply remains blocked until the public DNS authority described in
+The mocked account, domain, hosted-zone ID, certificate, and image digests are non-deployment
+values. They are never accepted as live evidence. Main-branch OIDC plans still use the real AWS
+provider and remote state. Real apply remains blocked until the public DNS authority described in
 [`PHASE6C_EXTERNAL_PREREQUISITES.md`](../../../PHASE6C_EXTERNAL_PREREQUISITES.md) is configured.
 
 ## Cost boundary

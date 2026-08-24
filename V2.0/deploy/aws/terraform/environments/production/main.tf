@@ -34,6 +34,7 @@ module "data" {
   database_multi_az              = true
   database_deletion_protection   = true
   database_backup_retention_days = 14
+  permissions_boundary_arn       = var.permissions_boundary_arn
   application_security_group_ids = {
     api    = module.security.api_security_group_id
     web    = module.security.web_security_group_id
@@ -93,6 +94,7 @@ module "compute" {
   web_image_digest                = var.web_image_digest
   activate_services               = var.activate_services
   enable_worker_delete_permission = var.enable_worker_delete_permission
+  permissions_boundary_arn        = var.permissions_boundary_arn
 }
 
 module "backup" {
@@ -115,6 +117,7 @@ module "backup" {
   backup_image_digest              = var.backup_image_digest
   activate_logical_backup_schedule = var.activate_logical_backup_schedule
   enable_restore_testing           = var.enable_restore_testing
+  permissions_boundary_arn         = var.permissions_boundary_arn
 }
 
 module "observability" {

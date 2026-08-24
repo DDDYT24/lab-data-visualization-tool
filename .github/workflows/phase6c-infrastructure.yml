@@ -1,0 +1,114 @@
+name: Phase 6C infrastructure
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/phase6c-*.yml"
+      - "V2.0/deploy/aws/**"
+      - "V2.0/api/tests/test_architecture_boundaries.py"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/phase6c-*.yml"
+      - "V2.0/deploy/aws/**"
+      - "V2.0/api/tests/test_architecture_boundaries.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase6c-infrastructure-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ap-southeast-1
+  TERRAFORM_VERSION: 1.15.8
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+      - name: Check formatting
+        run: terraform fmt -check -recursive V2.0/deploy/aws/terraform
+      - name: Initialize and validate without remote state
+        shell: bash
+        run: |
+          set -euo pipefail
+          roots=(
+            V2.0/deploy/aws/terraform/bootstrap
+            V2.0/deploy/aws/terraform/account
+            V2.0/deploy/aws/terraform/environments/staging
+            V2.0/deploy/aws/terraform/environments/production
+          )
+          for root in "${roots[@]}"; do
+            terraform -chdir="$root" init -backend=false -input=false
+            terraform -chdir="$root" validate
+          done
+          terraform -chdir=V2.0/deploy/aws/terraform/environments/staging test -no-color
+          terraform -chdir=V2.0/deploy/aws/terraform/environments/production test -no-color
+      - name: Scan IaC and deployment files
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          scan-type: fs
+          scan-ref: V2.0/deploy/aws
+          scanners: vuln,misconfig,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  plan:
+    if: github.event_name != 'pull_request'
+    needs: static
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [staging, production]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: phase6c-plan-${{ matrix.environment }}
+      - name: Plan protected environment
+        shell: bash
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          TF_VAR_owner: ${{ vars.OWNER }}
+          TF_VAR_domain_name: ${{ matrix.environment == 'staging' && vars.STAGING_DOMAIN_NAME || vars.PRODUCTION_DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ matrix.environment == 'staging' && vars.STAGING_ROUTE53_ZONE_ID || vars.PRODUCTION_ROUTE53_ZONE_ID }}
+          TF_VAR_api_image_digest: ${{ matrix.environment == 'staging' && vars.STAGING_API_IMAGE_DIGEST || vars.PRODUCTION_API_IMAGE_DIGEST }}
+          TF_VAR_web_image_digest: ${{ matrix.environment == 'staging' && vars.STAGING_WEB_IMAGE_DIGEST || vars.PRODUCTION_WEB_IMAGE_DIGEST }}
+          TF_VAR_backup_image_digest: ${{ matrix.environment == 'staging' && vars.STAGING_BACKUP_IMAGE_DIGEST || vars.PRODUCTION_BACKUP_IMAGE_DIGEST }}
+          TF_VAR_ses_identity_name: ${{ matrix.environment == 'staging' && vars.STAGING_SES_IDENTITY_NAME || vars.PRODUCTION_SES_IDENTITY_NAME }}
+          TF_VAR_ses_from_address: ${{ matrix.environment == 'staging' && vars.STAGING_SES_FROM_ADDRESS || vars.PRODUCTION_SES_FROM_ADDRESS }}
+          TF_VAR_notification_email: ${{ secrets.NOTIFICATION_EMAIL }}
+          TF_VAR_permissions_boundary_arn: ${{ matrix.environment == 'staging' && vars.STAGING_PERMISSIONS_BOUNDARY_ARN || vars.PRODUCTION_PERMISSIONS_BOUNDARY_ARN }}
+        run: |
+          set -euo pipefail
+          root="V2.0/deploy/aws/terraform/environments/${{ matrix.environment }}"
+          terraform -chdir="$root" init -input=false -backend-config="bucket=$TF_STATE_BUCKET"
+          terraform -chdir="$root" plan -input=false -lock-timeout=5m -out="${{ matrix.environment }}.tfplan"
+          terraform -chdir="$root" show -json "${{ matrix.environment }}.tfplan" > "$RUNNER_TEMP/${{ matrix.environment }}-plan.json"
+      - name: Upload short-lived machine-readable plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6c-${{ matrix.environment }}-plan-${{ github.sha }}
+          path: ${{ runner.temp }}/${{ matrix.environment }}-plan.json
+          retention-days: 1
+          if-no-files-found: error

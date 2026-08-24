@@ -90,6 +90,16 @@ variable "enable_restore_testing" {
   default     = false
 }
 
+variable "permissions_boundary_arn" {
+  description = "Production runtime-role permissions boundary created by the bootstrap root."
+  type        = string
+
+  validation {
+    condition     = can(regex(":policy/labviz-production-runtime-boundary$", var.permissions_boundary_arn))
+    error_message = "Production must use the production LabViz runtime permissions boundary."
+  }
+}
+
 locals {
   name_prefix = "labviz"
   required_tags = {

@@ -109,3 +109,5 @@ jobs:
         run: docker build -f api/Dockerfile -t labviz-api:ci api
       - name: Build production Web image
         run: docker build -f web/Dockerfile -t labviz-web:ci .
+      - name: Build logical-backup image
+        run: docker build -f deploy/aws/backup/Dockerfile -t labviz-logical-backup:ci .

@@ -29,8 +29,9 @@ data "aws_iam_policy_document" "ecs_tasks_assume" {
 }
 
 resource "aws_iam_role" "logical_execution" {
-  name               = "${var.name_prefix}-${var.environment}-logical-backup-execution"
-  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
+  name                 = "${var.name_prefix}-${var.environment}-logical-backup-execution"
+  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume.json
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 data "aws_iam_policy_document" "logical_execution" {
@@ -67,8 +68,9 @@ resource "aws_iam_role_policy" "logical_execution" {
 }
 
 resource "aws_iam_role" "logical_task" {
-  name               = "${var.name_prefix}-${var.environment}-logical-backup-task"
-  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
+  name                 = "${var.name_prefix}-${var.environment}-logical-backup-task"
+  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume.json
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 data "aws_iam_policy_document" "logical_task" {
@@ -151,8 +153,9 @@ data "aws_iam_policy_document" "scheduler_assume" {
 }
 
 resource "aws_iam_role" "scheduler" {
-  name               = "${var.name_prefix}-${var.environment}-logical-backup-scheduler"
-  assume_role_policy = data.aws_iam_policy_document.scheduler_assume.json
+  name                 = "${var.name_prefix}-${var.environment}-logical-backup-scheduler"
+  assume_role_policy   = data.aws_iam_policy_document.scheduler_assume.json
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 data "aws_iam_policy_document" "scheduler" {

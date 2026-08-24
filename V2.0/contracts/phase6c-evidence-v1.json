@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "phase": "6C",
+  "codeEvidenceIsAcceptance": false,
+  "requiredLiveEvidence": {
+    "terraform_apply": {
+      "required": true,
+      "artifacts": ["reviewed-plan", "apply-log", "zero-unexplained-drift-plan"]
+    },
+    "private_network": {
+      "required": true,
+      "artifacts": ["no-public-ip", "endpoint-reachability", "blocked-public-egress"]
+    },
+    "tls_dns_alb": {
+      "required": true,
+      "artifacts": ["dns-delegation", "acm-issued", "https-smoke", "forwarded-header-chain"]
+    },
+    "deployment_rollback": {
+      "required": true,
+      "artifacts": ["forced-failure", "alarm-state-change", "previous-revision-restored"]
+    },
+    "backup_restore": {
+      "required": true,
+      "artifacts": ["rds-pitr", "logical-restore", "s3-version-recovery", "measured-rpo-rto"]
+    },
+    "ses": {
+      "required": true,
+      "artifacts": ["accepted-message-id", "delivery", "bounce", "complaint", "suppression", "alarm-delivery"]
+    },
+    "deployed_iam": {
+      "required": true,
+      "artifacts": ["api-send-only", "worker-no-email", "no-static-keys"]
+    },
+    "application": {
+      "required": true,
+      "artifacts": ["web-api-worker-smoke", "migration-success", "browser-smoke"]
+    }
+  },
+  "redactions": [
+    "credentials",
+    "secret-values",
+    "authentication-codes",
+    "recipient-addresses",
+    "terraform-state",
+    "database-content",
+    "object-content"
+  ]
+}

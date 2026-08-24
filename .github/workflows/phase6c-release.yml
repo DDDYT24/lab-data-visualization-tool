@@ -1,0 +1,272 @@
+name: Phase 6C release
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected target environment
+        required: true
+        type: choice
+        options: [staging, production]
+      enable_restore_testing:
+        description: Enable the quarterly AWS Backup restore-testing schedule
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: phase6c-release-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  TERRAFORM_VERSION: 1.15.8
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_owner: ${{ vars.OWNER }}
+  TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+  TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID }}
+  TF_VAR_ses_identity_name: ${{ vars.SES_IDENTITY_NAME }}
+  TF_VAR_ses_from_address: ${{ vars.SES_FROM_ADDRESS }}
+  TF_VAR_notification_email: ${{ secrets.NOTIFICATION_EMAIL }}
+  TF_VAR_permissions_boundary_arn: ${{ vars.PERMISSIONS_BOUNDARY_ARN }}
+  TF_VAR_activate_services: "true"
+  TF_VAR_activate_logical_backup_schedule: "true"
+  TF_VAR_enable_restore_testing: ${{ inputs.enable_restore_testing }}
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require successful full CI for the exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          accepted=$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq 'length')
+          test "$accepted" -ge 1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: phase6c-release-${{ inputs.environment }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: sigstore/cosign-installer@v3.10.0
+      - name: Initialize protected environment and read non-secret outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="V2.0/deploy/aws/terraform/environments/${{ inputs.environment }}"
+          terraform -chdir="$root" init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          api_repo=$(terraform -chdir="$root" output -raw api_repository_url)
+          web_repo=$(terraform -chdir="$root" output -raw web_repository_url)
+          backup_repo=$(terraform -chdir="$root" output -raw logical_backup_repository_url)
+          {
+            echo "TF_ROOT=$root"
+            echo "API_REPOSITORY=$api_repo"
+            echo "WEB_REPOSITORY=$web_repo"
+            echo "BACKUP_REPOSITORY=$backup_repo"
+          } >> "$GITHUB_ENV"
+      - name: Build and push immutable candidate images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --pull -f V2.0/api/Dockerfile -t "$API_REPOSITORY:$GITHUB_SHA" V2.0/api
+          docker build --pull -f V2.0/web/Dockerfile -t "$WEB_REPOSITORY:$GITHUB_SHA" V2.0
+          docker build --pull -f V2.0/deploy/aws/backup/Dockerfile -t "$BACKUP_REPOSITORY:$GITHUB_SHA" V2.0
+          docker push "$API_REPOSITORY:$GITHUB_SHA"
+          docker push "$WEB_REPOSITORY:$GITHUB_SHA"
+          docker push "$BACKUP_REPOSITORY:$GITHUB_SHA"
+
+          api_name=${API_REPOSITORY##*/}
+          web_name=${WEB_REPOSITORY##*/}
+          backup_name=${BACKUP_REPOSITORY##*/}
+          api_digest=$(aws ecr describe-images --repository-name "$api_name" --image-ids imageTag="$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text)
+          web_digest=$(aws ecr describe-images --repository-name "$web_name" --image-ids imageTag="$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text)
+          backup_digest=$(aws ecr describe-images --repository-name "$backup_name" --image-ids imageTag="$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text)
+          {
+            echo "API_DIGEST=$api_digest"
+            echo "WEB_DIGEST=$web_digest"
+            echo "BACKUP_DIGEST=$backup_digest"
+            echo "API_IMAGE=$API_REPOSITORY@$api_digest"
+            echo "WEB_IMAGE=$WEB_REPOSITORY@$web_digest"
+            echo "BACKUP_IMAGE=$BACKUP_REPOSITORY@$backup_digest"
+            echo "TF_VAR_api_image_digest=$api_digest"
+            echo "TF_VAR_web_image_digest=$web_digest"
+            echo "TF_VAR_backup_image_digest=$backup_digest"
+          } >> "$GITHUB_ENV"
+      - name: Scan API candidate
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: ${{ env.API_IMAGE }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan Web candidate
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: ${{ env.WEB_IMAGE }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan logical-backup candidate
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: ${{ env.BACKUP_IMAGE }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Sign accepted digests with GitHub OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign sign --yes "$API_IMAGE"
+          cosign sign --yes "$WEB_IMAGE"
+          cosign sign --yes "$BACKUP_IMAGE"
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/phase6c-release.yml@refs/heads/main"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$API_IMAGE" > /dev/null
+          cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$WEB_IMAGE" > /dev/null
+          cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$BACKUP_IMAGE" > /dev/null
+      - name: Create the reviewed release plan
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="$TF_ROOT" plan -input=false -lock-timeout=5m -out=release.tfplan
+          terraform -chdir="$TF_ROOT" show -json release.tfplan > "$RUNNER_TEMP/release-plan.json"
+      - name: Capture current services and run candidate migration
+        id: migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime=$(terraform -chdir="$TF_ROOT" output -json release_runtime)
+          cluster=$(jq -r '.cluster_arn' <<<"$runtime")
+          migration_definition=$(jq -r '.migration_task_definition_arn' <<<"$runtime")
+          subnets=$(jq -r '.application_subnet_ids | join(",")' <<<"$runtime")
+          api_sg=$(jq -r '.api_security_group_id' <<<"$runtime")
+          services=$(jq -c '[.api_service_name,.web_service_name]+.worker_service_names' <<<"$runtime")
+
+          jq -n '{}' > "$RUNNER_TEMP/previous-services.json"
+          while IFS= read -r service; do
+            previous=$(aws ecs describe-services --cluster "$cluster" --services "$service" --query 'services[0].taskDefinition' --output text)
+            jq --arg service "$service" --arg task "$previous" '. + {($service):$task}' "$RUNNER_TEMP/previous-services.json" > "$RUNNER_TEMP/previous-services.next"
+            mv "$RUNNER_TEMP/previous-services.next" "$RUNNER_TEMP/previous-services.json"
+          done < <(jq -r '.[]' <<<"$services")
+
+          aws ecs describe-task-definition --task-definition "$migration_definition" --query taskDefinition > "$RUNNER_TEMP/migration-current.json"
+          jq --arg image "$API_IMAGE" '
+            .containerDefinitions[0].image=$image |
+            del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)
+          ' "$RUNNER_TEMP/migration-current.json" > "$RUNNER_TEMP/migration-candidate.json"
+          candidate=$(aws ecs register-task-definition --cli-input-json "file://$RUNNER_TEMP/migration-candidate.json" --query 'taskDefinition.taskDefinitionArn' --output text)
+          task=$(aws ecs run-task \
+            --cluster "$cluster" \
+            --task-definition "$candidate" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$api_sg],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' --output text)
+          test -n "$task"
+          test "$task" != "None"
+          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task"
+          exit_code=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" --query 'tasks[0].containers[0].exitCode' --output text)
+          test "$exit_code" = "0"
+          {
+            echo "cluster=$cluster"
+            echo "task=$task"
+            echo "candidate_definition=$candidate"
+          } >> "$GITHUB_OUTPUT"
+      - name: Apply only after successful migration
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="$TF_ROOT" apply -input=false -lock-timeout=5m release.tfplan
+      - name: Wait for every service and verify HTTPS
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime=$(terraform -chdir="$TF_ROOT" output -json release_runtime)
+          cluster=$(jq -r '.cluster_arn' <<<"$runtime")
+          services=$(jq -r '[.api_service_name,.web_service_name]+.worker_service_names | .[]' <<<"$runtime")
+          while IFS= read -r service; do
+            aws ecs wait services-stable --cluster "$cluster" --services "$service"
+            running=$(aws ecs describe-services --cluster "$cluster" --services "$service" --query 'services[0].runningCount' --output text)
+            test "$running" -ge 1
+          done <<<"$services"
+          application_url=$(terraform -chdir="$TF_ROOT" output -raw application_url)
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$application_url/health" > /dev/null
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$application_url/api/v1/ready" > /dev/null
+      - name: Fail on active operational alarms
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime=$(terraform -chdir="$TF_ROOT" output -json release_runtime)
+          mapfile -t alarms < <(jq -r '.alarm_names[]' <<<"$runtime")
+          for ((i=0; i<${#alarms[@]}; i+=100)); do
+            batch=("${alarms[@]:i:100}")
+            active=$(aws cloudwatch describe-alarms --alarm-names "${batch[@]}" --query 'MetricAlarms[?StateValue==`ALARM`].AlarmName' --output text)
+            test -z "$active"
+          done
+      - name: Require no unexplained post-apply drift
+        shell: bash
+        run: terraform -chdir="$TF_ROOT" plan -input=false -lock-timeout=5m -detailed-exitcode
+      - name: Roll back services after a failed apply or verification
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous="$RUNNER_TEMP/previous-services.json"
+          if [[ ! -s "$previous" ]]; then
+            exit 0
+          fi
+          runtime=$(terraform -chdir="$TF_ROOT" output -json release_runtime)
+          cluster=$(jq -r '.cluster_arn' <<<"$runtime")
+          while IFS=$'\t' read -r service task; do
+            aws ecs update-service --cluster "$cluster" --service "$service" --task-definition "$task" > /dev/null
+          done < <(jq -r 'to_entries[] | [.key,.value] | @tsv' "$previous")
+          mapfile -t services < <(jq -r 'keys[]' "$previous")
+          aws ecs wait services-stable --cluster "$cluster" --services "${services[@]}"
+      - name: Write non-secret release evidence
+        if: always()
+        shell: bash
+        run: |
+          jq -n \
+            --arg environment "${{ inputs.environment }}" \
+            --arg commit "$GITHUB_SHA" \
+            --arg utc "$(date -u +%FT%TZ)" \
+            --arg status "${{ job.status }}" \
+            --arg api "${API_IMAGE:-not-built}" \
+            --arg web "${WEB_IMAGE:-not-built}" \
+            --arg backup "${BACKUP_IMAGE:-not-built}" \
+            --arg migration "${{ steps.migration.outputs.task }}" \
+            '{schemaVersion:1,kind:"phase6c-release",environment:$environment,commit:$commit,recordedAt:$utc,status:$status,images:{api:$api,web:$web,logicalBackup:$backup},migrationTask:$migration}' \
+            > "$RUNNER_TEMP/release-evidence.json"
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6c-release-${{ inputs.environment }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/release-evidence.json
+            ${{ runner.temp }}/release-plan.json
+          retention-days: 30
+          if-no-files-found: warn
