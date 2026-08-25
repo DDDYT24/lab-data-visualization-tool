@@ -20,6 +20,10 @@ Lab Data Visualization Tool is a local-first application for loading, validating
 
 > **Current release: V1.1** — supports CSV, TSV, delimited TXT, JSON, and XLSX data, with seven 2D/3D visualization types.
 
+> **Distribution model:** this repository does not operate an official hosted website. Clone it
+> from GitHub and run it on your own computer. The default local paths require no AWS account,
+> domain, DNS, paid email provider, Docker, PostgreSQL server, or MinIO server.
+
 ## Repository Versions
 
 | Version | Status | Location |
@@ -28,6 +32,12 @@ Lab Data Visualization Tool is a local-first application for loading, validating
 | V2.0 | Website-first Next.js and FastAPI alpha | [`V2.0/`](V2.0/) |
 
 Repository-wide automation and documentation remain at the root. Deferred V2.0 work is tracked in [`V2.0/TODO.md`](V2.0/TODO.md).
+
+For the smallest installation, use V1.1: it needs only Python. Use V2.0 when
+you want the guided website workflow, project history, sign-in, revisioned
+descriptions, sharing, and publication exports. V2.0 needs Python and Node.js,
+but its default SQLite database and local object directory are created
+automatically and do not require a database service.
 
 ## ⚡ Quick Start
 
@@ -73,9 +83,11 @@ and supports temporary projects, email-code sign-in, saved history, authenticate
 project descriptions, and read-only revision-pinned share links. Raw uploaded bytes are processed in memory and are not
 written to the SQLite project database.
 
-The approved production route is PostgreSQL 17 plus S3-compatible object storage with separate API,
-Web, and Worker runtimes. AWS deployment and production email evidence are not yet complete, so the
-V2.0 website remains an alpha rather than a production release.
+V2.0 is distributed for local self-hosting and remains an alpha. Its default
+single-computer route uses SQLite plus local object storage. PostgreSQL 17,
+S3-compatible storage, workers, and the AWS deployment files remain available
+for advanced multi-process deployments and integration testing, but they are
+not required to run the application locally.
 
 Prerequisites: Python 3.12 or 3.13 and Node.js 22.22.2 or newer. Python 3.12
 and Node.js 24 are used by CI and are the recommended development versions.
@@ -95,7 +107,7 @@ Start the website in a second PowerShell window:
 
 ```powershell
 Set-Location .\V2.0\web
-npm install
+npm ci
 npm run dev
 ```
 
@@ -106,12 +118,26 @@ table. The Next.js development server proxies `/api/v1` to
 
 Local development uses console email delivery: request a sign-in code in the
 website, then copy the six-digit code printed in the API terminal. No email is
-sent in this mode. The reference service supports the documented
-`LABVIZ_SMTP_*` variables for non-production integration testing. Production uses the implemented
-Amazon SES v2 adapter through the ECS task role; real-account delivery/feedback evidence remains a
-blocking Phase 6C staging acceptance requirement.
+sent and no email account is required in this mode. SMTP and Amazon SES adapters
+are retained only for maintainers who choose to build an externally hosted
+deployment.
 For a separately hosted API, set `NEXT_PUBLIC_LABVIZ_API_URL` before starting
 Next.js and include the website origin in `LABVIZ_ALLOWED_ORIGINS`.
+
+### What local users do and do not need
+
+| Component | Default local use | When it becomes useful |
+| --- | --- | --- |
+| SQLite | Automatically included with Python | Stores project metadata, sessions, history, and revisions locally |
+| Local object directory | Automatically created under `V2.0/api/.labviz/` | Stores local processed artifacts |
+| PostgreSQL | Not required | Multiple API/worker processes or a shared self-hosted server |
+| MinIO / S3 | Not required | Shared or remote object storage |
+| Docker | Not required | Contributor integration tests or container-based deployment |
+| AWS, DNS, TLS, SES | Not required | Only if a maintainer intentionally publishes an Internet-facing service |
+
+Keep the default services bound to `127.0.0.1`. Do not expose ports 3000 or
+8000 to the Internet without adding HTTPS, secure cookies, production email,
+backups, monitoring, and an appropriate multi-user persistence configuration.
 
 ## ✨ Features
 
@@ -350,12 +376,13 @@ This project keeps an intentionally smaller scope and contains an independent im
 
 ## 中文说明
 
-这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。网页端使用 Streamlit，命令行端适合重复实验和批处理脚本；实验原始数据不会写入历史数据库。
+这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。项目不提供官方在线网站，用户从 GitHub 克隆后在自己的电脑上运行；实验原始数据不会写入历史数据库。
 
 V1.1 仍是当前稳定可用版本。V2.0 是 website-first 的 Next.js 前端开发版本，
-仓库内的 FastAPI 只作为 API Contract 参考服务和端到端测试工具，并不代表生产
-后端框架已经确定。当前已移除前端生成的预览行，工作区、历史、分享、登录和导出
-均使用真实 `/api/v1` 响应。原始上传文件只在处理期间保留于内存，不写入 SQLite。
+FastAPI 提供真实的数据处理、工作区、历史、分享、登录和导出接口。V2.0 默认使用
+SQLite 和本地对象目录，二者都会自动创建；不需要 AWS、域名、DNS、Docker、
+PostgreSQL、MinIO 或付费邮件服务。原始上传文件只在处理期间保留于内存，不写入
+SQLite。
 
 ### 🚀 快速开始
 
@@ -405,7 +432,7 @@ python -m uvicorn labviz_api.main:app --reload --port 8000
 
 ```powershell
 Set-Location .\V2.0\web
-npm install
+npm ci
 npm run dev
 ```
 
@@ -413,6 +440,21 @@ npm run dev
 `http://127.0.0.1:8000`，接口文档位于 `http://localhost:8000/docs`。点击
 “使用示例数据”会请求服务端明确提供的示例项目；也可以上传真实表格。开发模式
 下邮箱验证码会显示在 API 终端，接口响应不会返回验证码。
+
+#### 本地部署需要哪些组件
+
+| 组件 | 普通本地使用 | 什么时候才需要 |
+| --- | --- | --- |
+| SQLite | Python 自带、自动创建 | 本地保存项目元数据、会话、历史和版本 |
+| 本地对象目录 | 自动创建在 `V2.0/api/.labviz/` | 保存本地处理结果 |
+| PostgreSQL | 不需要 | 多个 API/Worker 进程或多人共享服务器 |
+| MinIO / S3 | 不需要 | 共享或远程对象存储 |
+| Docker | 不需要 | 贡献者完整集成测试或容器部署 |
+| AWS、DNS、TLS、SES | 不需要 | 维护者主动建设公网服务时才需要 |
+
+普通用户只需保持网站和 API 绑定在 `127.0.0.1`。如果没有配置 HTTPS、安全
+Cookie、生产邮件、备份、监控和多用户数据库，请不要把 3000 或 8000 端口暴露到
+公网。
 
 ### ✨ 核心能力
 
@@ -472,12 +514,10 @@ Python 3.12 锁文件，CI 和可复现验证使用它们；两个范围文件�
 
 本地默认数据库为 `V2.0/api/.labviz/labviz-v2.db`；临时项目和导出结果按最后
 一次项目操作保留 2 小时；网站上传上限为 50 MB；验证码使用终端输出模式。
-参考服务可设置 `LABVIZ_AUTH_MODE=smtp` 以及 `LABVIZ_SMTP_HOST`、端口、账号、
-密码和发件人变量来做非生产集成测试；正式环境使用 `LABVIZ_AUTH_MODE=ses`、SES
-Region、已验证发件人和 Configuration Set，并通过 ECS task role 的标准 AWS 凭证链
-调用 SES v2，不使用静态访问密钥或 SMTP 密钥。生产 HTTPS 环境还应设置
-`LABVIZ_COOKIE_SECURE=true`。验证码挑战、原子频率限制和登录会话由所选
-SQLite/PostgreSQL 后端持久化；生产多主机由 PostgreSQL 协调。
+本地运行不需要配置 SMTP 或 SES；验证码直接显示在 API 终端。SMTP、SES、
+PostgreSQL、S3/MinIO 和 AWS 文件仅供选择高级自托管方案的维护者使用。验证码
+挑战、原子频率限制和登录会话默认由 SQLite 持久化；只有多进程、多主机部署才
+需要 PostgreSQL 协调。
 
 ### 💻 命令行示例
 
