@@ -654,6 +654,30 @@ def test_scientific_analysis_and_all_chart_renderers() -> None:
     )
 
 
+def test_chart_analysis_rejects_reusing_response_field_as_x_axis(
+    api_client: tuple[TestClient, MemoryEmailSender],
+) -> None:
+    client, _sender = api_client
+    session = _sample_project(client)
+    chart = _chart()
+    chart["xAxis"] = {
+        "field": "Response (mV)",
+        "title": "Response",
+        "unit": "mV",
+    }
+
+    response = client.post(
+        f"/api/v1/projects/{session['projectId']}/chart-analysis",
+        json={"chart": chart},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "invalid-chart-fields",
+        "message": "The X field must be different from every response field.",
+    }
+
+
 def test_long_format_grouping_creates_independent_series_and_fits() -> None:
     frame = pd.DataFrame(
         [

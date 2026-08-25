@@ -262,11 +262,33 @@ export function ChartStep({
                   (item) => item.field === event.target.value,
                 );
                 if (column) {
+                  const previousXColumn = numericColumns.find(
+                    (item) => item.field === chartSpec.xAxis.field,
+                  );
+                  const nextSeries = chartSpec.series.map((series) =>
+                    series.field === column.field && previousXColumn
+                      ? {
+                          ...series,
+                          field: previousXColumn.field,
+                          label: previousXColumn.label,
+                        }
+                      : series,
+                  );
                   updateChart({
                     xAxis: {
                       field: column.field,
                       title: column.label,
                       unit: column.unit ?? "",
+                    },
+                    series: nextSeries,
+                    yAxis: {
+                      ...chartSpec.yAxis,
+                      field: nextSeries[0].field,
+                      title: nextSeries[0].label,
+                      unit:
+                        numericColumns.find(
+                          (item) => item.field === nextSeries[0].field,
+                        )?.unit ?? "",
                     },
                   });
                 }
