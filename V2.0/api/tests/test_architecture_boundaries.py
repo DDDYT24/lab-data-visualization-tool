@@ -662,3 +662,43 @@ def test_phase6_github_governance_is_complete_but_not_applied() -> None:
         job for workflow in protection["requiredWorkflowJobs"] for job in workflow["jobs"]
     }
     assert required_jobs == {"python", "frontend", "v2-api", "v2-containers", "static"}
+
+
+def test_phase6d_drafts_are_prepared_without_bypassing_phase6c() -> None:
+    contracts = V2_ROOT / "contracts"
+    preparation = json.loads(
+        (contracts / "phase6d-preparation-v1.json").read_text(encoding="utf-8")
+    )
+    quotas = json.loads((contracts / "phase6d-quota-retention-v1.json").read_text(encoding="utf-8"))
+    inventory = json.loads(
+        (contracts / "phase6d-data-inventory-v1.json").read_text(encoding="utf-8")
+    )
+    load_recovery = json.loads(
+        (contracts / "phase6d-load-recovery-v1.json").read_text(encoding="utf-8")
+    )
+
+    assert preparation["status"] == "draft-blocked-by-phase6c"
+    assert preparation["phase6cAcceptanceRequired"] is True
+    assert preparation["entryAllowed"] is False
+    assert preparation["codeEvidenceIsAcceptance"] is False
+    assert "phase6d-pass" in preparation["prohibitedClaims"]
+
+    assert quotas["status"] == "candidate-not-enforced"
+    assert quotas["acceptedExistingLimits"]["uploadBytes"] == 50 * 1024 * 1024
+    assert quotas["candidateProductQuotas"]["savedProjectsPerUser"] > 0
+    assert quotas["candidateProductQuotas"]["retainedObjectBytesPerUser"] > 0
+    assert quotas["accountingRequirements"]["reservationMustBeAtomic"] is True
+    assert quotas["accountingRequirements"]["releaseMustBeAtomic"] is True
+
+    assert inventory["status"] == "draft-not-legal-advice"
+    assert inventory["complianceCertificationClaimed"] is False
+    inventory_ids = {item["id"] for item in inventory["dataClasses"]}
+    assert {"uploaded-source-bytes", "user-email", "client-identity-digest"} <= inventory_ids
+    assert {"database-object-and-logical-backups", "incident-and-support-evidence"} <= inventory_ids
+
+    assert load_recovery["status"] == "draft-local-preflight-only"
+    assert load_recovery["loadProfiles"]["localIntegrity"]["acceptanceAuthority"] is False
+    assert load_recovery["loadProfiles"]["stagingQualification"]["acceptanceAuthority"] is True
+    assert load_recovery["disasterRecovery"]["rpoMinutesMaximum"] == 15
+    assert load_recovery["disasterRecovery"]["rtoMinutesMaximum"] == 240
+    assert load_recovery["disasterRecovery"]["localSimulationIsAcceptance"] is False

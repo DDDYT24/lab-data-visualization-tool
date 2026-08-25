@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "phase": "6D",
+  "status": "draft-blocked-by-phase6c",
+  "phase6cAcceptanceRequired": true,
+  "entryAllowed": false,
+  "codeEvidenceIsAcceptance": false,
+  "preparedArtifacts": {
+    "quotasAndRetention": "phase6d-quota-retention-v1.json",
+    "privacyAndDataInventory": "phase6d-data-inventory-v1.json",
+    "loadAndRecovery": "phase6d-load-recovery-v1.json"
+  },
+  "acceptanceRequires": [
+    "accepted-phase6c-release-candidate",
+    "real-staging-load-evidence",
+    "real-postgresql-overlap-and-restart-evidence",
+    "authoritative-object-inventory",
+    "live-backup-restore-rpo-rto-evidence",
+    "independent-launch-acceptance"
+  ],
+  "prohibitedClaims": [
+    "phase6d-pass",
+    "production-ready",
+    "HIPAA-compliant",
+    "GLP-compliant",
+    "GxP-compliant",
+    "GDPR-compliant",
+    "PIPL-compliant",
+    "medical-device-certified",
+    "clinical-use-approved"
+  ]
+}
