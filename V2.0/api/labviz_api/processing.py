@@ -722,6 +722,14 @@ def validate_chart_fields(frame: pd.DataFrame, chart: ChartSpec) -> None:
             "invalid-group-field",
         )
 
+    if chart.type in {"line", "scatter", "bar", "surface3d"} and any(
+        item.field == chart.x_axis.field for item in chart.series
+    ):
+        raise ProcessingError(
+            "The X field must be different from every response field.",
+            "invalid-chart-fields",
+        )
+
     numeric_fields = [item.field for item in chart.series]
     if chart.type == "surface3d":
         numeric_fields.append(chart.x_axis.field)
@@ -987,6 +995,14 @@ def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
 def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> list[dict[str, Any]]:
     if x_field not in frame.columns or y_field not in frame.columns:
         return []
+    if x_field == y_field:
+        numeric = pd.to_numeric(frame[y_field], errors="coerce").dropna()
+        numeric = numeric.iloc[_sample_positions(len(numeric))]
+        return [
+            {"x": _json_value(value), "y": float(value)}
+            for value in numeric
+            if math.isfinite(float(value))
+        ]
     complete = frame[[x_field, y_field]].dropna()
     numeric_y = pd.to_numeric(complete[y_field], errors="coerce")
     complete = complete[numeric_y.notna()].copy()
