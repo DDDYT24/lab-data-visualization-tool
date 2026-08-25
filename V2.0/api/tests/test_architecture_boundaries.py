@@ -632,3 +632,33 @@ def test_phase6_cost_model_blocks_billable_apply_by_default() -> None:
         assert "Require explicit recurring cost approval" in workflow
         assert "COST_APPROVAL_REFERENCE" in workflow
         assert 'test "$COST_APPROVAL_REFERENCE" != "local-only"' in workflow
+
+
+def test_phase6_github_governance_is_complete_but_not_applied() -> None:
+    governance_path = V2_ROOT / "contracts" / "phase6-github-governance-v1.json"
+    governance = json.loads(governance_path.read_text(encoding="utf-8"))
+
+    assert governance["repository"] == "DDDYT24/lab-data-visualization-tool"
+    assert governance["defaultBranch"] == "main"
+    assert governance["status"] == "prepared-not-applied"
+    assert governance["externalMutationApplied"] is False
+    assert governance["secretValuesStoredInRepository"] is False
+    assert set(governance["environments"]) == {"staging", "production"}
+    assert governance["repositorySecrets"] == ["NOTIFICATION_EMAIL"]
+    assert "AWS_ACCESS_KEY_ID" not in governance["repositoryVariables"]
+    assert "AWS_SECRET_ACCESS_KEY" not in governance["repositoryVariables"]
+    for environment in governance["environments"].values():
+        assert environment["deploymentBranch"] == "main"
+        assert environment["preventSelfReview"] is True
+        assert environment["requiredReviewers"] >= 1
+        assert "COST_APPROVAL_REFERENCE" in environment["variables"]
+        assert environment["secrets"] == ["NOTIFICATION_EMAIL"]
+
+    protection = governance["branchProtection"]
+    assert protection["enforceAdmins"] is True
+    assert protection["allowForcePushes"] is False
+    assert protection["allowDeletions"] is False
+    required_jobs = {
+        job for workflow in protection["requiredWorkflowJobs"] for job in workflow["jobs"]
+    }
+    assert required_jobs == {"python", "frontend", "v2-api", "v2-containers", "static"}

@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "repository": "DDDYT24/lab-data-visualization-tool",
+  "defaultBranch": "main",
+  "status": "prepared-not-applied",
+  "externalMutationApplied": false,
+  "applyBlockedUntil": [
+    "phase6-workflows-exist-on-remote-main",
+    "required-check-contexts-have-run-on-remote",
+    "independent-production-reviewer-is-selected",
+    "dns-and-oidc-values-exist",
+    "recurring-cost-approval-exists"
+  ],
+  "branchProtection": {
+    "requiredWorkflowJobs": [
+      {
+        "workflow": "CI",
+        "jobs": ["python", "frontend", "v2-api", "v2-containers"]
+      },
+      {
+        "workflow": "Phase 6C infrastructure",
+        "jobs": ["static"]
+      }
+    ],
+    "pullRequestReviews": {
+      "requiredApprovingReviewCount": 1,
+      "dismissStaleReviews": true,
+      "requireCodeOwnerReviews": false
+    },
+    "requireConversationResolution": true,
+    "requireLinearHistory": true,
+    "enforceAdmins": true,
+    "allowForcePushes": false,
+    "allowDeletions": false
+  },
+  "repositoryVariables": [
+    "AWS_PLAN_ROLE_ARN",
+    "TF_STATE_BUCKET",
+    "OWNER",
+    "STAGING_DOMAIN_NAME",
+    "STAGING_ROUTE53_ZONE_ID",
+    "STAGING_SES_IDENTITY_NAME",
+    "STAGING_SES_FROM_ADDRESS",
+    "STAGING_PERMISSIONS_BOUNDARY_ARN",
+    "STAGING_API_IMAGE_DIGEST",
+    "STAGING_WEB_IMAGE_DIGEST",
+    "STAGING_BACKUP_IMAGE_DIGEST",
+    "PRODUCTION_DOMAIN_NAME",
+    "PRODUCTION_ROUTE53_ZONE_ID",
+    "PRODUCTION_SES_IDENTITY_NAME",
+    "PRODUCTION_SES_FROM_ADDRESS",
+    "PRODUCTION_PERMISSIONS_BOUNDARY_ARN",
+    "PRODUCTION_API_IMAGE_DIGEST",
+    "PRODUCTION_WEB_IMAGE_DIGEST",
+    "PRODUCTION_BACKUP_IMAGE_DIGEST"
+  ],
+  "repositorySecrets": ["NOTIFICATION_EMAIL"],
+  "environments": {
+    "staging": {
+      "deploymentBranch": "main",
+      "preventSelfReview": true,
+      "requiredReviewers": 1,
+      "variables": [
+        "AWS_ROLE_ARN",
+        "TF_STATE_BUCKET",
+        "OWNER",
+        "DOMAIN_NAME",
+        "ROUTE53_ZONE_ID",
+        "SES_IDENTITY_NAME",
+        "SES_FROM_ADDRESS",
+        "PERMISSIONS_BOUNDARY_ARN",
+        "COST_APPROVAL_REFERENCE"
+      ],
+      "secrets": ["NOTIFICATION_EMAIL"]
+    },
+    "production": {
+      "deploymentBranch": "main",
+      "preventSelfReview": true,
+      "requiredReviewers": 1,
+      "reviewerConstraint": "reviewer-must-differ-from-release-author",
+      "variables": [
+        "AWS_ROLE_ARN",
+        "TF_STATE_BUCKET",
+        "OWNER",
+        "DOMAIN_NAME",
+        "ROUTE53_ZONE_ID",
+        "SES_IDENTITY_NAME",
+        "SES_FROM_ADDRESS",
+        "PERMISSIONS_BOUNDARY_ARN",
+        "COST_APPROVAL_REFERENCE"
+      ],
+      "secrets": ["NOTIFICATION_EMAIL"]
+    }
+  },
+  "secretValuesStoredInRepository": false
+}
