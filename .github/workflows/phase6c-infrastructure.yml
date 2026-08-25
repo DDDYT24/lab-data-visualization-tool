@@ -65,7 +65,10 @@ jobs:
           exit-code: "1"
 
   plan:
-    if: github.event_name != 'pull_request'
+    if: >-
+      github.event_name != 'pull_request' &&
+      vars.AWS_PLAN_ROLE_ARN != '' &&
+      vars.TF_STATE_BUCKET != ''
     needs: static
     runs-on: ubuntu-latest
     permissions:
