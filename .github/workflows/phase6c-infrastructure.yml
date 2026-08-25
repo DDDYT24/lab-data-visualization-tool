@@ -54,7 +54,7 @@ jobs:
           terraform -chdir=V2.0/deploy/aws/terraform/environments/staging test -no-color
           terraform -chdir=V2.0/deploy/aws/terraform/environments/production test -no-color
       - name: Scan IaC and deployment files
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: V2.0/deploy/aws

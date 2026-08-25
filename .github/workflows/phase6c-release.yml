@@ -118,7 +118,7 @@ jobs:
             echo "TF_VAR_backup_image_digest=$backup_digest"
           } >> "$GITHUB_ENV"
       - name: Scan API candidate
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.API_IMAGE }}
           format: table
@@ -126,7 +126,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
       - name: Scan Web candidate
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.WEB_IMAGE }}
           format: table
@@ -134,7 +134,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
       - name: Scan logical-backup candidate
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.BACKUP_IMAGE }}
           format: table
