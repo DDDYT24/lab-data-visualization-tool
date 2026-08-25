@@ -58,22 +58,22 @@ def _add_work_item_columns(
         sa.Column("quarantined_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_check_constraint(
-        f"ck_{table_name}_worker_lease_pair",
+        op.f(f"ck_{table_name}_worker_lease_pair"),
         table_name,
         "(lease_owner IS NULL) = (lease_until IS NULL)",
     )
     op.create_check_constraint(
-        f"ck_{table_name}_worker_fencing_token_nonnegative",
+        op.f(f"ck_{table_name}_worker_fencing_token_nonnegative"),
         table_name,
         "fencing_token >= 0",
     )
     op.create_check_constraint(
-        f"ck_{table_name}_worker_retry_count_nonnegative",
+        op.f(f"ck_{table_name}_worker_retry_count_nonnegative"),
         table_name,
         "retry_count >= 0",
     )
     op.create_check_constraint(
-        f"ck_{table_name}_worker_quarantine_has_no_lease",
+        op.f(f"ck_{table_name}_worker_quarantine_has_no_lease"),
         table_name,
         "quarantined_at IS NULL OR (lease_owner IS NULL AND lease_until IS NULL)",
     )
@@ -88,7 +88,7 @@ def _drop_work_item_columns(table_name: str, *, index_name: str) -> None:
         "worker_fencing_token_nonnegative",
         "worker_lease_pair",
     ):
-        op.drop_constraint(f"ck_{table_name}_{suffix}", table_name, type_="check")
+        op.drop_constraint(op.f(f"ck_{table_name}_{suffix}"), table_name, type_="check")
     for column_name in (
         "quarantined_at",
         "last_error_message",
@@ -129,15 +129,15 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "task IN ('pending-reconciliation', 'project-lifecycle', 'stored-object-gc', "
             "'orphan-staging-inventory', 'metadata-cleanup')",
-            name="ck_worker_leases_task",
+            name=op.f("ck_worker_leases_task"),
         ),
         sa.CheckConstraint(
             "(lease_owner IS NULL) = (lease_until IS NULL)",
-            name="ck_worker_leases_lease_pair",
+            name=op.f("ck_worker_leases_lease_pair"),
         ),
         sa.CheckConstraint(
             "fencing_token >= 0",
-            name="ck_worker_leases_fencing_token_nonnegative",
+            name=op.f("ck_worker_leases_fencing_token_nonnegative"),
         ),
         sa.PrimaryKeyConstraint("task", name="pk_worker_leases"),
     )

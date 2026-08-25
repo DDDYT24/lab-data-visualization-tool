@@ -64,7 +64,7 @@ def upgrade() -> None:
         sa.Column("deletion_completed_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_check_constraint(
-        "ck_orphan_staging_candidates_deletion_completion",
+        op.f("ck_orphan_staging_candidates_deletion_completion"),
         "orphan_staging_candidates",
         "deletion_completed_at IS NULL OR deletion_started_at IS NOT NULL",
     )
@@ -73,7 +73,7 @@ def upgrade() -> None:
         table_name="orphan_staging_candidates",
     )
     op.drop_constraint(
-        "ck_orphan_staging_candidates_observation_count_positive",
+        op.f("ck_orphan_staging_candidates_observation_count_positive"),
         "orphan_staging_candidates",
         type_="check",
     )
@@ -88,7 +88,7 @@ def upgrade() -> None:
         ["backend_name", "inventory_scope", "staging_key"],
     )
     op.create_check_constraint(
-        "ck_orphan_staging_candidates_observation_count_nonnegative",
+        op.f("ck_orphan_staging_candidates_observation_count_nonnegative"),
         "orphan_staging_candidates",
         "observation_count >= 0",
     )
@@ -124,24 +124,24 @@ def upgrade() -> None:
         sa.Column("last_error_message", sa.String(1024), nullable=True),
         sa.CheckConstraint(
             "status IN ('running', 'completed', 'failed')",
-            name="ck_storage_inventory_checkpoints_status",
+            name=op.f("ck_storage_inventory_checkpoints_status"),
         ),
         sa.CheckConstraint(
             "page_count >= 0",
-            name="ck_storage_inventory_checkpoints_page_count_nonnegative",
+            name=op.f("ck_storage_inventory_checkpoints_page_count_nonnegative"),
         ),
         sa.CheckConstraint(
             "item_count >= 0",
-            name="ck_storage_inventory_checkpoints_item_count_nonnegative",
+            name=op.f("ck_storage_inventory_checkpoints_item_count_nonnegative"),
         ),
         sa.CheckConstraint(
             "task_fencing_token >= 0",
-            name="ck_storage_inventory_checkpoints_task_fencing_token_nonnegative",
+            name=op.f("ck_storage_inventory_checkpoints_task_fencing_token_nonnegative"),
         ),
         sa.CheckConstraint(
             "(status = 'completed' AND completed_at IS NOT NULL AND cursor IS NULL) OR "
             "(status <> 'completed' AND completed_at IS NULL)",
-            name="ck_storage_inventory_checkpoints_completion_state",
+            name=op.f("ck_storage_inventory_checkpoints_completion_state"),
         ),
         sa.PrimaryKeyConstraint(
             "backend_name",
@@ -190,7 +190,7 @@ def downgrade() -> None:
         table_name="orphan_staging_candidates",
     )
     op.drop_constraint(
-        "ck_orphan_staging_candidates_observation_count_nonnegative",
+        op.f("ck_orphan_staging_candidates_observation_count_nonnegative"),
         "orphan_staging_candidates",
         type_="check",
     )
@@ -205,7 +205,7 @@ def downgrade() -> None:
         ["staging_key"],
     )
     op.create_check_constraint(
-        "ck_orphan_staging_candidates_observation_count_positive",
+        op.f("ck_orphan_staging_candidates_observation_count_positive"),
         "orphan_staging_candidates",
         "observation_count >= 1",
     )
@@ -220,7 +220,7 @@ def downgrade() -> None:
         ["quarantined_at", "next_attempt_at", "first_seen_at"],
     )
     op.drop_constraint(
-        "ck_orphan_staging_candidates_deletion_completion",
+        op.f("ck_orphan_staging_candidates_deletion_completion"),
         "orphan_staging_candidates",
         type_="check",
     )

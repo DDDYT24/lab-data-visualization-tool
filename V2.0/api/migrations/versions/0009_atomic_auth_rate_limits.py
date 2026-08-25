@@ -28,23 +28,23 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
             "scope IN ('client', 'email')",
-            name="ck_auth_rate_limit_buckets_scope",
+            name=op.f("ck_auth_rate_limit_buckets_scope"),
         ),
         sa.CheckConstraint(
             "scope <> 'client' OR identity_key ~ '^[0-9a-f]{64}$'",
-            name="ck_auth_rate_limit_buckets_client_identity_lower_hex",
+            name=op.f("ck_auth_rate_limit_buckets_client_identity_lower_hex"),
         ),
         sa.CheckConstraint(
             "scope <> 'email' OR identity_key = lower(identity_key)",
-            name="ck_auth_rate_limit_buckets_email_identity_normalized",
+            name=op.f("ck_auth_rate_limit_buckets_email_identity_normalized"),
         ),
         sa.CheckConstraint(
             "request_count >= 0",
-            name="ck_auth_rate_limit_buckets_request_count_nonnegative",
+            name=op.f("ck_auth_rate_limit_buckets_request_count_nonnegative"),
         ),
         sa.CheckConstraint(
             "expires_at > window_started_at",
-            name="ck_auth_rate_limit_buckets_window_order",
+            name=op.f("ck_auth_rate_limit_buckets_window_order"),
         ),
         sa.PrimaryKeyConstraint("id", name="pk_auth_rate_limit_buckets"),
         sa.UniqueConstraint(

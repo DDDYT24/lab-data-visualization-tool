@@ -28,8 +28,8 @@ def upgrade() -> None:
         sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("created_at", TIMESTAMP, nullable=False),
         sa.Column("updated_at", TIMESTAMP, nullable=False),
-        sa.CheckConstraint("email = lower(email)", name="ck_users_email_normalized"),
-        sa.CheckConstraint("length(email) BETWEEN 3 AND 320", name="ck_users_email_length"),
+        sa.CheckConstraint("email = lower(email)", name=op.f("ck_users_email_normalized")),
+        sa.CheckConstraint("length(email) BETWEEN 3 AND 320", name=op.f("ck_users_email_length")),
         sa.PrimaryKeyConstraint("id", name="pk_users"),
         sa.UniqueConstraint("email", name="uq_users_email"),
     )
@@ -51,19 +51,23 @@ def upgrade() -> None:
         sa.Column("updated_at", TIMESTAMP, nullable=False),
         sa.CheckConstraint(
             "purpose IN ('source-upload', 'dataset', 'export')",
-            name="ck_stored_objects_purpose",
+            name=op.f("ck_stored_objects_purpose"),
         ),
         sa.CheckConstraint(
             "status IN ('pending', 'available', 'deleting', 'deleted')",
-            name="ck_stored_objects_status",
+            name=op.f("ck_stored_objects_status"),
         ),
-        sa.CheckConstraint("size_bytes >= 0", name="ck_stored_objects_size_nonnegative"),
-        sa.CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="ck_stored_objects_sha256_lower_hex"),
-        sa.CheckConstraint("length(object_key) > 0", name="ck_stored_objects_object_key_nonempty"),
+        sa.CheckConstraint("size_bytes >= 0", name=op.f("ck_stored_objects_size_nonnegative")),
+        sa.CheckConstraint(
+            "sha256 ~ '^[0-9a-f]{64}$'", name=op.f("ck_stored_objects_sha256_lower_hex")
+        ),
+        sa.CheckConstraint(
+            "length(object_key) > 0", name=op.f("ck_stored_objects_object_key_nonempty")
+        ),
         sa.CheckConstraint(
             "(status = 'deleted' AND deleted_at IS NOT NULL) OR "
             "(status <> 'deleted' AND deleted_at IS NULL)",
-            name="ck_stored_objects_deleted_status_time",
+            name=op.f("ck_stored_objects_deleted_status_time"),
         ),
         sa.PrimaryKeyConstraint("id", name="pk_stored_objects"),
         sa.UniqueConstraint("object_key", name="uq_stored_objects_object_key"),
@@ -90,22 +94,24 @@ def upgrade() -> None:
         sa.Column("updated_at", TIMESTAMP, nullable=False),
         sa.CheckConstraint(
             "storage_mode IN ('temporary-cloud', 'saved-cloud', 'local')",
-            name="ck_projects_storage_mode",
+            name=op.f("ck_projects_storage_mode"),
         ),
         sa.CheckConstraint(
             "storage_mode <> 'saved-cloud' OR owner_user_id IS NOT NULL",
-            name="ck_projects_saved_project_owner",
+            name=op.f("ck_projects_saved_project_owner"),
         ),
         sa.CheckConstraint(
             "storage_mode <> 'temporary-cloud' OR expires_at IS NOT NULL",
-            name="ck_projects_temporary_project_expiry",
+            name=op.f("ck_projects_temporary_project_expiry"),
         ),
-        sa.CheckConstraint("length(title) BETWEEN 1 AND 200", name="ck_projects_title_length"),
+        sa.CheckConstraint(
+            "length(title) BETWEEN 1 AND 200", name=op.f("ck_projects_title_length")
+        ),
         sa.CheckConstraint(
             "(deleted_at IS NULL AND purge_after IS NULL) OR "
             "(storage_mode = 'saved-cloud' AND deleted_at IS NOT NULL AND "
             "purge_after = deleted_at + INTERVAL '24 hours')",
-            name="ck_projects_deletion_window",
+            name=op.f("ck_projects_deletion_window"),
         ),
         sa.ForeignKeyConstraint(
             ["owner_user_id"],
@@ -134,14 +140,16 @@ def upgrade() -> None:
         sa.Column("binary_deleted_at", TIMESTAMP, nullable=True),
         sa.Column("parsed_at", TIMESTAMP, nullable=True),
         sa.Column("created_at", TIMESTAMP, nullable=False),
-        sa.CheckConstraint("size_bytes >= 0", name="ck_source_files_size_nonnegative"),
-        sa.CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="ck_source_files_sha256_lower_hex"),
+        sa.CheckConstraint("size_bytes >= 0", name=op.f("ck_source_files_size_nonnegative")),
         sa.CheckConstraint(
-            "header_row IS NULL OR header_row >= 1",
-            name="ck_source_files_header_row_positive",
+            "sha256 ~ '^[0-9a-f]{64}$'", name=op.f("ck_source_files_sha256_lower_hex")
         ),
         sa.CheckConstraint(
-            "length(original_name) > 0", name="ck_source_files_original_name_nonempty"
+            "header_row IS NULL OR header_row >= 1",
+            name=op.f("ck_source_files_header_row_positive"),
+        ),
+        sa.CheckConstraint(
+            "length(original_name) > 0", name=op.f("ck_source_files_original_name_nonempty")
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
@@ -170,9 +178,9 @@ def upgrade() -> None:
         sa.Column("sheet_name", sa.String(length=255), nullable=True),
         sa.Column("header_row", sa.Integer(), nullable=True),
         sa.Column("created_at", TIMESTAMP, nullable=False),
-        sa.CheckConstraint("length(name) BETWEEN 1 AND 200", name="ck_datasets_name_length"),
+        sa.CheckConstraint("length(name) BETWEEN 1 AND 200", name=op.f("ck_datasets_name_length")),
         sa.CheckConstraint(
-            "header_row IS NULL OR header_row >= 1", name="ck_datasets_header_row_positive"
+            "header_row IS NULL OR header_row >= 1", name=op.f("ck_datasets_header_row_positive")
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
@@ -204,15 +212,21 @@ def upgrade() -> None:
         sa.Column("row_count", sa.Integer(), nullable=False),
         sa.Column("column_count", sa.Integer(), nullable=False),
         sa.Column("created_at", TIMESTAMP, nullable=False),
-        sa.CheckConstraint("version_number >= 1", name="ck_dataset_versions_version_positive"),
         sa.CheckConstraint(
-            "kind IN ('parsed', 'cleaned', 'derived')", name="ck_dataset_versions_kind"
+            "version_number >= 1", name=op.f("ck_dataset_versions_version_positive")
         ),
-        sa.CheckConstraint("row_count >= 0", name="ck_dataset_versions_row_count_nonnegative"),
-        sa.CheckConstraint("column_count >= 1", name="ck_dataset_versions_column_count_positive"),
+        sa.CheckConstraint(
+            "kind IN ('parsed', 'cleaned', 'derived')", name=op.f("ck_dataset_versions_kind")
+        ),
+        sa.CheckConstraint(
+            "row_count >= 0", name=op.f("ck_dataset_versions_row_count_nonnegative")
+        ),
+        sa.CheckConstraint(
+            "column_count >= 1", name=op.f("ck_dataset_versions_column_count_positive")
+        ),
         sa.CheckConstraint(
             "parent_version_id IS NULL OR parent_version_id <> id",
-            name="ck_dataset_versions_parent_not_self",
+            name=op.f("ck_dataset_versions_parent_not_self"),
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
@@ -269,19 +283,19 @@ def upgrade() -> None:
         sa.Column("created_at", TIMESTAMP, nullable=False),
         sa.CheckConstraint(
             "operation IN ('parse', 'profile', 'clean', 'analyze', 'export')",
-            name="ck_processing_runs_operation",
+            name=op.f("ck_processing_runs_operation"),
         ),
         sa.CheckConstraint(
             "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
-            name="ck_processing_runs_status",
+            name=op.f("ck_processing_runs_status"),
         ),
         sa.CheckConstraint(
             "finished_at IS NULL OR (started_at IS NOT NULL AND finished_at >= started_at)",
-            name="ck_processing_runs_finish_after_start",
+            name=op.f("ck_processing_runs_finish_after_start"),
         ),
         sa.CheckConstraint(
             "output_dataset_version_id IS NULL OR status = 'succeeded'",
-            name="ck_processing_runs_output_succeeded",
+            name=op.f("ck_processing_runs_output_succeeded"),
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
@@ -323,14 +337,14 @@ def upgrade() -> None:
         sa.Column("spec_document", JSONB, nullable=False),
         sa.Column("created_at", TIMESTAMP, nullable=False),
         sa.CheckConstraint(
-            "revision_number >= 1", name="ck_chart_spec_revisions_revision_positive"
+            "revision_number >= 1", name=op.f("ck_chart_spec_revisions_revision_positive")
         ),
         sa.CheckConstraint(
-            "schema_version >= 1", name="ck_chart_spec_revisions_schema_version_positive"
+            "schema_version >= 1", name=op.f("ck_chart_spec_revisions_schema_version_positive")
         ),
         sa.CheckConstraint(
             "decision_set_revision IS NULL OR decision_set_revision >= 1",
-            name="ck_chart_spec_revisions_decision_revision_positive",
+            name=op.f("ck_chart_spec_revisions_decision_revision_positive"),
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
@@ -373,9 +387,11 @@ def upgrade() -> None:
         sa.Column("spec_schema_version", sa.Integer(), nullable=False),
         sa.Column("spec_document", JSONB, nullable=False),
         sa.Column("created_at", TIMESTAMP, nullable=False),
-        sa.CheckConstraint("revision_number >= 1", name="ck_project_revisions_revision_positive"),
         sa.CheckConstraint(
-            "spec_schema_version >= 1", name="ck_project_revisions_schema_version_positive"
+            "revision_number >= 1", name=op.f("ck_project_revisions_revision_positive")
+        ),
+        sa.CheckConstraint(
+            "spec_schema_version >= 1", name=op.f("ck_project_revisions_schema_version_positive")
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
