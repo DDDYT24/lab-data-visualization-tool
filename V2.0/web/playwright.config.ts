@@ -21,7 +21,7 @@ export default defineConfig({
       maxDiffPixelRatio: 0.03,
     },
   },
-  snapshotPathTemplate: "{testDir}/{testFilePath}-snapshots/{arg}{ext}",
+  snapshotPathTemplate: "{testDir}/{testFilePath}-snapshots/{arg}-{platform}{ext}",
   use: {
     baseURL,
     colorScheme: "light",
