@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.14"
 
 [tool.pytest.ini_options]
 addopts = "-q"
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]
