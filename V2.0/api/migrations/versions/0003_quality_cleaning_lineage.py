@@ -52,10 +52,14 @@ def upgrade() -> None:
         sa.Column("report_document", JSONB, nullable=False),
         sa.Column("completed_at", TIMESTAMP, nullable=True),
         sa.Column("created_at", TIMESTAMP, nullable=False),
-        sa.CheckConstraint("revision_number >= 1", name="ck_quality_reports_revision_positive"),
-        sa.CheckConstraint("status IN ('completed', 'failed')", name="ck_quality_reports_status"),
         sa.CheckConstraint(
-            "length(profiler_name) > 0", name="ck_quality_reports_profiler_name_nonempty"
+            "revision_number >= 1", name=op.f("ck_quality_reports_revision_positive")
+        ),
+        sa.CheckConstraint(
+            "status IN ('completed', 'failed')", name=op.f("ck_quality_reports_status")
+        ),
+        sa.CheckConstraint(
+            "length(profiler_name) > 0", name=op.f("ck_quality_reports_profiler_name_nonempty")
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
@@ -105,16 +109,16 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("created_at", TIMESTAMP, nullable=False),
         sa.CheckConstraint(
-            "affected_count >= 0", name="ck_quality_findings_affected_count_nonnegative"
+            "affected_count >= 0", name=op.f("ck_quality_findings_affected_count_nonnegative")
         ),
         sa.CheckConstraint(
             "kind IN ('missing', 'duplicate', 'type-conflict', 'extreme-value', "
             "'sudden-change', 'outside-range', 'trend-inconsistent')",
-            name="ck_quality_findings_kind",
+            name=op.f("ck_quality_findings_kind"),
         ),
         sa.CheckConstraint(
             "severity IN ('info', 'warning', 'error')",
-            name="ck_quality_findings_severity",
+            name=op.f("ck_quality_findings_severity"),
         ),
         sa.ForeignKeyConstraint(
             ["quality_report_id", "project_id"],
@@ -147,11 +151,11 @@ def upgrade() -> None:
         sa.Column("decisions_hash", sa.String(64), nullable=False),
         sa.Column("created_at", TIMESTAMP, nullable=False),
         sa.CheckConstraint(
-            "revision_number >= 1", name="ck_cleaning_decision_sets_revision_positive"
+            "revision_number >= 1", name=op.f("ck_cleaning_decision_sets_revision_positive")
         ),
         sa.CheckConstraint(
             "decisions_hash ~ '^[0-9a-f]{64}$'",
-            name="ck_cleaning_decision_sets_decisions_hash_lower_hex",
+            name=op.f("ck_cleaning_decision_sets_decisions_hash_lower_hex"),
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
@@ -201,7 +205,7 @@ def upgrade() -> None:
         sa.Column("created_at", TIMESTAMP, nullable=False),
         sa.CheckConstraint(
             "action IN ('ignore', 'exclude', 'remove')",
-            name="ck_cleaning_decisions_action",
+            name=op.f("ck_cleaning_decisions_action"),
         ),
         sa.ForeignKeyConstraint(
             ["decision_set_id", "project_id"],

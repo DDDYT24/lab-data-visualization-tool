@@ -29,13 +29,15 @@ def upgrade() -> None:
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "token_digest ~ '^[0-9a-f]{64}$'", name="ck_guest_sessions_token_digest_lower_hex"
+            "token_digest ~ '^[0-9a-f]{64}$'", name=op.f("ck_guest_sessions_token_digest_lower_hex")
         ),
-        sa.CheckConstraint("status IN ('active', 'revoked')", name="ck_guest_sessions_status"),
+        sa.CheckConstraint(
+            "status IN ('active', 'revoked')", name=op.f("ck_guest_sessions_status")
+        ),
         sa.CheckConstraint(
             "(status = 'revoked' AND revoked_at IS NOT NULL) OR "
             "(status = 'active' AND revoked_at IS NULL)",
-            name="ck_guest_sessions_revoked_status_time",
+            name=op.f("ck_guest_sessions_revoked_status_time"),
         ),
         sa.PrimaryKeyConstraint("id", name="pk_guest_sessions"),
         sa.UniqueConstraint("token_digest", name="uq_guest_sessions_token_digest"),
@@ -94,8 +96,8 @@ def upgrade() -> None:
           )
         """
     )
-    op.drop_constraint("ck_projects_saved_project_owner", "projects", type_="check")
-    op.drop_constraint("ck_projects_temporary_project_expiry", "projects", type_="check")
+    op.drop_constraint(op.f("ck_projects_saved_project_owner"), "projects", type_="check")
+    op.drop_constraint(op.f("ck_projects_temporary_project_expiry"), "projects", type_="check")
     op.create_check_constraint(
         "ownership_by_storage_mode",
         "projects",
@@ -117,9 +119,11 @@ def upgrade() -> None:
         sa.Column("resend_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("failed_attempts", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint("email = lower(email)", name="ck_auth_challenges_email_normalized"),
         sa.CheckConstraint(
-            "failed_attempts >= 0", name="ck_auth_challenges_failed_attempts_nonnegative"
+            "email = lower(email)", name=op.f("ck_auth_challenges_email_normalized")
+        ),
+        sa.CheckConstraint(
+            "failed_attempts >= 0", name=op.f("ck_auth_challenges_failed_attempts_nonnegative")
         ),
         sa.PrimaryKeyConstraint("id", name="pk_auth_challenges"),
     )
@@ -133,7 +137,7 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "token_digest ~ '^[0-9a-f]{64}$'", name="ck_auth_sessions_token_digest_lower_hex"
+            "token_digest ~ '^[0-9a-f]{64}$'", name=op.f("ck_auth_sessions_token_digest_lower_hex")
         ),
         sa.ForeignKeyConstraint(
             ["user_id"], ["users.id"], name="fk_auth_sessions_user_id_users", ondelete="CASCADE"
@@ -290,7 +294,8 @@ def upgrade() -> None:
         sa.Column("origin_kind", sa.String(24), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "origin_kind IN ('duplicate', 'local-import')", name="ck_project_origins_origin_kind"
+            "origin_kind IN ('duplicate', 'local-import')",
+            name=op.f("ck_project_origins_origin_kind"),
         ),
         sa.ForeignKeyConstraint(
             ["source_project_id"],
@@ -325,7 +330,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "event_type IN ('claim', 'save', 'duplicate', 'delete', 'restore', "
             "'revision-restore', 'purge')",
-            name="ck_project_lifecycle_events_event_type",
+            name=op.f("ck_project_lifecycle_events_event_type"),
         ),
         sa.ForeignKeyConstraint(
             ["actor_user_id"],
@@ -357,7 +362,8 @@ def upgrade() -> None:
         sa.Column("response_document", JSONB, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "length(idempotency_key) BETWEEN 1 AND 255", name="ck_idempotency_records_key_length"
+            "length(idempotency_key) BETWEEN 1 AND 255",
+            name=op.f("ck_idempotency_records_key_length"),
         ),
         sa.ForeignKeyConstraint(
             ["actor_user_id"],

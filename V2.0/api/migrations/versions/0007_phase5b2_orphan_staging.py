@@ -28,15 +28,15 @@ def upgrade() -> None:
         sa.Column("quarantined_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
             "observation_count >= 1",
-            name="ck_orphan_staging_candidates_observation_count_positive",
+            name=op.f("ck_orphan_staging_candidates_observation_count_positive"),
         ),
         sa.CheckConstraint(
             "size_bytes >= 0",
-            name="ck_orphan_staging_candidates_size_bytes_nonnegative",
+            name=op.f("ck_orphan_staging_candidates_size_bytes_nonnegative"),
         ),
         sa.CheckConstraint(
             "retry_count >= 0",
-            name="ck_orphan_staging_candidates_retry_count_nonnegative",
+            name=op.f("ck_orphan_staging_candidates_retry_count_nonnegative"),
         ),
         sa.PrimaryKeyConstraint("staging_key", name="pk_orphan_staging_candidates"),
     )

@@ -37,12 +37,12 @@ def upgrade() -> None:
         ["guest_session_id", "operation", "idempotency_key"],
     )
     op.create_check_constraint(
-        "ck_idempotency_records_exactly_one_actor",
+        op.f("ck_idempotency_records_exactly_one_actor"),
         "idempotency_records",
         "((actor_user_id IS NOT NULL)::int + (guest_session_id IS NOT NULL)::int) = 1",
     )
     op.create_check_constraint(
-        "ck_idempotency_records_request_sha256_lower_hex",
+        op.f("ck_idempotency_records_request_sha256_lower_hex"),
         "idempotency_records",
         "request_sha256 IS NULL OR request_sha256 ~ '^[0-9a-f]{64}$'",
     )
@@ -65,20 +65,20 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
             "expires_at IS NULL OR expires_at > created_at",
-            name="ck_share_links_expiry_after_create",
+            name=op.f("ck_share_links_expiry_after_create"),
         ),
         sa.CheckConstraint(
             "(status = 'active' AND revoked_at IS NULL AND revoked_by_user_id IS NULL) OR "
             "(status = 'revoked' AND revoked_at IS NOT NULL)",
-            name="ck_share_links_revocation_state",
+            name=op.f("ck_share_links_revocation_state"),
         ),
-        sa.CheckConstraint("status IN ('active', 'revoked')", name="ck_share_links_status"),
+        sa.CheckConstraint("status IN ('active', 'revoked')", name=op.f("ck_share_links_status")),
         sa.CheckConstraint(
             "token_digest ~ '^[0-9a-f]{64}$'",
-            name="ck_share_links_token_digest_lower_hex",
+            name=op.f("ck_share_links_token_digest_lower_hex"),
         ),
         sa.CheckConstraint(
-            "token_key_version >= 1", name="ck_share_links_token_key_version_positive"
+            "token_key_version >= 1", name=op.f("ck_share_links_token_key_version_positive")
         ),
         sa.ForeignKeyConstraint(
             ["created_by_user_id"],
@@ -129,7 +129,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
             "event_type IN ('create', 'downloads-update', 'revoke')",
-            name="ck_share_link_events_event_type",
+            name=op.f("ck_share_link_events_event_type"),
         ),
         sa.ForeignKeyConstraint(
             ["actor_user_id"],
@@ -171,23 +171,25 @@ def upgrade() -> None:
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint("attempt_count >= 1", name="ck_export_jobs_attempt_count_positive"),
+        sa.CheckConstraint(
+            "attempt_count >= 1", name=op.f("ck_export_jobs_attempt_count_positive")
+        ),
         sa.CheckConstraint(
             "((requested_by_user_id IS NOT NULL)::int + (guest_session_id IS NOT NULL)::int) = 1",
-            name="ck_export_jobs_exactly_one_actor",
+            name=op.f("ck_export_jobs_exactly_one_actor"),
         ),
-        sa.CheckConstraint("format IN ('png', 'svg', 'pdf')", name="ck_export_jobs_format"),
+        sa.CheckConstraint("format IN ('png', 'svg', 'pdf')", name=op.f("ck_export_jobs_format")),
         sa.CheckConstraint(
             "status <> 'ready' OR pending_stored_object_id IS NULL",
-            name="ck_export_jobs_ready_has_no_pending_object",
+            name=op.f("ck_export_jobs_ready_has_no_pending_object"),
         ),
         sa.CheckConstraint(
             "request_sha256 ~ '^[0-9a-f]{64}$'",
-            name="ck_export_jobs_request_sha256_lower_hex",
+            name=op.f("ck_export_jobs_request_sha256_lower_hex"),
         ),
         sa.CheckConstraint(
             "status IN ('queued', 'rendering', 'ready', 'failed')",
-            name="ck_export_jobs_status",
+            name=op.f("ck_export_jobs_status"),
         ),
         sa.ForeignKeyConstraint(
             ["current_processing_run_id", "project_id"],
@@ -263,14 +265,16 @@ def upgrade() -> None:
         sa.Column("output_size_bytes", sa.Integer(), nullable=False),
         sa.Column("validation_document", JSON_DOCUMENT, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint("dpi > 0", name="ck_publication_exports_dpi_positive"),
-        sa.CheckConstraint("format IN ('png', 'svg', 'pdf')", name="ck_publication_exports_format"),
+        sa.CheckConstraint("dpi > 0", name=op.f("ck_publication_exports_dpi_positive")),
         sa.CheckConstraint(
-            "output_sha256 ~ '^[0-9a-f]{64}$'",
-            name="ck_publication_exports_output_sha256_lower_hex",
+            "format IN ('png', 'svg', 'pdf')", name=op.f("ck_publication_exports_format")
         ),
         sa.CheckConstraint(
-            "output_size_bytes >= 0", name="ck_publication_exports_output_size_nonnegative"
+            "output_sha256 ~ '^[0-9a-f]{64}$'",
+            name=op.f("ck_publication_exports_output_sha256_lower_hex"),
+        ),
+        sa.CheckConstraint(
+            "output_size_bytes >= 0", name=op.f("ck_publication_exports_output_size_nonnegative")
         ),
         sa.ForeignKeyConstraint(
             ["id", "project_id", "project_revision_id", "format"],
@@ -347,12 +351,14 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "(status = 'pending' AND completed_at IS NULL) OR "
             "(status = 'completed' AND completed_at IS NOT NULL)",
-            name="ck_stored_object_write_intents_completion_state",
+            name=op.f("ck_stored_object_write_intents_completion_state"),
         ),
-        sa.CheckConstraint("operation = 'export'", name="ck_stored_object_write_intents_operation"),
+        sa.CheckConstraint(
+            "operation = 'export'", name=op.f("ck_stored_object_write_intents_operation")
+        ),
         sa.CheckConstraint(
             "status IN ('pending', 'completed')",
-            name="ck_stored_object_write_intents_status",
+            name=op.f("ck_stored_object_write_intents_status"),
         ),
         sa.ForeignKeyConstraint(
             ["export_job_id", "project_id"],
@@ -384,7 +390,7 @@ def upgrade() -> None:
         sa.Column("publication_export_id", UUID, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "format IN ('png', 'svg', 'pdf')", name="ck_share_export_bindings_format"
+            "format IN ('png', 'svg', 'pdf')", name=op.f("ck_share_export_bindings_format")
         ),
         sa.ForeignKeyConstraint(
             ["publication_export_id", "project_id", "project_revision_id", "format"],
@@ -606,12 +612,12 @@ def downgrade() -> None:
 
     op.drop_index("ix_idempotency_records_expires", table_name="idempotency_records")
     op.drop_constraint(
-        "ck_idempotency_records_request_sha256_lower_hex",
+        op.f("ck_idempotency_records_request_sha256_lower_hex"),
         "idempotency_records",
         type_="check",
     )
     op.drop_constraint(
-        "ck_idempotency_records_exactly_one_actor",
+        op.f("ck_idempotency_records_exactly_one_actor"),
         "idempotency_records",
         type_="check",
     )
