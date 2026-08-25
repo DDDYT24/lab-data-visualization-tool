@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "status": "local-pass",
+  "verifiedAt": "2026-08-25",
+  "timezone": "Asia/Shanghai",
+  "applicationRevision": "6f173aa",
+  "results": {
+    "v1Pytest": {
+      "passed": 33,
+      "coveragePercent": 72
+    },
+    "v2ApiPytest": {
+      "passed": 224,
+      "failed": 0,
+      "services": [
+        "postgresql",
+        "minio"
+      ]
+    },
+    "v2WebVitest": {
+      "filesPassed": 10,
+      "testsPassed": 41,
+      "failed": 0
+    },
+    "playwrightDefault": {
+      "passed": 22,
+      "skipped": 2,
+      "failed": 0
+    },
+    "playwrightLiveGeneratedCsv": {
+      "passed": 1,
+      "skippedPrivateWorkbook": 1,
+      "failed": 0
+    },
+    "terraformRootsValidated": 4,
+    "terraformMockSuitesPassed": 2,
+    "productionImagesBuilt": 3,
+    "containerSmokeHttpStatus": {
+      "apiHealth": 200,
+      "webHome": 200
+    }
+  },
+  "acceptanceBoundary": {
+    "phase6cAwsAcceptance": false,
+    "phase6dUnlocked": false,
+    "reason": "Local evidence cannot substitute for real AWS, staging, DNS, TLS, SES, observability, deployment, rollback, quota, privacy, load, or recovery evidence."
+  }
+}
