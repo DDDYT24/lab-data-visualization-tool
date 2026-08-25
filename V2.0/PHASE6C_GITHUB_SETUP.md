@@ -3,6 +3,10 @@
 The workflows are code-complete but intentionally inert until bootstrap, GitHub environments, DNS,
 secrets, and cost approval exist. Never store AWS access keys: all jobs use GitHub OIDC.
 
+The desired branch protection, environment, variable, and secret-name structure is versioned in
+[`contracts/phase6-github-governance-v1.json`](contracts/phase6-github-governance-v1.json). Its
+`prepared-not-applied` state is deliberate until the Phase 6 workflows exist on remote `main`.
+
 ## 1. Select hosted zones, then bootstrap once from the MFA-backed IAM profile
 
 Create or select the staging/production public hosted zones first and pass their exact IDs through
