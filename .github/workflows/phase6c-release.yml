@@ -37,6 +37,7 @@ env:
   TF_VAR_activate_services: "true"
   TF_VAR_activate_logical_backup_schedule: "true"
   TF_VAR_enable_restore_testing: ${{ inputs.enable_restore_testing }}
+  COST_APPROVAL_REFERENCE: ${{ vars.COST_APPROVAL_REFERENCE }}
 
 jobs:
   release:
@@ -47,6 +48,13 @@ jobs:
       name: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require explicit recurring cost approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$COST_APPROVAL_REFERENCE"
+          test "$COST_APPROVAL_REFERENCE" != "pending"
+          test "$COST_APPROVAL_REFERENCE" != "local-only"
       - name: Require successful full CI for the exact commit
         env:
           GH_TOKEN: ${{ github.token }}

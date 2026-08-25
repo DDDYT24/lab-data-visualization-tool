@@ -611,3 +611,24 @@ def test_phase6c4_live_evidence_contract_cannot_be_satisfied_by_code() -> None:
     }
     assert all(item["required"] is True and item["artifacts"] for item in required.values())
     assert "terraform-state" in evidence["redactions"]
+
+
+def test_phase6_cost_model_blocks_billable_apply_by_default() -> None:
+    cost_path = V2_ROOT / "contracts" / "phase6-cost-model-v1.json"
+    model = json.loads(cost_path.read_text(encoding="utf-8"))
+    foundation = (V2_ROOT.parent / ".github" / "workflows" / "phase6c-foundation.yml").read_text(
+        encoding="utf-8"
+    )
+    release = (V2_ROOT.parent / ".github" / "workflows" / "phase6c-release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert model["defaultDeploymentMode"] == "local-only"
+    assert model["estimates"]["foundationWorkloadsDisabled"]["pricedMinimum"] > 30
+    assert model["estimates"]["servicesActivated"]["pricedMinimum"] > 30
+    assert model["acceptance"]["budgetIsHardCap"] is False
+    assert model["acceptance"]["billableApplyAllowedByDefault"] is False
+    for workflow in (foundation, release):
+        assert "Require explicit recurring cost approval" in workflow
+        assert "COST_APPROVAL_REFERENCE" in workflow
+        assert 'test "$COST_APPROVAL_REFERENCE" != "local-only"' in workflow

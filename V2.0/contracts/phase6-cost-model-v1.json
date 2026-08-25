@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "pricedAt": "2026-08-25",
+  "region": "ap-southeast-1",
+  "currency": "USD",
+  "hoursPerMonth": 730,
+  "defaultDeploymentMode": "local-only",
+  "monthlyBudgetAlert": 30,
+  "estimates": {
+    "foundationWorkloadsDisabled": {
+      "pricedMinimum": 160.49,
+      "items": [
+        {
+          "service": "VPC interface endpoints",
+          "quantity": 12,
+          "unit": "endpoint-AZ",
+          "unitRatePerHour": 0.013,
+          "monthly": 113.88
+        },
+        {
+          "service": "Application Load Balancer",
+          "quantity": 1,
+          "unitRatePerHour": 0.0252,
+          "monthly": 18.4
+        },
+        {
+          "service": "RDS PostgreSQL db.t4g.micro Single-AZ",
+          "quantity": 1,
+          "unitRatePerHour": 0.025,
+          "monthly": 18.25
+        },
+        {
+          "service": "RDS PostgreSQL gp3 storage",
+          "quantityGb": 20,
+          "unitRatePerGbMonth": 0.138,
+          "monthly": 2.76
+        },
+        {
+          "service": "Customer-managed KMS keys before paid rotations",
+          "quantity": 5,
+          "unitRatePerMonth": 1,
+          "monthly": 5
+        },
+        {
+          "service": "Secrets Manager secrets",
+          "quantity": 3,
+          "unitRatePerMonth": 0.4,
+          "monthly": 1.2
+        },
+        {
+          "service": "Route 53 public hosted zones",
+          "quantity": 2,
+          "unitRatePerMonth": 0.5,
+          "monthly": 1
+        }
+      ]
+    },
+    "servicesActivated": {
+      "additionalFargateMinimum": 89.97,
+      "pricedMinimum": 250.45,
+      "taskShape": {
+        "runningTasks": 7,
+        "totalVcpu": 2,
+        "totalMemoryGb": 4,
+        "vcpuRatePerHour": 0.05056,
+        "memoryRatePerGbHour": 0.00553
+      }
+    }
+  },
+  "notIncluded": [
+    "ALB LCU usage",
+    "CloudWatch logs, metrics, dashboards, and alarms",
+    "S3, ECR, RDS backup, AWS Backup, and snapshot storage",
+    "KMS API calls and future paid key rotations",
+    "Secrets Manager API calls",
+    "SES, SNS, CloudTrail storage, DNS queries, and data transfer",
+    "taxes, exchange-rate effects, and domain registration"
+  ],
+  "sources": {
+    "awsPriceList": [
+      "AmazonVPC/current/ap-southeast-1",
+      "AWSELB/current/ap-southeast-1",
+      "AmazonRDS/current/ap-southeast-1",
+      "AmazonECS/current/ap-southeast-1"
+    ],
+    "kms": "https://aws.amazon.com/kms/pricing/",
+    "secretsManager": "https://aws.amazon.com/secrets-manager/pricing/",
+    "route53": "https://aws.amazon.com/route53/pricing/"
+  },
+  "acceptance": {
+    "budgetIsHardCap": false,
+    "underThirtyUsd": false,
+    "billableApplyAllowedByDefault": false,
+    "requiredApprovalVariable": "COST_APPROVAL_REFERENCE"
+  }
+}
