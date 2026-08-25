@@ -1,12 +1,17 @@
 # LabViz V2.0 Project Plan
 
-**Status:** Frontend V2.0 alpha implemented; production data and AWS runtime architecture approved
+**Status:** V2.0 local self-hosted release complete; public-cloud deployment is optional
 **Product source of truth:** [`prd.md`](prd.md)
 **Prototype source of truth:** [LabViz V2.0 — Product Prototype](https://www.figma.com/design/xKdEwynLhAj2dyiqeEw58n)
 
 ## 1. Delivery Strategy
 
 V2.0 is **website-first**. The first implementation is a responsive web application; a Windows desktop shell is deferred until the web workflow and Python processing API are stable.
+
+The supported V2.0 distribution is local self-hosting from this repository. SQLite and the local
+object directory are created automatically, so ordinary users do not need AWS, DNS, Docker,
+PostgreSQL, MinIO, or a paid email provider. The production-cloud documents remain an optional
+maintainer path and are not release requirements for V2.0.
 
 The initial product path is:
 
@@ -150,25 +155,24 @@ Feature components must not repeat raw brand colors or invent local spacing scal
 
 ### Phase 3 — Scientific figure tools
 
-**Status:** Frontend and contract/reference-service alpha complete for all items below.
+**Status:** Frontend and local processing service complete for all items below.
 
 - Add remaining chart types, fitting, error bars, confidence intervals, dual axes, and up to four panels.
 - Add SVG/PDF, 600 DPI, journal dimensions, grayscale QA, and complete export states.
 
-### Phase 4 — Cloud product
+### Phase 4 — Saved and shared workflows
 
-**Status:** Frontend alpha and local contract/reference-service flows complete
-for temporary retention, email-code sessions, saved history, and sharing.
-Production PostgreSQL/S3 storage and the AWS runtime are approved. Production containerization is
-Phase 6A; real SES delivery and cloud-resource provisioning remain later Phase 6 work.
+**Status:** Local flows complete for temporary retention, console-delivered email-code sessions,
+saved history, and sharing. PostgreSQL/S3 and a public-cloud runtime remain optional advanced
+self-hosting work.
 
 - Add guest retention, email-code authentication, saved projects, history, and sharing.
 - Add mobile shared views and the remaining responsive states.
 
-### Phase 6 — Production runtime and operations
+### Optional Phase 6 — Public-cloud runtime and operations
 
-**Status:** Phase 6-0, 6A, and the Phase 6B application implementation are accepted. Phase 6C is
-admitted and owns all real AWS/staging evidence; Phase 6D remains gated on Phase 6C acceptance.
+**Status:** Container and application preparation are complete. AWS/staging evidence is not needed
+for the V2.0 local release and remains an optional future maintainer track.
 
 - Phase 6A makes the application container-deployable with fail-closed production configuration
   and real dependency readiness.
@@ -179,8 +183,8 @@ admitted and owns all real AWS/staging evidence; Phase 6D remains gated on Phase
 
 ### Deferred
 
-- Windows packaging, local SQLite, and local Python sidecar.
-- macOS/Linux installers, dark mode, external identity providers, billing, and team features.
+- Native Windows/macOS/Linux installers, dark mode, external identity providers, billing, and
+  team features.
 
 ## 9. Phase 1 Acceptance Criteria
 

@@ -2,6 +2,10 @@
 
 This file records explicitly deferred work so it does not expand the V2.0 prototype scope.
 
+> **Release note:** V2.0 is distributed as a local self-hosted application. The AWS Phase 6C/6D
+> items below are optional maintainer work and do not block the V2.0 release. Local use relies on
+> automatically created SQLite and local object storage.
+
 ## V2.0 Closeout Gate
 
 **Checkpoint:** 2026-08-09
