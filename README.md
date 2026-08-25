@@ -7,18 +7,23 @@
 从导入、检查、清洗到 2D/3D 可视化与导出，一套面向实验数据的轻量工作流。
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-V1.1-6f42c1)
-![V2.0](https://img.shields.io/badge/V2.0-web%20%2B%20API%20alpha-0f766e)
+![Release](https://img.shields.io/badge/release-V2.0-0f766e)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776ab?logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.49%2B-ff4b4b?logo=streamlit&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22.22.2%2B-339933?logo=node.js&logoColor=white)
 
-[Quick Start](#-quick-start) · [V2.0 PRD](V2.0/prd.md) · [V2.0 Plan](V2.0/PROJECT_PLAN.md) · [Features](#-features) · [Development](#-development-and-verification) · [中文](#中文说明)
+[English](README.md) · [简体中文](README.zh-CN.md) · [Quick Start](#-quick-start--v20) · [Features](#-features) · [Development](#-development-and-verification)
 
 </div>
 
-Lab Data Visualization Tool is a local-first application for loading, validating, cleaning, visualizing, and exporting experimental data. Researchers can use the Streamlit interface for interactive work or the CLI for repeatable scripts. Raw experiment data stays on the local machine and is never written to the history database.
+Lab Data Visualization Tool is a local-first web application for loading, validating, cleaning,
+visualizing, and exporting experimental data. V2.0 combines a guided Next.js interface with a
+FastAPI scientific-processing service. Raw uploads stay on the local machine and are not written
+to the project database.
 
-> **Current release: V1.1** — supports CSV, TSV, delimited TXT, JSON, and XLSX data, with seven 2D/3D visualization types.
+> **Current release: V2.0** — supports CSV, TSV, delimited TXT, JSON, and XLSX data; guided
+> quality review; seven 2D/3D chart types; saved history; local sign-in; sharing; and PNG/SVG/PDF
+> publication exports.
 
 > **Distribution model:** this repository does not operate an official hosted website. Clone it
 > from GitHub and run it on your own computer. The default local paths require no AWS account,
@@ -28,52 +33,46 @@ Lab Data Visualization Tool is a local-first application for loading, validating
 
 | Version | Status | Location |
 | --- | --- | --- |
-| V1.1 | Stable Streamlit/Python application | [`V1.1/`](V1.1/) |
-| V2.0 | Website-first Next.js and FastAPI alpha | [`V2.0/`](V2.0/) |
+| V2.0 | Current local self-hosted Next.js + FastAPI release | [`V2.0/`](V2.0/) |
+| V1.1 | Legacy Python-only Streamlit application | [`V1.1/`](V1.1/) |
 
 Repository-wide automation and documentation remain at the root. Deferred V2.0 work is tracked in [`V2.0/TODO.md`](V2.0/TODO.md).
 
-For the smallest installation, use V1.1: it needs only Python. Use V2.0 when
-you want the guided website workflow, project history, sign-in, revisioned
-descriptions, sharing, and publication exports. V2.0 needs Python and Node.js,
-but its default SQLite database and local object directory are created
-automatically and do not require a database service.
+V2.0 needs Python and Node.js, but its default SQLite database and local object directory are
+created automatically. V1.1 remains available when a smaller Python-only legacy interface is
+preferred.
 
-## ⚡ Quick Start
+## ⚡ Quick Start — V2.0
 
-Prerequisites: [Git](https://git-scm.com/downloads) and Python 3.12 or 3.13. Run the following commands from the folder where you want to download the project.
+Install [Git](https://git-scm.com/downloads), Python 3.12 or 3.13, and Node.js 22.22.2 or newer.
+The first launch creates the Python environment and installs all required packages.
 
 ### Windows PowerShell
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-Set-Location .\lab-data-visualization-tool\V1.1
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m streamlit run app.py
+Set-Location .\lab-data-visualization-tool
+.\start-labviz.cmd
 ```
 
 ### macOS / Linux
 
 ```bash
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-cd lab-data-visualization-tool/V1.1
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m streamlit run app.py
+cd lab-data-visualization-tool
+chmod +x start-labviz.sh
+./start-labviz.sh
 ```
 
-Streamlit opens the application in the browser, normally at `http://localhost:8501`. Upload a table in the sidebar, choose cleaning rules, inspect data quality, generate a chart, and download the result.
+Open `http://127.0.0.1:3000`. Keep the terminal open; local sign-in codes appear in the API
+output. Press `Ctrl+C` to stop both services. Run `start-labviz.cmd -RefreshDependencies` on
+Windows or `./start-labviz.sh --refresh-dependencies` on macOS/Linux after dependency files change.
 
 ```text
 Load data  →  Inspect quality  →  Clean safely  →  Visualize  →  Export
 ```
 
-### V2.0 Web + Contract API Alpha
+### Manual startup
 
 V2.0 includes a runnable FastAPI contract/reference service for frontend
 development and end-to-end testing. It accepts CSV, TSV, delimited
@@ -83,8 +82,8 @@ and supports temporary projects, email-code sign-in, saved history, authenticate
 project descriptions, and read-only revision-pinned share links. Raw uploaded bytes are processed in memory and are not
 written to the SQLite project database.
 
-V2.0 is distributed for local self-hosting and remains an alpha. Its default
-single-computer route uses SQLite plus local object storage. PostgreSQL 17,
+V2.0 is distributed for local self-hosting. Its default single-computer route
+uses SQLite plus local object storage. PostgreSQL 17,
 S3-compatible storage, workers, and the AWS deployment files remain available
 for advanced multi-process deployments and integration testing, but they are
 not required to run the application locally.
@@ -147,7 +146,7 @@ backups, monitoring, and an appropriate multi-user persistence configuration.
 | Inspect | Row and column counts, data types, missing cells, duplicates, unique values, and memory use |
 | Clean | Exact-duplicate removal; keep, drop, forward-fill, backward-fill, mean-fill, or median-fill missing values |
 | Visualize | Line, scatter, bar, histogram, box, correlation heatmap, and 3D surface plots |
-| Export | Complete cleaned table as CSV and the current figure as PNG |
+| Export | Complete cleaned table as CSV and publication figures as PNG, SVG, or PDF |
 | Track | Compact SQLite plot history without storing raw table contents |
 | Scale | Deterministic preview limits and evenly spaced sampling for large plots |
 
@@ -365,6 +364,13 @@ history, sharing permissions, MinIO-backed object storage, and stable error
 responses. CI runs the same checks on Python 3.12; the Compose services are
 required for the full integration suite.
 
+## License
+
+LabViz is released under the [MIT License](LICENSE). You may use, copy, modify,
+distribute, sublicense, or sell the software, including in commercial projects,
+provided that the copyright and license notice remain included. The software is
+provided without warranty.
+
 ## 📚 Design References
 
 - The large-file preview, data-quality summary, and numeric-column guidance were informed by [The-Schultz-Lab/plottle](https://github.com/The-Schultz-Lab/plottle) (MIT).
@@ -378,43 +384,40 @@ This project keeps an intentionally smaller scope and contains an independent im
 
 这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。项目不提供官方在线网站，用户从 GitHub 克隆后在自己的电脑上运行；实验原始数据不会写入历史数据库。
 
-V1.1 仍是当前稳定可用版本。V2.0 是 website-first 的 Next.js 前端开发版本，
-FastAPI 提供真实的数据处理、工作区、历史、分享、登录和导出接口。V2.0 默认使用
+V2.0 是当前正式发布的本地自托管版本，由 Next.js 前端和 FastAPI 科研处理服务组成，
+提供真实的数据处理、工作区、历史、分享、登录和导出接口。V2.0 默认使用
 SQLite 和本地对象目录，二者都会自动创建；不需要 AWS、域名、DNS、Docker、
 PostgreSQL、MinIO 或付费邮件服务。原始上传文件只在处理期间保留于内存，不写入
-SQLite。
+SQLite。V1.1 作为仅需 Python 的旧版界面继续保留。
 
 ### 🚀 快速开始
 
-请先安装 [Git](https://git-scm.com/downloads) 和 Python 3.12 或 3.13，然后在准备存放项目的目录中执行完整命令。**克隆后必须进入 `V1.1` 应用目录**，否则系统找不到 `requirements.txt` 和 `app.py`。
+请先安装 [Git](https://git-scm.com/downloads)、Python 3.12 或 3.13，以及 Node.js
+22.22.2 或更新版本。第一次启动会自动创建 Python 虚拟环境并安装所需依赖。
 
 #### Windows PowerShell
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-Set-Location .\lab-data-visualization-tool\V1.1
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m streamlit run app.py
+Set-Location .\lab-data-visualization-tool
+.\start-labviz.cmd
 ```
 
 #### macOS / Linux
 
 ```bash
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-cd lab-data-visualization-tool/V1.1
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m streamlit run app.py
+cd lab-data-visualization-tool
+chmod +x start-labviz.sh
+./start-labviz.sh
 ```
 
-启动后浏览器通常会打开 `http://localhost:8501`。在侧边栏上传表格，选择清洗规则，在数据质量页检查结果，然后生成并下载图像。
+打开 `http://127.0.0.1:3000`。请保持终端窗口开启；本地登录验证码会显示在 API
+输出中。按 `Ctrl+C` 可同时停止网站和 API。依赖文件变化后，Windows 可运行
+`.\start-labviz.cmd -RefreshDependencies`，macOS/Linux 可运行
+`./start-labviz.sh --refresh-dependencies`。
 
-#### V2.0 网站与 API
+#### 手动启动 V2.0 网站与 API
 
 请安装 Python 3.12（也支持 3.13）以及 Node.js 22.22.2 或更新版本，推荐使用
 Node.js 24。先在第一个 PowerShell 窗口启动 API：
@@ -462,7 +465,7 @@ Cookie、生产邮件、备份、监控和多用户数据库，请不要把 3000
 - 自动统计行列数、字段类型、缺失值、重复行、唯一值和内存占用。
 - 支持删除重复行，以及保留、删除、前向填充、后向填充、均值填充和中位数填充。
 - 支持折线图、散点图、柱状图、直方图、箱线图、相关性热力图和 3D 曲面模型。
-- 可下载完整清洗数据和 PNG 图像。
+- 可下载完整清洗数据，以及 PNG、SVG 或 PDF 图像。
 - SQLite 只记录绘图历史和数据质量摘要，不保存实验原始数据。
 - 大数据绘图使用等距抽样，避免浏览器卡顿；数据下载仍保留全部清洗结果。
 
@@ -571,6 +574,12 @@ docker compose down -v --remove-orphans
 ```
 
 完整 API 集成测试需要 Compose 提供 PostgreSQL 和 MinIO；CI 使用同一套锁文件、服务和验证命令。
+
+### 许可证
+
+LabViz 使用 [MIT 许可证](LICENSE)发布。任何人都可以使用、复制、修改、分发、
+再许可或销售本软件，包括商业用途；条件是保留原始版权和许可证声明。本软件不
+提供任何担保。
 
 ---
 
