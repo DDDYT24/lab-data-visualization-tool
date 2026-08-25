@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "status": "draft-local-preflight-only",
+  "loadProfiles": {
+    "localIntegrity": {
+      "purpose": "functional-concurrency-preflight",
+      "virtualUsers": [1, 5, 10],
+      "durationSecondsPerLevel": 60,
+      "acceptanceAuthority": false
+    },
+    "stagingQualification": {
+      "purpose": "capacity-and-cost-qualification",
+      "virtualUsers": [1, 10, 25, 50],
+      "durationSecondsPerLevel": 300,
+      "acceptanceAuthority": true
+    }
+  },
+  "scenarios": [
+    "small-csv-and-xlsx",
+    "fifty-megabyte-boundary",
+    "cleaning-and-seven-chart-types",
+    "multi-panel-analysis",
+    "png-svg-pdf-and-data-exports",
+    "authentication-and-rate-limits",
+    "history-and-sharing",
+    "concurrent-worker-maintenance"
+  ],
+  "metrics": [
+    "web-and-api-latency",
+    "processing-duration",
+    "cpu-and-memory",
+    "database-connections-and-locks",
+    "object-throughput",
+    "worker-backlog-age",
+    "ses-delivery",
+    "autoscaling",
+    "cost"
+  ],
+  "failureExercises": [
+    "api-web-and-worker-task-loss",
+    "concurrent-deployment",
+    "one-availability-zone-loss",
+    "rds-failover-and-connection-exhaustion",
+    "s3-kms-and-ses-unavailability",
+    "expired-credentials",
+    "poison-work-and-stale-leases",
+    "failed-migration",
+    "alarm-loss",
+    "service-rollback"
+  ],
+  "disasterRecovery": {
+    "rpoMinutesMaximum": 15,
+    "rtoMinutesMaximum": 240,
+    "restoreTargets": ["rds-pitr", "logical-backup", "required-object-versions"],
+    "isolatedRestoreRequired": true,
+    "localSimulationIsAcceptance": false
+  },
+  "evidenceFields": [
+    "candidate-commit",
+    "container-digests",
+    "terraform-plan-id",
+    "scenario-and-load-profile",
+    "utc-start-and-end",
+    "measurements",
+    "alarms-and-logs",
+    "recovery-point",
+    "rpo-and-rto",
+    "rollback-revision",
+    "result-and-blockers"
+  ]
+}

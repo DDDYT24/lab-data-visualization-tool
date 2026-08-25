@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-not-enforced",
+  "acceptedExistingLimits": {
+    "uploadBytes": 52428800,
+    "temporaryProjectTtlSeconds": 7200,
+    "exportTtlSeconds": 7200,
+    "authenticationChallengeTtlSeconds": 600,
+    "authenticationSessionTtlSeconds": 604800,
+    "softDeleteRecoverySeconds": 86400,
+    "logicalBackupRetentionDays": 30
+  },
+  "candidateProductQuotas": {
+    "savedProjectsPerUser": 25,
+    "retainedObjectBytesPerUser": 2147483648,
+    "decisionStatus": "requires-phase6d-product-approval"
+  },
+  "accountingRequirements": {
+    "authoritativeStore": "PostgreSQL",
+    "reservationMustBeAtomic": true,
+    "releaseMustBeAtomic": true,
+    "inventoryReconciliationRequired": true,
+    "operations": [
+      "upload",
+      "save-to-cloud",
+      "duplicate",
+      "export",
+      "soft-delete",
+      "restore",
+      "permanent-purge",
+      "retry",
+      "worker-recovery"
+    ]
+  },
+  "stableApiCodesDraft": [
+    "project-quota-approaching",
+    "project-quota-exceeded",
+    "retained-bytes-quota-approaching",
+    "retained-bytes-quota-exceeded",
+    "quota-accounting-unavailable"
+  ],
+  "acceptanceEvidence": [
+    "postgresql-concurrent-reservation",
+    "postgresql-restart-recovery",
+    "no-double-release",
+    "authoritative-object-inventory-match",
+    "bilingual-ui-states"
+  ]
+}

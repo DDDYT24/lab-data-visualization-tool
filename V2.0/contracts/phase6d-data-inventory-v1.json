@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "status": "draft-not-legal-advice",
+  "plannedAwsRegion": "ap-southeast-1",
+  "controllerProcessorDecision": "requires-owner-and-legal-review",
+  "dataClasses": [
+    {
+      "id": "uploaded-source-bytes",
+      "sensitivity": "user-content",
+      "stores": ["MinIO-local", "S3-planned"],
+      "deletionPath": "project-lifecycle-and-object-gc"
+    },
+    {
+      "id": "derived-parquet-and-analysis",
+      "sensitivity": "derived-user-content",
+      "stores": ["MinIO-local", "S3-planned"],
+      "deletionPath": "project-lifecycle-and-object-gc"
+    },
+    {
+      "id": "project-metadata-and-revisions",
+      "sensitivity": "user-content-metadata",
+      "stores": ["PostgreSQL"],
+      "deletionPath": "soft-delete-then-purge"
+    },
+    {
+      "id": "user-email",
+      "sensitivity": "direct-identifier",
+      "stores": ["PostgreSQL", "SES-events-planned"],
+      "deletionPath": "account-and-auth-record-process-required"
+    },
+    {
+      "id": "client-identity-digest",
+      "sensitivity": "pseudonymous-security-data",
+      "stores": ["PostgreSQL", "application-logs"],
+      "deletionPath": "retention-and-security-review-required"
+    },
+    {
+      "id": "share-links-and-management-audit",
+      "sensitivity": "access-control-metadata",
+      "stores": ["PostgreSQL"],
+      "deletionPath": "revoke-purge-with-audit-retention-decision"
+    },
+    {
+      "id": "exports",
+      "sensitivity": "derived-user-content",
+      "stores": ["MinIO-local", "S3-planned"],
+      "deletionPath": "two-hour-expiry-and-object-gc"
+    },
+    {
+      "id": "authentication-and-rate-limit-records",
+      "sensitivity": "security-and-direct-identifier",
+      "stores": ["PostgreSQL"],
+      "deletionPath": "expiry-worker-and-retention-decision"
+    },
+    {
+      "id": "application-and-cloud-audit-logs",
+      "sensitivity": "operational-metadata",
+      "stores": ["local-console", "CloudWatch-and-CloudTrail-planned"],
+      "deletionPath": "log-retention-policy"
+    },
+    {
+      "id": "database-object-and-logical-backups",
+      "sensitivity": "encrypted-copy-of-user-and-security-data",
+      "stores": ["AWS-Backup-and-S3-planned"],
+      "deletionPath": "backup-lifecycle-after-source-deletion"
+    },
+    {
+      "id": "incident-and-support-evidence",
+      "sensitivity": "operational-possibly-user-linked",
+      "stores": ["restricted-evidence-store-required"],
+      "deletionPath": "incident-retention-decision-required"
+    }
+  ],
+  "requiredDecisions": [
+    "data-controller-and-processors",
+    "subprocessors",
+    "saved-project-retention",
+    "share-link-default-expiry",
+    "log-and-security-evidence-retention",
+    "backup-deletion-lag",
+    "data-access-export-and-deletion-request-process",
+    "incident-contact-and-notification-process"
+  ],
+  "securityQualification": [
+    "tenant-owner-isolation",
+    "share-token-tamper-replay-and-scope",
+    "csrf-cookie-and-origin",
+    "upload-parser-and-malicious-content",
+    "ssrf-and-path-boundaries",
+    "dependency-container-and-iac-scans",
+    "deployed-iam-least-privilege",
+    "secret-exposure-scan",
+    "log-and-pii-redaction"
+  ],
+  "complianceCertificationClaimed": false
+}
