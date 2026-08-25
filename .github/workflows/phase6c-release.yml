@@ -121,6 +121,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.API_IMAGE }}
+          trivyignores: V2.0/deploy/aws/.trivyignore.yaml
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -129,6 +130,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.WEB_IMAGE }}
+          trivyignores: V2.0/deploy/aws/.trivyignore.yaml
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -137,6 +139,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.BACKUP_IMAGE }}
+          trivyignores: V2.0/deploy/aws/.trivyignore.yaml
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true

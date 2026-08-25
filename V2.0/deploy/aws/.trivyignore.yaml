@@ -1,0 +1,44 @@
+misconfigurations:
+  - id: AWS-0015
+    paths:
+      - "terraform/account/cloudtrail.tf"
+    statement: >-
+      The optional cost-bounded account trail deliberately uses SSE-S3. Review
+      customer-managed KMS before any public-cloud launch.
+    expired_at: 2027-02-25
+
+  - id: AWS-0132
+    paths:
+      - "terraform/account/cloudtrail.tf"
+      - "terraform/bootstrap/main.tf"
+    statement: >-
+      Audit and Terraform-state buckets use SSE-S3 in the optional low-cost
+      baseline. Review customer-managed KMS before any public-cloud launch.
+    expired_at: 2027-02-25
+
+  - id: AWS-0345
+    paths:
+      - "terraform/bootstrap/identity.tf"
+    statement: >-
+      This document is a permissions boundary that defines a maximum service
+      ceiling; deployable workload roles remain resource-scoped and least
+      privilege. Re-audit the boundary before any public-cloud launch.
+    expired_at: 2027-02-25
+
+  - id: AWS-0053
+    paths:
+      - "terraform/modules/edge/alb.tf"
+    statement: >-
+      The optional website ALB is intentionally Internet-facing. Its HTTP
+      listener redirects to TLS and the module applies the approved edge and
+      WAF controls. Re-audit before any public-cloud launch.
+    expired_at: 2027-02-25
+
+  - id: AWS-0136
+    paths:
+      - "terraform/modules/email/main.tf"
+      - "terraform/modules/observability/main.tf"
+    statement: >-
+      Optional low-cost SNS topics use the AWS-managed SNS key. Review a
+      customer-managed key before any public-cloud launch.
+    expired_at: 2027-02-25
