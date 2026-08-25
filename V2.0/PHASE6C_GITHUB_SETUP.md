@@ -40,7 +40,8 @@ evidence.
 Create GitHub environments named exactly `staging` and `production`. In each environment set:
 
 - variables `AWS_ROLE_ARN`, `TF_STATE_BUCKET`, `OWNER`, `DOMAIN_NAME`, `ROUTE53_ZONE_ID`,
-  `SES_IDENTITY_NAME`, `SES_FROM_ADDRESS`, and `PERMISSIONS_BOUNDARY_ARN`;
+  `SES_IDENTITY_NAME`, `SES_FROM_ADDRESS`, `PERMISSIONS_BOUNDARY_ARN`, and
+  `COST_APPROVAL_REFERENCE`;
 - secret `NOTIFICATION_EMAIL`;
 - deployment branch `main` only.
 
@@ -61,7 +62,8 @@ ACM `ISSUED` and SES `verified_for_sending_status=true`.
 ## 5. Safe execution order
 
 1. Obtain a current AWS Pricing Calculator estimate and explicit approval; the USD 30 budget is an
-   alert, not a hard cap.
+   alert, not a hard cap. Record the approval reference in `COST_APPROVAL_REFERENCE`; keep it absent
+   for the default local-only mode. See [`PHASE6_COST_BOUNDARY.md`](PHASE6_COST_BOUNDARY.md).
 2. Run `Phase 6C foundation apply` for staging. It uses placeholder digests and verifies every ECS
    service remains at desired count zero; backup/restore schedules remain off.
 3. Populate the three application Secrets Manager values outside Terraform and confirm both SNS

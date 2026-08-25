@@ -34,6 +34,7 @@ env:
   TF_VAR_activate_services: "false"
   TF_VAR_activate_logical_backup_schedule: "false"
   TF_VAR_enable_restore_testing: "false"
+  COST_APPROVAL_REFERENCE: ${{ vars.COST_APPROVAL_REFERENCE }}
 
 jobs:
   apply:
@@ -43,6 +44,13 @@ jobs:
       name: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require explicit recurring cost approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$COST_APPROVAL_REFERENCE"
+          test "$COST_APPROVAL_REFERENCE" != "pending"
+          test "$COST_APPROVAL_REFERENCE" != "local-only"
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
