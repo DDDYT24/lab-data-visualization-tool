@@ -45,15 +45,23 @@ preferred.
 ## ⚡ Quick Start — V2.0
 
 Install [Git](https://git-scm.com/downloads), Python 3.12 or 3.13, and Node.js 22.22.2 or newer.
-The first launch creates the Python environment and installs all required packages.
+Run the Windows commands below from the directory that should contain the cloned repository.
+Run them in order; if the PowerShell prompt already ends in `\lab-data-visualization-tool`,
+skip the clone and `Set-Location` lines.
 
 ### Windows PowerShell
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-Set-Location .\lab-data-visualization-tool
+Set-Location -LiteralPath .\lab-data-visualization-tool
+if (-not (Test-Path -LiteralPath .\start-labviz.cmd)) { throw "Not the LabViz repository root." }
 .\start-labviz.cmd
 ```
+
+The first launch intentionally downloads local dependencies: it creates
+`V2.0/api/.venv`, installs the API packages with `pip`, and runs `npm ci` when
+`V2.0/web/node_modules` is missing. These downloads are required for local
+execution; they are not an AWS or hosted deployment.
 
 ### macOS / Linux
 
@@ -65,7 +73,7 @@ chmod +x start-labviz.sh
 ```
 
 Open `http://127.0.0.1:3000`. Keep the terminal open; local sign-in codes appear in the API
-output. Press `Ctrl+C` to stop both services. Run `start-labviz.cmd -RefreshDependencies` on
+output. Press `Ctrl+C` to stop both services. Run `.\start-labviz.cmd -RefreshDependencies` on
 Windows or `./start-labviz.sh --refresh-dependencies` on macOS/Linux after dependency files change.
 
 ```text
@@ -95,6 +103,7 @@ Start the API in the first PowerShell window:
 
 ```powershell
 Set-Location .\V2.0\api
+# Python 3.12 is recommended; use py -3.13 if 3.12 is not installed.
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -276,6 +285,34 @@ Run `python main.py --help` for every option.
 
 ## 🛠 Troubleshooting
 
+### `Set-Location` cannot find the repository
+
+`Set-Location .\lab-data-visualization-tool` assumes the current directory is
+the parent directory used by `git clone`. If the prompt already shows the
+repository directory, skip that command. Otherwise use the actual clone path,
+for example:
+
+```powershell
+Set-Location -LiteralPath 'C:\Users\your-name\lab-data-visualization-tool'
+Test-Path .\start-labviz.cmd
+```
+
+The last command should return `True` before starting LabViz.
+
+### `No suitable Python runtime found`
+
+The launcher accepts Python 3.12 or 3.13 and intentionally does not accept
+Python 3.14 yet. Check the Python launcher and the supported version directly:
+
+```powershell
+py -0p
+py -3.13 --version
+```
+
+Update to the latest launcher if `py -3.13` works but the startup command still
+fails; older Windows PowerShell behavior could stop the version probe when
+Python 3.12 was not installed.
+
 ### `No such file or directory: 'requirements.txt'`
 
 The command is running outside the V1.1 application directory. In PowerShell, enter it and confirm the file exists:
@@ -399,7 +436,8 @@ SQLite。V1.1 作为仅需 Python 的旧版界面继续保留。
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-Set-Location .\lab-data-visualization-tool
+Set-Location -LiteralPath .\lab-data-visualization-tool
+if (-not (Test-Path -LiteralPath .\start-labviz.cmd)) { throw "当前目录不是 LabViz 仓库根目录。" }
 .\start-labviz.cmd
 ```
 
@@ -424,6 +462,7 @@ Node.js 24。先在第一个 PowerShell 窗口启动 API：
 
 ```powershell
 Set-Location .\V2.0\api
+# Python 3.12 is recommended; use py -3.13 if 3.12 is not installed.
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip

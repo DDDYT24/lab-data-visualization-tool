@@ -26,8 +26,17 @@ function Test-PythonCandidate {
         "-c",
         "import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] < (3, 14) else 1)"
     )
-    $null = & $Executable @arguments 2>$null
-    return $LASTEXITCODE -eq 0
+    try {
+        $null = & $Executable @arguments 2>$null
+        $exitCode = $LASTEXITCODE
+    }
+    catch {
+        # Windows PowerShell 5.1 can promote native stderr to a terminating
+        # error even when stderr is redirected. Treat an unavailable selector
+        # as a failed candidate so the next supported Python version is tried.
+        return $false
+    }
+    return $exitCode -eq 0
 }
 
 $basePython = $null
