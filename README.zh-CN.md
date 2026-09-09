@@ -29,13 +29,19 @@ Docker、PostgreSQL、MinIO 或付费邮件服务。
 
 ### Windows
 
-在 PowerShell 中运行：
+请在克隆目标的父目录中，按顺序运行下面的命令。如果 PowerShell 提示符已经位于
+`lab-data-visualization-tool` 仓库目录内，则跳过 `git clone` 和 `Set-Location` 两行。
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-Set-Location .\lab-data-visualization-tool
+Set-Location -LiteralPath .\lab-data-visualization-tool
+if (-not (Test-Path -LiteralPath .\start-labviz.cmd)) { throw "当前目录不是 LabViz 仓库根目录。" }
 .\start-labviz.cmd
 ```
+
+第一次启动下载依赖是正常现象：脚本会创建 `V2.0/api/.venv`，用 `pip` 安装 API
+依赖；如果 `V2.0/web/node_modules` 不存在，还会运行 `npm ci` 安装网站依赖。
+这些是本地运行所需的依赖，不是 AWS 或在线部署下载。
 
 ### macOS / Linux
 
@@ -114,6 +120,7 @@ XLSX 文件。网页端单文件上限为 50 MB。
 
 ```powershell
 Set-Location .\V2.0\api
+# 推荐 Python 3.12；如果未安装 3.12，请将下一行的 py -3.12 改为 py -3.13。
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -130,6 +137,14 @@ npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
 ## 常见问题
+
+- **`Set-Location` 找不到路径：** 该命令假设当前目录是克隆目标的父目录。如果提示符已经显示在
+  `lab-data-visualization-tool` 内，请跳过它；否则使用实际路径，例如
+  `Set-Location -LiteralPath 'C:\Users\你的用户名\lab-data-visualization-tool'`，再用
+  `Test-Path .\start-labviz.cmd` 确认返回 `True`。
+- **出现 `No suitable Python runtime found`：** 启动器支持 Python 3.12 或 3.13，暂不支持
+  Python 3.14。运行 `py -0p` 和 `py -3.13 --version` 检查版本；如果 3.13 可以运行但旧启动器
+  仍失败，请更新到最新仓库版本。
 
 - **找不到 Python 3.12/3.13：** 安装支持的 Python 后重新打开终端；Windows 可用
   `py -0p` 查看已安装版本。
