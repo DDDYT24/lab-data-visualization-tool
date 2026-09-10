@@ -190,7 +190,7 @@ self-hosting work.
 ### V2.1 — Structured 3D and research workflow
 
 **Status:** P0-1 through P0-3, P1-1 through P1-3, and C-1 through C-4 are implemented and verified
-on the V2.1 local development branch. The branch is a local V2.1 release candidate; it has not been published.
+on the V2.1 local development branch. The accepted result is published as the V2.1.0 local release.
 Detailed task IDs and acceptance criteria are tracked in [`TODO.md`](TODO.md).
 
 - **P0:** add structured-grid validation and explicit surface fields, make quality findings and
