@@ -455,7 +455,7 @@ def create_app(
 
     app = FastAPI(
         title="LabViz API",
-        version="2.1.0",
+        version="2.1.1",
         description="Processing, quality review, chart export, history, sharing, and auth.",
         lifespan=lifespan,
     )
