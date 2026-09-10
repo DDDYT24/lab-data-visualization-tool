@@ -96,7 +96,59 @@ const quality = {
   ],
 };
 
+const surfacePoints = Array.from({ length: 21 * 21 }, (_, index) => {
+  const x = -5 + (index % 21) * 0.5;
+  const y = -5 + Math.floor(index / 21) * 0.5;
+  return { panel: 1, x, y, z: x ** 2 + y ** 2 };
+});
+
+const surfaceChart = {
+  ...chart,
+  title: "Surface response",
+  xAxis: { field: "x", title: "X", unit: "" },
+  yAxis: { field: "y", title: "Y", unit: "" },
+  series: [{ field: "y", label: "Y", color: "#2563EB" }],
+};
+
+const surfacePreview = {
+  apiVersion: "v1",
+  projectId: PROJECT_ID,
+  columns: [
+    { field: "x", label: "X", kind: "number", unit: null, nullable: false },
+    { field: "y", label: "Y", kind: "number", unit: null, nullable: false },
+    { field: "z", label: "Z", kind: "number", unit: null, nullable: false },
+  ],
+  rows: surfacePoints.slice(0, 200).map(({ x, y, z }, index) => ({
+    rowId: index + 1,
+    x,
+    y,
+    z,
+  })),
+  totalRows: surfacePoints.length,
+  sampled: true,
+  sampleStrategy: "evenly-distributed",
+};
+
+const surfaceQuality = {
+  apiVersion: "v1",
+  projectId: PROJECT_ID,
+  totalRows: surfacePoints.length,
+  validRows: surfacePoints.length,
+  missingValues: 0,
+  duplicateRows: 0,
+  suspiciousPoints: 0,
+  findings: [],
+};
+
+export type ObservedChartSpec = {
+  type: string;
+  xAxis: { field: string };
+  series: Array<{ field: string }>;
+  export: { format: "png" | "svg" | "pdf" };
+};
+
 export type MockApiObservations = {
+  analysisCharts: ObservedChartSpec[];
   analysisModels: string[];
   cleaningActions: string[];
   deletedProjects: string[];
@@ -104,13 +156,17 @@ export type MockApiObservations = {
   duplicatedProjects: string[];
   exportRequests: number;
   exportFormats: string[];
+  exportCharts: ObservedChartSpec[];
   requests: string[];
   requestedEmail: string | null;
+  savedCharts: ObservedChartSpec[];
   uploadedBytes: number[];
+  uploadBodies: string[];
   verifiedCode: string | null;
 };
 
 type MockApiOptions = {
+  dataset?: "default" | "surface";
   dataDelayMs?: number;
   deliveryMode?: "console" | "email";
   history?: "empty" | "saved";
@@ -145,6 +201,7 @@ export async function installMockApi(
   options: MockApiOptions = {},
 ): Promise<MockApiObservations> {
   const observations: MockApiObservations = {
+    analysisCharts: [],
     analysisModels: [],
     cleaningActions: [],
     deletedProjects: [],
@@ -152,14 +209,20 @@ export async function installMockApi(
     duplicatedProjects: [],
     exportRequests: 0,
     exportFormats: [],
+    exportCharts: [],
     requests: [],
     requestedEmail: null,
+    savedCharts: [],
     uploadedBytes: [],
+    uploadBodies: [],
     verifiedCode: null,
   };
   let historyProjectVisible = options.history !== "empty";
   let projectDescription = "";
   let currentRevisionId = REVISION_1;
+  const activeChart = options.dataset === "surface" ? surfaceChart : chart;
+  const activePreview = options.dataset === "surface" ? surfacePreview : preview;
+  const activeQuality = options.dataset === "surface" ? surfaceQuality : quality;
 
   await page.context().route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -169,7 +232,9 @@ export async function installMockApi(
     observations.requests.push(`${method} ${path}`);
 
     if (method === "POST" && path === "/projects") {
-      observations.uploadedBytes.push(request.postDataBuffer()?.byteLength ?? 0);
+      const body = request.postDataBuffer();
+      observations.uploadedBytes.push(body?.byteLength ?? 0);
+      observations.uploadBodies.push(body?.toString("utf8") ?? "");
       return json(route, {
         apiVersion: "v1",
         projectId: PROJECT_ID,
@@ -177,8 +242,8 @@ export async function installMockApi(
         description: "",
         currentRevisionId: null,
         source: {
-          name: "experiment-1.87mb.csv",
-          size: 1_960_000,
+          name: options.dataset === "surface" ? "07_surface3d.csv" : "experiment-1.87mb.csv",
+          size: options.dataset === "surface" ? 8_192 : 1_960_000,
           mediaType: "text/csv",
           sheetName: null,
           headerRow: 1,
@@ -221,8 +286,8 @@ export async function installMockApi(
           description: projectDescription,
           currentRevisionId: options.descriptionLoading ? null : currentRevisionId,
           source: {
-            name: "experiment-1.87mb.csv",
-            size: 1_960_000,
+            name: options.dataset === "surface" ? "07_surface3d.csv" : "experiment-1.87mb.csv",
+            size: options.dataset === "surface" ? 8_192 : 1_960_000,
             mediaType: "text/csv",
             sheetName: null,
             availableSheets: [],
@@ -231,13 +296,15 @@ export async function installMockApi(
           job: processingJob("ready"),
           expiresAt: null,
         },
-        preview,
-        quality,
-        decisions: [
-          { findingId: "finding-e2e", action: "ignore" },
-          { findingId: "finding-missing-e2e", action: "exclude" },
-        ],
-        chart,
+        preview: activePreview,
+        quality: activeQuality,
+        decisions: options.dataset === "surface"
+          ? []
+          : [
+              { findingId: "finding-e2e", action: "ignore" },
+              { findingId: "finding-missing-e2e", action: "exclude" },
+            ],
+        chart: activeChart,
         shares: [],
       });
     }
@@ -246,14 +313,14 @@ export async function installMockApi(
       if (options.dataDelayMs) {
         await new Promise((resolve) => setTimeout(resolve, options.dataDelayMs));
       }
-      return json(route, preview);
+      return json(route, activePreview);
     }
 
     if (method === "GET" && path === `/projects/${PROJECT_ID}/quality`) {
       if (options.dataDelayMs) {
         await new Promise((resolve) => setTimeout(resolve, options.dataDelayMs));
       }
-      return json(route, quality);
+      return json(route, activeQuality);
     }
 
     if (method === "GET" && path === `/projects/${PROJECT_ID}`) {
@@ -356,7 +423,8 @@ export async function installMockApi(
     }
 
     if (method === "PUT" && path === `/projects/${PROJECT_ID}/chart`) {
-      const body = request.postDataJSON() as { chart: unknown };
+      const body = request.postDataJSON() as { chart: ObservedChartSpec };
+      observations.savedCharts.push(body.chart);
       return json(route, {
         apiVersion: "v1",
         projectId: PROJECT_ID,
@@ -370,10 +438,45 @@ export async function installMockApi(
       path === `/projects/${PROJECT_ID}/chart-analysis`
     ) {
       const body = request.postDataJSON() as {
-        chart: { fitting?: { model?: string } };
+        chart: ObservedChartSpec & { fitting?: { model?: string } };
       };
       const model = body.chart.fitting?.model ?? "none";
+      observations.analysisCharts.push(body.chart);
       observations.analysisModels.push(model);
+      if (options.dataset === "surface" && body.chart.type === "surface3d") {
+        return json(route, {
+          apiVersion: "v1",
+          projectId: PROJECT_ID,
+          series: [],
+          preview: {
+            histograms: [],
+            boxes: [],
+            heatmaps: [],
+            surfaceDiagnostics: [
+              {
+                panel: 1,
+                xField: "x",
+                yField: "y",
+                zField: "z",
+                xCount: 21,
+                yCount: 21,
+                expectedPoints: 441,
+                usablePoints: 441,
+                duplicateCoordinatePairs: 0,
+                duplicateCoordinateRows: 0,
+                missingGridCells: 0,
+                nonFinitePoints: 0,
+                uniformXSpacing: true,
+                uniformYSpacing: true,
+                collinear: false,
+                status: "valid",
+              },
+            ],
+            surfacePoints,
+          },
+          recommendations: [],
+        });
+      }
       return json(route, {
         apiVersion: "v1",
         projectId: PROJECT_ID,
@@ -395,12 +498,51 @@ export async function installMockApi(
                     model,
                     equation: "y = 1.1x + 1.0",
                     rSquared: 0.98,
+                    sampleSize: 4,
+                    excludedCount: 0,
+                    fitMethod: "ordinary-least-squares",
+                    confidenceMethod: "student-t",
+                    intervalKind: "pointwise-mean",
                     points: [
                       { x: 0, y: 1, lower: 0.8, upper: 1.2 },
                       { x: 3, y: 4.3, lower: 4.1, upper: 4.5 },
                     ],
                   },
             uncertainty: null,
+            residualDiagnostic:
+              model === "none"
+                ? null
+                : {
+                    status: "supported",
+                    sampleSize: 4,
+                    meanResidual: 0.02,
+                    rmse: 0.15,
+                    mae: 0.11,
+                    maxAbsResidual: 0.24,
+                    residualTrend: "none",
+                    assumptions: ["Residual summaries are descriptive checks."],
+                    limitations: ["Prediction intervals are deferred."],
+                  },
+            disclosures:
+              model === "none"
+                ? []
+                : [
+                    {
+                      method: "fit",
+                      status: "supported",
+                      sampleSize: 4,
+                      excludedCount: 0,
+                      assumptions: ["The selected model form is appropriate."],
+                      limitations: ["R² does not establish causality."],
+                    },
+                    {
+                      method: "prediction-band",
+                      status: "deferred",
+                      sampleSize: 4,
+                      excludedCount: 0,
+                      limitations: ["Prediction intervals are not displayed by this release."],
+                    },
+                  ],
             warnings: [],
           },
         ],
@@ -408,18 +550,41 @@ export async function installMockApi(
           histograms: [],
           boxes: [],
           heatmaps: [],
+          surfaceDiagnostics: [],
           surfacePoints: [],
         },
+        recommendations: options.dataset === "surface"
+          ? [
+              {
+                chartType: "surface3d",
+                source: "regular-grid",
+                xField: "x",
+                yField: "y",
+                zField: "z",
+                reason: "Detected a complete 21 x 21 grid.",
+                reasonCode: "chart.recommendation.surface-grid-line",
+                reasonParams: {
+                  pointCount: 441,
+                  xCount: 21,
+                  yCount: 21,
+                  xField: "x",
+                  yField: "y",
+                  zField: "z",
+                },
+              },
+            ]
+          : [],
       });
     }
 
     if (method === "POST" && path === `/projects/${PROJECT_ID}/exports`) {
       const body = request.postDataJSON() as {
-        chart: { export: { format: "png" | "svg" | "pdf" } };
+        chart: ObservedChartSpec;
       };
       const format = body.chart.export.format;
       observations.exportRequests += 1;
       observations.exportFormats.push(format);
+      observations.exportCharts.push(body.chart);
       return json(route, {
         apiVersion: "v1",
         id: "export-e2e",
@@ -493,6 +658,14 @@ export async function installMockApi(
                 updatedAt: UPDATED_AT,
                 storageMode: "saved-cloud",
                 thumbnailUrl: null,
+                experiment: {
+                  experimentId: "experiment-e2e",
+                  experimentRunId: "experiment-run-e2e",
+                  title: "Dose response study",
+                  runLabel: "Acquisition 2",
+                  replicateId: "R2",
+                  batchId: "B-2026-09",
+                },
               },
             ];
       return json(route, { apiVersion: "v1", projects });
@@ -571,4 +744,11 @@ export function createCsvNearSize(targetBytes = 1_960_000) {
   }
 
   return Buffer.from(rows.join(""));
+}
+
+export function createSurfaceCsv() {
+  return Buffer.from([
+    "x,y,z",
+    ...surfacePoints.map(({ x, y, z }) => `${x},${y},${z}`),
+  ].join("\n"));
 }

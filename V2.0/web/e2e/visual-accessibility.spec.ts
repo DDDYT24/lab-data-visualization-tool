@@ -126,6 +126,18 @@ test("keeps chart editing readable at the mobile breakpoint", async ({ page }) =
 
   await expect(page.getByRole("heading", { name: "Create your chart" })).toBeVisible();
   await expectNoHorizontalPageOverflow(page);
+  const figureSubtitle = page.getByLabel("Figure subtitle");
+  const subtitleControl = figureSubtitle.locator(
+    "xpath=ancestor::*[contains(@class, 'MuiFormControl-root')]",
+  );
+  const [inputBox, controlBox, inputBoxSizing] = await Promise.all([
+    figureSubtitle.boundingBox(),
+    subtitleControl.boundingBox(),
+    figureSubtitle.evaluate((input) => getComputedStyle(input).boxSizing),
+  ]);
+  expect(inputBoxSizing).toBe("content-box");
+  expect(inputBox?.height).toBeGreaterThanOrEqual(38);
+  expect(controlBox?.height).toBeGreaterThanOrEqual(38);
   const contentWidth = await page.getByRole("heading", { name: "Create your chart" }).evaluate(
     (heading) => heading.getBoundingClientRect().width,
   );

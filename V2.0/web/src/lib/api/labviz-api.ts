@@ -101,6 +101,11 @@ export const labvizApi = {
     options?: {
       sheetName?: string | null;
       headerRow?: number | null;
+      experimentTitle?: string | null;
+      runLabel?: string | null;
+      replicateId?: string | null;
+      batchId?: string | null;
+      experimentRunId?: string | null;
       idempotencyKey?: string;
     },
     signal?: AbortSignal,
@@ -109,6 +114,11 @@ export const labvizApi = {
     body.append("file", file);
     if (options?.sheetName) body.append("sheetName", options.sheetName);
     if (options?.headerRow) body.append("headerRow", String(options.headerRow));
+    if (options?.experimentTitle) body.append("experimentTitle", options.experimentTitle);
+    if (options?.runLabel) body.append("runLabel", options.runLabel);
+    if (options?.replicateId) body.append("replicateId", options.replicateId);
+    if (options?.batchId) body.append("batchId", options.batchId);
+    if (options?.experimentRunId) body.append("experimentRunId", options.experimentRunId);
     return request("/projects", projectSessionSchema, {
       method: "POST",
       body,

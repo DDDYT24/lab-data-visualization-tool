@@ -65,25 +65,22 @@ safety net.
 metadata, logical dataset, dataset versions, processing history, cleaning decisions, chart
 revisions, exports, and share links.
 
-`Experiment` and `ExperimentRun` are not introduced in the current schema or UI because the
-approved product flow does not yet collect their identity, hierarchy, or repeated-acquisition
-semantics. Creating them now would produce speculative tables and duplicate the meaning of
-Project and Dataset.
+V2.1 adds a minimum optional `Experiment` and physical `ExperimentRun` layer because the product
+now collects repeated-acquisition identity. One Experiment groups multiple physical runs. Each
+uploaded file may create one ExperimentRun with a run label and optional replicate and batch IDs;
+one or more Project analyses may reference that physical run.
+
+Migration `0010_experiment_runs` adds this layer. Migration `0011_normalize_check_names` then
+normalizes only exact legacy double-prefixed check-constraint names created by the earlier naming
+convention; it is a no-op on a fresh PostgreSQL database and leaves constraint definitions intact.
 
 `ProcessingRun` is introduced now and means a software execution such as parse, profile, clean,
 analyze, or export. It must not later be reused to mean a physical laboratory run.
 
-The current product does need an optional project/experiment description because the PRD
-allows it on shared charts. This is a `Project.description` field, not a reason to create an
-Experiment entity.
-
-Experiment and physical ExperimentRun become eligible only when a confirmed workflow requires
-one or more of the following:
-
-- multiple acquisitions grouped into one scientific experiment;
-- multiple source files or instruments in one project;
-- run-to-run comparison, replicate identity, or batch metadata;
-- experiment-level permissions or reporting distinct from project ownership.
+Experiment ownership is scoped to the creating guest browser or signed-in user. Saving the first
+project claims the experiment for that user, and later uploads by the same signed-in owner may join
+it by name. Project access remains independently enforced. Broader membership roles and comparison
+workflows remain deferred.
 
 ### 2.3 Saved-project deletion and recovery
 
@@ -194,6 +191,8 @@ migration function. The frontend must never read database entities directly.
 | Entity | Responsibility |
 | --- | --- |
 | `users` | Normalized email identity and account lifecycle. |
+| `experiments` | Owner-scoped grouping for repeated physical acquisitions. |
+| `experiment_runs` | Physical acquisition label, replicate ID, batch ID, and experiment link. |
 | `projects` | Ownership, title, description, storage mode, current revision, activity, soft deletion, and purge time. |
 | `project_revisions` | Immutable ProjectSpec snapshot and references to the active data, decisions, and chart revisions. |
 | `source_files` | Original file metadata, SHA-256, parser selection, and proof that the temporary binary was deleted. |
@@ -218,6 +217,8 @@ separate from the scientific lineage model and use short lifecycles.
 - User edits create a new revision rather than updating history in place.
 - A ProcessingRun records exactly one operation and may produce a new DatasetVersion or another
   derived artifact.
+- An ExperimentRun records a physical acquisition and must never be used as a software job.
+- Publication exports snapshot experiment, physical run, replicate, and batch identity.
 - Dataset content and exports stay outside PostgreSQL. PostgreSQL stores verified object keys and
   checksums only.
 - JSONB is limited to validated specifications, parameters, column schemas, and bounded derived

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = Number(process.env.PLAYWRIGHT_PORT ?? 3_000);
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 3_100);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
 const nodeOptions = [process.env.NODE_OPTIONS, "--unhandled-rejections=strict"]
   .filter(Boolean)
@@ -12,8 +12,9 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["github"], ["line"]] : "list",
-  timeout: 45_000,
-  workers: process.env.CI ? 2 : 4,
+  timeout: 90_000,
+  // Keep cold Turbopack compilation from competing with too many browser workers.
+  workers: 2,
   expect: {
     timeout: 10_000,
     toHaveScreenshot: {
@@ -45,12 +46,13 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: `npm run dev -- --hostname localhost --port ${port}`,
+        command: `npm run prepare:e2e && npm run build && npm run start -- --hostname localhost --port ${port}`,
         env: {
           ...process.env,
+          LABVIZ_E2E_BUILD: "1",
           NODE_OPTIONS: nodeOptions,
         },
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
         stderr: "pipe",
         stdout: "pipe",
         timeout: 120_000,

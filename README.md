@@ -7,21 +7,21 @@
 从导入、检查、清洗到 2D/3D 可视化与导出，一套面向实验数据的轻量工作流。
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-V2.0-0f766e)
+![Release](https://img.shields.io/badge/release-V2.1%20local-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776ab?logo=python&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-22.22.2%2B-339933?logo=node.js&logoColor=white)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [Quick Start](#-quick-start--v20) · [Features](#-features) · [Development](#-development-and-verification)
+[English](README.md) · [简体中文](README.zh-CN.md) · [Privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [Offline install](V2.0/docs/OFFLINE_INSTALL.md) · [Quick Start](#-quick-start--v21) · [Features](#-features) · [Development](#-development-and-verification)
 
 </div>
 
 Lab Data Visualization Tool is a local-first web application for loading, validating, cleaning,
-visualizing, and exporting experimental data. V2.0 combines a guided Next.js interface with a
-FastAPI scientific-processing service. Raw uploads stay on the local machine and are not written
-to the project database.
+visualizing, and exporting experimental data. V2.1 combines a guided Next.js interface with a
+FastAPI scientific-processing service. Original upload files are not retained as original project
+assets; parsed data snapshots and processing results remain on the local machine by default.
 
-> **Current release: V2.0** — supports CSV, TSV, delimited TXT, JSON, and XLSX data; guided
+> **Current release: V2.1 local release candidate** — supports CSV, TSV, delimited TXT, JSON, and XLSX data; guided
 > quality review; seven 2D/3D chart types; saved history; local sign-in; sharing; and PNG/SVG/PDF
 > publication exports.
 
@@ -33,16 +33,19 @@ to the project database.
 
 | Version | Status | Location |
 | --- | --- | --- |
-| V2.0 | Current local self-hosted Next.js + FastAPI release | [`V2.0/`](V2.0/) |
+| V2.1 | Current local self-hosted Next.js + FastAPI release | [`V2.0/`](V2.0/) |
 | V1.1 | Legacy Python-only Streamlit application | [`V1.1/`](V1.1/) |
 
-Repository-wide automation and documentation remain at the root. Deferred V2.0 work is tracked in [`V2.0/TODO.md`](V2.0/TODO.md).
+The V2.1 source directory remains `V2.0/` to preserve working paths and migration history; a
+second copy under `V2.1/` would make fixes drift between two trees. Repository-wide automation
+and documentation remain at the root. Remaining backlog is tracked in [`V2.0/TODO.md`](V2.0/TODO.md).
 
-V2.0 needs Python and Node.js, but its default SQLite database and local object directory are
-created automatically. V1.1 remains available when a smaller Python-only legacy interface is
-preferred.
+V2.1 needs Python and Node.js, but its default SQLite database and local object directory are
+created automatically. SQLite is provided by Python's standard library; FastAPI is installed into
+the project virtual environment by the launcher. V1.1 remains available when a smaller Python-only
+legacy interface is preferred.
 
-## ⚡ Quick Start — V2.0
+## ⚡ Quick Start — V2.1
 
 Install [Git](https://git-scm.com/downloads), Python 3.12 or 3.13, and Node.js 22.22.2 or newer.
 Run the Windows commands below from the directory that should contain the cloned repository.
@@ -61,7 +64,7 @@ if (-not (Test-Path -LiteralPath .\start-labviz.cmd)) { throw "Not the LabViz re
 The first launch intentionally downloads local dependencies: it creates
 `V2.0/api/.venv`, installs the API packages with `pip`, and runs `npm ci` when
 `V2.0/web/node_modules` is missing. These downloads are required for local
-execution; they are not an AWS or hosted deployment.
+execution; they are not a hosted deployment.
 
 ### macOS / Linux
 
@@ -82,15 +85,16 @@ Load data  →  Inspect quality  →  Clean safely  →  Visualize  →  Export
 
 ### Manual startup
 
-V2.0 includes a runnable FastAPI contract/reference service for frontend
+V2.1 includes a runnable FastAPI contract/reference service for frontend
 development and end-to-end testing. It accepts CSV, TSV, delimited
 TXT, JSON, and XLSX uploads; builds bounded previews and explained quality
 findings; records user cleaning decisions; renders PNG, SVG, and PDF figures;
 and supports temporary projects, email-code sign-in, saved history, authenticated plain-text
-project descriptions, and read-only revision-pinned share links. Raw uploaded bytes are processed in memory and are not
-written to the SQLite project database.
+project descriptions, and read-only revision-pinned share links. Original upload files are not
+retained as original project assets; parsed data snapshots are kept locally to support history,
+cleaning, and export.
 
-V2.0 is distributed for local self-hosting. Its default single-computer route
+V2.1 is distributed for local self-hosting. Its default single-computer route
 uses SQLite plus local object storage. PostgreSQL 17,
 S3-compatible storage, workers, and the AWS deployment files remain available
 for advanced multi-process deployments and integration testing, but they are
@@ -129,8 +133,8 @@ website, then copy the six-digit code printed in the API terminal. No email is
 sent and no email account is required in this mode. SMTP and Amazon SES adapters
 are retained only for maintainers who choose to build an externally hosted
 deployment.
-For a separately hosted API, set `NEXT_PUBLIC_LABVIZ_API_URL` before starting
-Next.js and include the website origin in `LABVIZ_ALLOWED_ORIGINS`.
+Remote API and storage variables are optional maintainer extensions and are not needed for normal
+local use. See [the privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) before changing them.
 
 ### What local users do and do not need
 
@@ -147,6 +151,13 @@ Keep the default services bound to `127.0.0.1`. Do not expose ports 3000 or
 8000 to the Internet without adding HTTPS, secure cookies, production email,
 backups, monitoring, and an appropriate multi-user persistence configuration.
 
+For local users: [privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) ·
+[offline install](V2.0/docs/OFFLINE_INSTALL.md) · [backup and restore](V2.0/docs/BACKUP_RESTORE.md).
+
+Contributors: [CONTRIBUTING.md](CONTRIBUTING.md) · Security reports: [SECURITY.md](SECURITY.md) ·
+Version history: [CHANGELOG.md](CHANGELOG.md) · Maintainer release checklist:
+[PUBLIC_RELEASE_CHECKLIST.md](V2.0/docs/PUBLIC_RELEASE_CHECKLIST.md).
+
 ## ✨ Features
 
 | Stage | Capabilities |
@@ -156,7 +167,7 @@ backups, monitoring, and an appropriate multi-user persistence configuration.
 | Clean | Exact-duplicate removal; keep, drop, forward-fill, backward-fill, mean-fill, or median-fill missing values |
 | Visualize | Line, scatter, bar, histogram, box, correlation heatmap, and 3D surface plots |
 | Export | Complete cleaned table as CSV and publication figures as PNG, SVG, or PDF |
-| Track | Compact SQLite plot history without storing raw table contents |
+| Track | Local SQLite history and processed data snapshots without retaining original upload files |
 | Scale | Deterministic preview limits and evenly spaced sampling for large plots |
 
 Large previews are limited to 200 rows. Plots above the selected threshold use an evenly spaced sample, while the cleaned CSV download always contains every remaining row.
@@ -419,13 +430,13 @@ This project keeps an intentionally smaller scope and contains an independent im
 
 ## 中文说明
 
-这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。项目不提供官方在线网站，用户从 GitHub 克隆后在自己的电脑上运行；实验原始数据不会写入历史数据库。
+这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。项目不提供官方在线网站，用户从 GitHub 克隆后在自己的电脑上运行；原始上传文件不会以原文件形式长期保存，解析后的数据快照和处理结果留在本机。
 
-V2.0 是当前正式发布的本地自托管版本，由 Next.js 前端和 FastAPI 科研处理服务组成，
-提供真实的数据处理、工作区、历史、分享、登录和导出接口。V2.0 默认使用
+V2.1 是当前本地发布候选，由 Next.js 前端和 FastAPI 科研处理服务组成，
+提供真实的数据处理、工作区、历史、分享、登录和导出接口。V2.1 默认使用
 SQLite 和本地对象目录，二者都会自动创建；不需要 AWS、域名、DNS、Docker、
-PostgreSQL、MinIO 或付费邮件服务。原始上传文件只在处理期间保留于内存，不写入
-SQLite。V1.1 作为仅需 Python 的旧版界面继续保留。
+PostgreSQL、MinIO 或付费邮件服务。FastAPI 由启动脚本安装到项目虚拟环境，SQLite
+由 Python 标准库提供。V1.1 作为仅需 Python 的旧版界面继续保留。
 
 ### 🚀 快速开始
 
@@ -455,7 +466,7 @@ chmod +x start-labviz.sh
 `.\start-labviz.cmd -RefreshDependencies`，macOS/Linux 可运行
 `./start-labviz.sh --refresh-dependencies`。
 
-#### 手动启动 V2.0 网站与 API
+#### 手动启动 V2.1 网站与 API
 
 请安装 Python 3.12（也支持 3.13）以及 Node.js 22.22.2 或更新版本，推荐使用
 Node.js 24。先在第一个 PowerShell 窗口启动 API：
@@ -505,7 +516,7 @@ Cookie、生产邮件、备份、监控和多用户数据库，请不要把 3000
 - 支持删除重复行，以及保留、删除、前向填充、后向填充、均值填充和中位数填充。
 - 支持折线图、散点图、柱状图、直方图、箱线图、相关性热力图和 3D 曲面模型。
 - 可下载完整清洗数据，以及 PNG、SVG 或 PDF 图像。
-- SQLite 只记录绘图历史和数据质量摘要，不保存实验原始数据。
+- SQLite 和本地对象目录保存项目历史、解析后的数据快照、质量摘要和导出结果，不保存原始上传文件的原文件副本。
 - 大数据绘图使用等距抽样，避免浏览器卡顿；数据下载仍保留全部清洗结果。
 
 ### 🧰 支持的开发环境
@@ -546,7 +557,7 @@ SQLite 来自 Python 标准库，因此不需要额外安装数据库软件或 P
 
 运行依赖采用带主版本上限的范围，能够获取兼容更新，同时避免自动跨越可能带来破坏性变更的主版本。升级主版本时应单独修改并运行完整验证。
 
-#### V2.0 API 依赖与默认行为
+#### V2.1 API 依赖与默认行为
 
 运行服务安装 `V2.0/api/requirements.txt`；开发和测试安装
 `V2.0/api/requirements-dev.txt`。核心依赖包括 FastAPI、Uvicorn、Pydantic、

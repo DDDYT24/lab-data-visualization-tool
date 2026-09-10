@@ -1,10 +1,183 @@
-# LabViz Product Backlog
+# LabViz Product Backlog (V2.1 local release)
 
-This file records explicitly deferred work so it does not expand the V2.0 prototype scope.
+This file records the V2.0 baseline, the ordered V2.1 work, and explicitly deferred work.
 
-> **Release note:** V2.0 is distributed as a local self-hosted application. The AWS Phase 6C/6D
-> items below are optional maintainer work and do not block the V2.0 release. Local use relies on
-> automatically created SQLite and local object storage.
+> **Release note:** V2.1 is distributed as a local self-hosted application. The AWS Phase 6C/6D
+> items below are optional maintainer work and do not block the V2.1 local release. Local use relies
+> on automatically created SQLite and local object storage.
+
+## V2.1 Roadmap
+
+**Planning checkpoint:** 2026-09-08
+
+**Release intent:** Improve the local-first workflow for non-programmer laboratory users and
+make structured 3D data scientifically legible. Keep the V2.0 local release stable while
+shipping the work below in order. Public-cloud operations, desktop packaging, billing, and team
+features remain separate tracks.
+
+### P0 — 3D surface correctness (complete before P1)
+
+- [x] **V21-P0-1: Add a structured-grid and surface-field contract.** Detect numeric X/Y/Z
+  candidates, regular rectangular grids, duplicate coordinate pairs, missing grid cells, and
+  non-finite values. Expose explicit X, Y, and Z roles for `surface3d`; keep the existing
+  generic series editor for other chart types.
+  - **Acceptance:** `07_surface3d.csv` is identified as a 21 x 21 grid with 441 usable points;
+    irregular, duplicate, missing, and collinear fixtures produce actionable messages; the
+    recommendation never silently changes a user's chart.
+  - **Evidence (2026-09-08, V2.1 local development branch):** the actual `07_surface3d.csv` returns a valid 21 x 21
+    grid with 441 usable points; the API blocks invalid surface exports with stable error codes;
+    the chart editor uses explicit Y/Z selectors; duplicate, missing, irregular, collinear, and
+    non-finite cases pass the focused API regression. Browser and quality-recommendation gates
+    remain open below.
+- [x] **V21-P0-2: Make quality checks and chart recommendations grid-aware.** Do not treat the
+  row-boundary reset in a flattened grid as a sudden change. Warn when a line chart would join
+  repeated X values or different surface slices, and recommend surface, heatmap, or scatter
+  views with a plain-language explanation.
+  - **Acceptance:** the clean `07_surface3d.csv` fixture has no false row-order anomaly
+    findings, while a true injected discontinuity is still reported; the recommendation is
+    localized in English and Simplified Chinese.
+  - **Evidence (2026-09-09, V2.1 local development branch):** the actual 441-row fixture reports no sudden-change
+    findings; a deterministic 21 x 21 regression with a 1,000-unit local spike still reports the
+    affected Z rows. Line charts over a complete grid receive a localized 3D-surface suggestion,
+    while incomplete, duplicated, or irregular grid-like data receives a localized scatter
+    suggestion. Suggestions are informational and never change the selected chart.
+- [x] **V21-P0-3: Verify interactive and export surface parity.** Add a browser regression for
+  the real surface workflow and assert the serialized `ChartSpec`, `surfacePoints`, 3D axes,
+  ECharts-GL readiness, camera controls, and PNG/SVG/PDF export path. Keep backend Matplotlib
+  and frontend ECharts semantics aligned.
+  - **Acceptance:** the browser test selects X=`x`, Y=`y`, Z=`z`, receives 441 points, renders
+    `grid3D`/`xAxis3D`/`yAxis3D`/`zAxis3D`, and never falls back to a `y over x` line chart.
+  - **Evidence (2026-09-09, V2.1 local development branch):** the Chromium regression selects the explicit fields,
+    observes all four ECharts-GL 3D components, renders all 441 analyzed points, exercises mouse
+    rotation and zoom, and verifies that the saved chart and PNG/SVG/PDF requests retain the same
+    surface fields. The focused backend surface render/export regression and frontend render-contract
+    unit test pass. Local Playwright now starts an isolated server on port 3100 instead of reusing an
+    unrelated process on port 3000.
+
+### P1 — user and scientific workflow (start after all P0 gates pass)
+
+- [x] **V21-P1-1: Add beginner guidance and progressive disclosure.** Provide a recommended
+  chart card for detected data shapes, X/Y/Z help, short explanations for cleaning, grouping,
+  uncertainty, and fitting, plus surface-specific empty/error states. Preserve the no-code,
+  reversible-cleaning principles and the desktop/mobile responsibility split.
+  - **Acceptance:** a first-time user can import the surface fixture, understand the suggested
+    chart, correct a wrong chart type, and reach export without reading developer terminology;
+    Playwright, keyboard, localization, and serious/critical WCAG checks pass.
+  - **Evidence (2026-09-09, V2.1 local development branch):** the browser flow uploads a deterministic surface CSV,
+    uses the localized recommendation card with keyboard Enter, explains cleaning/grouping/fitting/
+    uncertainty in context, checks the dedicated surface setup state, switches English/Simplified
+    Chinese, verifies the mobile desktop handoff, reaches export, and finds no serious or critical
+    Axe violations. The full frontend verify gate passes with 42 Vitest tests.
+- [x] **V21-P1-2: Ship a scientifically defensible analysis slice.** Define and validate the
+  first supported bootstrap confidence interval, prediction/simultaneous-band, residual
+  diagnostic, robust/weighted fitting, and multiple-comparison guidance paths. Every method
+  must state assumptions, sample size, exclusions, and limitations in the result and export.
+  - **Acceptance:** independent answer-keyed fixtures cover valid, insufficient, and misleading
+    cases; the UI does not present a statistically weaker default as more authoritative; the
+    remaining advanced methods are explicitly listed as deferred rather than implied complete.
+  - **Evidence (2026-09-09, V2.1 local development branch):** the additive v1 analysis contract now records fit
+    method, interval method, sample size, exclusions, assumptions, residual RMSE/MAE, possible
+    residual structure, and method limitations in each analyzed series. Ordinary and weighted
+    least-squares fits are supported; Student-t and deterministic 400-resample residual Bootstrap
+    pointwise mean bands are supported. Prediction intervals, simultaneous bands, robust fitting,
+    and multiplicity correction remain explicitly deferred in both the result card and exported
+    figure footer. Independent valid, insufficient, and misleading answer-keyed fixtures pass;
+    the browser regression verifies the method selector, evidence disclosure, and deferred-method
+    copy. `ruff`, `mypy`, targeted API tests, frontend verify, and focused Chromium tests pass.
+- [x] **V21-P1-3: Introduce the minimum experiment-level model.** Add validated `Experiment`
+  and physical `ExperimentRun` concepts for repeated acquisitions, replicate identity, batch
+  identification/history comparison, and experiment-level permissions while keeping software
+  `ProcessingRun` separate.
+  - **Acceptance:** one multi-file/replicate workflow has a persisted schema, API contract,
+    history view, and export provenance; migration and deletion/restore behavior are tested
+    before broader team features are considered.
+  - **Evidence (2026-09-09, V2.1 local development branch):** optional upload metadata groups repeated files by
+    experiment for the same browser or signed-in owner; each file receives a distinct physical
+    `ExperimentRun` with run, replicate, and batch identity. SQLite and PostgreSQL persistence,
+    additive API contracts, history search/cards, export response metadata, download headers, and
+    figure footers carry the lineage while software `ProcessingRun` remains separate. The local
+    two-file workflow, ownership claim, history, export snapshot, and orphan cleanup tests pass;
+    a real PostgreSQL 17 run also passes upgrade/downgrade, schema-column, downgrade-protection,
+    and soft-delete/restore checks. Alembic offline PostgreSQL DDL, `ruff`, `mypy`, API regression,
+    frontend verify, and focused Chromium flows pass. Repository-wide `alembic check` still reports
+    pre-existing name-only drift for historical check constraints; no P1-3 table or column drift was
+    reported, and the baseline issue is tracked as `V21-C-4` below.
+
+### Compatibility and release hardening
+
+- [x] **V21-C-1: Normalize UTF-8 BOM headers** and add a regression that expects the first
+  column name without `\ufeff` for TXT/CSV imports.
+  - **Evidence (2026-09-09, V2.1 local development branch):** CSV, TSV, and delimiter-detected TXT parsing now
+    explicitly uses UTF-8 with BOM handling. API regressions verify all three formats expose
+    `time_min`, never `\ufefftime_min`; the original `E10_BOM表头兼容性.txt` fixture also parses
+    to two clean columns and three preserved rows. The four focused cases and all 23 API tests
+    pass, followed by clean `ruff` and `mypy` checks.
+- [x] **V21-C-2: Make cleaned-data downloads Unicode-safe.** Encode `Content-Disposition` for
+  Chinese and other non-ASCII filenames and add a 200-status download regression.
+  - **Evidence (2026-09-09, V2.1 local development branch):** cleaned CSV responses use an ASCII fallback plus an
+    RFC 5987 UTF-8 `filename*` value. The original `E11_中文文件名.csv` uploads and downloads with
+    status 200, and the API regression checks the encoded Chinese filename and BOM CSV body.
+- [x] **V21-C-3: Re-run the complete fixture matrix** after P0/P1 changes, including the 23-file
+  package, answer-keyed surface checks, API checks, browser checks, and export checks. Record
+  the scope explicitly when cloud, live mail, or private-file tests are not configured.
+  - **Evidence (2026-09-09, V2.1 local development branch):** all 23 fixture datasets produced 95 passing checks;
+    seven chart types each exported PNG, SVG, and PDF (21 exports). The 243-test API/PostgreSQL/
+    MinIO gate, 45 frontend unit tests, production build, and 27 configured browser tests pass.
+    A separate live-service browser flow processes and exports a generated 1.87 MB CSV. The
+    private-workbook, live-mail, AWS, and external GPU/OS combinations remain explicitly unverified.
+  - **Current verification note (2026-09-09):** PostgreSQL 17 and MinIO were started from the
+    repository Compose definition, the test bucket was initialized, and all 243 API tests passed in
+    143.96 seconds. Ruff, formatting, MyPy, frontend verification, production build, and the
+    configured browser suite also passed; the temporary Compose services were stopped afterward.
+- [x] **V21-C-4: Reconcile the Alembic check-constraint naming baseline.** Remove the historical
+  name-only drift between SQLAlchemy metadata and the first nine migrations, then require a clean
+  `alembic check` against a fresh PostgreSQL 17 database without renaming live constraints blindly.
+  - **Evidence (2026-09-09, V2.1 local development branch):** migration `0011_normalize_check_names` recognizes only
+    the exact historical SQLAlchemy double-prefixed names, renames 100 affected constraints in the
+    persisted development database without rebuilding them, and is a no-op on a fresh database.
+    Fresh and legacy PostgreSQL 17 upgrade paths both end at head with `alembic check` reporting no
+    new upgrade operations; targeted round-trip and normalization regressions pass.
+- [x] **V21-C-5: Publish the local privacy boundary.** Document the default SQLite/local-object
+  path, dependency installation, backup and restore procedure, and the conditions that would send
+  data outside the machine. Add regression checks for loopback binding, local defaults, relative API
+  routing, and the absence of telemetry hooks.
+  - **Evidence (2026-09-09, V2.1 local release candidate):** `PRIVACY_DATA_BOUNDARY.md`,
+    `OFFLINE_INSTALL.md`, `BACKUP_RESTORE.md`, `SECURITY.md`, `CONTRIBUTING.md`, and the public
+    release checklist are present; the focused privacy test passes alongside Ruff, MyPy, frontend
+    verify, and browser visual/accessibility coverage.
+- [x] **V21-C-6: Make the user-facing storage language network-neutral.** Explain temporary and
+  saved projects as local states in both locales, keep the save/share flow explicit, and remove
+  stale cloud wording from the help and settings views without changing persisted API compatibility.
+  - **Evidence (2026-09-09, V2.1 local release candidate):** the localized frontend verify and
+    visual/accessibility browser suite pass; legacy wire values remain accepted for existing projects.
+
+### Later optimization (after V2.1 acceptance)
+
+- [ ] Replace the legacy persisted `temporary-cloud`/`saved-cloud` state names with network-neutral
+  values in a separately versioned migration after confirming API and saved-history compatibility.
+- [ ] Add a true no-store mode only if users require processing without local persistence; define
+  its refresh, history, export, and crash-recovery semantics before implementation.
+- [ ] Evaluate large-surface performance, adaptive sampling, irregular-surface triangulation,
+  accessible data-table alternatives, color-vision-safe palettes, and mobile 3D controls.
+- [ ] Resume the optional AWS Phase 6C/6D track only with account-owned credentials, staging
+  evidence, backups, monitoring, quotas, privacy/compliance review, load/recovery drills, and
+  rollback evidence.
+- [ ] Build native installers, external identity providers, team workspaces, billing, and other
+  commercial features only after the local workflow and usage evidence justify them.
+
+### V2.1 definition of done
+
+- [x] All three P0 gates pass on the answer-keyed surface fixtures and the browser regression.
+- [x] All three P1 tracks have implementation, localized UX copy, versioned API/schema changes,
+  reproducible fixtures, and documented limitations.
+- [x] The two known compatibility regressions are closed and remain in automated regression
+  coverage.
+- [x] Local privacy boundary, offline installation, backup/restore, security, contribution, and
+  public-release documents are present; default local routing and public-text hygiene have focused
+  regression checks.
+- [x] A fresh PostgreSQL 17 database reaches Alembic head and returns a clean `alembic check`.
+- [x] `npm run verify`, `npm run test:e2e`, and the documented API gate pass; skipped live/cloud
+  checks are reported as skipped and do not count as evidence.
 
 ## V2.0 Closeout Gate
 
@@ -36,8 +209,13 @@ and style semantics, not pixel-identical output from different rendering engines
 
 ## Website Frontend Progress
 
-**Last checkpoint:** 2026-08-09
+**Last checkpoint:** 2026-09-08
 **Architecture:** [`PROJECT_PLAN.md`](PROJECT_PLAN.md)
+
+The latest checkpoint includes the chart-inspector spacing regression fix and the current general
+desktop/mobile browser gates. The V2.1 `surface3d` field/grid contract, grid-aware quality and
+recommendation behavior, dedicated browser preview/export regression, and beginner guidance are
+complete under `V21-P0-1` through `V21-P0-3` and `V21-P1-1`. P1 analysis/model work remains open.
 
 Completed:
 
@@ -113,7 +291,12 @@ Next:
 
 ## Deferred Scientific Domain Model
 
-- [ ] Introduce `Experiment` and physical `ExperimentRun` entities, UI, and business rules only after a validated workflow requires repeated acquisitions, multi-file grouping, replicate identity, batch comparison, or experiment-level permissions.
+> V2.1 implements the minimum repeated-acquisition/replicate workflow in `V21-P1-3` above.
+> Broader experiment editing, cross-experiment comparison, membership roles, and team permissions
+> remain deferred until this vertical slice is validated through user studies.
+
+- [x] Introduce the minimum `Experiment` and physical `ExperimentRun` entities for repeated
+  acquisitions, multi-file grouping, replicate identity, batch identity, and owner-scoped access.
 - [ ] Keep software `ProcessingRun` separate from any future physical laboratory `ExperimentRun`.
 
 ## Figma Prototype Progress
@@ -161,10 +344,16 @@ Resume after the Figma MCP quota resets:
 
 ## Advanced Analysis
 
-- [ ] Evaluate bootstrap confidence intervals.
+> V2.1 tracks the first scientifically defensible methods slice under `V21-P1-2` above. These
+> individual backlog items remain open until their assumptions, answer-keyed fixtures, and
+> export disclosures are accepted.
+
+- [x] Evaluate bootstrap confidence intervals for the first supported residual-bootstrap slice.
 - [ ] Evaluate simultaneous confidence bands and prediction intervals.
-- [ ] Evaluate weighted and robust regression.
-- [ ] Add residual diagnostics and multiple-comparison correction where scientifically appropriate.
+- [ ] Evaluate robust regression; weighted least squares is supported only with a scientifically
+  justified error column and remains bounded by the P1-2 disclosure contract.
+- [x] Add residual diagnostics and document multiple-comparison correction as explicitly deferred
+  until a comparison design and correction policy are accepted.
 - [ ] Evaluate user-defined fitting models with strong validation and guidance.
 
 ## Cloud and Commercial Features

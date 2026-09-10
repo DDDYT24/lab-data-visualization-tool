@@ -50,6 +50,7 @@ class User(Base):
     )
 
     projects: Mapped[list[Project]] = relationship(back_populates="owner")
+    experiments: Mapped[list[Experiment]] = relationship(back_populates="owner")
     created_project_revisions: Mapped[list[ProjectRevision]] = relationship(
         back_populates="created_by",
         foreign_keys="ProjectRevision.created_by_user_id",
@@ -95,6 +96,75 @@ class GuestSession(Base):
     )
 
     projects: Mapped[list[Project]] = relationship(back_populates="guest_session")
+    experiments: Mapped[list[Experiment]] = relationship(back_populates="guest_session")
+
+
+class Experiment(Base):
+    """A research experiment grouping one or more physical acquisitions."""
+
+    __tablename__ = "experiments"
+    __table_args__ = (
+        CheckConstraint("length(title) BETWEEN 1 AND 200", name="title_length"),
+        CheckConstraint(
+            "(owner_user_id IS NULL) <> (guest_session_id IS NULL)",
+            name="single_owner",
+        ),
+        Index("ix_experiments_owner_updated", "owner_user_id", "updated_at"),
+        Index("ix_experiments_guest_updated", "guest_session_id", "updated_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    owner_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    guest_session_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("guest_sessions.id", ondelete="RESTRICT"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    owner: Mapped[User | None] = relationship(back_populates="experiments")
+    guest_session: Mapped[GuestSession | None] = relationship(back_populates="experiments")
+    runs: Mapped[list[ExperimentRun]] = relationship(
+        back_populates="experiment", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class ExperimentRun(Base):
+    """One physical acquisition; separate from software ProcessingRun records."""
+
+    __tablename__ = "experiment_runs"
+    __table_args__ = (
+        CheckConstraint("length(run_label) BETWEEN 1 AND 200", name="run_label_length"),
+        CheckConstraint(
+            "replicate_id IS NULL OR length(replicate_id) BETWEEN 1 AND 100",
+            name="replicate_id_length",
+        ),
+        CheckConstraint(
+            "batch_id IS NULL OR length(batch_id) BETWEEN 1 AND 100",
+            name="batch_id_length",
+        ),
+        Index("ix_experiment_runs_experiment_created", "experiment_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    experiment_id: Mapped[UUID] = mapped_column(
+        ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False
+    )
+    run_label: Mapped[str] = mapped_column(String(200), nullable=False)
+    replicate_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    batch_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    experiment: Mapped[Experiment] = relationship(back_populates="runs")
+    projects: Mapped[list[Project]] = relationship(back_populates="experiment_run")
 
 
 class AuthChallenge(Base):
@@ -355,6 +425,9 @@ class Project(Base):
     guest_session_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("guest_sessions.id", ondelete="RESTRICT"), nullable=True
     )
+    experiment_run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("experiment_runs.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     current_revision_id: Mapped[UUID | None] = mapped_column(nullable=True)
     storage_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -387,6 +460,7 @@ class Project(Base):
 
     owner: Mapped[User | None] = relationship(back_populates="projects")
     guest_session: Mapped[GuestSession | None] = relationship(back_populates="projects")
+    experiment_run: Mapped[ExperimentRun | None] = relationship(back_populates="projects")
     current_revision: Mapped[ProjectRevision | None] = relationship(
         foreign_keys=[current_revision_id],
         post_update=True,
@@ -1348,6 +1422,16 @@ class PublicationExport(Base):
     cleaning_decision_set_id: Mapped[UUID | None] = mapped_column(nullable=True)
     chart_spec_revision_id: Mapped[UUID] = mapped_column(nullable=False)
     processing_run_id: Mapped[UUID] = mapped_column(nullable=False)
+    experiment_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("experiments.id", ondelete="RESTRICT"), nullable=True
+    )
+    experiment_run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("experiment_runs.id", ondelete="RESTRICT"), nullable=True
+    )
+    experiment_title_snapshot: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    run_label_snapshot: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    replicate_id_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    batch_id_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
     stored_object_id: Mapped[UUID] = mapped_column(
         ForeignKey("stored_objects.id", ondelete="RESTRICT"), nullable=False
     )

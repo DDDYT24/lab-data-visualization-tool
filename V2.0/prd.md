@@ -1,6 +1,6 @@
 # LabViz V2.0 Product Requirements Document
 
-**Status:** Approved for website frontend implementation
+**Status:** Approved for V2.0 website implementation; V2.1 structured-3D and research-workflow extension planned
 **Primary prototype tool:** Figma
 **Primary language of the interface:** English
 **Secondary interface language:** Simplified Chinese
@@ -24,7 +24,7 @@ The experience should feel:
 - Focused on producing publication-ready figures.
 - Calm, precise, and lightweight rather than enterprise-heavy.
 
-Do not make the interface look like a generic business-intelligence dashboard, a spreadsheet clone, a futuristic AI product, or a dark cyber interface. Avoid decorative gradients, glassmorphism, oversized marketing sections, and excessive card nesting.
+Do not make the interface look like a generic business-intelligence dashboard, a spreadsheet clone, a futuristic software product, or a dark cyber interface. Avoid decorative gradients, glassmorphism, oversized marketing sections, and excessive card nesting.
 
 ## 2. Product Definition
 
@@ -58,6 +58,23 @@ A user uploads an Excel file containing thousands of experimental records. LabVi
 - Local processing and privacy are clearly communicated.
 - Statistical choices must not imply that a paid option is more scientifically correct.
 - Desktop supports the complete workflow; mobile focuses on viewing, sharing, and simple edits.
+
+### V2.1 product direction
+
+V2.1 keeps the V2.0 local-first workflow and adds a safer path for structured 3D experimental data.
+The product may recommend a chart based on the shape of the uploaded data, but it must not silently
+change the chart type, cleaning decisions, or source data. A regular X/Y grid should be explained
+as a candidate surface, while incomplete, duplicated, irregular, or collinear points must receive a
+plain-language diagnostic and a suitable surface, heatmap, or scatter fallback.
+
+V2.1 also adds an optional repeated-acquisition identity layer. Before upload, a user may provide
+an experiment name plus acquisition, replicate, and batch labels. Each file becomes a distinct
+physical `ExperimentRun`; saved history and publication exports retain that lineage. A software
+`ProcessingRun` continues to describe parse, profile, clean, analyze, or export execution only.
+Experiment dashboards, cross-experiment statistics, and team roles remain outside this slice.
+
+The V2.1 execution order and acceptance gates are maintained in [`TODO.md`](TODO.md#v21-roadmap)
+and [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
 ## 3. Business and Deployment Model
 
@@ -129,6 +146,20 @@ The V2.0 implementation is website-first. The following local-mode requirements 
 - Export the complete cleaned dataset.
 - Process long operations in the background.
 - Show real progress and the current processing stage.
+
+### V2.1 structured surface data
+
+- Treat three numeric columns as a surface candidate only after checking the selected X/Y pair.
+- Report the number of unique X values, unique Y values, usable points, duplicate `(X,Y)` pairs,
+  missing grid cells, non-finite values, and whether the points are collinear.
+- For a complete rectangular grid, show the detected dimensions and offer a user-confirmed 3D
+  surface recommendation.
+- In the 3D editor, expose explicit X, Y, and Z selectors. The first surface coordinate is Y and
+  the response height is Z; generic multi-series labels are not sufficient for this mode.
+- For incomplete or irregular points, explain why a regular surface may be misleading and offer a
+  heatmap or scatter fallback where the data supports it.
+- Keep the original row order and source data unchanged. Grid interpretation belongs to chart
+  analysis, not destructive cleaning.
 - Never leave the page looking frozen.
 
 ## 5. Information Architecture
@@ -309,6 +340,9 @@ Future cloud plans may allow six panels, but the initial prototype should focus 
 
 - Chart-type recommendations based on selected columns.
 - X, Y, grouping, error, and panel field selectors.
+- For `3D surface`, explicit X, Y, and Z selectors with the detected grid summary beside them.
+- A non-destructive explanation when the current row order would make a line chart join repeated
+  X values or different surface slices.
 - Large central chart canvas.
 - Right-side appearance and analysis controls.
 - Data-point inspection on hover or selection.
@@ -325,6 +359,10 @@ Future cloud plans may allow six panels, but the initial prototype should focus 
 - Invalid field combination.
 - Fitting failed or model not suitable.
 - 3D surface cannot be generated from collinear or insufficient points.
+- 3D surface has duplicate coordinates.
+- 3D surface has missing grid cells or an irregular grid.
+- 3D surface recommendation available and awaiting user confirmation.
+- 3D surface rendering unavailable with a recoverable explanation.
 
 ### 7.5 Workspace Step 4 — Customize and Export
 
@@ -622,6 +660,23 @@ The prototype is ready for product review when:
 - English is the default, and the language control is easy to find.
 - The visual design feels scientific, friendly, and suitable for publication work.
 
+### V2.1 acceptance additions
+
+- A complete `x,y,z` grid is recognized as a surface candidate without silently changing the
+  user's chart choice.
+- The surface editor makes X/Y/Z roles explicit and shows grid dimensions, usable-point count,
+  duplicates, missing cells, and collinearity before rendering.
+- A flattened regular grid does not receive false row-order sudden-change findings; a real
+  injected discontinuity remains visible and explainable.
+- The same surface `ChartSpec` drives the interactive preview and PNG/SVG/PDF export. A browser
+  regression verifies the 3D axes, `surfacePoints`, ECharts-GL readiness, camera controls, and
+  the absence of a fallback `y over x` line chart.
+- Beginner guidance explains why a surface, heatmap, scatter, or line chart is recommended and
+  lets the user change that choice.
+- V2.1 scientific results disclose assumptions, sample size, exclusions, and limitations; a
+  planned method is never presented as implemented evidence.
+- BOM and non-ASCII filename regressions pass before the V2.1 release is called compatible.
+
 ## 15. Open Decisions After Prototype Review
 
 These decisions must not block initial Figma prototyping:
@@ -688,7 +743,7 @@ Work on Pass 1 only. First establish a simple low-fidelity structure for the des
 
 The product is for experimenters who do not know Python. The primary action must be immediately obvious: upload an experimental Excel or CSV file and begin creating a publication-ready chart. Keep secondary choices visually quiet and explain technical concepts in plain language.
 
-Both variations must feel professional scientific, friendly, calm, and publication ready. Use a high-quality light theme, an off-white application background, white surfaces, laboratory blue as the primary action color, restrained teal accents, clear borders, Inter and Noto Sans SC, and a paper-like chart treatment. Avoid dark mode, gradients, glassmorphism, generic BI dashboards, excessive cards, and futuristic AI styling.
+Both variations must feel professional scientific, friendly, calm, and publication ready. Use a high-quality light theme, an off-white application background, white surfaces, laboratory blue as the primary action color, restrained teal accents, clear borders, Inter and Noto Sans SC, and a paper-like chart treatment. Avoid dark mode, gradients, glassmorphism, generic BI dashboards, excessive cards, and futuristic styling.
 
 Include the English default interface, a visible Chinese language switch, Local/Cloud context, privacy reassurance, supported formats, a sample-data action, and a restrained recent-project area. Generate reusable shell components. Briefly explain the layout decisions and the important differences between the two variations, then recommend one direction for Pass 2.
 ```

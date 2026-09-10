@@ -1,7 +1,7 @@
 [project]
 name = "labviz-api"
-version = "2.0.0"
-description = "FastAPI processing service for the LabViz V2.0 web application"
+version = "2.1.0"
+description = "FastAPI processing service for the LabViz V2.1 web application"
 requires-python = ">=3.12,<3.14"
 
 [tool.pytest.ini_options]
