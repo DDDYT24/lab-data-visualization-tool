@@ -141,14 +141,14 @@ features remain separate tracks.
   path, dependency installation, backup and restore procedure, and the conditions that would send
   data outside the machine. Add regression checks for loopback binding, local defaults, relative API
   routing, and the absence of telemetry hooks.
-  - **Evidence (2026-09-09, V2.1 local release candidate):** `PRIVACY_DATA_BOUNDARY.md`,
+  - **Evidence (2026-09-09, V2.1.0 local release):** `PRIVACY_DATA_BOUNDARY.md`,
     `OFFLINE_INSTALL.md`, `BACKUP_RESTORE.md`, `SECURITY.md`, `CONTRIBUTING.md`, and the public
     release checklist are present; the focused privacy test passes alongside Ruff, MyPy, frontend
     verify, and browser visual/accessibility coverage.
 - [x] **V21-C-6: Make the user-facing storage language network-neutral.** Explain temporary and
   saved projects as local states in both locales, keep the save/share flow explicit, and remove
   stale cloud wording from the help and settings views without changing persisted API compatibility.
-  - **Evidence (2026-09-09, V2.1 local release candidate):** the localized frontend verify and
+  - **Evidence (2026-09-09, V2.1.0 local release):** the localized frontend verify and
     visual/accessibility browser suite pass; legacy wire values remain accepted for existing projects.
 
 ### Later optimization (after V2.1 acceptance)
