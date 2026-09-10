@@ -59,6 +59,7 @@ POSTGRES_URL = os.environ.get(
     "LABVIZ_TEST_POSTGRES_URL",
     "postgresql+psycopg://labviz:labviz-local@127.0.0.1:54329/labviz_test",
 )
+CURRENT_SCHEMA_REVISION = "0011_normalize_check_names"
 
 
 def _alembic_config() -> Config:
@@ -895,9 +896,10 @@ def test_migration_0005_downgrade_fails_closed_with_tracked_artifacts(
         command.downgrade(_alembic_config(), "0004_identity_project_lifecycle")
     with postgres_database.engine.connect() as connection:
         # Alembic runs the requested multi-revision downgrade transactionally;
-        # 0005's fail-closed guard therefore restores the 0009 starting head too.
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0009_atomic_auth_rate_limits"
+        # 0005's fail-closed guard therefore restores the starting head too.
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version"))
+            == CURRENT_SCHEMA_REVISION
         )
 
 
@@ -916,8 +918,9 @@ def test_empty_database_migrates_0005_to_0004_and_back(
     command.upgrade(config, "head")
     command.check(config)
     with postgres_database.engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0009_atomic_auth_rate_limits"
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version"))
+            == CURRENT_SCHEMA_REVISION
         )
 
 

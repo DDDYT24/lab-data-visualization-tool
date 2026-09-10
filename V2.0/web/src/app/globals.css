@@ -2,10 +2,6 @@
   color-scheme: light;
 }
 
-* {
-  box-sizing: border-box;
-}
-
 html,
 body {
   min-height: 100%;
@@ -13,6 +9,10 @@ body {
 
 body {
   margin: 0;
+}
+
+input.MuiOutlinedInput-input {
+  box-sizing: content-box;
 }
 
 a:not(.MuiButton-root) {

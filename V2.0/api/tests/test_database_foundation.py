@@ -126,6 +126,49 @@ def test_initial_migration_is_upgradeable_reversible_and_current(
     command.check(config)
 
 
+def test_legacy_check_constraint_names_are_normalized_without_rebuilding(
+    postgres_database: Database,
+) -> None:
+    config = alembic_config(postgres_database.engine.url.render_as_string(hide_password=False))
+    command.downgrade(config, "0010_experiment_runs")
+    with postgres_database.engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                ALTER TABLE users
+                RENAME CONSTRAINT ck_users_email_normalized
+                TO ck_users_ck_users_email_normalized
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                ALTER TABLE storage_inventory_checkpoints
+                RENAME CONSTRAINT ck_storage_inventory_checkpoints_completion_state
+                TO ck_storage_inventory_checkpoints_ck_storage_inventory_c_1ad8
+                """
+            )
+        )
+
+    command.upgrade(config, "head")
+
+    user_checks = {
+        item["name"] for item in inspect(postgres_database.engine).get_check_constraints("users")
+    }
+    inventory_checks = {
+        item["name"]
+        for item in inspect(postgres_database.engine).get_check_constraints(
+            "storage_inventory_checkpoints"
+        )
+    }
+    assert "ck_users_email_normalized" in user_checks
+    assert "ck_users_ck_users_email_normalized" not in user_checks
+    assert "ck_storage_inventory_checkpoints_completion_state" in inventory_checks
+    assert "ck_storage_inventory_checkpoints_ck_storage_inventory_c_1ad8" not in inventory_checks
+    command.check(config)
+
+
 def test_database_health_and_postgres_only_guard(postgres_database: Database) -> None:
     assert postgres_database.health().ready
     with pytest.raises(ValueError, match="must use PostgreSQL"):

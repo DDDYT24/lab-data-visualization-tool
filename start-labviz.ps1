@@ -26,8 +26,17 @@ function Test-PythonCandidate {
         "-c",
         "import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] < (3, 14) else 1)"
     )
-    $null = & $Executable @arguments 2>$null
-    return $LASTEXITCODE -eq 0
+    try {
+        $null = & $Executable @arguments 2>$null
+        $exitCode = $LASTEXITCODE
+    }
+    catch {
+        # Windows PowerShell 5.1 can promote native stderr to a terminating
+        # error even when stderr is redirected. Treat an unavailable selector
+        # as a failed candidate so the next supported Python version is tried.
+        return $false
+    }
+    return $exitCode -eq 0
 }
 
 $basePython = $null
@@ -94,14 +103,16 @@ if ($RefreshDependencies -or -not (Test-Path -LiteralPath (Join-Path $webRoot "n
     }
 }
 
-Write-Host "Starting LabViz V2.0 on http://127.0.0.1:$WebPort" -ForegroundColor Green
+Write-Host "Starting LabViz V2.1 on http://127.0.0.1:$WebPort" -ForegroundColor Green
 Write-Host "Keep this window open. Local sign-in codes appear in the API output." -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop both services." -ForegroundColor Yellow
 
 $apiProcess = $null
 $webProcess = $null
 $previousProxyTarget = $env:LABVIZ_API_PROXY_TARGET
+$previousNextTelemetryDisabled = $env:NEXT_TELEMETRY_DISABLED
 try {
+    $env:NEXT_TELEMETRY_DISABLED = "1"
     $apiProcess = Start-Process -FilePath $venvPython `
         -ArgumentList @("-m", "uvicorn", "labviz_api.main:app", "--host", "127.0.0.1", "--port", "$ApiPort") `
         -WorkingDirectory $apiRoot -NoNewWindow -PassThru
@@ -124,6 +135,7 @@ try {
 }
 finally {
     $env:LABVIZ_API_PROXY_TARGET = $previousProxyTarget
+    $env:NEXT_TELEMETRY_DISABLED = $previousNextTelemetryDisabled
     foreach ($process in @($apiProcess, $webProcess)) {
         if ($process -and -not $process.HasExited) {
             Stop-Process -Id $process.Id

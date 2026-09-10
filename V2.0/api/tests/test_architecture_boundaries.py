@@ -107,7 +107,8 @@ def test_phase6a_images_and_ecs_examples_keep_runtime_boundaries() -> None:
 
     assert "USER labviz" in api_dockerfile
     assert "USER node" in web_dockerfile
-    assert 'output: "standalone"' in next_config
+    assert '"standalone"' in next_config
+    assert "LABVIZ_E2E_BUILD" in next_config
     assert "requirements.lock.txt" in api_dockerfile
     assert "http://127.0.0.1:8000/health" in api_dockerfile
     assert "http://127.0.0.1:8000/api/v1/ready" not in api_dockerfile

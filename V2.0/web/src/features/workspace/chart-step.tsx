@@ -26,6 +26,7 @@ import { useTranslations } from "next-intl";
 
 import { ApiStatePanel } from "@/components/common/api-state-panel";
 import { ChartCanvas } from "@/components/common/chart-canvas";
+import type { ChartAnalysis } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
@@ -58,6 +59,16 @@ export function ChartStep({
   const quality = useWorkspaceStore((state) => state.quality);
   const updateChart = useWorkspaceStore((state) => state.updateChart);
   const numericColumns = preview?.columns.filter((column) => column.kind === "number") ?? [];
+  const surfaceYField = chartSpec.series[0]?.field ?? "";
+  const surfaceZField = chartSpec.series[1]?.field ?? "";
+  const surfaceNeedsAnotherField =
+    chartSpec.type === "surface3d" &&
+    (chartSpec.series.length !== 2 ||
+      !surfaceYField ||
+      !surfaceZField ||
+      surfaceYField === chartSpec.xAxis.field ||
+      surfaceZField === chartSpec.xAxis.field ||
+      surfaceYField === surfaceZField);
   const groupingColumns =
     preview?.columns.filter(
       (column) =>
@@ -84,7 +95,7 @@ export function ChartStep({
       if (!projectId) throw new Error("No project is open.");
       return labvizApi.analyzeChart(projectId, chartSpec, signal);
     },
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId) && !surfaceNeedsAnotherField,
     retry: 1,
     staleTime: 30_000,
   });
@@ -137,14 +148,264 @@ export function ChartStep({
     }
   };
 
+  const setSurfaceField = (index: 0 | 1, field: string) => {
+    const column = numericColumns.find((item) => item.field === field);
+    if (!column || field === chartSpec.xAxis.field) return;
+    const nextSeries = chartSpec.series.slice(0, 2);
+    const baseSeries = nextSeries[index] ?? {
+      field,
+      label: column.label,
+      color: seriesColors[index % seriesColors.length],
+      lineStyle: "solid" as const,
+      panel: 1,
+      yAxis: "primary" as const,
+    };
+    nextSeries[index] = {
+      ...baseSeries,
+      field,
+      label: column.label,
+      panel: 1,
+      yAxis: "primary",
+    };
+    updateChart({
+      series: nextSeries,
+      ...(index === 0
+        ? {
+            yAxis: {
+              ...chartSpec.yAxis,
+              field,
+              title: column.label,
+              unit: column.unit ?? "",
+            },
+          }
+        : {}),
+    });
+  };
+
+  const applyRecommendation = (
+    recommendation: ChartAnalysis["recommendations"][number],
+  ) => {
+    const xColumn = numericColumns.find(
+      (column) => column.field === recommendation.xField,
+    );
+    const yColumn = numericColumns.find(
+      (column) => column.field === recommendation.yField,
+    );
+    const zColumn = numericColumns.find(
+      (column) => column.field === recommendation.zField,
+    );
+    if (!xColumn || !yColumn || !zColumn) return;
+
+    const recommendedSeries = [yColumn, zColumn].map((column, index) => {
+      const existing = chartSpec.series.find(
+        (series) => series.field === column.field,
+      );
+      return {
+        ...(existing ?? chartSpec.series[0]),
+        color: existing?.color ?? seriesColors[index % seriesColors.length],
+        field: column.field,
+        label: column.label,
+        lineStyle: existing?.lineStyle ?? "solid",
+        panel: 1,
+        yAxis: "primary" as const,
+      };
+    });
+    if (recommendation.chartType === "surface3d") {
+      updateChart({
+        fitting: { ...chartSpec.fitting, model: "none" },
+        groupField: null,
+        panelCount: 1,
+        secondaryYAxis: {
+          ...chartSpec.secondaryYAxis,
+          enabled: false,
+          field: null,
+        },
+        series: recommendedSeries,
+        type: "surface3d",
+        uncertainty: {
+          ...chartSpec.uncertainty,
+          errorField: null,
+          mode: "none",
+        },
+        xAxis: {
+          field: xColumn.field,
+          title: xColumn.label,
+          unit: xColumn.unit ?? "",
+        },
+        yAxis: {
+          field: yColumn.field,
+          title: yColumn.label,
+          unit: yColumn.unit ?? "",
+        },
+      });
+      return;
+    }
+    if (recommendation.chartType === "scatter") {
+      updateChart({
+        groupField: yColumn.field,
+        panelCount: 1,
+        series: [recommendedSeries[1]],
+        type: "scatter",
+        xAxis: {
+          field: xColumn.field,
+          title: xColumn.label,
+          unit: xColumn.unit ?? "",
+        },
+        yAxis: {
+          field: zColumn.field,
+          title: zColumn.label,
+          unit: zColumn.unit ?? "",
+        },
+      });
+    }
+  };
+
   const warnings = analysisQuery.data?.series.flatMap((series) => series.warnings) ?? [];
-  const surfaceNeedsAnotherField =
-    chartSpec.type === "surface3d" && chartSpec.series.length < 2;
+  const translateAnalysisText = (value: string) => {
+    if (value.startsWith("The selected model form")) return t("evidenceMessages.modelForm");
+    if (value.startsWith("Complete finite observations")) {
+      return t("evidenceMessages.completeObservations");
+    }
+    if (value.startsWith("The supplied error column")) return t("evidenceMessages.errorColumn");
+    if (value.startsWith("Bootstrap residual resampling")) return t("evidenceMessages.bootstrap");
+    if (value.startsWith("The selected confidence level")) return t("evidenceMessages.confidence");
+    if (value.startsWith("Residual summaries")) return t("evidenceMessages.residualDescriptive");
+    if (value.startsWith("They do not establish")) return t("evidenceMessages.residualNoInference");
+    if (value.startsWith("R² describes")) return t("evidenceMessages.rSquared");
+    if (value.startsWith("The interval is pointwise")) return t("evidenceMessages.pointwise");
+    if (value.startsWith("Ordinary least squares")) return t("evidenceMessages.ordinary");
+    if (value.startsWith("Weighted fitting")) return t("evidenceMessages.weighted");
+    if (value.startsWith("A possible residual trend")) return t("evidenceMessages.residualTrend");
+    if (value.startsWith("Prediction intervals")) return t("evidenceMessages.prediction");
+    if (value.startsWith("Simultaneous confidence bands")) {
+      return t("evidenceMessages.simultaneous");
+    }
+    if (value.startsWith("Robust regression")) return t("evidenceMessages.robust");
+    if (value.startsWith("No multiplicity correction")) return t("evidenceMessages.multiplicity");
+    if (value.startsWith("Select weighted least squares")) {
+      return t("evidenceMessages.weightedSelection");
+    }
+    if (value.startsWith("A confidence band is available")) {
+      return t("evidenceMessages.confidenceRequiresFit");
+    }
+    if (value.startsWith("Residual diagnostics require")) {
+      return t("evidenceMessages.residualRequiresFit");
+    }
+    if (value.startsWith("The selected fit could not")) return t("evidenceMessages.fitUnavailable");
+    return value;
+  };
+  const renderAnalysisEvidence = (series: ChartAnalysis["series"][number]) => {
+    const disclosures = series.disclosures ?? [];
+    const assumptions = disclosures.flatMap((item) => item.assumptions ?? []).map(translateAnalysisText);
+    const limitations = disclosures.flatMap((item) => item.limitations ?? []).map(translateAnalysisText);
+    const residual = series.residualDiagnostic;
+    const uniqueAssumptions = [...new Set(assumptions)];
+    const uniqueLimitations = [...new Set(limitations)];
+    const hasDeferredMethod = disclosures.some((item) => item.status === "deferred");
+    return (
+      <Stack spacing={0.5} sx={{ mt: 0.75 }}>
+        {series.fit ? (
+          <Typography variant="caption">
+            {t("analysisEvidence", {
+              excludedCount: series.fit.excludedCount ?? 0,
+              sampleSize: series.fit.sampleSize ?? residual?.sampleSize ?? 0,
+            })}
+          </Typography>
+        ) : null}
+        {residual?.status === "supported" && residual.rmse !== null ? (
+          <Typography variant="caption">
+            {t("residualDiagnostic", {
+              meanResidual: residual.meanResidual?.toFixed(4) ?? "—",
+              rmse: residual.rmse.toFixed(4),
+            })}
+          </Typography>
+        ) : null}
+        {residual?.residualTrend === "possible-trend" ? (
+          <Typography variant="caption">{t("residualTrend")}</Typography>
+        ) : null}
+        {hasDeferredMethod ? (
+          <Typography variant="caption">{t("deferredMethods")}</Typography>
+        ) : null}
+        {uniqueAssumptions.length > 0 ? (
+          <Typography variant="caption">
+            <strong>{t("analysisAssumptions")}:</strong> {uniqueAssumptions.join(" ")}
+          </Typography>
+        ) : null}
+        {uniqueLimitations.length > 0 ? (
+          <Typography variant="caption">
+            <strong>{t("limitations")}:</strong> {uniqueLimitations.join(" ")}
+          </Typography>
+        ) : null}
+      </Stack>
+    );
+  };
+  const recommendationMessage = (
+    recommendation: ChartAnalysis["recommendations"][number],
+  ) => {
+    const params = {
+      pointCount: Number(recommendation.reasonParams.pointCount ?? 0),
+      xCount: Number(recommendation.reasonParams.xCount ?? 0),
+      xField: recommendation.xField,
+      yCount: Number(recommendation.reasonParams.yCount ?? 0),
+      yField: recommendation.yField,
+      zField: recommendation.zField,
+    };
+    switch (recommendation.reasonCode) {
+      case "chart.recommendation.surface-grid-line":
+        return t("recommendations.surfaceGridLine", params);
+      case "chart.recommendation.surface-grid":
+        return t("recommendations.surfaceGrid", params);
+      case "chart.recommendation.scatter-grid":
+        return t("recommendations.scatterGrid", params);
+      default:
+        return recommendation.reason;
+    }
+  };
+  const surfaceDiagnostic =
+    chartSpec.type === "surface3d"
+      ? analysisQuery.data?.preview.surfaceDiagnostics.find((item) => item.panel === 1)
+      : undefined;
+  const surfaceDiagnosticMessage = surfaceDiagnostic
+    ? (() => {
+        switch (surfaceDiagnostic.status) {
+          case "invalid-values":
+            return t("surfaceDiagnostics.invalidValues", {
+              count: surfaceDiagnostic.nonFinitePoints,
+            });
+          case "insufficient-points":
+            return t("surfaceDiagnostics.insufficientPoints");
+          case "collinear":
+            return t("surfaceDiagnostics.collinear");
+          case "duplicate-coordinates":
+            return t("surfaceDiagnostics.duplicateCoordinates", {
+              count: surfaceDiagnostic.duplicateCoordinateRows,
+            });
+          case "missing-grid":
+            return t("surfaceDiagnostics.missingGrid", {
+              count: surfaceDiagnostic.missingGridCells,
+            });
+          case "irregular-grid":
+            return t("surfaceDiagnostics.irregularGrid");
+          default:
+            return null;
+        }
+      })()
+    : null;
+  const surfaceBlocked = Boolean(
+    surfaceDiagnostic && surfaceDiagnostic.status !== "valid",
+  );
 
   const canvas = (
     <Stack spacing={1.5}>
       <Paper sx={{ border: 1, borderColor: "divider", p: { xs: 1, md: 2 } }}>
-        {analysisQuery.isPending ? (
+        {surfaceNeedsAnotherField ? (
+          <ApiStatePanel
+            compact
+            description={t("surfaceSetupDescription")}
+            kind="empty"
+            title={t("surfaceSetupTitle")}
+          />
+        ) : analysisQuery.isPending ? (
           <ApiStatePanel
             compact
             description={t("calculatingAnalysis")}
@@ -182,12 +443,48 @@ export function ChartStep({
           })}
         </Alert>
       ) : null}
+      {analysisQuery.data?.recommendations.map((recommendation) => (
+        <Paper
+          aria-label={t("recommendationTitle", {
+            chart: t(`types.${recommendation.chartType}`),
+          })}
+          key={`${recommendation.chartType}:${recommendation.xField}:${recommendation.yField}:${recommendation.zField}`}
+          sx={{ border: 1, borderColor: "info.main", p: 2 }}
+        >
+          <Stack spacing={1.25}>
+            <Typography component="h2" sx={{ fontWeight: 700 }} variant="body1">
+              {t("recommendationTitle", {
+                chart: t(`types.${recommendation.chartType}`),
+              })}
+            </Typography>
+            <Typography color="text.secondary" variant="body2">
+              {recommendationMessage(recommendation)}
+            </Typography>
+            {recommendation.chartType !== "heatmap" ? (
+              <Button
+                onClick={() => applyRecommendation(recommendation)}
+                size="small"
+                sx={{ alignSelf: "flex-start" }}
+                variant="outlined"
+              >
+                {t("useRecommendation", {
+                  chart: t(`types.${recommendation.chartType}`),
+                })}
+              </Button>
+            ) : null}
+          </Stack>
+        </Paper>
+      ))}
       {analysisQuery.data?.series
-        .filter((series) => series.fit)
+        .filter(
+          (series) =>
+            series.fit ||
+            series.disclosures?.some((item) => item.status === "insufficient-data"),
+        )
         .map((series) => (
-          <Alert key={series.field} severity="success">
+          <Alert key={series.field} severity={series.fit ? "success" : "warning"}>
             <Typography sx={{ fontWeight: 700 }} variant="body2">
-              {t("fitResult", { label: series.label })}
+              {series.fit ? t("fitResult", { label: series.label }) : t("analysisFailed")}
             </Typography>
             {chartSpec.fitting.showEquation ? (
               <Typography component="span" variant="body2">
@@ -199,6 +496,7 @@ export function ChartStep({
                 R² = {series.fit?.rSquared.toFixed(4)}
               </Typography>
             ) : null}
+            {renderAnalysisEvidence(series)}
           </Alert>
         ))}
       {warnings.map((warning) => (
@@ -232,10 +530,9 @@ export function ChartStep({
                   ...(singlePanel
                     ? {
                         panelCount: 1,
-                        series: chartSpec.series.map((series) => ({
-                          ...series,
-                          panel: 1,
-                        })),
+                        series: chartSpec.series
+                          .slice(0, type === "surface3d" ? 2 : undefined)
+                          .map((series) => ({ ...series, panel: 1 })),
                       }
                     : {}),
                   ...(!["line", "scatter", "bar"].includes(type)
@@ -302,35 +599,89 @@ export function ChartStep({
               ))}
             </Select>
           </FormControl>
-          <FormControl fullWidth size="small">
-            <InputLabel id="chart-series-field-label">{t("seriesFields")}</InputLabel>
-            <Select
-              label={t("seriesFields")}
-              labelId="chart-series-field-label"
-              multiple
-              onChange={setSeriesFields}
-              renderValue={(selected) =>
-                chartSpec.series
-                  .filter((series) => selected.includes(series.field))
-                  .map((series) => series.label)
-                  .join(", ")
-              }
-              value={chartSpec.series.map((series) => series.field)}
-            >
-              {numericColumns
-                .filter((column) => column.field !== chartSpec.xAxis.field)
-                .map((column) => (
-                  <MenuItem key={column.field} value={column.field}>
-                    <Checkbox
-                      checked={chartSpec.series.some(
-                        (series) => series.field === column.field,
-                      )}
-                    />
-                    {column.label}
-                  </MenuItem>
-                ))}
-            </Select>
-          </FormControl>
+          {chartSpec.type === "surface3d" ? (
+            <Stack spacing={1.5}>
+              <Typography color="text.secondary" variant="caption">
+                {t("surfaceAxisHelp")}
+              </Typography>
+              <FormControl fullWidth size="small">
+                <InputLabel id="surface-y-field-label">{t("surfaceYField")}</InputLabel>
+                <Select
+                  label={t("surfaceYField")}
+                  labelId="surface-y-field-label"
+                  onChange={(event) => setSurfaceField(0, event.target.value)}
+                  value={surfaceYField}
+                >
+                  {!surfaceYField ? <MenuItem value="">{t("chooseField")}</MenuItem> : null}
+                  {numericColumns
+                    .filter(
+                      (column) =>
+                        column.field === surfaceYField ||
+                        (column.field !== chartSpec.xAxis.field &&
+                          column.field !== surfaceZField),
+                    )
+                    .map((column) => (
+                      <MenuItem key={column.field} value={column.field}>
+                        {column.label}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+              <FormControl disabled={!surfaceYField} fullWidth size="small">
+                <InputLabel id="surface-z-field-label">{t("surfaceZField")}</InputLabel>
+                <Select
+                  label={t("surfaceZField")}
+                  labelId="surface-z-field-label"
+                  onChange={(event) => setSurfaceField(1, event.target.value)}
+                  value={surfaceZField}
+                >
+                  {!surfaceZField ? <MenuItem value="">{t("chooseField")}</MenuItem> : null}
+                  {numericColumns
+                    .filter(
+                      (column) =>
+                        column.field === surfaceZField ||
+                        (column.field !== chartSpec.xAxis.field &&
+                          column.field !== surfaceYField),
+                    )
+                    .map((column) => (
+                      <MenuItem key={column.field} value={column.field}>
+                        {column.label}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          ) : (
+            <FormControl fullWidth size="small">
+              <InputLabel id="chart-series-field-label">{t("seriesFields")}</InputLabel>
+              <Select
+                label={t("seriesFields")}
+                labelId="chart-series-field-label"
+                multiple
+                onChange={setSeriesFields}
+                renderValue={(selected) =>
+                  chartSpec.series
+                    .filter((series) => selected.includes(series.field))
+                    .map((series) => series.label)
+                    .join(", ")
+                }
+                value={chartSpec.series.map((series) => series.field)}
+              >
+                {numericColumns
+                  .filter((column) => column.field !== chartSpec.xAxis.field)
+                  .map((column) => (
+                    <MenuItem key={column.field} value={column.field}>
+                      <Checkbox
+                        checked={chartSpec.series.some(
+                          (series) => series.field === column.field,
+                        )}
+                      />
+                      {column.label}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+          )}
           <FormControl
             disabled={!(["line", "scatter", "bar"] as ChartSpec["type"][]).includes(chartSpec.type)}
             fullWidth
@@ -353,8 +704,14 @@ export function ChartStep({
               ))}
             </Select>
           </FormControl>
+          <Typography color="text.secondary" variant="caption">
+            {t("groupHelp")}
+          </Typography>
           {surfaceNeedsAnotherField ? (
-            <Alert severity="warning">{t("surfaceFields")}</Alert>
+            <Alert severity="warning">{t("surfaceSetupDescription")}</Alert>
+          ) : null}
+          {surfaceDiagnosticMessage ? (
+            <Alert severity="warning">{surfaceDiagnosticMessage}</Alert>
           ) : null}
           <TextField
             fullWidth
@@ -486,6 +843,9 @@ export function ChartStep({
             <AccordionSummary>{t("analysis")}</AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
+                <Typography color="text.secondary" variant="caption">
+                  {t("analysisHelp")}
+                </Typography>
                 <FormControl fullWidth size="small">
                   <InputLabel id="fit-model-label">{t("fitModel")}</InputLabel>
                   <Select
@@ -511,6 +871,36 @@ export function ChartStep({
                     )}
                   </Select>
                 </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="fit-method-label">{t("fitMethod")}</InputLabel>
+                  <Select
+                    disabled={chartSpec.fitting.model === "none"}
+                    label={t("fitMethod")}
+                    labelId="fit-method-label"
+                    onChange={(event) =>
+                      updateChart({
+                        fitting: {
+                          ...chartSpec.fitting,
+                          fitMethod: event.target.value as ChartSpec["fitting"]["fitMethod"],
+                        },
+                      })
+                    }
+                    value={chartSpec.fitting.fitMethod}
+                  >
+                    {(["ordinary-least-squares", "weighted-least-squares"] as const).map(
+                      (method) => (
+                        <MenuItem key={method} value={method}>
+                          {t(`fitMethods.${method}`)}
+                        </MenuItem>
+                      ),
+                    )}
+                  </Select>
+                </FormControl>
+                {chartSpec.fitting.fitMethod === "weighted-least-squares" ? (
+                  <Typography color="text.secondary" variant="caption">
+                    {t("weightedFitHelp")}
+                  </Typography>
+                ) : null}
                 {chartSpec.fitting.model === "polynomial" ? (
                   <FormControl fullWidth size="small">
                     <InputLabel id="polynomial-order-label">{t("polynomialOrder")}</InputLabel>
@@ -572,6 +962,30 @@ export function ChartStep({
                   }
                   label={t("confidenceBand")}
                 />
+                {chartSpec.fitting.confidenceBand ? (
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="confidence-method-label">{t("confidenceMethod")}</InputLabel>
+                    <Select
+                      label={t("confidenceMethod")}
+                      labelId="confidence-method-label"
+                      onChange={(event) =>
+                        updateChart({
+                          fitting: {
+                            ...chartSpec.fitting,
+                            confidenceMethod: event.target.value as ChartSpec["fitting"]["confidenceMethod"],
+                          },
+                        })
+                      }
+                      value={chartSpec.fitting.confidenceMethod}
+                    >
+                      {(["student-t", "bootstrap"] as const).map((method) => (
+                        <MenuItem key={method} value={method}>
+                          {t(`confidenceMethods.${method}`)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : null}
                 <FormControl fullWidth size="small">
                   <InputLabel id="uncertainty-mode-label">{t("errorBars")}</InputLabel>
                   <Select
@@ -758,7 +1172,11 @@ export function ChartStep({
               {t("back")}
             </Button>
             <Button
-              disabled={surfaceNeedsAnotherField || Boolean(analysisQuery.error)}
+              disabled={
+                surfaceNeedsAnotherField ||
+                surfaceBlocked ||
+                Boolean(analysisQuery.error)
+              }
               endIcon={<ArrowForwardRoundedIcon />}
               fullWidth
               loading={saveChart.isPending}

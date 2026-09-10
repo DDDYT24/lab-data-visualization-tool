@@ -3,7 +3,7 @@ PASS
 # Phase 6-PRE Acceptance
 
 - **Accepted on:** 2026-08-11
-- **Branch:** `codex/v2-closeout-p0-1-runtime-errors`
+- **Branch:** local development branch
 - **Base:** `f345e1adfc45dfe263ab11521c7969b6b8c7e326`
 - **PRE-1:** `c5ce14e985d15c0a0adc3b6a21c6603eae8f699f`
 - **PRE-2 candidate:** `96f9a8b409557985127c7e16a83ae28e88da40db`

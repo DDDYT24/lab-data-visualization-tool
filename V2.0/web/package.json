@@ -1,6 +1,6 @@
 {
   "name": "labviz-web",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "engines": {
     "node": ">=22.22.2"
@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "prepare:e2e": "node scripts/prepare-playwright.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:live": "playwright test e2e/live-api.spec.ts --project=chromium",

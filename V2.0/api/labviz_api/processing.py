@@ -9,8 +9,9 @@ import re
 import zlib
 from collections import Counter
 from datetime import date, datetime
+from itertools import combinations
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, TypedDict, cast
 from zipfile import BadZipFile, ZipFile
 
 import matplotlib
@@ -34,8 +35,11 @@ MAX_PREVIEW_ROWS = 200
 MAX_PREVIEW_CELLS = 15_000
 MAX_FINDING_ROW_IDS = 100
 MAX_ANALYSIS_POINTS = 250
+BOOTSTRAP_RESAMPLES = 400
 MAX_XLSX_ENTRIES = 5_000
 MAX_XLSX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
+MAX_GRID_CANDIDATE_COLUMNS = 12
+MIN_GRID_COVERAGE = 0.8
 UNIT_PATTERN = re.compile(r"^\s*(.*?)\s*(?:\(([^()]+)\)|\[([^\[\]]+)\])\s*$")
 
 
@@ -43,6 +47,22 @@ class ProcessingError(ValueError):
     def __init__(self, message: str, code: str = "processing-failed") -> None:
         super().__init__(message)
         self.code = code
+
+
+class GridShape(TypedDict):
+    x_field: str
+    y_field: str
+    x_count: int
+    y_count: int
+    expected_points: int
+    usable_points: int
+    unique_points: int
+    duplicate_coordinate_rows: int
+    missing_grid_cells: int
+    non_finite_points: int
+    uniform_x_spacing: bool
+    uniform_y_spacing: bool
+    coverage: float
 
 
 def validate_upload(payload: bytes, filename: str, max_upload_bytes: int) -> str:
@@ -91,11 +111,22 @@ def load_dataframe(
 
     try:
         if suffix == ".csv":
-            frame = pd.read_csv(source, header=pandas_header)
+            frame = pd.read_csv(source, header=pandas_header, encoding="utf-8-sig")
         elif suffix == ".tsv":
-            frame = pd.read_csv(source, sep="\t", header=pandas_header)
+            frame = pd.read_csv(
+                source,
+                sep="\t",
+                header=pandas_header,
+                encoding="utf-8-sig",
+            )
         elif suffix == ".txt":
-            frame = pd.read_csv(source, sep=None, engine="python", header=pandas_header)
+            frame = pd.read_csv(
+                source,
+                sep=None,
+                engine="python",
+                header=pandas_header,
+                encoding="utf-8-sig",
+            )
         elif suffix == ".json":
             parsed = json.loads(payload.decode("utf-8-sig"))
             frame = pd.DataFrame(parsed)
@@ -250,6 +281,141 @@ def _finding_message_fields(
     }
 
 
+def _uniform_spacing(values: np.ndarray[Any, Any]) -> bool:
+    if len(values) < 2:
+        return False
+    differences = np.diff(values)
+    return bool(np.all(differences > 0) and np.allclose(differences, differences[0]))
+
+
+def _grid_shapes(frame: pd.DataFrame) -> list[GridShape]:
+    numeric_columns = [str(column) for column in frame.select_dtypes(include="number").columns]
+    column_order = {column: index for index, column in enumerate(numeric_columns)}
+    ranked_columns = sorted(
+        (
+            (column, int(pd.to_numeric(frame[column], errors="coerce").nunique(dropna=True)))
+            for column in numeric_columns
+        ),
+        key=lambda item: (item[1], column_order[item[0]]),
+    )
+    candidate_columns = [
+        column for column, unique_count in ranked_columns if 2 <= unique_count < len(frame)
+    ][:MAX_GRID_CANDIDATE_COLUMNS]
+    shapes: list[GridShape] = []
+    for x_field, y_field in combinations(candidate_columns, 2):
+        coordinates = frame[[x_field, y_field]].apply(pd.to_numeric, errors="coerce")
+        finite_mask = np.isfinite(coordinates.to_numpy(dtype=float)).all(axis=1)
+        usable = coordinates.loc[finite_mask]
+        if len(usable) < 4:
+            continue
+        x_values = np.sort(usable[x_field].unique().astype(float))
+        y_values = np.sort(usable[y_field].unique().astype(float))
+        if len(x_values) < 2 or len(y_values) < 2:
+            continue
+        pair_counts = usable.groupby([x_field, y_field], sort=False).size()
+        expected_points = int(len(x_values) * len(y_values))
+        unique_points = int(len(pair_counts))
+        coverage = unique_points / expected_points
+        if coverage < MIN_GRID_COVERAGE:
+            continue
+        duplicate_counts = pair_counts[pair_counts > 1]
+        shapes.append(
+            {
+                "x_field": x_field,
+                "y_field": y_field,
+                "x_count": int(len(x_values)),
+                "y_count": int(len(y_values)),
+                "expected_points": expected_points,
+                "usable_points": int(len(usable)),
+                "unique_points": unique_points,
+                "duplicate_coordinate_rows": int((duplicate_counts - 1).sum()),
+                "missing_grid_cells": max(expected_points - unique_points, 0),
+                "non_finite_points": int((~finite_mask).sum()),
+                "uniform_x_spacing": _uniform_spacing(x_values),
+                "uniform_y_spacing": _uniform_spacing(y_values),
+                "coverage": coverage,
+            }
+        )
+    return shapes
+
+
+def _best_grid_shape(frame: pd.DataFrame, preferred_field: str | None = None) -> GridShape | None:
+    shapes = _grid_shapes(frame)
+    if not shapes:
+        return None
+    return max(
+        shapes,
+        key=lambda shape: (
+            int(preferred_field in {shape["x_field"], shape["y_field"]}),
+            int(shape["uniform_x_spacing"] and shape["uniform_y_spacing"]),
+            shape["coverage"],
+            min(shape["x_count"], shape["y_count"]),
+            -shape["missing_grid_cells"],
+            -shape["duplicate_coordinate_rows"],
+        ),
+    )
+
+
+def _grid_adjacent_changes(
+    frame: pd.DataFrame,
+    column: str,
+    grid: GridShape,
+) -> pd.Series[Any]:
+    changes = np.full(len(frame), np.nan, dtype=float)
+    for group_field, sort_field in (
+        (grid["y_field"], grid["x_field"]),
+        (grid["x_field"], grid["y_field"]),
+    ):
+        working = pd.DataFrame(
+            {
+                "position": np.arange(len(frame)),
+                "group": pd.to_numeric(frame[group_field], errors="coerce").to_numpy(),
+                "coordinate": pd.to_numeric(frame[sort_field], errors="coerce").to_numpy(),
+                "value": pd.to_numeric(frame[column], errors="coerce").to_numpy(),
+            }
+        )
+        finite = np.isfinite(working[["group", "coordinate", "value"]].to_numpy(dtype=float)).all(
+            axis=1
+        )
+        ordered = working.loc[finite].sort_values(
+            ["group", "coordinate", "position"], kind="mergesort"
+        )
+        positions = ordered["position"].to_numpy(dtype=int)
+        groups = ordered["group"].to_numpy(dtype=float)
+        values = ordered["value"].to_numpy(dtype=float)
+        for index in range(1, len(ordered)):
+            if groups[index] != groups[index - 1]:
+                continue
+            difference = abs(values[index] - values[index - 1])
+            for position in (positions[index - 1], positions[index]):
+                current = changes[position]
+                changes[position] = difference if math.isnan(current) else max(current, difference)
+    return pd.Series(changes, index=frame.index)
+
+
+def _sudden_change_mask(
+    frame: pd.DataFrame,
+    column: str,
+    grid: GridShape | None,
+) -> np.ndarray[Any, Any]:
+    changes = (
+        _grid_adjacent_changes(frame, column, grid)
+        if grid is not None
+        else frame[column].diff().abs()
+    )
+    valid_changes = changes.dropna()
+    if len(valid_changes) < 5:
+        return np.zeros(len(frame), dtype=bool)
+    typical_change = float(valid_changes.median())
+    deviation = float((valid_changes - typical_change).abs().median())
+    threshold = max(
+        typical_change + 6 * 1.4826 * deviation,
+        typical_change * 6,
+        1e-12,
+    )
+    return cast(np.ndarray[Any, Any], (changes.notna() & (changes > threshold)).to_numpy())
+
+
 def build_quality_report(
     project_id: str,
     frame: pd.DataFrame,
@@ -258,6 +424,7 @@ def build_quality_report(
     findings: list[dict[str, Any]] = []
     issue_mask = np.zeros(len(frame), dtype=bool)
     suspicious_mask = np.zeros(len(frame), dtype=bool)
+    grid = _best_grid_shape(frame)
 
     for column in frame.columns:
         missing_mask = frame[column].isna()
@@ -465,21 +632,12 @@ def build_quality_report(
                         }
                     )
 
-        changes = frame[column].diff().abs()
-        valid_changes = changes.dropna()
-        if len(valid_changes) < 5:
-            continue
-        typical_change = float(valid_changes.median())
-        deviation = float((valid_changes - typical_change).abs().median())
-        threshold = max(
-            typical_change + 6 * 1.4826 * deviation,
-            typical_change * 6,
-            1e-12,
-        )
-        sudden_change_mask = changes.notna() & (changes > threshold)
+        sudden_change_mask = _sudden_change_mask(frame, str(column), grid)
         if sudden_change_mask.any():
-            rows, affected_count, truncated = _finding_rows(sudden_change_mask)
-            mask_values = sudden_change_mask.to_numpy()
+            mask_series = pd.Series(sudden_change_mask, index=frame.index)
+            rows, affected_count, truncated = _finding_rows(mask_series)
+            mask_values = sudden_change_mask
+            grid_aware = grid is not None
             issue_mask |= mask_values
             suspicious_mask |= mask_values
             findings.append(
@@ -494,16 +652,34 @@ def build_quality_report(
                     "summary": (
                         f"{affected_count} point"
                         f"{'s' if affected_count != 1 else ''} change "
-                        "abruptly from the previous row"
+                        + (
+                            "abruptly from neighboring grid coordinates"
+                            if grid_aware
+                            else "abruptly from the previous row"
+                        )
                     ),
                     "reason": (
-                        "The adjacent change is much larger than the typical change in this "
-                        "column. Review the measurements before excluding anything."
+                        (
+                            "The change between neighboring grid coordinates is much larger "
+                            "than the typical grid change."
+                            if grid_aware
+                            else "The adjacent row change is much larger than the typical "
+                            "change in this column."
+                        )
+                        + " Review the measurements before excluding anything."
                     ),
                     **_finding_message_fields(
-                        summary_code="quality.sudden-change.summary",
+                        summary_code=(
+                            "quality.sudden-change.summary.grid"
+                            if grid_aware
+                            else "quality.sudden-change.summary"
+                        ),
                         summary_params={"count": affected_count},
-                        reason_code="quality.sudden-change.reason",
+                        reason_code=(
+                            "quality.sudden-change.reason.grid"
+                            if grid_aware
+                            else "quality.sudden-change.reason"
+                        ),
                     ),
                 }
             )
@@ -665,14 +841,7 @@ def _quality_finding_mask(frame: pd.DataFrame, finding: dict[str, Any]) -> np.nd
             (series.notna() & ((series < lower) | (series > upper))).to_numpy(),
         )
     if kind == "sudden-change":
-        changes = series.diff().abs()
-        valid_changes = changes.dropna()
-        if len(valid_changes) < 5:
-            return np.zeros(len(frame), dtype=bool)
-        typical_change = float(valid_changes.median())
-        deviation = float((valid_changes - typical_change).abs().median())
-        threshold = max(typical_change + 6 * 1.4826 * deviation, typical_change * 6, 1e-12)
-        return cast(np.ndarray[Any, Any], (changes.notna() & (changes > threshold)).to_numpy())
+        return _sudden_change_mask(frame, column, _best_grid_shape(frame))
     if kind == "outside-range":
         minimum = finding.get("validMinimum")
         maximum = finding.get("validMaximum")
@@ -733,9 +902,33 @@ def validate_chart_fields(frame: pd.DataFrame, chart: ChartSpec) -> None:
     numeric_fields = [item.field for item in chart.series]
     if chart.type == "surface3d":
         numeric_fields.append(chart.x_axis.field)
+        for panel in range(1, chart.panel_count + 1):
+            panel_fields = [item.field for item in chart.series if item.panel == panel]
+            if len(panel_fields) < 2:
+                raise ProcessingError(
+                    f"3D surface panel {panel} needs separate Y and Z fields.",
+                    "invalid-chart-fields",
+                )
+            if len(panel_fields) > 2:
+                raise ProcessingError(
+                    f"3D surface panel {panel} accepts exactly one Y field and one Z field.",
+                    "invalid-chart-fields",
+                )
+            if panel_fields[0] == panel_fields[1]:
+                raise ProcessingError(
+                    "3D surface Y and Z fields must be different.",
+                    "invalid-chart-fields",
+                )
     if chart.fitting.model != "none" or chart.uncertainty.mode != "none":
         numeric_fields.append(chart.x_axis.field)
     if chart.uncertainty.error_field:
+        numeric_fields.append(chart.uncertainty.error_field)
+    if chart.fitting.fit_method == "weighted-least-squares":
+        if chart.uncertainty.mode != "column" or not chart.uncertainty.error_field:
+            raise ProcessingError(
+                "Weighted fitting requires an existing error column.",
+                "invalid-fit-method",
+            )
         numeric_fields.append(chart.uncertainty.error_field)
     _numeric(frame, sorted(set(numeric_fields)))
 
@@ -766,33 +959,92 @@ def _fit_equation(model: str, coefficients: np.ndarray[Any, Any]) -> str:
     return "y = " + " + ".join(terms).replace("+ -", "− ")
 
 
+def _deferred_analysis_disclosures(
+    *, sample_size: int, excluded_count: int
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "method": "prediction-band",
+            "status": "deferred",
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": ["Prediction intervals are not displayed by this release."],
+        },
+        {
+            "method": "simultaneous-band",
+            "status": "deferred",
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": ["Simultaneous confidence bands are not displayed by this release."],
+        },
+        {
+            "method": "robust-fitting",
+            "status": "deferred",
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": ["Robust regression is not displayed by this release."],
+        },
+        {
+            "method": "multiple-comparison",
+            "status": "deferred",
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": ["No multiplicity correction is applied across series or groups."],
+        },
+    ]
+
+
 def _fit_analysis(
     frame: pd.DataFrame,
     x_field: str,
     y_field: str,
     chart: ChartSpec,
-) -> tuple[dict[str, Any] | None, list[str]]:
+) -> tuple[dict[str, Any] | None, list[str], dict[str, Any] | None, list[dict[str, Any]]]:
     fitting = chart.fitting
     if fitting.model == "none":
-        return None, []
-    _numeric(frame, [x_field, y_field])
-    complete = frame[[x_field, y_field]].dropna()
+        return None, [], None, []
+    fields = [x_field, y_field]
+    if fitting.fit_method == "weighted-least-squares":
+        if chart.uncertainty.mode != "column" or not chart.uncertainty.error_field:
+            raise ProcessingError(
+                "Weighted fitting requires an existing error column.",
+                "invalid-fit-method",
+            )
+        fields.append(chart.uncertainty.error_field)
+    _numeric(frame, fields)
+    complete = frame[fields].dropna()
+    available_count = len(frame)
     x = complete[x_field].to_numpy(dtype=float)
     y = complete[y_field].to_numpy(dtype=float)
-    finite = np.isfinite(x) & np.isfinite(y)
+    error_values: np.ndarray[Any, Any] | None = None
+    if fitting.fit_method == "weighted-least-squares":
+        assert chart.uncertainty.error_field is not None
+        error_values = complete[chart.uncertainty.error_field].to_numpy(dtype=float)
+        finite = np.isfinite(x) & np.isfinite(y) & np.isfinite(error_values) & (error_values > 0)
+    else:
+        finite = np.isfinite(x) & np.isfinite(y)
     x, y = x[finite], y[finite]
+    if error_values is not None:
+        error_values = error_values[finite]
+    excluded_count = max(available_count - len(x), 0)
     warnings: list[str] = []
 
     if fitting.model in {"exponential", "power"}:
         positive_y = y > 0
         if not positive_y.all():
             warnings.append("Non-positive Y values were excluded from this fit.")
+            excluded_count += int((~positive_y).sum())
         x, y = x[positive_y], y[positive_y]
+        if error_values is not None:
+            error_values = error_values[positive_y]
     if fitting.model in {"logarithmic", "power"}:
         positive_x = x > 0
         if not positive_x.all():
             warnings.append("Non-positive X values were excluded from this fit.")
+            excluded_count += int((~positive_x).sum())
         x, y = x[positive_x], y[positive_x]
+        if error_values is not None:
+            error_values = error_values[positive_x]
 
     degree = fitting.polynomial_order if fitting.model == "polynomial" else 1
     parameter_count = degree + 1
@@ -805,7 +1057,23 @@ def _fit_analysis(
     transformed_x = np.log(x) if fitting.model in {"logarithmic", "power"} else x
     transformed_y = np.log(y) if fitting.model in {"exponential", "power"} else y
     design = np.vander(transformed_x, N=parameter_count, increasing=False)
-    coefficients, _residuals, rank, _singular = np.linalg.lstsq(design, transformed_y, rcond=None)
+
+    weight_scale: np.ndarray[Any, Any] | None = None
+    if error_values is not None:
+        weight_scale = 1 / np.maximum(np.abs(error_values), 1e-12)
+
+    def solve(response: np.ndarray[Any, Any]) -> tuple[np.ndarray[Any, Any], int]:
+        solve_design = design
+        solve_response = response
+        if weight_scale is not None:
+            solve_design = design * weight_scale[:, None]
+            solve_response = response * weight_scale
+        coefficients, _residuals, rank, _singular = np.linalg.lstsq(
+            solve_design, solve_response, rcond=None
+        )
+        return coefficients, int(rank)
+
+    coefficients, rank = solve(transformed_y)
     if rank < parameter_count:
         raise ProcessingError(
             "The selected points cannot support a stable fitted curve.", "fit-not-suitable"
@@ -835,19 +1103,64 @@ def _fit_analysis(
     lower: np.ndarray[Any, Any] | None = None
     upper: np.ndarray[Any, Any] | None = None
     degrees_of_freedom = len(x) - parameter_count
+    confidence_method: Literal["none", "student-t", "bootstrap"] = "none"
     if fitting.confidence_band:
+        confidence_method = fitting.confidence_method
         residuals = transformed_y - fitted_transformed
-        residual_variance = float(residuals @ residuals) / degrees_of_freedom
-        covariance = residual_variance * np.linalg.pinv(design.T @ design)
-        variance = np.einsum("ij,jk,ik->i", grid_design, covariance, grid_design)
-        critical = float(
-            student_t.ppf((1 + fitting.confidence_level / 100) / 2, degrees_of_freedom)
-        )
-        delta = critical * np.sqrt(np.maximum(variance, 0))
-        if fitting.model in {"exponential", "power"}:
-            lower, upper = np.exp(grid_transformed - delta), np.exp(grid_transformed + delta)
+        if fitting.confidence_method == "bootstrap":
+            rng = np.random.default_rng(1729)
+            bootstrap_predictions: list[np.ndarray[Any, Any]] = []
+            for _ in range(BOOTSTRAP_RESAMPLES):
+                sampled = rng.choice(residuals, size=len(residuals), replace=True)
+                try:
+                    bootstrap_coefficients, bootstrap_rank = solve(fitted_transformed + sampled)
+                except np.linalg.LinAlgError:
+                    continue
+                if bootstrap_rank < parameter_count:
+                    continue
+                bootstrap_grid = grid_design @ bootstrap_coefficients
+                bootstrap_predictions.append(
+                    np.exp(bootstrap_grid)
+                    if fitting.model in {"exponential", "power"}
+                    else bootstrap_grid
+                )
+            if len(bootstrap_predictions) < 100:
+                raise ProcessingError(
+                    "The bootstrap confidence band could not be estimated reliably.",
+                    "bootstrap-not-suitable",
+                )
+            bootstrap_array = np.asarray(bootstrap_predictions)
+            tail = (100 - fitting.confidence_level) / 2
+            lower, upper = np.percentile(
+                bootstrap_array,
+                [tail, 100 - tail],
+                axis=0,
+            )
         else:
-            lower, upper = grid_y - delta, grid_y + delta
+            if degrees_of_freedom <= 0:
+                raise ProcessingError(
+                    "A confidence band needs residual degrees of freedom.",
+                    "fit-not-suitable",
+                )
+            if weight_scale is None:
+                residual_variance = float(residuals @ residuals) / degrees_of_freedom
+                covariance = residual_variance * np.linalg.pinv(design.T @ design)
+            else:
+                weighted_residuals = residuals * weight_scale
+                residual_variance = (
+                    float(weighted_residuals @ weighted_residuals) / degrees_of_freedom
+                )
+                weighted_design = design * weight_scale[:, None]
+                covariance = residual_variance * np.linalg.pinv(weighted_design.T @ weighted_design)
+            variance = np.einsum("ij,jk,ik->i", grid_design, covariance, grid_design)
+            critical = float(
+                student_t.ppf((1 + fitting.confidence_level / 100) / 2, degrees_of_freedom)
+            )
+            delta = critical * np.sqrt(np.maximum(variance, 0))
+            if fitting.model in {"exponential", "power"}:
+                lower, upper = np.exp(grid_transformed - delta), np.exp(grid_transformed + delta)
+            else:
+                lower, upper = grid_y - delta, grid_y + delta
 
     points = []
     for index, (x_value, y_value) in enumerate(zip(x_grid, grid_y, strict=True)):
@@ -859,14 +1172,134 @@ def _fit_analysis(
                 "upper": float(upper[index]) if upper is not None else None,
             }
         )
+    raw_residuals = y - fitted_y
+    residual_trend = "none"
+    if len(raw_residuals) >= 5 and float(np.std(raw_residuals)) > 0:
+        centered_x = x - float(np.mean(x))
+        residual_correlations = [
+            float(np.corrcoef(x, raw_residuals)[0, 1]),
+            float(np.corrcoef(centered_x**2, raw_residuals)[0, 1]),
+        ]
+        if any(math.isfinite(value) and abs(value) >= 0.35 for value in residual_correlations):
+            residual_trend = "possible-trend"
+    residual_diagnostic = {
+        "status": "supported" if len(raw_residuals) >= 3 else "insufficient-data",
+        "sampleSize": int(len(raw_residuals)),
+        "meanResidual": float(np.mean(raw_residuals)) if len(raw_residuals) else None,
+        "rmse": float(np.sqrt(np.mean(raw_residuals**2))) if len(raw_residuals) else None,
+        "mae": float(np.mean(np.abs(raw_residuals))) if len(raw_residuals) else None,
+        "maxAbsResidual": float(np.max(np.abs(raw_residuals))) if len(raw_residuals) else None,
+        "residualTrend": residual_trend,
+        "assumptions": [
+            "Residual summaries are descriptive checks on the response scale.",
+            "They do not establish independence, normality, or causality.",
+        ],
+        "limitations": (
+            ["A possible residual trend suggests the selected model may miss structure."]
+            if residual_trend == "possible-trend"
+            else []
+        ),
+    }
+    fit_limitations = [
+        "R² describes in-sample association and does not establish causality.",
+    ]
+    if fitting.confidence_band:
+        fit_limitations.append(
+            "The interval is pointwise for the fitted mean; prediction and simultaneous bands "
+            "are deferred."
+        )
+    fit_assumptions = [
+        "The selected model form is appropriate for the scientific question.",
+        "Complete finite observations are representative of the intended analysis set.",
+    ]
+    if fitting.fit_method == "weighted-least-squares":
+        fit_assumptions.append(
+            "The supplied error column is proportional to measurement standard deviation."
+        )
+        fit_limitations.append(
+            "Weighted fitting uses the supplied error column; robust fitting is deferred."
+        )
+    else:
+        fit_limitations.append(
+            "Ordinary least squares gives every included observation equal weight."
+        )
+    if fitting.confidence_method == "bootstrap":
+        fit_assumptions.append(
+            "Bootstrap residual resampling is reasonable for the included observations."
+        )
+    disclosures: list[dict[str, Any]] = [
+        {
+            "method": "fit",
+            "status": "supported",
+            "sampleSize": int(len(x)),
+            "excludedCount": int(excluded_count),
+            "assumptions": fit_assumptions,
+            "limitations": fit_limitations,
+        },
+        {
+            "method": "confidence-band",
+            "status": "supported" if fitting.confidence_band else "not-requested",
+            "sampleSize": int(len(x)),
+            "excludedCount": int(excluded_count),
+            "assumptions": (
+                ["The selected confidence level is interpreted as a pointwise mean interval."]
+                if fitting.confidence_band
+                else []
+            ),
+            "limitations": (
+                ["This is not a prediction interval or a simultaneous confidence band."]
+                if fitting.confidence_band
+                else []
+            ),
+        },
+        {
+            "method": "residual-diagnostic",
+            "status": residual_diagnostic["status"],
+            "sampleSize": int(len(x)),
+            "excludedCount": int(excluded_count),
+            "assumptions": residual_diagnostic["assumptions"],
+            "limitations": residual_diagnostic["limitations"],
+        },
+        {
+            "method": "weighted-fitting",
+            "status": "supported"
+            if fitting.fit_method == "weighted-least-squares"
+            else "not-requested",
+            "sampleSize": int(len(x)),
+            "excludedCount": int(excluded_count),
+            "assumptions": (
+                ["The supplied error column is proportional to measurement standard deviation."]
+                if fitting.fit_method == "weighted-least-squares"
+                else []
+            ),
+            "limitations": (
+                [
+                    "Select weighted least squares only when an error column is "
+                    "scientifically justified."
+                ]
+                if fitting.fit_method != "weighted-least-squares"
+                else []
+            ),
+        },
+        *_deferred_analysis_disclosures(
+            sample_size=int(len(x)), excluded_count=int(excluded_count)
+        ),
+    ]
     return (
         {
             "model": fitting.model,
             "equation": _fit_equation(fitting.model, coefficients),
             "rSquared": r_squared,
+            "sampleSize": int(len(x)),
+            "excludedCount": int(excluded_count),
+            "fitMethod": fitting.fit_method,
+            "confidenceMethod": confidence_method,
+            "intervalKind": "pointwise-mean" if fitting.confidence_band else "none",
             "points": points,
         },
         warnings,
+        residual_diagnostic,
+        disclosures,
     )
 
 
@@ -938,6 +1371,143 @@ def _uncertainty_analysis(
     return {"mode": uncertainty.mode, "points": points}, warnings
 
 
+def _chart_recommendations(frame: pd.DataFrame, chart: ChartSpec) -> list[dict[str, Any]]:
+    grid = _best_grid_shape(frame, chart.x_axis.field)
+    if grid is None:
+        return []
+
+    grid_fields = {grid["x_field"], grid["y_field"]}
+    z_candidates = [
+        str(column)
+        for column in frame.select_dtypes(include="number").columns
+        if str(column) not in grid_fields
+        and pd.to_numeric(frame[column], errors="coerce")
+        .replace([np.inf, -np.inf], np.nan)
+        .notna()
+        .any()
+    ]
+    if not z_candidates:
+        return []
+    selected_z_fields = [item.field for item in chart.series if item.field not in grid_fields]
+    z_field = selected_z_fields[0] if selected_z_fields else z_candidates[0]
+    if chart.x_axis.field in grid_fields:
+        x_field = chart.x_axis.field
+        y_field = next(field for field in grid_fields if field != x_field)
+    else:
+        x_field = grid["x_field"]
+        y_field = grid["y_field"]
+
+    reason_params: dict[str, JsonScalar] = {
+        "xField": x_field,
+        "yField": y_field,
+        "zField": z_field,
+        "xCount": grid["x_count"],
+        "yCount": grid["y_count"],
+        "pointCount": grid["unique_points"],
+    }
+    complete_regular_grid = (
+        grid["missing_grid_cells"] == 0
+        and grid["duplicate_coordinate_rows"] == 0
+        and grid["non_finite_points"] == 0
+        and grid["uniform_x_spacing"]
+        and grid["uniform_y_spacing"]
+    )
+    if complete_regular_grid:
+        if chart.type == "surface3d":
+            return []
+        repeated_x = int(frame[x_field].nunique(dropna=True)) < int(frame[x_field].notna().sum())
+        reason_code = (
+            "chart.recommendation.surface-grid-line"
+            if chart.type == "line" and repeated_x
+            else "chart.recommendation.surface-grid"
+        )
+        reason = (
+            f"Detected a complete {grid['x_count']} × {grid['y_count']} grid. "
+            f"Plot {z_field} over {x_field} and {y_field} as a 3D surface."
+        )
+        if reason_code.endswith("-line"):
+            reason += " A line chart would connect repeated X values across grid slices."
+        return [
+            {
+                "chartType": "surface3d",
+                "source": "regular-grid",
+                "xField": x_field,
+                "yField": y_field,
+                "zField": z_field,
+                "reason": reason,
+                "reasonCode": reason_code,
+                "reasonParams": reason_params,
+            }
+        ]
+
+    if chart.type == "scatter":
+        return []
+    return [
+        {
+            "chartType": "scatter",
+            "source": "grid-like",
+            "xField": x_field,
+            "yField": y_field,
+            "zField": z_field,
+            "reason": (
+                "The coordinate data is incomplete, duplicated, or irregular. "
+                "Use a scatter plot to inspect individual measurements without implying "
+                "a complete surface."
+            ),
+            "reasonCode": "chart.recommendation.scatter-grid",
+            "reasonParams": reason_params,
+        }
+    ]
+
+
+def _default_analysis_disclosures(
+    *,
+    sample_size: int,
+    excluded_count: int,
+    fit_status: str = "not-requested",
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "method": "fit",
+            "status": fit_status,
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": (
+                ["The selected fit could not be calculated for this analysis."]
+                if fit_status == "insufficient-data"
+                else []
+            ),
+        },
+        {
+            "method": "confidence-band",
+            "status": "not-requested",
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": [
+                "A confidence band is available only when a supported fit is selected."
+            ],
+        },
+        {
+            "method": "residual-diagnostic",
+            "status": "not-requested",
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": ["Residual diagnostics require a successfully fitted curve."],
+        },
+        {
+            "method": "weighted-fitting",
+            "status": "not-requested",
+            "sampleSize": sample_size,
+            "excludedCount": excluded_count,
+            "limitations": [
+                "Select weighted least squares only when an error column is "
+                "scientifically justified."
+            ],
+        },
+        *_deferred_analysis_disclosures(sample_size=sample_size, excluded_count=excluded_count),
+    ]
+
+
 def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
     validate_chart_fields(frame, chart)
     x_field = chart.x_axis.field
@@ -959,11 +1529,15 @@ def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
         for group_value, series_frame in grouped_frames:
             fit: dict[str, Any] | None = None
             uncertainty: dict[str, Any] | None = None
+            residual_diagnostic: dict[str, Any] | None = None
+            disclosures: list[dict[str, Any]] = []
             fit_warnings: list[str] = []
             uncertainty_warnings: list[str] = []
             if chart.type in {"line", "scatter", "bar"}:
                 try:
-                    fit, fit_warnings = _fit_analysis(series_frame, x_field, series.field, chart)
+                    fit, fit_warnings, residual_diagnostic, disclosures = _fit_analysis(
+                        series_frame, x_field, series.field, chart
+                    )
                 except ProcessingError as exc:
                     fit_warnings = [str(exc)]
                 try:
@@ -972,6 +1546,15 @@ def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
                     )
                 except ProcessingError as exc:
                     uncertainty_warnings = [str(exc)]
+            if not disclosures:
+                complete_count = 0
+                if x_field in series_frame.columns and series.field in series_frame.columns:
+                    complete_count = int(series_frame[[x_field, series.field]].dropna().shape[0])
+                disclosures = _default_analysis_disclosures(
+                    sample_size=complete_count,
+                    excluded_count=max(len(series_frame) - complete_count, 0),
+                    fit_status="insufficient-data" if fit_warnings else "not-requested",
+                )
             group_label = str(group_value) if group_value is not None else None
             analyses.append(
                 {
@@ -986,10 +1569,16 @@ def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
                     "points": _series_preview_points(series_frame, x_field, series.field),
                     "fit": fit,
                     "uncertainty": uncertainty,
+                    "residualDiagnostic": residual_diagnostic,
+                    "disclosures": disclosures,
                     "warnings": [*fit_warnings, *uncertainty_warnings],
                 }
             )
-    return {"series": analyses, "preview": _derived_chart_preview(frame, chart)}
+    return {
+        "series": analyses,
+        "preview": _derived_chart_preview(frame, chart),
+        "recommendations": _chart_recommendations(frame, chart),
+    }
 
 
 def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> list[dict[str, Any]]:
@@ -1015,11 +1604,120 @@ def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> l
     ]
 
 
+def _surface_diagnostic(
+    frame: pd.DataFrame,
+    *,
+    panel: int,
+    x_field: str,
+    y_field: str,
+    z_field: str,
+) -> dict[str, Any]:
+    fields = [x_field, y_field, z_field]
+    numeric = frame[fields].apply(pd.to_numeric, errors="coerce")
+    values = numeric.to_numpy(dtype=float)
+    finite_mask = np.isfinite(values).all(axis=1)
+    usable = numeric.loc[finite_mask]
+    non_finite_points = int((~finite_mask).sum())
+
+    x_values = np.sort(usable[x_field].unique().astype(float))
+    y_values = np.sort(usable[y_field].unique().astype(float))
+    pair_counts = usable.groupby([x_field, y_field], sort=False, dropna=False).size()
+    unique_pairs = len(pair_counts)
+    expected_points = int(len(x_values) * len(y_values))
+    duplicate_pair_counts = pair_counts[pair_counts > 1]
+    duplicate_coordinate_pairs = int(len(duplicate_pair_counts))
+    duplicate_coordinate_rows = int((duplicate_pair_counts - 1).sum())
+    missing_grid_cells = max(expected_points - unique_pairs, 0)
+    uniform_x_spacing = _uniform_spacing(x_values)
+    uniform_y_spacing = _uniform_spacing(y_values)
+
+    collinear = False
+    if unique_pairs >= 3:
+        coordinates = usable[[x_field, y_field]].drop_duplicates().to_numpy(dtype=float)
+        centered = coordinates - coordinates.mean(axis=0)
+        collinear = bool(np.linalg.matrix_rank(centered) < 2)
+
+    if non_finite_points:
+        status = "invalid-values"
+    elif len(usable) < 3 or len(x_values) < 2 or len(y_values) < 2:
+        status = "insufficient-points"
+    elif collinear:
+        status = "collinear"
+    elif duplicate_coordinate_pairs:
+        status = "duplicate-coordinates"
+    elif missing_grid_cells:
+        status = "missing-grid"
+    elif not uniform_x_spacing or not uniform_y_spacing:
+        status = "irregular-grid"
+    else:
+        status = "valid"
+
+    return {
+        "panel": panel,
+        "xField": x_field,
+        "yField": y_field,
+        "zField": z_field,
+        "xCount": int(len(x_values)),
+        "yCount": int(len(y_values)),
+        "expectedPoints": expected_points,
+        "usablePoints": int(len(usable)),
+        "duplicateCoordinatePairs": duplicate_coordinate_pairs,
+        "duplicateCoordinateRows": duplicate_coordinate_rows,
+        "missingGridCells": missing_grid_cells,
+        "nonFinitePoints": non_finite_points,
+        "uniformXSpacing": uniform_x_spacing,
+        "uniformYSpacing": uniform_y_spacing,
+        "collinear": collinear,
+        "status": status,
+    }
+
+
+def _surface_diagnostic_error(diagnostic: dict[str, Any]) -> ProcessingError:
+    status = diagnostic["status"]
+    if status == "invalid-values":
+        return ProcessingError(
+            "3D surface fields contain "
+            f"{diagnostic['nonFinitePoints']} non-finite point(s); fix or remove those rows.",
+            "surface-invalid-values",
+        )
+    if status == "insufficient-points":
+        return ProcessingError(
+            "A 3D surface needs at least three complete points and two unique X and Y values.",
+            "surface-insufficient-points",
+        )
+    if status == "collinear":
+        return ProcessingError(
+            "The selected X and Y coordinates are collinear; choose a grid "
+            "spanning both dimensions.",
+            "surface-collinear",
+        )
+    if status == "duplicate-coordinates":
+        return ProcessingError(
+            "The selected X/Y coordinates contain "
+            f"{diagnostic['duplicateCoordinateRows']} duplicate row(s); keep one Z value per pair.",
+            "surface-duplicate-coordinates",
+        )
+    if status == "missing-grid":
+        return ProcessingError(
+            "The selected X/Y coordinates are missing "
+            f"{diagnostic['missingGridCells']} grid cell(s); provide a complete rectangular grid.",
+            "surface-missing-grid",
+        )
+    if status == "irregular-grid":
+        return ProcessingError(
+            "The X and Y coordinates are not uniformly spaced; use a regular grid "
+            "or a scatter plot.",
+            "surface-irregular-grid",
+        )
+    return ProcessingError("The selected 3D points do not span a surface.", "invalid-chart-fields")
+
+
 def _derived_chart_preview(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
     histograms: list[dict[str, Any]] = []
     boxes: list[dict[str, Any]] = []
     heatmaps: list[dict[str, Any]] = []
     surface_points: list[dict[str, Any]] = []
+    surface_diagnostics: list[dict[str, Any]] = []
 
     if chart.type == "histogram":
         for item in chart.series:
@@ -1099,7 +1797,20 @@ def _derived_chart_preview(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, A
                 )
             y_field, z_field = items[0].field, items[1].field
             _numeric(frame, [chart.x_axis.field, y_field, z_field])
-            complete = frame[[chart.x_axis.field, y_field, z_field]].dropna()
+            diagnostic = _surface_diagnostic(
+                frame,
+                panel=panel,
+                x_field=chart.x_axis.field,
+                y_field=y_field,
+                z_field=z_field,
+            )
+            surface_diagnostics.append(diagnostic)
+            if diagnostic["status"] != "valid":
+                continue
+            complete = frame[[chart.x_axis.field, y_field, z_field]].apply(
+                pd.to_numeric, errors="coerce"
+            )
+            complete = complete.loc[np.isfinite(complete.to_numpy(dtype=float)).all(axis=1)]
             complete = complete.iloc[_sample_positions(len(complete), 2_000)]
             surface_points.extend(
                 {
@@ -1109,20 +1820,46 @@ def _derived_chart_preview(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, A
                     "z": float(row[z_field]),
                 }
                 for _, row in complete.iterrows()
-                if all(
-                    math.isfinite(float(row[field]))
-                    for field in (chart.x_axis.field, y_field, z_field)
-                )
             )
     return {
         "histograms": histograms,
         "boxes": boxes,
         "heatmaps": heatmaps,
         "surfacePoints": surface_points,
+        "surfaceDiagnostics": surface_diagnostics,
     }
 
 
-def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
+def _analysis_export_note(analyses: list[dict[str, Any]]) -> str:
+    notes: list[str] = []
+    for analysis in analyses:
+        fit = analysis.get("fit")
+        if not fit:
+            continue
+        diagnostic = analysis.get("residualDiagnostic") or {}
+        confidence = fit.get("confidenceMethod", "none")
+        interval = (
+            f"pointwise {confidence} mean interval"
+            if confidence != "none"
+            else "no confidence band"
+        )
+        rmse = diagnostic.get("rmse")
+        residual_note = f", residual RMSE={float(rmse):.4g}" if rmse is not None else ""
+        notes.append(
+            f"{analysis['label']}: n={fit['sampleSize']}, excluded={fit['excludedCount']}; "
+            f"{fit['fitMethod']}, {interval}{residual_note}. "
+            "Assumptions: selected model form and representative complete observations. "
+            "Deferred: prediction/simultaneous bands, robust fitting, and multiplicity correction."
+        )
+    return "\n".join(notes)
+
+
+def render_chart(
+    frame: pd.DataFrame,
+    chart: ChartSpec,
+    *,
+    provenance: dict[str, Any] | None = None,
+) -> bytes:
     if frame.empty:
         raise ProcessingError("There are no rows available to export.", "empty-chart-data")
     export = chart.export_settings
@@ -1168,6 +1905,14 @@ def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
     derived = analyze_chart(frame, chart)
     analyses = derived["series"]
     preview = derived["preview"]
+    if chart.type == "surface3d":
+        invalid_diagnostics = [
+            diagnostic
+            for diagnostic in preview["surfaceDiagnostics"]
+            if diagnostic["status"] != "valid"
+        ]
+        if invalid_diagnostics:
+            raise _surface_diagnostic_error(invalid_diagnostics[0])
 
     for panel_index, axis in enumerate(axes, start=1):
         panel_series = [
@@ -1407,12 +2152,41 @@ def render_chart(frame: pd.DataFrame, chart: ChartSpec) -> bytes:
             f"{chart.title}\n{chart.subtitle}" if chart.subtitle else chart.title,
             fontsize=export.font_size + 2,
         )
+    footer_parts: list[str] = []
+    if provenance:
+        acquisition = [f"Experiment: {provenance['title']}", f"run: {provenance['runLabel']}"]
+        if provenance.get("replicateId"):
+            acquisition.append(f"replicate: {provenance['replicateId']}")
+        if provenance.get("batchId"):
+            acquisition.append(f"batch: {provenance['batchId']}")
+        acquisition.extend(
+            [
+                f"experiment ID: {provenance['experimentId']}",
+                f"run ID: {provenance['experimentRunId']}",
+            ]
+        )
+        footer_parts.append("; ".join(acquisition) + ".")
+    analysis_note = _analysis_export_note(analyses)
+    if analysis_note:
+        footer_parts.append(analysis_note)
+    footer_note = "\n".join(footer_parts)
+    if footer_note:
+        figure.text(
+            0.01,
+            0.01,
+            footer_note,
+            color="#4B5563",
+            fontsize=max(6, export.font_size - 2),
+            ha="left",
+            va="bottom",
+            wrap=True,
+        )
     for text in figure.findobj(match=lambda item: hasattr(item, "set_fontfamily")):
         styled_text = cast(Any, text)
         styled_text.set_fontfamily(export.font_family)
         if hasattr(styled_text, "get_fontsize") and styled_text.get_fontsize() == 10:
             styled_text.set_fontsize(export.font_size)
-    figure.tight_layout()
+    figure.tight_layout(rect=(0, 0.1, 1, 1) if footer_note else None)
     output = io.BytesIO()
     figure.savefig(
         output,
