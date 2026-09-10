@@ -12,7 +12,7 @@
 
 </div>
 
-LabViz V2.1.0 是当前本地发布版本，由 Next.js 网站和 FastAPI 科研处理
+LabViz V2.1.1 是当前本地发布版本，由 Next.js 网站和 FastAPI 科研处理
 服务组成。它支持数据导入、质量检查、清洗、绘图、项目历史、本地验证码登录、
 只读分享，以及 PNG、SVG、PDF 科研图像导出。
 
