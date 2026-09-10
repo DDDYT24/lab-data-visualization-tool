@@ -60,6 +60,8 @@ class SqliteProjectStore:
         source: dict[str, Any],
         source_sha256: str,
         guest_token_digest: str,
+        owner_user_id: str | None = None,
+        experiment: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
         request_sha256: str | None = None,
     ) -> ProjectCreation:
@@ -70,6 +72,8 @@ class SqliteProjectStore:
                 title=title,
                 source=source,
                 guest_token_digest=guest_token_digest,
+                owner_user_id=owner_user_id,
+                experiment=experiment,
                 idempotency_key=idempotency_key,
                 request_sha256=request_sha256,
             )
@@ -124,6 +128,7 @@ class SqliteProjectStore:
     def get_project(self, project_id: str, *, touch: bool = True) -> dict[str, Any] | None:
         project = self.repository.get_project(project_id, touch=touch)
         if project is not None:
+            project["experiment"] = self.repository.get_experiment_context(project_id)
             project["ready"] = bool(
                 project.get("preview_json")
                 and project.get("quality_json")
@@ -303,7 +308,10 @@ class SqliteProjectStore:
         raise PersistenceNotFound("The SQLite reference repository has no immutable history.")
 
     def list_projects(self, owner_user_id: str | None) -> list[dict[str, Any]]:
-        return self.repository.list_projects(owner_user_id)
+        projects = self.repository.list_projects(owner_user_id)
+        for project in projects:
+            project["experiment"] = self.repository.get_experiment_context(project["id"])
+        return projects
 
     def list_deleted_projects(self, owner_user_id: str) -> list[dict[str, Any]]:
         del owner_user_id
@@ -435,6 +443,7 @@ class SqliteProjectStore:
             payload=payload,
             expires_at=expires_at,
             message="Your publication-ready figure is ready to download.",
+            experiment=self.repository.get_experiment_context(project_id),
         )
         return {
             "id": export_id,
@@ -446,14 +455,19 @@ class SqliteProjectStore:
         }
 
     def get_export(self, export_id: str) -> dict[str, Any] | None:
-        return self.repository.get_export(export_id)
+        export = self.repository.get_export(export_id)
+        if export is not None:
+            export["experiment"] = (
+                json.loads(export["experiment_json"]) if export.get("experiment_json") else None
+            )
+        return export
 
     def get_export_metadata(self, export_id: str) -> dict[str, Any] | None:
         self.repository.cleanup_expired()
         with sqlite3.connect(self.repository.database_path, timeout=30) as connection:
             connection.row_factory = sqlite3.Row
             row = connection.execute(
-                "SELECT id, project_id, format FROM exports WHERE id = ?",
+                "SELECT id, project_id, format, experiment_json FROM exports WHERE id = ?",
                 (export_id,),
             ).fetchone()
         if row is None:
@@ -462,6 +476,7 @@ class SqliteProjectStore:
             "id": row["id"],
             "project_id": row["project_id"],
             "format": row["format"],
+            "experiment": (json.loads(row["experiment_json"]) if row["experiment_json"] else None),
         }
 
     def get_shared_export(self, token: str, format_name: str) -> dict[str, Any] | None:

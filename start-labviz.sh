@@ -9,6 +9,7 @@ venv_python="$venv_root/bin/python"
 refresh_dependencies=0
 api_port="${LABVIZ_API_PORT:-8000}"
 web_port="${LABVIZ_WEB_PORT:-3000}"
+export NEXT_TELEMETRY_DISABLED=1
 
 if [[ "${1:-}" == "--refresh-dependencies" ]]; then
   refresh_dependencies=1
@@ -60,7 +61,7 @@ trap cleanup EXIT INT TERM
 
 export LABVIZ_API_PROXY_TARGET="http://127.0.0.1:$api_port"
 
-echo "Starting LabViz V2.0 on http://127.0.0.1:$web_port"
+echo "Starting LabViz V2.1 on http://127.0.0.1:$web_port"
 echo "Keep this terminal open. Local sign-in codes appear in the API output."
 echo "Press Ctrl+C to stop both services."
 

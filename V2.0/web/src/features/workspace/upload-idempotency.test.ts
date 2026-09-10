@@ -38,4 +38,18 @@ describe("upload idempotency state", () => {
     expect(changed.key).toBe("key-2");
     expect(changed).not.toBe(first);
   });
+
+  it("treats changed replicate metadata as a different upload intent", () => {
+    const file = new File(["x,y\n1,2"], "run.csv", { lastModified: 123 });
+    const first = uploadRequestSignature(file, {
+      experimentTitle: "Study A",
+      replicateId: "R1",
+    });
+    const second = uploadRequestSignature(file, {
+      experimentTitle: "Study A",
+      replicateId: "R2",
+    });
+
+    expect(second).not.toBe(first);
+  });
 });

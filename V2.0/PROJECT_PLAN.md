@@ -1,8 +1,12 @@
-# LabViz V2.0 Project Plan
+# LabViz V2.0/V2.1 Project Plan
 
-**Status:** V2.0 local self-hosted release complete; public-cloud deployment is optional
+**Status:** V2.0 local self-hosted release complete; V2.1 P0, P1, compatibility hardening, local
+privacy documentation, and the local release matrix are implemented on the V2.1 local development
+branch; publication remains pending and public-cloud deployment is optional.
 **Product source of truth:** [`prd.md`](prd.md)
 **Prototype source of truth:** [LabViz V2.0 — Product Prototype](https://www.figma.com/design/xKdEwynLhAj2dyiqeEw58n)
+**V2.1 execution backlog:** [`TODO.md`](TODO.md#v21-roadmap)
+**V2.1 release notes:** [`RELEASE_NOTES_V2.1.md`](RELEASE_NOTES_V2.1.md)
 
 ## 1. Delivery Strategy
 
@@ -20,6 +24,16 @@ Upload → Inspect → Create chart → Export
 ```
 
 The first vertical slice must let a user select a supported file, review a bounded data preview and quality summary, configure a line chart, and prepare a publication export without requiring Python knowledge.
+
+### V2.1 scope anchor
+
+V2.1 remains local-first and preserves the V2.0 workflow and persistence boundary. Its first gate
+is structured 3D correctness: detect regular surfaces, expose explicit X/Y/Z roles, keep quality
+findings aware of grid row order, and prove frontend preview/export parity with a browser test.
+After all three P0 gates pass, V2.1 adds beginner guidance, a first scientifically defensible
+analysis slice, and the minimum experiment/replicate model. BOM and non-ASCII filename compatibility
+are release-hardening work. AWS Phase 6C/6D, native installers, billing, and team features remain
+separate deferred tracks.
 
 ## 2. Approved Frontend Stack
 
@@ -69,6 +83,10 @@ path.
 ### Chart configuration
 
 UI controls edit a serializable, versioned `ChartSpec`. Interactive preview, saved projects, shared views, and backend export must consume the same specification. React components and library-specific ECharts objects must not be persisted in it.
+
+For V2.1, `surface3d` adds explicit X/Y/Z roles and a structured-grid diagnostic to the chart
+contract. A recommendation may guide the user toward a surface, heatmap, or scatter view, but it
+must not silently change the selected chart or cleaning decisions.
 
 ### Project configuration
 
@@ -168,6 +186,31 @@ self-hosting work.
 
 - Add guest retention, email-code authentication, saved projects, history, and sharing.
 - Add mobile shared views and the remaining responsive states.
+
+### V2.1 — Structured 3D and research workflow
+
+**Status:** P0-1 through P0-3, P1-1 through P1-3, and C-1 through C-4 are implemented and verified
+on the V2.1 local development branch. The branch is a local V2.1 release candidate; it has not been published.
+Detailed task IDs and acceptance criteria are tracked in [`TODO.md`](TODO.md).
+
+- **P0:** add structured-grid validation and explicit surface fields, make quality findings and
+  recommendations grid-aware, and add browser-level surface preview/export parity coverage.
+- **P1:** add beginner guidance, the first scientifically defensible analysis slice, and the
+  minimum experiment/replicate model.
+- **P1-2 slice:** the additive v1 contract supports ordinary/weighted least squares, Student-t
+  and deterministic residual Bootstrap pointwise mean bands, and residual diagnostics. Results
+  and exports include sample size, exclusions, assumptions, and limitations. Prediction,
+  simultaneous, robust, and multiplicity-correction methods are explicitly deferred.
+- **P1-3 slice:** optional upload metadata creates an owner-scoped `Experiment` and a distinct
+  physical `ExperimentRun` for each acquisition. History and publication exports carry experiment,
+  run, replicate, and batch provenance; `ProcessingRun` continues to represent software work.
+  Broader experiment editing, comparison dashboards, and team roles remain deferred.
+- **Compatibility:** BOM headers are normalized for CSV, TSV, and TXT; cleaned downloads use an
+  RFC 5987 Unicode filename; migration `0011_normalize_check_names` reconciles historical
+  check-constraint names; and the complete fixture/API/browser/export matrix passes locally.
+
+V2.1 is complete only when all P0/P1 gates and compatibility regressions are accepted. A skipped
+cloud, live-mail, or private-file test remains explicitly skipped; it is not a V2.1 pass.
 
 ### Optional Phase 6 — Public-cloud runtime and operations
 

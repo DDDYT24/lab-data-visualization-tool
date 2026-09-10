@@ -7,11 +7,15 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Container,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import { useTranslations } from "next-intl";
@@ -21,7 +25,12 @@ import { useRef, useState } from "react";
 import { validateWebFile } from "@/features/import-data/file-policy";
 import { useWorkspaceStore } from "@/features/workspace/workspace-store";
 
-type HomeError = "invalid-type" | "too-large" | "read-error" | null;
+type HomeError =
+  | "invalid-type"
+  | "too-large"
+  | "read-error"
+  | "experiment-title-required"
+  | null;
 
 export function HomeScreen() {
   const t = useTranslations("home");
@@ -30,8 +39,16 @@ export function HomeScreen() {
   const selectFile = useWorkspaceStore((state) => state.selectFile);
   const [error, setError] = useState<HomeError>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [experimentTitle, setExperimentTitle] = useState("");
+  const [runLabel, setRunLabel] = useState("");
+  const [replicateId, setReplicateId] = useState("");
+  const [batchId, setBatchId] = useState("");
 
   const openWorkspace = (file: File) => {
+    if (!experimentTitle.trim() && (runLabel.trim() || replicateId.trim() || batchId.trim())) {
+      setError("experiment-title-required");
+      return;
+    }
     const result = validateWebFile(file);
     if (!result.ok) {
       setError(result.reason === "too-large" ? "too-large" : "invalid-type");
@@ -45,6 +62,10 @@ export function HomeScreen() {
       type: file.type,
       isSample: false,
       sourceFile: file,
+      experimentTitle: experimentTitle.trim() || null,
+      runLabel: runLabel.trim() || null,
+      replicateId: replicateId.trim() || null,
+      batchId: batchId.trim() || null,
     });
     router.push("/workspace/new");
   };
@@ -76,6 +97,8 @@ export function HomeScreen() {
         ? t("invalidType")
         : error === "read-error"
           ? t("readError")
+          : error === "experiment-title-required"
+            ? t("experimentTitleRequired")
           : null;
 
   const steps = [
@@ -190,6 +213,61 @@ export function HomeScreen() {
                       {t("dropBody")}
                     </Typography>
                   </Box>
+                  <Accordion
+                    disableGutters
+                    elevation={0}
+                    sx={{ border: 1, borderColor: "divider", textAlign: "left", width: "100%" }}
+                  >
+                    <AccordionSummary>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ alignItems: "center", justifyContent: "space-between", width: "100%" }}
+                      >
+                        <Typography sx={{ fontWeight: 650 }} variant="body2">
+                          {t("experimentMetadata")}
+                        </Typography>
+                        <Typography color="text.secondary" variant="caption">
+                          {t("optional")}
+                        </Typography>
+                      </Stack>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gap: 1.5,
+                          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                        }}
+                      >
+                        <TextField
+                          label={t("experimentTitle")}
+                          onChange={(event) => setExperimentTitle(event.target.value)}
+                          size="small"
+                          value={experimentTitle}
+                        />
+                        <TextField
+                          helperText={t("runLabelHelp")}
+                          label={t("runLabel")}
+                          onChange={(event) => setRunLabel(event.target.value)}
+                          size="small"
+                          value={runLabel}
+                        />
+                        <TextField
+                          label={t("replicateId")}
+                          onChange={(event) => setReplicateId(event.target.value)}
+                          size="small"
+                          value={replicateId}
+                        />
+                        <TextField
+                          label={t("batchId")}
+                          onChange={(event) => setBatchId(event.target.value)}
+                          size="small"
+                          value={batchId}
+                        />
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                     <Button onClick={() => inputRef.current?.click()} variant="contained">
                       {t("browse")}

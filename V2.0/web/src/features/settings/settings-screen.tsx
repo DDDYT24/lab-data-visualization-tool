@@ -1,6 +1,6 @@
 "use client";
 
-import CloudOutlinedIcon from "@mui/icons-material/CloudOutlined";
+import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import ComputerOutlinedIcon from "@mui/icons-material/ComputerOutlined";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
@@ -265,7 +265,7 @@ export function SettingsScreen() {
           control={
             <Button
               disabled
-              startIcon={<CloudOutlinedIcon />}
+              startIcon={<StorageOutlinedIcon />}
               variant="outlined"
             >
               {t("manageCloud")}

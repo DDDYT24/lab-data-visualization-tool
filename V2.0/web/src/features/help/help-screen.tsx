@@ -65,7 +65,7 @@ const questionsEn = [
   },
   {
     title: "Does LabViz change the original file?",
-    body: "No. Cleaning decisions apply to the project and cleaned copy. The uploaded source remains unchanged and is deleted after cloud parsing.",
+    body: "No. Cleaning decisions apply to the project and cleaned copy. The uploaded source remains unchanged and is removed after local parsing.",
   },
   {
     title: "Why is my chart preview sampled?",
@@ -84,7 +84,7 @@ const questionsZh = [
   },
   {
     title: "LabViz 会修改原始文件吗？",
-    body: "不会。清洗决定只作用于项目和清洗副本。上传的源文件保持不变，并会在云端解析后删除。",
+    body: "不会。清洗决定只作用于项目和清洗副本。上传的源文件保持不变，并会在本机解析后删除。",
   },
   {
     title: "为什么图表预览经过抽样？",

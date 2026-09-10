@@ -6,7 +6,7 @@ pending.
 ## Git boundary
 
 - Direct parent and Phase 6C-0 candidate: `b17595ace4159284253f07801e5402ea1ac34342`.
-- Candidate: the commit containing this record on `codex/phase-6c1-network-edge-data`.
+- Candidate: the commit containing this record on the Phase 6C-1 local development branch.
 - Scope: Phase 6C-1 network, security, data, and edge code only.
 
 ## Implemented boundary

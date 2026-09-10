@@ -177,8 +177,12 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
         return t("findingMessages.extremeValue.reason");
       case "quality.sudden-change.summary":
         return t("findingMessages.suddenChange.summary", { count });
+      case "quality.sudden-change.summary.grid":
+        return t("findingMessages.suddenChange.gridSummary", { count });
       case "quality.sudden-change.reason":
         return t("findingMessages.suddenChange.reason");
+      case "quality.sudden-change.reason.grid":
+        return t("findingMessages.suddenChange.gridReason");
       case "quality.trend-inconsistent.summary":
         return t("findingMessages.trendInconsistent.summary", { count });
       case "quality.trend-inconsistent.reason":
@@ -455,6 +459,9 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
                 </Alert>
               ) : null}
               <Divider />
+              <Typography color="text.secondary" variant="caption">
+                {t("decisionHelp")}
+              </Typography>
               <RadioGroup
                 onChange={(event) => {
                   const action = event.target.value as IssueAction;

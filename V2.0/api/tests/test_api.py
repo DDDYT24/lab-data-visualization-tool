@@ -263,6 +263,65 @@ def test_real_csv_and_xlsx_uploads_and_stable_errors(
     assert denied.json()["code"] == "authentication-required"
 
 
+@pytest.mark.parametrize(
+    ("filename", "content_type", "separator"),
+    [
+        ("bom.csv", "text/csv", ","),
+        ("bom.tsv", "text/tab-separated-values", "\t"),
+        ("bom.txt", "text/plain", "\t"),
+    ],
+)
+def test_utf8_bom_is_removed_from_text_import_headers(
+    api_client: tuple[TestClient, MemoryEmailSender],
+    filename: str,
+    content_type: str,
+    separator: str,
+) -> None:
+    client, _sender = api_client
+    payload = f"\ufefftime_min{separator}response_A\n0{separator}1.0\n".encode()
+
+    response = client.post(
+        "/api/v1/projects",
+        files={"file": (filename, payload, content_type)},
+    )
+
+    assert response.status_code == 202
+    preview = client.get(f"/api/v1/projects/{response.json()['projectId']}/preview")
+    assert preview.status_code == 200
+    assert [column["field"] for column in preview.json()["columns"]] == [
+        "time_min",
+        "response_A",
+    ]
+
+
+def test_cleaned_download_uses_unicode_safe_filename(
+    api_client: tuple[TestClient, MemoryEmailSender],
+) -> None:
+    client, _sender = api_client
+    response = client.post(
+        "/api/v1/projects",
+        files={
+            "file": (
+                "实验结果.csv",
+                b"time,response\n0,1.0\n1,2.0\n",
+                "text/csv",
+            )
+        },
+    )
+    assert response.status_code == 202
+
+    download = client.get(
+        f"/api/v1/projects/{response.json()['projectId']}/exports/cleaned-data.csv"
+    )
+
+    assert download.status_code == 200
+    assert download.content.startswith(b"\xef\xbb\xbf")
+    assert download.headers["content-disposition"] == (
+        'attachment; filename="cleaned.csv"; '
+        "filename*=UTF-8''%E5%AE%9E%E9%AA%8C%E7%BB%93%E6%9E%9C-cleaned.csv"
+    )
+
+
 def test_upload_idempotency_replays_same_project_and_rejects_changed_payload(
     api_client: tuple[TestClient, MemoryEmailSender],
 ) -> None:
@@ -652,6 +711,142 @@ def test_scientific_analysis_and_all_chart_renderers() -> None:
     assert render_chart(pd.DataFrame(surface_rows), ChartSpec.model_validate(surface)).startswith(
         b"\x89PNG"
     )
+
+
+def test_surface_grid_diagnostics_cover_regular_and_invalid_coordinate_sets() -> None:
+    surface_rows = [
+        {"x": -5 + x_index * 0.5, "y": -5 + y_index * 0.5, "z": float(x_index + y_index)}
+        for x_index in range(21)
+        for y_index in range(21)
+    ]
+    payload = _chart()
+    payload.update(
+        {
+            "type": "surface3d",
+            "xAxis": {"field": "x", "title": "X", "unit": ""},
+            "yAxis": {"field": "y", "title": "Y", "unit": ""},
+            "series": [
+                {"field": "y", "label": "Y", "color": "#2563EB"},
+                {"field": "z", "label": "Z", "color": "#DC6B2F"},
+            ],
+        }
+    )
+    spec = ChartSpec.model_validate(payload)
+    regular = analyze_chart(pd.DataFrame(surface_rows), spec)["preview"]["surfaceDiagnostics"][0]
+    assert regular["status"] == "valid"
+    assert regular["xCount"] == 21
+    assert regular["yCount"] == 21
+    assert regular["expectedPoints"] == 441
+    assert regular["usablePoints"] == 441
+    assert regular["missingGridCells"] == 0
+    assert regular["duplicateCoordinateRows"] == 0
+    assert regular["uniformXSpacing"] is True
+    assert regular["uniformYSpacing"] is True
+
+    invalid_cases = [
+        (
+            "duplicate-coordinates",
+            pd.DataFrame([*surface_rows, surface_rows[0]]),
+            "surface-duplicate-coordinates",
+        ),
+        (
+            "missing-grid",
+            pd.DataFrame(surface_rows[1:]),
+            "surface-missing-grid",
+        ),
+        (
+            "irregular-grid",
+            pd.DataFrame(
+                [
+                    {"x": x, "y": y, "z": float(x + y)}
+                    for x in (0.0, 1.0, 3.0)
+                    for y in (0.0, 1.0, 2.0)
+                ]
+            ),
+            "surface-irregular-grid",
+        ),
+        (
+            "collinear",
+            pd.DataFrame(
+                [
+                    {"x": float(index), "y": float(index * 2), "z": float(index)}
+                    for index in range(4)
+                ]
+            ),
+            "surface-collinear",
+        ),
+        (
+            "invalid-values",
+            pd.DataFrame(
+                [
+                    {**row, "z": np.inf} if index == 0 else row
+                    for index, row in enumerate(surface_rows)
+                ]
+            ),
+            "surface-invalid-values",
+        ),
+    ]
+    for status, frame, error_code in invalid_cases:
+        diagnostic = analyze_chart(frame, spec)["preview"]["surfaceDiagnostics"][0]
+        assert diagnostic["status"] == status
+        with pytest.raises(ProcessingError) as error:
+            render_chart(frame, spec)
+        assert error.value.code == error_code
+
+
+def test_grid_quality_and_chart_recommendations_preserve_surface_structure() -> None:
+    coordinates = np.linspace(-5, 5, num=21)
+    frame = pd.DataFrame(
+        [
+            {"x": float(x), "y": float(y), "z": float(x**2 + y**2)}
+            for y in coordinates
+            for x in coordinates
+        ]
+    )
+    quality = build_quality_report("surface-grid", frame)
+    assert not any(item["kind"] == "sudden-change" for item in quality["findings"])
+
+    spiked = frame.copy()
+    spiked.loc[220, "z"] += 1_000
+    spiked_quality = build_quality_report("surface-grid-spike", spiked)
+    sudden_changes = [
+        item for item in spiked_quality["findings"] if item["kind"] == "sudden-change"
+    ]
+    assert [item["column"] for item in sudden_changes] == ["z"]
+    assert 221 in sudden_changes[0]["rowIds"]
+    assert sudden_changes[0]["summaryCode"] == "quality.sudden-change.summary.grid"
+    assert sudden_changes[0]["reasonCode"] == "quality.sudden-change.reason.grid"
+
+    line_payload = _chart()
+    line_payload.update(
+        {
+            "xAxis": {"field": "x", "title": "X", "unit": ""},
+            "yAxis": {"field": "y", "title": "Y", "unit": ""},
+            "series": [{"field": "y", "label": "Y", "color": "#2563EB"}],
+        }
+    )
+    recommendation = analyze_chart(frame, ChartSpec.model_validate(line_payload))[
+        "recommendations"
+    ][0]
+    assert recommendation["chartType"] == "surface3d"
+    assert recommendation["source"] == "regular-grid"
+    assert recommendation["reasonCode"] == "chart.recommendation.surface-grid-line"
+    assert recommendation["reasonParams"] == {
+        "xField": "x",
+        "yField": "y",
+        "zField": "z",
+        "xCount": 21,
+        "yCount": 21,
+        "pointCount": 441,
+    }
+
+    incomplete = frame.drop(index=0).reset_index(drop=True)
+    fallback = analyze_chart(incomplete, ChartSpec.model_validate(line_payload))["recommendations"][
+        0
+    ]
+    assert fallback["chartType"] == "scatter"
+    assert fallback["source"] == "grid-like"
+    assert fallback["reasonCode"] == "chart.recommendation.scatter-grid"
 
 
 def test_chart_analysis_rejects_reusing_response_field_as_x_axis(

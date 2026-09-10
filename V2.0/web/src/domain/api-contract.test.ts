@@ -4,6 +4,7 @@ import {
   chartAnalysisSchema,
   dataPreviewSchema,
   exportJobSchema,
+  experimentContextSchema,
   projectDescriptionTextSchema,
   processingJobSchema,
   qualityReportSchema,
@@ -117,8 +118,21 @@ describe("LabViz API v1 contract", () => {
             matrix: [[null, null], [null, 1]],
           },
         ],
+        surfaceDiagnostics: [],
         surfacePoints: [],
       },
+      recommendations: [
+        {
+          chartType: "surface3d",
+          source: "regular-grid",
+          xField: "x",
+          yField: "y",
+          zField: "z",
+          reason: "Detected a complete grid.",
+          reasonCode: "chart.recommendation.surface-grid-line",
+          reasonParams: { xCount: 21, yCount: 21, pointCount: 441 },
+        },
+      ],
     });
 
     expect(result.success).toBe(true);
@@ -136,6 +150,22 @@ describe("LabViz API v1 contract", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("validates experiment and physical-run provenance independently", () => {
+    const context = {
+      experimentId: "experiment-1",
+      experimentRunId: "physical-run-1",
+      title: "Dose response study",
+      runLabel: "Acquisition 1",
+      replicateId: "R1",
+      batchId: "B1",
+    };
+
+    expect(experimentContextSchema.safeParse(context).success).toBe(true);
+    expect(
+      experimentContextSchema.safeParse({ ...context, runLabel: "" }).success,
+    ).toBe(false);
   });
 
   it("enforces the project-description UTF-8 byte and NUL contract", () => {

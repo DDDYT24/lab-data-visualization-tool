@@ -1,7 +1,7 @@
 "use client";
 
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
-import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import {
@@ -113,7 +113,7 @@ export function CloudProjectActions() {
             fullWidth
             loading={saveMutation.isPending}
             onClick={save}
-            startIcon={<CloudUploadOutlinedIcon />}
+            startIcon={<SaveOutlinedIcon />}
             variant="outlined"
           >
             {t("save")}

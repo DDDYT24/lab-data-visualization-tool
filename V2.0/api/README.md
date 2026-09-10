@@ -1,4 +1,16 @@
-# LabViz V2.0 API
+# LabViz V2.1 API
+
+## 普通本地用户
+
+普通用户只需运行仓库根目录的启动脚本。默认使用 Python 自带的 SQLite 和
+`.labviz/objects/` 本地对象目录；FastAPI、Uvicorn 以及科学计算依赖会安装到
+`V2.0/api/.venv`。不需要单独安装数据库服务器、Docker、PostgreSQL、MinIO 或外部邮件服务。
+数据边界、离线安装和备份方式分别见 [`../docs/PRIVACY_DATA_BOUNDARY.md`](../docs/PRIVACY_DATA_BOUNDARY.md)、
+[`../docs/OFFLINE_INSTALL.md`](../docs/OFFLINE_INSTALL.md) 和
+[`../docs/BACKUP_RESTORE.md`](../docs/BACKUP_RESTORE.md)。
+
+下面的 PostgreSQL、对象存储、Worker 和生产配置是维护者扩展与集成测试说明，不是普通本地
+部署的必需步骤。
 
 SQLite remains the default reference repository. Phase 2 adds an opt-in PostgreSQL project
 persistence slice for project creation, reopening, preview, and immutable chart revisions without
@@ -181,6 +193,12 @@ python -m alembic downgrade 0008_phase5b3_storage_inventory
 python -m alembic upgrade head
 python -m alembic check
 ```
+
+V2.1 migration `0011_normalize_check_names` normalizes only the exact legacy double-prefixed
+check-constraint names produced by the former naming convention. It does not rebuild constraints
+and is a no-op on a fresh database. Its downgrade is intentionally a no-op so a fresh upgrade that
+performed no rename cannot introduce legacy names; use an isolated disposable database for full
+chain rollback testing.
 
 Run a worker as an independent process. Reconciliation may finalize already-persisted writes;
 lifecycle, GC, metadata, and staging tasks default to audited dry-run:

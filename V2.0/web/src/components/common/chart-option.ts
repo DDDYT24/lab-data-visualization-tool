@@ -340,9 +340,15 @@ export function buildChartOption({
         ? [[x, y, z]]
         : [];
     });
-    const data = analysis?.preview.surfacePoints.length
+    const surfaceDiagnostic = analysis?.preview.surfaceDiagnostics.find(
+      (item) => item.panel === 1,
+    );
+    const analysisData = analysis?.preview.surfacePoints.length
       ? analysis.preview.surfacePoints.map((point) => [point.x, point.y, point.z])
       : fallbackData;
+    const data = surfaceDiagnostic?.status === "valid" || !surfaceDiagnostic
+      ? analysisData
+      : [];
     const zValues = data.map((point) => point[2]);
     return {
       ...common,
@@ -351,7 +357,13 @@ export function buildChartOption({
         boxDepth: 80,
         boxHeight: 80,
         boxWidth: 120,
-        viewControl: { projection: "perspective" },
+        viewControl: {
+          autoRotate: false,
+          panSensitivity: 1,
+          projection: "perspective",
+          rotateSensitivity: 1,
+          zoomSensitivity: 1,
+        },
       },
       visualMap: {
         max: zValues.length ? Math.max(...zValues) : 1,
@@ -360,7 +372,14 @@ export function buildChartOption({
       xAxis3D: { name: axisName(spec.xAxis.title, spec.xAxis.unit), type: "value" },
       yAxis3D: { name: spec.series[0]?.label ?? "Y", type: "value" },
       zAxis3D: { name: spec.series[1]?.label ?? spec.yAxis.title, type: "value" },
-      series: [{ data, shading: "lambert", type: "surface" }],
+      series: [{
+        data,
+        dataShape: surfaceDiagnostic
+          ? [surfaceDiagnostic.yCount, surfaceDiagnostic.xCount]
+          : undefined,
+        shading: "lambert",
+        type: "surface",
+      }],
     } as EChartsOption;
   }
 

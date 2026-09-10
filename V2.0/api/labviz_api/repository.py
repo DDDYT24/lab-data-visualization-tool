@@ -50,6 +50,25 @@ class ProjectRepository:
         with self._connect() as connection:
             connection.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS experiments (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    owner_user_id TEXT,
+                    guest_token_digest TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK ((owner_user_id IS NULL) <> (guest_token_digest IS NULL))
+                );
+
+                CREATE TABLE IF NOT EXISTS experiment_runs (
+                    id TEXT PRIMARY KEY,
+                    experiment_id TEXT NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+                    run_label TEXT NOT NULL,
+                    replicate_id TEXT,
+                    batch_id TEXT,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS projects (
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
@@ -64,7 +83,8 @@ class ProjectRepository:
                     chart_json TEXT,
                     preview_json TEXT,
                     quality_json TEXT,
-                    data_blob BLOB
+                    data_blob BLOB,
+                    experiment_run_id TEXT REFERENCES experiment_runs(id) ON DELETE RESTRICT
                 );
 
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -111,7 +131,8 @@ class ProjectRepository:
                     payload BLOB,
                     expires_at TEXT,
                     message TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    experiment_json TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS auth_challenges (
@@ -173,6 +194,15 @@ class ProjectRepository:
                 CREATE INDEX IF NOT EXISTS idx_projects_owner
                 ON projects(owner_user_id, updated_at DESC);
 
+                CREATE INDEX IF NOT EXISTS idx_experiments_owner
+                ON experiments(owner_user_id, updated_at DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_experiments_guest
+                ON experiments(guest_token_digest, updated_at DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_experiment_runs_experiment
+                ON experiment_runs(experiment_id, created_at DESC);
+
                 CREATE INDEX IF NOT EXISTS idx_project_description_revisions_project
                 ON project_description_revisions(project_id, revision_number);
 
@@ -205,6 +235,8 @@ class ProjectRepository:
                 )
             if "current_revision_id" not in project_columns:
                 connection.execute("ALTER TABLE projects ADD COLUMN current_revision_id TEXT")
+            if "experiment_run_id" not in project_columns:
+                connection.execute("ALTER TABLE projects ADD COLUMN experiment_run_id TEXT")
             share_columns = {
                 str(row["name"])
                 for row in connection.execute("PRAGMA table_info(shares)").fetchall()
@@ -253,6 +285,11 @@ class ProjectRepository:
             }
             if "guest_token_digest" not in project_columns:
                 connection.execute("ALTER TABLE projects ADD COLUMN guest_token_digest TEXT")
+            export_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(exports)").fetchall()
+            }
+            if "experiment_json" not in export_columns:
+                connection.execute("ALTER TABLE exports ADD COLUMN experiment_json TEXT")
             connection.execute(
                 "UPDATE jobs SET updated_at = ? WHERE updated_at IS NULL", (iso_now(),)
             )
@@ -272,6 +309,23 @@ class ProjectRepository:
                 """,
                 (now,),
             )
+            connection.execute(
+                """
+                DELETE FROM experiment_runs
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM projects WHERE projects.experiment_run_id = experiment_runs.id
+                )
+                """
+            )
+            connection.execute(
+                """
+                DELETE FROM experiments
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM experiment_runs
+                    WHERE experiment_runs.experiment_id = experiments.id
+                )
+                """
+            )
             connection.execute("DELETE FROM auth_challenges WHERE expires_at < ?", (now,))
             connection.execute("DELETE FROM auth_sessions WHERE expires_at < ?", (now,))
             connection.execute("DELETE FROM upload_idempotency WHERE expires_at <= ?", (now,))
@@ -289,6 +343,8 @@ class ProjectRepository:
         title: str,
         source: dict[str, Any],
         guest_token_digest: str,
+        owner_user_id: str | None = None,
+        experiment: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
         request_sha256: str | None = None,
     ) -> ProjectCreation:
@@ -345,12 +401,66 @@ class ProjectRepository:
                                 job_id=str(existing["job_id"]),
                                 replayed=True,
                             )
+            experiment_run_id: str | None = None
+            if experiment is not None:
+                title = str(experiment["title"])
+                requested_run_id = experiment.get("experimentRunId")
+                if requested_run_id:
+                    authorized_run = connection.execute(
+                        """
+                        SELECT r.id
+                        FROM experiment_runs r
+                        JOIN experiments e ON e.id = r.experiment_id
+                        WHERE r.id = ?
+                          AND (e.guest_token_digest = ? OR e.owner_user_id = ?)
+                        """,
+                        (requested_run_id, guest_token_digest, owner_user_id),
+                    ).fetchone()
+                    if authorized_run is None:
+                        raise ValueError("ExperimentRun does not exist or is not accessible.")
+                    experiment_run_id = str(authorized_run["id"])
+                else:
+                    experiment_row = connection.execute(
+                        """
+                        SELECT id FROM experiments
+                        WHERE (guest_token_digest = ? OR owner_user_id = ?)
+                          AND title = ? COLLATE NOCASE
+                        ORDER BY created_at LIMIT 1
+                        """,
+                        (guest_token_digest, owner_user_id, title),
+                    ).fetchone()
+                    experiment_id = str(experiment_row["id"]) if experiment_row else uuid4().hex
+                    if experiment_row is None:
+                        connection.execute(
+                            """
+                            INSERT INTO experiments (
+                                id, title, owner_user_id, guest_token_digest, created_at, updated_at
+                            ) VALUES (?, ?, NULL, ?, ?, ?)
+                            """,
+                            (experiment_id, title, guest_token_digest, now, now),
+                        )
+                    experiment_run_id = uuid4().hex
+                    connection.execute(
+                        """
+                        INSERT INTO experiment_runs (
+                            id, experiment_id, run_label, replicate_id, batch_id, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            experiment_run_id,
+                            experiment_id,
+                            experiment["runLabel"],
+                            experiment.get("replicateId"),
+                            experiment.get("batchId"),
+                            now,
+                        ),
+                    )
             connection.execute(
                 """
                 INSERT INTO projects (
                     id, title, source_json, storage_mode, guest_token_digest,
-                    expires_at, updated_at
-                ) VALUES (?, ?, ?, 'temporary-cloud', ?, ?, ?)
+                    expires_at, updated_at, experiment_run_id
+                ) VALUES (?, ?, ?, 'temporary-cloud', ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -359,6 +469,7 @@ class ProjectRepository:
                     guest_token_digest,
                     project_expires_at,
                     now,
+                    experiment_run_id,
                 ),
             )
             connection.execute(
@@ -597,6 +708,30 @@ class ProjectRepository:
                 ).fetchone()
         return dict(row) if row else None
 
+    def get_experiment_context(self, project_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT e.id AS experiment_id, e.title, r.id AS experiment_run_id,
+                       r.run_label, r.replicate_id, r.batch_id
+                FROM projects p
+                JOIN experiment_runs r ON r.id = p.experiment_run_id
+                JOIN experiments e ON e.id = r.experiment_id
+                WHERE p.id = ?
+                """,
+                (project_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "experimentId": row["experiment_id"],
+            "experimentRunId": row["experiment_run_id"],
+            "title": row["title"],
+            "runLabel": row["run_label"],
+            "replicateId": row["replicate_id"],
+            "batchId": row["batch_id"],
+        }
+
     def get_project_json(self, project_id: str, column: str) -> dict[str, Any] | None:
         if column not in {"preview_json", "quality_json", "chart_json"}:
             raise ValueError("Unsupported project JSON column.")
@@ -735,6 +870,20 @@ class ProjectRepository:
                 """,
                 (owner_user_id, updated_at, revision_id, project_id, owner_user_id),
             )
+            connection.execute(
+                """
+                UPDATE experiments
+                SET owner_user_id = ?, guest_token_digest = NULL, updated_at = ?
+                WHERE id = (
+                    SELECT r.experiment_id
+                    FROM projects p
+                    JOIN experiment_runs r ON r.id = p.experiment_run_id
+                    WHERE p.id = ?
+                )
+                  AND (owner_user_id IS NULL OR owner_user_id = ?)
+                """,
+                (owner_user_id, updated_at, project_id, owner_user_id),
+            )
         return updated_at
 
     def duplicate_project(
@@ -758,8 +907,8 @@ class ProjectRepository:
                 INSERT INTO projects (
                     id, title, description, current_revision_id, source_json, storage_mode,
                     owner_user_id, expires_at, updated_at, chart_json, preview_json,
-                    quality_json, data_blob
-                ) VALUES (?, ?, ?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?)
+                    quality_json, data_blob, experiment_run_id
+                ) VALUES (?, ?, ?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -773,6 +922,7 @@ class ProjectRepository:
                     source["preview_json"],
                     source["quality_json"],
                     source["data_blob"],
+                    source["experiment_run_id"],
                 ),
             )
             connection.execute(
@@ -801,7 +951,31 @@ class ProjectRepository:
 
     def delete_project(self, project_id: str) -> bool:
         with self._connect() as connection:
+            run = connection.execute(
+                "SELECT experiment_run_id FROM projects WHERE id = ?", (project_id,)
+            ).fetchone()
             cursor = connection.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            if run is not None and run["experiment_run_id"] is not None:
+                run_id = run["experiment_run_id"]
+                remaining = connection.execute(
+                    "SELECT 1 FROM projects WHERE experiment_run_id = ? LIMIT 1", (run_id,)
+                ).fetchone()
+                if remaining is None:
+                    experiment = connection.execute(
+                        "SELECT experiment_id FROM experiment_runs WHERE id = ?", (run_id,)
+                    ).fetchone()
+                    connection.execute("DELETE FROM experiment_runs WHERE id = ?", (run_id,))
+                    if experiment is not None:
+                        connection.execute(
+                            """
+                            DELETE FROM experiments
+                            WHERE id = ?
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM experiment_runs WHERE experiment_id = ?
+                              )
+                            """,
+                            (experiment["experiment_id"], experiment["experiment_id"]),
+                        )
         return cursor.rowcount == 1
 
     def create_share(
@@ -885,14 +1059,16 @@ class ProjectRepository:
         payload: bytes,
         expires_at: str,
         message: str,
+        experiment: dict[str, Any] | None = None,
     ) -> None:
         with self._connect() as connection:
             self._touch(connection, project_id)
             connection.execute(
                 """
                 INSERT INTO exports (
-                    id, project_id, format, status, payload, expires_at, message, created_at
-                ) VALUES (?, ?, ?, 'ready', ?, ?, ?, ?)
+                    id, project_id, format, status, payload, expires_at, message, created_at,
+                    experiment_json
+                ) VALUES (?, ?, ?, 'ready', ?, ?, ?, ?, ?)
                 """,
                 (
                     export_id,
@@ -902,6 +1078,7 @@ class ProjectRepository:
                     expires_at,
                     message,
                     iso_now(),
+                    json.dumps(experiment, ensure_ascii=False) if experiment else None,
                 ),
             )
 

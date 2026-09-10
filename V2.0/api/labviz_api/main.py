@@ -11,7 +11,8 @@ import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any, cast
-from uuid import uuid4
+from urllib.parse import quote
+from uuid import UUID, uuid4
 
 from fastapi import (
     BackgroundTasks,
@@ -44,6 +45,8 @@ from .models import (
     CleaningDecisionsResponse,
     CreateShareRequest,
     DataPreview,
+    ExperimentContext,
+    ExperimentInput,
     ExportJob,
     HealthResponse,
     ProcessingJob,
@@ -122,6 +125,7 @@ def _upload_request_sha256(
     media_type: str,
     sheet_name: str | None,
     header_row: int,
+    experiment: dict[str, Any] | None = None,
 ) -> str:
     document = {
         "apiContractVersion": "api-v1",
@@ -129,6 +133,7 @@ def _upload_request_sha256(
         "mediaType": media_type,
         "sheetName": sheet_name,
         "headerRow": header_row,
+        "experiment": experiment,
         "payloadSha256": hashlib.sha256(payload).hexdigest(),
     }
     canonical = json.dumps(
@@ -173,7 +178,41 @@ def _project_session(repository: ProjectReader, project: dict[str, Any]) -> Proj
         source=SourceFile.model_validate_json(project["source_json"]),
         job=_job_from_row(job_row) if job_row else None,
         expires_at=project["expires_at"],
+        experiment=(
+            ExperimentContext.model_validate(project["experiment"])
+            if project.get("experiment")
+            else None
+        ),
     )
+
+
+def _experiment_input(
+    *,
+    filename: str,
+    title: str | None,
+    run_label: str | None,
+    replicate_id: str | None,
+    batch_id: str | None,
+) -> ExperimentInput | None:
+    values = {
+        "title": (title or "").strip(),
+        "runLabel": (run_label or "").strip(),
+        "replicateId": (replicate_id or "").strip() or None,
+        "batchId": (batch_id or "").strip() or None,
+    }
+    if not values["title"]:
+        if any(values[key] for key in ("runLabel", "replicateId", "batchId")):
+            raise ApiProblem(
+                422,
+                "experiment-title-required",
+                "An experiment name is required when run, replicate, or batch metadata is set.",
+            )
+        return None
+    values["runLabel"] = values["runLabel"] or Path(filename).stem or "Acquisition"
+    try:
+        return ExperimentInput.model_validate(values)
+    except ValidationError as exc:
+        raise ApiProblem(422, "invalid-experiment-metadata", str(exc)) from exc
 
 
 def _require_project(repository: ProjectReader, project_id: str) -> dict[str, Any]:
@@ -240,13 +279,28 @@ def _export_response(export: dict[str, Any]) -> Response:
         "pdf": ("application/pdf", "pdf"),
     }
     media_type, extension = formats[export["format"]]
+    headers = {"Content-Disposition": f'attachment; filename="labviz-{export["id"]}.{extension}"'}
+    experiment = export.get("experiment")
+    if experiment:
+        headers["X-LabViz-Experiment-Id"] = str(experiment["experimentId"])
+        headers["X-LabViz-Experiment-Run-Id"] = str(experiment["experimentRunId"])
     return Response(
         content=bytes(export["payload"]),
         media_type=media_type,
-        headers={
-            "Content-Disposition": f'attachment; filename="labviz-{export["id"]}.{extension}"'
-        },
+        headers=headers,
     )
+
+
+def _download_content_disposition(filename: str) -> str:
+    ascii_name = "".join(
+        character
+        if character.isascii() and (character.isalnum() or character in {"-", "_", "."})
+        else "-"
+        for character in filename
+    )
+    ascii_name = "-".join(part for part in ascii_name.split("-") if part) or "labviz.csv"
+    encoded_name = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
 
 
 def _shared_preview(preview: DataPreview, chart: ChartSpec) -> DataPreview:
@@ -401,7 +455,7 @@ def create_app(
 
     app = FastAPI(
         title="LabViz API",
-        version="2.0.0",
+        version="2.1.0",
         description="Processing, quality review, chart export, history, sharing, and auth.",
         lifespan=lifespan,
     )
@@ -543,8 +597,14 @@ def create_app(
         file: UploadFile = File(...),
         sheet_name: str | None = Form(default=None, alias="sheetName"),
         header_row: int = Form(default=1, alias="headerRow", ge=1, le=1_000),
+        experiment_title: str | None = Form(default=None, alias="experimentTitle"),
+        run_label: str | None = Form(default=None, alias="runLabel"),
+        replicate_id: str | None = Form(default=None, alias="replicateId"),
+        batch_id: str | None = Form(default=None, alias="batchId"),
+        experiment_run_id: UUID | None = Form(default=None, alias="experimentRunId"),
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
         guest_cookie: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        user: dict[str, str] | None = Depends(optional_user),
         repository: ProjectStore = Depends(get_project_store),
         current_settings: Settings = Depends(get_settings),
     ) -> ProjectSession:
@@ -555,6 +615,22 @@ def create_app(
             validate_upload(payload, filename, current_settings.max_upload_bytes)
         except ProcessingError as exc:
             raise ApiProblem(422, exc.code, str(exc)) from exc
+        experiment_input = _experiment_input(
+            filename=filename,
+            title=experiment_title,
+            run_label=run_label,
+            replicate_id=replicate_id,
+            batch_id=batch_id,
+        )
+        if experiment_run_id is not None and experiment_input is None:
+            raise ApiProblem(
+                422,
+                "experiment-title-required",
+                "An experiment name is required when reusing an experiment run.",
+            )
+        experiment_document = _model_json(experiment_input) if experiment_input else None
+        if experiment_document is not None and experiment_run_id is not None:
+            experiment_document["experimentRunId"] = experiment_run_id.hex
 
         project_id = uuid4().hex
         job_id = uuid4().hex
@@ -566,6 +642,7 @@ def create_app(
                 media_type=media_type,
                 sheet_name=sheet_name,
                 header_row=header_row,
+                experiment=experiment_document,
             )
             if idempotency_key is not None
             else None
@@ -580,6 +657,8 @@ def create_app(
             source=_model_json(source),
             source_sha256=hashlib.sha256(payload).hexdigest(),
             guest_token_digest=_guest_digest(guest_token),
+            owner_user_id=user["id"] if user else None,
+            experiment=experiment_document,
             idempotency_key=idempotency_key,
             request_sha256=request_sha256,
         )
@@ -957,6 +1036,11 @@ def create_app(
                     updated_at=row["updated_at"],
                     storage_mode=row["storage_mode"],
                     thumbnail_url=None,
+                    experiment=(
+                        ExperimentContext.model_validate(row["experiment"])
+                        if row.get("experiment")
+                        else None
+                    ),
                 )
             )
         return ProjectList(projects=projects)
@@ -979,6 +1063,11 @@ def create_app(
                     updated_at=row["updated_at"],
                     storage_mode=row["storage_mode"],
                     thumbnail_url=None,
+                    experiment=(
+                        ExperimentContext.model_validate(row["experiment"])
+                        if row.get("experiment")
+                        else None
+                    ),
                 )
             )
         return ProjectList(projects=projects)
@@ -1197,6 +1286,7 @@ def create_app(
                 project_id=context["project_id"],
                 series=derived["series"],
                 preview=derived["preview"],
+                recommendations=derived["recommendations"],
             ),
             downloads=downloads,
         )
@@ -1216,7 +1306,7 @@ def create_app(
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         try:
             frame = repository.load_chart_dataframe(project_id)
-            payload = render_chart(frame, body.chart)
+            payload = render_chart(frame, body.chart, provenance=project.get("experiment"))
         except (ProcessingError, ValidationError) as exc:
             code = exc.code if isinstance(exc, ProcessingError) else "invalid-chart"
             raise ApiProblem(422, code, str(exc)) from exc
@@ -1241,6 +1331,11 @@ def create_app(
             ),
             expires_at=export["expires_at"],
             message=export["message"],
+            experiment=(
+                ExperimentContext.model_validate(project["experiment"])
+                if project.get("experiment")
+                else None
+            ),
         )
 
     @app.post(
@@ -1265,6 +1360,7 @@ def create_app(
             project_id=project_id,
             series=analysis["series"],
             preview=analysis["preview"],
+            recommendations=analysis["recommendations"],
         )
 
     @app.get(f"{API_PREFIX}/exports/{{export_id}}/download")
@@ -1293,15 +1389,12 @@ def create_app(
         project = _require_project_access(repository, project_id, user, guest_token, ready=True)
         cleaned = repository.load_cleaned_dataframe(project_id)
         payload = cleaned.to_csv(index=False).encode("utf-8-sig")
-        safe_name = "".join(
-            character if character.isalnum() or character in {"-", "_"} else "-"
-            for character in str(project["title"])
-        ).strip("-")
-        filename = f"{safe_name or 'labviz'}-cleaned.csv"
+        title = str(project["title"])
+        filename = f"{title}-cleaned.csv"
         return Response(
             content=payload,
             media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": _download_content_disposition(filename)},
         )
 
     @app.get(f"{API_PREFIX}/shares/{{token}}/downloads/{{format_name}}")

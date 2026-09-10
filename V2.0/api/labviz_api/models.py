@@ -11,6 +11,15 @@ from pydantic.alias_generators import to_camel
 API_VERSION: Literal["v1"] = "v1"
 MAX_PROJECT_DESCRIPTION_UTF8_BYTES = 4_000
 JsonScalar = str | int | float | bool | None
+SurfaceDiagnosticStatus = Literal[
+    "valid",
+    "invalid-values",
+    "insufficient-points",
+    "collinear",
+    "duplicate-coordinates",
+    "missing-grid",
+    "irregular-grid",
+]
 
 
 class ContractModel(BaseModel):
@@ -43,6 +52,18 @@ class ProcessingJob(VersionedModel):
     error_code: str | None = None
 
 
+class ExperimentInput(ContractModel):
+    title: str = Field(min_length=1, max_length=200)
+    run_label: str = Field(min_length=1, max_length=200)
+    replicate_id: str | None = Field(default=None, min_length=1, max_length=100)
+    batch_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class ExperimentContext(ExperimentInput):
+    experiment_id: str
+    experiment_run_id: str
+
+
 class ProjectSession(VersionedModel):
     project_id: str
     storage_mode: Literal["temporary-cloud", "saved-cloud", "local"]
@@ -51,6 +72,7 @@ class ProjectSession(VersionedModel):
     source: SourceFile
     job: ProcessingJob | None = None
     expires_at: str | None = None
+    experiment: ExperimentContext | None = None
 
 
 class PreviewColumn(ContractModel):
@@ -143,9 +165,13 @@ class SeriesSpec(ContractModel):
 class FittingSpec(ContractModel):
     model: Literal["none", "linear", "polynomial", "exponential", "logarithmic", "power"] = "none"
     polynomial_order: Literal[1, 2, 3] = 2
+    fit_method: Literal["ordinary-least-squares", "weighted-least-squares"] = (
+        "ordinary-least-squares"
+    )
     show_equation: bool = True
     show_r_squared: bool = True
     confidence_band: bool = False
+    confidence_method: Literal["student-t", "bootstrap"] = "student-t"
     confidence_level: Literal[90, 95, 99] = 95
 
 
@@ -287,6 +313,7 @@ class ProjectSummary(ContractModel):
     updated_at: str
     storage_mode: Literal["saved-cloud", "local"]
     thumbnail_url: str | None = None
+    experiment: ExperimentContext | None = None
 
 
 class ProjectList(VersionedModel):
@@ -372,6 +399,11 @@ class FitAnalysis(ContractModel):
     model: Literal["linear", "polynomial", "exponential", "logarithmic", "power"]
     equation: str
     r_squared: float
+    sample_size: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    fit_method: Literal["ordinary-least-squares", "weighted-least-squares"]
+    confidence_method: Literal["none", "student-t", "bootstrap"]
+    interval_kind: Literal["none", "pointwise-mean"]
     points: list[FitPoint]
 
 
@@ -384,6 +416,36 @@ class UncertaintyPoint(ContractModel):
 class UncertaintyAnalysis(ContractModel):
     mode: Literal["standard-deviation", "standard-error", "confidence-interval", "column"]
     points: list[UncertaintyPoint]
+
+
+class ResidualDiagnostic(ContractModel):
+    status: Literal["supported", "insufficient-data"]
+    sample_size: int = Field(ge=0)
+    mean_residual: float | None = None
+    rmse: float | None = None
+    mae: float | None = None
+    max_abs_residual: float | None = None
+    residual_trend: Literal["none", "possible-trend"] | None = None
+    assumptions: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class AnalysisDisclosure(ContractModel):
+    method: Literal[
+        "fit",
+        "confidence-band",
+        "residual-diagnostic",
+        "prediction-band",
+        "simultaneous-band",
+        "robust-fitting",
+        "weighted-fitting",
+        "multiple-comparison",
+    ]
+    status: Literal["supported", "not-requested", "insufficient-data", "deferred"]
+    sample_size: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    assumptions: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
 
 
 class SeriesPoint(ContractModel):
@@ -399,6 +461,8 @@ class SeriesAnalysis(ContractModel):
     points: list[SeriesPoint]
     fit: FitAnalysis | None = None
     uncertainty: UncertaintyAnalysis | None = None
+    residual_diagnostic: ResidualDiagnostic | None = None
+    disclosures: list[AnalysisDisclosure] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -438,17 +502,49 @@ class SurfacePoint(ContractModel):
     z: float
 
 
+class SurfaceDiagnostic(ContractModel):
+    panel: int = Field(ge=1, le=4)
+    x_field: str
+    y_field: str
+    z_field: str
+    x_count: int = Field(ge=0)
+    y_count: int = Field(ge=0)
+    expected_points: int = Field(ge=0)
+    usable_points: int = Field(ge=0)
+    duplicate_coordinate_pairs: int = Field(ge=0)
+    duplicate_coordinate_rows: int = Field(ge=0)
+    missing_grid_cells: int = Field(ge=0)
+    non_finite_points: int = Field(ge=0)
+    uniform_x_spacing: bool
+    uniform_y_spacing: bool
+    collinear: bool
+    status: SurfaceDiagnosticStatus
+
+
 class ChartDerivedPreview(ContractModel):
     histograms: list[HistogramPreview] = Field(default_factory=list)
     boxes: list[BoxPreview] = Field(default_factory=list)
     heatmaps: list[HeatmapPreview] = Field(default_factory=list)
     surface_points: list[SurfacePoint] = Field(default_factory=list)
+    surface_diagnostics: list[SurfaceDiagnostic] = Field(default_factory=list)
+
+
+class ChartRecommendation(ContractModel):
+    chart_type: Literal["surface3d", "heatmap", "scatter"]
+    source: Literal["regular-grid", "grid-like"]
+    x_field: str
+    y_field: str
+    z_field: str
+    reason: str
+    reason_code: str
+    reason_params: dict[str, JsonScalar] = Field(default_factory=dict)
 
 
 class ChartAnalysis(VersionedModel):
     project_id: str
     series: list[SeriesAnalysis]
     preview: ChartDerivedPreview
+    recommendations: list[ChartRecommendation] = Field(default_factory=list)
 
 
 class SharedChart(VersionedModel):
@@ -469,6 +565,7 @@ class ExportJob(VersionedModel):
     download_url: str | None = None
     expires_at: str | None = None
     message: str
+    experiment: ExperimentContext | None = None
 
 
 class HealthResponse(VersionedModel):

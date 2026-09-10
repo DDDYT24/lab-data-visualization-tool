@@ -4,7 +4,7 @@ PASS
 
 - **Accepted locally on:** 2026-08-12
 - **Phase-boundary correction:** 2026-08-17
-- **Branch:** `codex/v2-closeout-p0-1-runtime-errors`
+- **Branch:** local development branch
 - **Offline-boundary base:** `3226742542d309822cfcdc3753e8c7c0ef24f7f6`
 - **Local candidate:** `2da381d6b08454549a74884775909b4a7ac71bb2`
 - **Phase 6B application verdict:** `PASS`
