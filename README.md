@@ -21,7 +21,7 @@ visualizing, and exporting experimental data. V2.1 combines a guided Next.js int
 FastAPI scientific-processing service. Original upload files are not retained as original project
 assets; parsed data snapshots and processing results remain on the local machine by default.
 
-> **Current release: V2.1.0 local release** — supports CSV, TSV, delimited TXT, JSON, and XLSX data; guided
+> **Current release: V2.1.1 local release** — supports CSV, TSV, delimited TXT, JSON, and XLSX data; guided
 > quality review; seven 2D/3D chart types; saved history; local sign-in; sharing; and PNG/SVG/PDF
 > publication exports.
 
@@ -434,7 +434,7 @@ This project keeps an intentionally smaller scope and contains an independent im
 
 这是一个轻量、本地运行的实验数据处理与可视化工具，面向需要“上传数据后直接检查、清洗、绘图并导出”的实验者。项目不提供官方在线网站，用户从 GitHub 克隆后在自己的电脑上运行；原始上传文件不会以原文件形式长期保存，解析后的数据快照和处理结果留在本机。
 
-V2.1.0 是当前本地发布版本，由 Next.js 前端和 FastAPI 科研处理服务组成，
+V2.1.1 是当前本地发布版本，由 Next.js 前端和 FastAPI 科研处理服务组成，
 提供真实的数据处理、工作区、历史、分享、登录和导出接口。V2.1 默认使用
 SQLite 和本地对象目录，二者都会自动创建；不需要 AWS、域名、DNS、Docker、
 PostgreSQL、MinIO 或付费邮件服务。FastAPI 由启动脚本安装到项目虚拟环境，SQLite
