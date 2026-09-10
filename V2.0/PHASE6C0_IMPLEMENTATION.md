@@ -5,7 +5,7 @@
 ## Git boundary
 
 - Direct parent and accepted Phase 6B boundary: `75adb8a0cc588fa5056da5725c504190978aa0a4`.
-- Candidate: the commit containing this record on `codex/phase-6c0-bootstrap`.
+- Candidate: the commit containing this record on the Phase 6C-0 local development branch.
 - Scope: Phase 6C-0 state, identity, account guardrails, and repository layout only.
 
 This unit does not claim a deployed state bucket, OIDC role, CloudTrail, cost-anomaly monitor,

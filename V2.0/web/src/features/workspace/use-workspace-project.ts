@@ -67,6 +67,11 @@ export function useWorkspaceProject(initialProjectId?: string) {
       const options = {
         sheetName: selectedFile.sheetName,
         headerRow: selectedFile.headerRow,
+        experimentTitle: selectedFile.experimentTitle,
+        runLabel: selectedFile.runLabel,
+        replicateId: selectedFile.replicateId,
+        batchId: selectedFile.batchId,
+        experimentRunId: selectedFile.experimentRunId,
       };
       const signature = uploadRequestSignature(selectedFile.sourceFile, options);
       const state = getUploadIdempotencyState(
@@ -169,7 +174,15 @@ export function useWorkspaceProject(initialProjectId?: string) {
       headerRow: number;
       sheetName: string | null;
     }) => {
-      const options = { headerRow, sheetName };
+      const options = {
+        headerRow,
+        sheetName,
+        experimentTitle: selectedFile?.experimentTitle,
+        runLabel: selectedFile?.runLabel,
+        replicateId: selectedFile?.replicateId,
+        batchId: selectedFile?.batchId,
+        experimentRunId: selectedFile?.experimentRunId,
+      };
       const signature = uploadRequestSignature(file, options);
       const state = getUploadIdempotencyState(
         reimportUploadStateRef.current,

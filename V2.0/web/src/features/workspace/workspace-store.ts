@@ -24,6 +24,11 @@ export type SelectedFile = {
   sheetName?: string | null;
   availableSheets?: string[];
   headerRow?: number | null;
+  experimentTitle?: string | null;
+  runLabel?: string | null;
+  replicateId?: string | null;
+  batchId?: string | null;
+  experimentRunId?: string | null;
 };
 
 export type WorkspaceLoadStatus =
@@ -154,6 +159,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
           sheetName: session.source.sheetName,
           availableSheets: session.source.availableSheets,
           headerRow: session.source.headerRow,
+          experimentTitle: session.experiment?.title,
+          runLabel: session.experiment?.runLabel,
+          replicateId: session.experiment?.replicateId,
+          batchId: session.experiment?.batchId,
+          experimentRunId: session.experiment?.experimentRunId,
         },
         loadStatus: failed ? "error" : "processing",
         loadError: failed ? session.job?.message ?? "Processing failed." : null,
@@ -174,6 +184,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         sheetName: workspace.session.source.sheetName,
         availableSheets: workspace.session.source.availableSheets,
         headerRow: workspace.session.source.headerRow,
+        experimentTitle: workspace.session.experiment?.title,
+        runLabel: workspace.session.experiment?.runLabel,
+        replicateId: workspace.session.experiment?.replicateId,
+        batchId: workspace.session.experiment?.batchId,
+        experimentRunId: workspace.session.experiment?.experimentRunId,
       },
       preview: workspace.preview,
       quality: workspace.quality,

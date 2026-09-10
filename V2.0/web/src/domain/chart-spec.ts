@@ -20,9 +20,13 @@ const fittingSchema = z.object({
     .enum(["none", "linear", "polynomial", "exponential", "logarithmic", "power"])
     .default("none"),
   polynomialOrder: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
+  fitMethod: z
+    .enum(["ordinary-least-squares", "weighted-least-squares"])
+    .default("ordinary-least-squares"),
   showEquation: z.boolean().default(true),
   showRSquared: z.boolean().default(true),
   confidenceBand: z.boolean().default(false),
+  confidenceMethod: z.enum(["student-t", "bootstrap"]).default("student-t"),
   confidenceLevel: z.union([z.literal(90), z.literal(95), z.literal(99)]).default(95),
 });
 
@@ -121,9 +125,11 @@ export const defaultChartSpec: ChartSpec = {
   fitting: {
     model: "none",
     polynomialOrder: 2,
+    fitMethod: "ordinary-least-squares",
     showEquation: true,
     showRSquared: true,
     confidenceBand: false,
+    confidenceMethod: "student-t",
     confidenceLevel: 95,
   },
   uncertainty: {

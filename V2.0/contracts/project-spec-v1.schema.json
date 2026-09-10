@@ -280,6 +280,15 @@
           "title": "Polynomialorder",
           "type": "integer"
         },
+        "fitMethod": {
+          "default": "ordinary-least-squares",
+          "enum": [
+            "ordinary-least-squares",
+            "weighted-least-squares"
+          ],
+          "title": "Fitmethod",
+          "type": "string"
+        },
         "showEquation": {
           "default": true,
           "title": "Showequation",
@@ -294,6 +303,15 @@
           "default": false,
           "title": "Confidenceband",
           "type": "boolean"
+        },
+        "confidenceMethod": {
+          "default": "student-t",
+          "enum": [
+            "student-t",
+            "bootstrap"
+          ],
+          "title": "Confidencemethod",
+          "type": "string"
         },
         "confidenceLevel": {
           "default": 95,

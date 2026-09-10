@@ -11,10 +11,16 @@ test("shows saved history and its filtered empty state", async ({ page }) => {
   ).toBeVisible();
   await expect.poll(() => observations.requests).toContain("GET /projects");
   await expect(page.getByText("Thermal response")).toBeVisible();
+  await expect(page.getByText("Dose response study")).toBeVisible();
+  await expect(page.getByText("Acquisition: Acquisition 2")).toBeVisible();
+  await expect(page.getByText("Replicate R2")).toBeVisible();
+  await expect(page.getByText("Batch B-2026-09")).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Continue editing" }),
   ).toHaveAttribute("href", "/workspace/project-e2e");
 
+  await page.getByPlaceholder("Search projects").fill("R2");
+  await expect(page.getByText("Thermal response")).toBeVisible();
   await page.getByPlaceholder("Search projects").fill("does not exist");
   await expect(
     page.getByText("No saved project matches the selected filters."),

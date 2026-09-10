@@ -103,7 +103,7 @@ if ($RefreshDependencies -or -not (Test-Path -LiteralPath (Join-Path $webRoot "n
     }
 }
 
-Write-Host "Starting LabViz V2.0 on http://127.0.0.1:$WebPort" -ForegroundColor Green
+Write-Host "Starting LabViz V2.1 on http://127.0.0.1:$WebPort" -ForegroundColor Green
 Write-Host "Keep this window open. Local sign-in codes appear in the API output." -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop both services." -ForegroundColor Yellow
 

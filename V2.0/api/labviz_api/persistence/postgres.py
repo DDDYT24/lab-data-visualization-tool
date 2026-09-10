@@ -29,6 +29,8 @@ from labviz_api.db.models import (
     CleaningDecisionSet,
     Dataset,
     DatasetVersion,
+    Experiment,
+    ExperimentRun,
     ExportJobRecord,
     GuestSession,
     IdempotencyRecord,
@@ -839,6 +841,7 @@ class PostgresProjectStore:
                 uow.commit()
                 return False
             object_ids = list(collect_project_object_ids(uow.session, project.id))
+            experiment_run_id = project.experiment_run_id
             stored_objects: list[StoredObject] = []
             if object_ids:
                 stored_objects = list(
@@ -862,6 +865,28 @@ class PostgresProjectStore:
                 )
             )
             uow.session.delete(project)
+            uow.session.flush()
+            if experiment_run_id is not None:
+                run_still_referenced = uow.session.scalar(
+                    select(Project.id)
+                    .where(Project.experiment_run_id == experiment_run_id)
+                    .limit(1)
+                )
+                if run_still_referenced is None:
+                    experiment_run = uow.session.get(ExperimentRun, experiment_run_id)
+                    if experiment_run is not None:
+                        experiment_id = experiment_run.experiment_id
+                        uow.session.delete(experiment_run)
+                        uow.session.flush()
+                        remaining_run = uow.session.scalar(
+                            select(ExperimentRun.id)
+                            .where(ExperimentRun.experiment_id == experiment_id)
+                            .limit(1)
+                        )
+                        if remaining_run is None:
+                            experiment_record = uow.session.get(Experiment, experiment_id)
+                            if experiment_record is not None:
+                                uow.session.delete(experiment_record)
             finalize_purged_project_objects(uow.session, stored_objects, now)
             uow.commit()
             return True
@@ -913,6 +938,8 @@ class PostgresProjectStore:
         source: dict[str, Any],
         source_sha256: str,
         guest_token_digest: str,
+        owner_user_id: str | None = None,
+        experiment: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
         request_sha256: str | None = None,
     ) -> ProjectCreation:
@@ -973,9 +1000,60 @@ class PostgresProjectStore:
                             )
                         uow.session.delete(record)
                         uow.session.flush()
+                experiment_run: ExperimentRun | None = None
+                if experiment is not None:
+                    experiment_owner = Experiment.guest_session_id == guest_session.id
+                    if owner_user_id is not None:
+                        experiment_owner = or_(
+                            experiment_owner,
+                            Experiment.owner_user_id == _uuid(owner_user_id),
+                        )
+                    requested_run_id = experiment.get("experimentRunId")
+                    if requested_run_id:
+                        experiment_run = uow.session.scalar(
+                            select(ExperimentRun)
+                            .join(Experiment)
+                            .where(
+                                ExperimentRun.id == _uuid(str(requested_run_id)),
+                                experiment_owner,
+                            )
+                            .with_for_update()
+                        )
+                        if experiment_run is None:
+                            raise PersistenceConflict(
+                                "ExperimentRun does not exist or is not accessible."
+                            )
+                    else:
+                        experiment_record = uow.session.scalar(
+                            select(Experiment)
+                            .where(
+                                experiment_owner,
+                                func.lower(Experiment.title) == str(experiment["title"]).lower(),
+                            )
+                            .order_by(Experiment.created_at)
+                            .limit(1)
+                            .with_for_update()
+                        )
+                        if experiment_record is None:
+                            experiment_record = Experiment(
+                                id=uuid4(),
+                                guest_session=guest_session,
+                                title=str(experiment["title"]),
+                                created_at=now,
+                                updated_at=now,
+                            )
+                        experiment_run = ExperimentRun(
+                            id=uuid4(),
+                            experiment=experiment_record,
+                            run_label=str(experiment["runLabel"]),
+                            replicate_id=experiment.get("replicateId"),
+                            batch_id=experiment.get("batchId"),
+                            created_at=now,
+                        )
                 project = Project(
                     id=_uuid(project_id),
                     guest_session=guest_session,
+                    experiment_run=experiment_run,
                     storage_mode="temporary-cloud",
                     title=title,
                     description="",
@@ -1172,6 +1250,21 @@ class PostgresProjectStore:
             ),
             "data_blob": None,
             "ready": ready,
+            "experiment": self._experiment_context(project),
+        }
+
+    @staticmethod
+    def _experiment_context(project: Project) -> dict[str, Any] | None:
+        run = project.experiment_run
+        if run is None:
+            return None
+        return {
+            "experimentId": run.experiment_id.hex,
+            "experimentRunId": run.id.hex,
+            "title": run.experiment.title,
+            "runLabel": run.run_label,
+            "replicateId": run.replicate_id,
+            "batchId": run.batch_id,
         }
 
     @staticmethod
@@ -1258,6 +1351,17 @@ class PostgresProjectStore:
                 guest = project.guest_session
                 if guest is None:
                     raise PersistenceConflict("Temporary project has no GuestSession owner.")
+                if project.experiment_run is not None:
+                    experiment_record = project.experiment_run.experiment
+                    if experiment_record.owner_user_id not in {None, owner_id}:
+                        raise PersistenceConflict("Experiment belongs to another user.")
+                    if experiment_record.owner_user_id is None and (
+                        experiment_record.guest_session_id != guest.id
+                    ):
+                        raise PersistenceConflict("Experiment belongs to another browser session.")
+                    experiment_record.owner = owner
+                    experiment_record.guest_session = None
+                    experiment_record.updated_at = now
                 existing_claim = uow.session.get(ProjectClaim, project.id)
                 if existing_claim is not None:
                     if existing_claim.user_uuid_snapshot != owner_id:
@@ -1660,6 +1764,7 @@ class PostgresProjectStore:
                 target_project = Project(
                     id=_uuid(project_id),
                     owner=owner,
+                    experiment_run=source_project.experiment_run,
                     storage_mode="saved-cloud",
                     title=copy_title,
                     description=source_project.description,
@@ -2697,6 +2802,7 @@ class PostgresProjectStore:
             raise PersistenceConflict("Export ProcessingRun has no input DatasetVersion.")
         render_spec = dict(parameters["renderSpec"])
         decision_id = parameters.get("cleaningDecisionSetId")
+        experiment = parameters.get("experiment") or {}
         return PublicationExport(
             id=job.id,
             project_id=job.project_id,
@@ -2705,6 +2811,16 @@ class PostgresProjectStore:
             cleaning_decision_set_id=_uuid(decision_id) if decision_id else None,
             chart_spec_revision_id=_uuid(parameters["chartSpecRevisionId"]),
             processing_run_id=run.id,
+            experiment_id=(
+                _uuid(experiment["experimentId"]) if experiment.get("experimentId") else None
+            ),
+            experiment_run_id=(
+                _uuid(experiment["experimentRunId"]) if experiment.get("experimentRunId") else None
+            ),
+            experiment_title_snapshot=experiment.get("title"),
+            run_label_snapshot=experiment.get("runLabel"),
+            replicate_id_snapshot=experiment.get("replicateId"),
+            batch_id_snapshot=experiment.get("batchId"),
             stored_object_id=stored.id,
             format=job.format,
             media_type=parameters["mediaType"],
@@ -2722,6 +2838,21 @@ class PostgresProjectStore:
             validation_document=dict(parameters["validation"]),
             created_at=now,
         )
+
+    @staticmethod
+    def _publication_experiment_context(
+        publication: PublicationExport,
+    ) -> dict[str, Any] | None:
+        if publication.experiment_id is None or publication.experiment_run_id is None:
+            return None
+        return {
+            "experimentId": publication.experiment_id.hex,
+            "experimentRunId": publication.experiment_run_id.hex,
+            "title": publication.experiment_title_snapshot,
+            "runLabel": publication.run_label_snapshot,
+            "replicateId": publication.replicate_id_snapshot,
+            "batchId": publication.batch_id_snapshot,
+        }
 
     def _complete_export_intent(
         self,
@@ -2959,6 +3090,7 @@ class PostgresProjectStore:
                             "validation": validation,
                             "outputSha256": output_sha,
                             "outputSizeBytes": len(payload),
+                            "experiment": self._experiment_context(project),
                         },
                         algorithm_version=EXPORT_RENDERER_VERSION,
                         code_version=PHASE5_CODE_VERSION,
@@ -3111,6 +3243,7 @@ class PostgresProjectStore:
                     "project_revision_id": _id(publication.project_revision_id),
                     "format": publication.format,
                     "media_type": publication.media_type,
+                    "experiment": self._publication_experiment_context(publication),
                 }
         except Exception as exc:
             raise _translate_database_error(exc) from exc
@@ -3142,6 +3275,7 @@ class PostgresProjectStore:
                     "project_revision_id": _id(publication.project_revision_id),
                     "format": publication.format,
                     "media_type": publication.media_type,
+                    "experiment": self._publication_experiment_context(publication),
                 }
             with self.storage.open(object_key) as stream:
                 payload = stream.read()

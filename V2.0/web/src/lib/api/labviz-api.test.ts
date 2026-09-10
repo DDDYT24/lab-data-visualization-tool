@@ -79,6 +79,31 @@ describe("LabViz API client contract", () => {
     expect(body.get("headerRow")).toBe("3");
   });
 
+  it("sends physical acquisition metadata with the uploaded file", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(readySession));
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["time,response\n0,1"], "replicate-1.csv", {
+      type: "text/csv",
+    });
+
+    await labvizApi.createProject(file, {
+      experimentTitle: "Dose response study",
+      runLabel: "Acquisition 1",
+      replicateId: "R1",
+      batchId: "B-2026-09",
+      experimentRunId: "00000000-0000-4000-8000-000000000010",
+    });
+
+    const body = fetchMock.mock.calls[0]?.[1]?.body as FormData;
+    expect(body.get("experimentTitle")).toBe("Dose response study");
+    expect(body.get("runLabel")).toBe("Acquisition 1");
+    expect(body.get("replicateId")).toBe("R1");
+    expect(body.get("batchId")).toBe("B-2026-09");
+    expect(body.get("experimentRunId")).toBe(
+      "00000000-0000-4000-8000-000000000010",
+    );
+  });
+
   it("sends the upload idempotency key without taking over multipart headers", async () => {
     const fetchMock = vi.fn().mockResolvedValue(apiResponse(readySession));
     vi.stubGlobal("fetch", fetchMock);

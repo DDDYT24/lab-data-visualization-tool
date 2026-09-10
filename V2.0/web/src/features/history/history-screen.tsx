@@ -70,7 +70,11 @@ export function HistoryScreen() {
       const matchesText =
         !normalized ||
         project.title.toLowerCase().includes(normalized) ||
-        project.sourceName.toLowerCase().includes(normalized);
+        project.sourceName.toLowerCase().includes(normalized) ||
+        project.experiment?.title.toLowerCase().includes(normalized) ||
+        project.experiment?.runLabel.toLowerCase().includes(normalized) ||
+        project.experiment?.replicateId?.toLowerCase().includes(normalized) ||
+        project.experiment?.batchId?.toLowerCase().includes(normalized);
       const matchesType = chartType === "all" || project.chartType === chartType;
       const matchesDate =
         maximumAge === null ||
@@ -282,6 +286,16 @@ export function HistoryScreen() {
                     <Typography color="text.secondary" noWrap variant="body2">
                       {project.sourceName}
                     </Typography>
+                    {project.experiment ? (
+                      <Stack spacing={0.25} sx={{ mt: 1 }}>
+                        <Typography color="primary.main" noWrap variant="body2">
+                          {project.experiment.title}
+                        </Typography>
+                        <Typography color="text.secondary" noWrap variant="caption">
+                          {t("experimentRun", { run: project.experiment.runLabel })}
+                        </Typography>
+                      </Stack>
+                    ) : null}
                   </Box>
                   <IconButton
                     aria-label={t("actionsFor", { title: project.title })}
@@ -294,9 +308,13 @@ export function HistoryScreen() {
                     <MoreHorizRoundedIcon />
                   </IconButton>
                 </Stack>
-                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}
+                >
                   <Chip
-                    label={project.storageMode === "local" ? t("local") : t("cloud")}
+                    label={t("local")}
                     size="small"
                     variant="outlined"
                   />
@@ -305,6 +323,20 @@ export function HistoryScreen() {
                       dateStyle: "medium",
                     }).format(new Date(project.updatedAt))}
                   </Typography>
+                  {project.experiment?.replicateId ? (
+                    <Chip
+                      label={t("replicate", { id: project.experiment.replicateId })}
+                      size="small"
+                      variant="outlined"
+                    />
+                  ) : null}
+                  {project.experiment?.batchId ? (
+                    <Chip
+                      label={t("batch", { id: project.experiment.batchId })}
+                      size="small"
+                      variant="outlined"
+                    />
+                  ) : null}
                 </Stack>
                 <Button
                   component={Link}

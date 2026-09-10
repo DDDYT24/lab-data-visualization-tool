@@ -5,21 +5,24 @@
 **把实验表格转换为清晰、可导出的科研图表，全程在本地运行。**
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-V2.0-0f766e)
+![Release](https://img.shields.io/badge/release-V2.1%20local-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [产品需求](V2.0/prd.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
+[English](README.md) · [简体中文](README.zh-CN.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
 
 </div>
 
-LabViz V2.0 是当前正式发布的本地自托管版本，由 Next.js 网站和 FastAPI 科研处理
+LabViz V2.1 是当前本地发布候选，由 Next.js 网站和 FastAPI 科研处理
 服务组成。它支持数据导入、质量检查、清洗、绘图、项目历史、本地验证码登录、
 只读分享，以及 PNG、SVG、PDF 科研图像导出。
 
 本项目不提供官方在线网站。普通使用者不需要购买域名，也不需要 AWS、DNS、
 Docker、PostgreSQL、MinIO 或付费邮件服务。
 
-## 三步启动 V2.0
+## 三步启动 V2.1
+
+V2.1 继续使用 `V2.0/` 作为代码目录，以保留现有启动路径和迁移历史；不复制出第二份
+`V2.1/` 目录，避免两套代码后续产生差异。
 
 请先安装：
 
@@ -42,6 +45,10 @@ if (-not (Test-Path -LiteralPath .\start-labviz.cmd)) { throw "当前目录不�
 第一次启动下载依赖是正常现象：脚本会创建 `V2.0/api/.venv`，用 `pip` 安装 API
 依赖；如果 `V2.0/web/node_modules` 不存在，还会运行 `npm ci` 安装网站依赖。
 这些是本地运行所需的依赖，不是 AWS 或在线部署下载。
+
+FastAPI 不是 Windows 或 macOS 自带的程序，但启动脚本会把它安装到项目自己的 Python
+虚拟环境中。SQLite 不需要另行安装数据库服务器，它由 Python 标准库提供，应用首次运行时
+自动创建 `V2.0/api/.labviz/labviz-v2.db`。
 
 ### macOS / Linux
 
@@ -94,11 +101,11 @@ XLSX 文件。网页端单文件上限为 50 MB。
 | --- | --- |
 | SQLite | 自动创建于 `V2.0/api/.labviz/labviz-v2.db`，保存项目元数据、会话、历史和修订 |
 | 本地对象目录 | 自动创建于 `V2.0/api/.labviz/`，保存本地处理结果 |
-| 原始上传文件 | 只在处理期间保留于内存，不写入项目数据库 |
+| 原始上传文件 | 不作为原文件长期保存；解析后的数据快照会留在本地以支持历史、清洗和导出 |
 | 登录验证码 | 显示在本地 API 终端，不发送邮件 |
 
 `.labviz` 运行数据已被 Git 忽略，不会随正常提交上传到 GitHub。公开分享仓库前，
-仍请确认没有手动添加实验数据、密钥或个人信息。
+仍请确认没有手动添加实验数据、密钥、个人路径或本机生成的 `outputs/` 文件。
 
 ## 哪些组件不是本地运行必需的
 
@@ -111,6 +118,13 @@ XLSX 文件。网页端单文件上限为 50 MB。
 
 请保持默认服务绑定在 `127.0.0.1`。如果没有配置 HTTPS、安全 Cookie、生产邮件、
 备份、监控和多用户存储，不要把端口 `3000` 或 `8000` 暴露到公网。
+
+更多说明：[`隐私边界`](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) ·
+[`离线安装`](V2.0/docs/OFFLINE_INSTALL.md) · [`备份与恢复`](V2.0/docs/BACKUP_RESTORE.md)。
+
+贡献代码请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题请阅读
+[`SECURITY.md`](SECURITY.md)，版本变化见 [`CHANGELOG.md`](CHANGELOG.md)，维护者发布前可参阅
+[`公开发布清单`](V2.0/docs/PUBLIC_RELEASE_CHECKLIST.md)。
 
 ## 手动启动
 

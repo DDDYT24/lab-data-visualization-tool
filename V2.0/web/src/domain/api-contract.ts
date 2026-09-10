@@ -46,6 +46,15 @@ export const processingJobSchema = z.object({
   errorCode: z.string().nullable(),
 });
 
+export const experimentContextSchema = z.object({
+  experimentId: z.string().min(1),
+  experimentRunId: z.string().min(1),
+  title: z.string().min(1).max(200),
+  runLabel: z.string().min(1).max(200),
+  replicateId: z.string().min(1).max(100).nullable(),
+  batchId: z.string().min(1).max(100).nullable(),
+});
+
 export const projectSessionSchema = z.object({
   apiVersion: apiVersionSchema,
   projectId: z.string().min(1),
@@ -55,6 +64,7 @@ export const projectSessionSchema = z.object({
   source: sourceFileSchema,
   job: processingJobSchema.nullable(),
   expiresAt: z.string().datetime().nullable(),
+  experiment: experimentContextSchema.nullable().default(null),
 });
 
 export const previewColumnSchema = z.object({
@@ -162,6 +172,7 @@ export const projectSummarySchema = z.object({
   updatedAt: z.string().datetime(),
   storageMode: z.enum(["saved-cloud", "local"]),
   thumbnailUrl: z.string().url().nullable(),
+  experiment: experimentContextSchema.nullable().default(null),
 });
 
 export const projectListSchema = z.object({
@@ -218,6 +229,7 @@ export const exportJobSchema = z.object({
   downloadUrl: downloadLocationSchema.nullable(),
   expiresAt: z.string().datetime().nullable(),
   message: z.string(),
+  experiment: experimentContextSchema.nullable().default(null),
 });
 
 export const shareLinkSchema = z.object({
@@ -251,6 +263,11 @@ const fitAnalysisSchema = z.object({
   model: z.enum(["linear", "polynomial", "exponential", "logarithmic", "power"]),
   equation: z.string(),
   rSquared: z.number(),
+  sampleSize: z.number().int().nonnegative().optional(),
+  excludedCount: z.number().int().nonnegative().optional(),
+  fitMethod: z.enum(["ordinary-least-squares", "weighted-least-squares"]).optional(),
+  confidenceMethod: z.enum(["none", "student-t", "bootstrap"]).optional(),
+  intervalKind: z.enum(["none", "pointwise-mean"]).optional(),
   points: z.array(fitPointSchema),
 });
 
@@ -264,6 +281,36 @@ const uncertaintyAnalysisSchema = z.object({
   points: z.array(
     z.object({ x: z.number(), y: z.number(), error: z.number().nonnegative() }),
   ),
+});
+
+const residualDiagnosticSchema = z.object({
+  status: z.enum(["supported", "insufficient-data"]),
+  sampleSize: z.number().int().nonnegative(),
+  meanResidual: z.number().nullable(),
+  rmse: z.number().nullable(),
+  mae: z.number().nullable(),
+  maxAbsResidual: z.number().nullable(),
+  residualTrend: z.enum(["none", "possible-trend"]).nullable(),
+  assumptions: z.array(z.string()),
+  limitations: z.array(z.string()),
+});
+
+const analysisDisclosureSchema = z.object({
+  method: z.enum([
+    "fit",
+    "confidence-band",
+    "residual-diagnostic",
+    "prediction-band",
+    "simultaneous-band",
+    "robust-fitting",
+    "weighted-fitting",
+    "multiple-comparison",
+  ]),
+  status: z.enum(["supported", "not-requested", "insufficient-data", "deferred"]),
+  sampleSize: z.number().int().nonnegative(),
+  excludedCount: z.number().int().nonnegative(),
+  assumptions: z.array(z.string()).optional(),
+  limitations: z.array(z.string()).optional(),
 });
 
 export const chartAnalysisSchema = z.object({
@@ -283,6 +330,8 @@ export const chartAnalysisSchema = z.object({
       ),
       fit: fitAnalysisSchema.nullable(),
       uncertainty: uncertaintyAnalysisSchema.nullable(),
+      residualDiagnostic: residualDiagnosticSchema.nullable().optional(),
+      disclosures: z.array(analysisDisclosureSchema).optional(),
       warnings: z.array(z.string()),
     }),
   ),
@@ -325,13 +374,54 @@ export const chartAnalysisSchema = z.object({
         z: z.number(),
       }),
     ),
+    surfaceDiagnostics: z.array(
+      z.object({
+        panel: z.number().int().min(1).max(4),
+        xField: z.string().min(1),
+        yField: z.string().min(1),
+        zField: z.string().min(1),
+        xCount: z.number().int().nonnegative(),
+        yCount: z.number().int().nonnegative(),
+        expectedPoints: z.number().int().nonnegative(),
+        usablePoints: z.number().int().nonnegative(),
+        duplicateCoordinatePairs: z.number().int().nonnegative(),
+        duplicateCoordinateRows: z.number().int().nonnegative(),
+        missingGridCells: z.number().int().nonnegative(),
+        nonFinitePoints: z.number().int().nonnegative(),
+        uniformXSpacing: z.boolean(),
+        uniformYSpacing: z.boolean(),
+        collinear: z.boolean(),
+        status: z.enum([
+          "valid",
+          "invalid-values",
+          "insufficient-points",
+          "collinear",
+          "duplicate-coordinates",
+          "missing-grid",
+          "irregular-grid",
+        ]),
+      }),
+    ).default([]),
   }),
+  recommendations: z.array(
+    z.object({
+      chartType: z.enum(["surface3d", "heatmap", "scatter"]),
+      source: z.enum(["regular-grid", "grid-like"]),
+      xField: z.string().min(1),
+      yField: z.string().min(1),
+      zField: z.string().min(1),
+      reason: z.string().min(1),
+      reasonCode: z.string().min(1),
+      reasonParams: messageParamsSchema.default({}),
+    }),
+  ).default([]),
 });
 
 export type CleaningDecision = z.infer<typeof cleaningDecisionSchema>;
 export type AuthState = z.infer<typeof authStateSchema>;
 export type ChartAnalysis = z.infer<typeof chartAnalysisSchema>;
 export type DataPreview = z.infer<typeof dataPreviewSchema>;
+export type ExperimentContext = z.infer<typeof experimentContextSchema>;
 export type PreviewColumn = z.infer<typeof previewColumnSchema>;
 export type PreviewRow = z.infer<typeof previewRowSchema>;
 export type ProcessingJob = z.infer<typeof processingJobSchema>;

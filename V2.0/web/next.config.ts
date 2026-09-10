@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  output: "standalone",
+  output: process.env.LABVIZ_E2E_BUILD === "1" ? undefined : "standalone",
   outputFileTracingRoot: path.resolve(__dirname, ".."),
   turbopack: {
     root: path.resolve(__dirname, ".."),

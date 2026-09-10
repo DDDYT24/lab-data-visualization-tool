@@ -46,6 +46,8 @@ class ProjectStore(ProjectReader, Protocol):
         source: dict[str, Any],
         source_sha256: str,
         guest_token_digest: str,
+        owner_user_id: str | None = None,
+        experiment: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
         request_sha256: str | None = None,
     ) -> ProjectCreation: ...

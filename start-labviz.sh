@@ -60,7 +60,7 @@ trap cleanup EXIT INT TERM
 
 export LABVIZ_API_PROXY_TARGET="http://127.0.0.1:$api_port"
 
-echo "Starting LabViz V2.0 on http://127.0.0.1:$web_port"
+echo "Starting LabViz V2.1 on http://127.0.0.1:$web_port"
 echo "Keep this terminal open. Local sign-in codes appear in the API output."
 echo "Press Ctrl+C to stop both services."
 

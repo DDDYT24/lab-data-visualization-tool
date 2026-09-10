@@ -31,7 +31,7 @@ export function StepLayout({ title, description, canvas, inspector }: StepLayout
           alignItems: "start",
           display: "grid",
           gap: 2,
-          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 288px" },
+          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 320px" },
         }}
       >
         <Box sx={{ minWidth: 0 }}>{canvas}</Box>
