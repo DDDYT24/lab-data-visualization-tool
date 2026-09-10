@@ -19,36 +19,27 @@ LabViz V2.1.1 是当前本地发布版本，由 Next.js 网站和 FastAPI 科研
 本项目不提供官方在线网站。普通使用者不需要购买域名，也不需要 AWS、DNS、
 Docker、PostgreSQL、MinIO 或付费邮件服务。
 
-## 三步启动 V2.1
+## 快速开始 V2.1.1
 
-V2.1 继续使用 `V2.0/` 作为代码目录，以保留现有启动路径和迁移历史；不复制出第二份
-`V2.1/` 目录，避免两套代码后续产生差异。
+V2.1 继续使用 `V2.0/` 作为代码目录。先点击下面的官方下载链接安装三个工具：
 
-请先安装：
-
-- [Git](https://git-scm.com/downloads)
-- Python 3.12 或 3.13
-- Node.js 22.22.2 或更新版本（推荐 Node.js 24）
+- [Git for Windows](https://git-scm.com/download/win)；macOS/Linux 使用 [Git downloads](https://git-scm.com/downloads)
+- [Python 3.12 或 3.13](https://www.python.org/downloads/)
+- [Node.js 22.22.2 或更新版本](https://nodejs.org/en/download)
 
 ### Windows
 
-请在克隆目标的父目录中，按顺序运行下面的命令。如果 PowerShell 提示符已经位于
-`lab-data-visualization-tool` 仓库目录内，则跳过 `git clone` 和 `Set-Location` 两行。
+请在准备存放项目的目录中打开 PowerShell，然后按顺序运行：
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
 Set-Location -LiteralPath .\lab-data-visualization-tool
-if (-not (Test-Path -LiteralPath .\start-labviz.cmd)) { throw "当前目录不是 LabViz 仓库根目录。" }
 .\start-labviz.cmd
 ```
 
-第一次启动下载依赖是正常现象：脚本会创建 `V2.0/api/.venv`，用 `pip` 安装 API
-依赖；如果 `V2.0/web/node_modules` 不存在，还会运行 `npm ci` 安装网站依赖。
-这些是本地运行所需的依赖，不是 AWS 或在线部署下载。
-
-FastAPI 不是 Windows 或 macOS 自带的程序，但启动脚本会把它安装到项目自己的 Python
-虚拟环境中。SQLite 不需要另行安装数据库服务器，它由 Python 标准库提供，应用首次运行时
-自动创建 `V2.0/api/.labviz/labviz-v2.db`。
+如果已经在 `lab-data-visualization-tool` 仓库目录内，跳过前两行即可。第一次启动会自动创建
+`V2.0/api/.venv`，安装 API 和网站依赖，然后启动两个本地服务。打开
+`http://127.0.0.1:3000` 即可使用。
 
 ### macOS / Linux
 
@@ -59,14 +50,13 @@ chmod +x start-labviz.sh
 ./start-labviz.sh
 ```
 
-第一次启动会自动创建 Python 虚拟环境并安装 API 与网站依赖，所需时间取决于网络
-速度。启动完成后打开：
+启动完成后打开：
 
 - LabViz 网站：`http://127.0.0.1:3000`
 - API 文档：`http://127.0.0.1:8000/docs`
 
-保持终端窗口开启；网站请求本地登录验证码后，六位验证码会显示在 API 输出中，
-不会发送真实邮件。按 `Ctrl+C` 可停止网站和 API。
+保持终端窗口开启；六位本地登录验证码会显示在 API 输出中，不会发送真实邮件。按
+`Ctrl+C` 可停止网站和 API。
 
 依赖文件更新后可强制刷新：
 
