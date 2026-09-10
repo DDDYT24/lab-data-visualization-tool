@@ -54,6 +54,8 @@ def test_launchers_bind_both_services_to_loopback() -> None:
     assert "--hostname 127.0.0.1" in shell
     assert "0.0.0.0" not in powershell
     assert "0.0.0.0" not in shell
+    assert '$env:NEXT_TELEMETRY_DISABLED = "1"' in powershell
+    assert "export NEXT_TELEMETRY_DISABLED=1" in shell
 
 
 def test_web_client_defaults_to_relative_api_and_has_no_telemetry_hooks() -> None:

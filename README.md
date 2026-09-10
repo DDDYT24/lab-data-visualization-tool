@@ -119,6 +119,7 @@ Start the website in a second PowerShell window:
 
 ```powershell
 Set-Location .\V2.0\web
+$env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run dev
 ```
@@ -385,6 +386,7 @@ Verify the V2.0 frontend separately:
 
 ```bash
 cd V2.0/web
+export NEXT_TELEMETRY_DISABLED=1
 npm ci
 npm run verify
 npm run test:e2e
@@ -485,6 +487,7 @@ python -m uvicorn labviz_api.main:app --reload --port 8000
 
 ```powershell
 Set-Location .\V2.0\web
+$env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run dev
 ```
@@ -602,6 +605,7 @@ V2.0 前端验证命令：
 
 ```powershell
 Set-Location .\V2.0\web
+$env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run verify
 npm run test:e2e
