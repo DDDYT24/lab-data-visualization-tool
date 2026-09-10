@@ -19,6 +19,7 @@
 
 ```powershell
 Set-Location .\V2.0\web
+$env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run verify
 npm run test:e2e

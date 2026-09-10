@@ -146,6 +146,7 @@ python -m uvicorn labviz_api.main:app --reload --host 127.0.0.1 --port 8000
 
 ```powershell
 Set-Location .\V2.0\web
+$env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
@@ -174,6 +175,7 @@ npm run dev -- --hostname 127.0.0.1 --port 3000
 
 ```powershell
 Set-Location .\V2.0\web
+$env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run verify
 npm run test:e2e

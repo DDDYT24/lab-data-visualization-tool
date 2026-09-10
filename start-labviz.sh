@@ -9,6 +9,7 @@ venv_python="$venv_root/bin/python"
 refresh_dependencies=0
 api_port="${LABVIZ_API_PORT:-8000}"
 web_port="${LABVIZ_WEB_PORT:-3000}"
+export NEXT_TELEMETRY_DISABLED=1
 
 if [[ "${1:-}" == "--refresh-dependencies" ]]; then
   refresh_dependencies=1

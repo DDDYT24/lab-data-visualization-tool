@@ -50,6 +50,7 @@ export default defineConfig({
         env: {
           ...process.env,
           LABVIZ_E2E_BUILD: "1",
+          NEXT_TELEMETRY_DISABLED: "1",
           NODE_OPTIONS: nodeOptions,
         },
         reuseExistingServer: false,

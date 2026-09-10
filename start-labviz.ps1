@@ -110,7 +110,9 @@ Write-Host "Press Ctrl+C to stop both services." -ForegroundColor Yellow
 $apiProcess = $null
 $webProcess = $null
 $previousProxyTarget = $env:LABVIZ_API_PROXY_TARGET
+$previousNextTelemetryDisabled = $env:NEXT_TELEMETRY_DISABLED
 try {
+    $env:NEXT_TELEMETRY_DISABLED = "1"
     $apiProcess = Start-Process -FilePath $venvPython `
         -ArgumentList @("-m", "uvicorn", "labviz_api.main:app", "--host", "127.0.0.1", "--port", "$ApiPort") `
         -WorkingDirectory $apiRoot -NoNewWindow -PassThru
@@ -133,6 +135,7 @@ try {
 }
 finally {
     $env:LABVIZ_API_PROXY_TARGET = $previousProxyTarget
+    $env:NEXT_TELEMETRY_DISABLED = $previousNextTelemetryDisabled
     foreach ($process in @($apiProcess, $webProcess)) {
         if ($process -and -not $process.HasExited) {
             Stop-Process -Id $process.Id

@@ -17,7 +17,8 @@ MinIO、Docker 或外部邮件服务。
 ```
 
 脚本会自动创建 `V2.0/api/.venv`，检查 Python 3.12/3.13，安装 FastAPI 等 API 依赖，并在
-缺少 `V2.0/web/node_modules` 时运行 `npm ci`。浏览器打开 `http://127.0.0.1:3000`。
+缺少 `V2.0/web/node_modules` 时运行 `npm ci`。启动网站时会设置
+`NEXT_TELEMETRY_DISABLED=1`。浏览器打开 `http://127.0.0.1:3000`。
 
 ### macOS / Linux
 
@@ -26,7 +27,7 @@ chmod +x start-labviz.sh
 ./start-labviz.sh
 ```
 
-脚本会创建 Python 虚拟环境并安装 API 和网站依赖。浏览器打开
+脚本会创建 Python 虚拟环境并安装 API 和网站依赖，同时禁用 Next.js 遥测。浏览器打开
 `http://127.0.0.1:3000`。
 
 ## 已安装依赖后的运行
