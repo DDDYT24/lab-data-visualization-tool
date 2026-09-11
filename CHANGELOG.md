@@ -1,5 +1,8 @@
 # 更新记录
 
+版本功能基准见 [`VERSION_BASELINE.md`](VERSION_BASELINE.md)；未来待办和完成状态只以
+[`V2.0/TODO.md`](V2.0/TODO.md) 为准。
+
 ## V2.1.1
 
 - 将 Next.js 更新至 16.3.4，修复影响 Windows 本地服务的安全公告。

@@ -1,6 +1,7 @@
 # LabViz V2.0 Product Requirements Document
 
-**Status:** Approved for V2.0 website implementation; V2.1 structured-3D and research-workflow extension planned
+**Status:** V2.0 website requirements implemented; V2.1 structured-3D and research-workflow
+extension shipped in the V2.1.1 local release. Future work is tracked only in [`TODO.md`](TODO.md).
 **Primary prototype tool:** Figma
 **Primary language of the interface:** English
 **Secondary interface language:** Simplified Chinese
@@ -73,8 +74,9 @@ physical `ExperimentRun`; saved history and publication exports retain that line
 `ProcessingRun` continues to describe parse, profile, clean, analyze, or export execution only.
 Experiment dashboards, cross-experiment statistics, and team roles remain outside this slice.
 
-The V2.1 execution order and acceptance gates are maintained in [`TODO.md`](TODO.md#v21-roadmap)
-and [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
+The V2.1 execution order, acceptance gates, and future backlog are maintained only in
+[`TODO.md`](TODO.md#v21-roadmap). [`PROJECT_PLAN.md`](PROJECT_PLAN.md) is the architecture
+reference and does not own completion status.
 
 ## 3. Business and Deployment Model
 

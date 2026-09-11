@@ -1,12 +1,14 @@
 # Phase 6C-1 Implementation Record
 
-**Status:** Code-complete locally; no AWS environment was applied and Phase 6C acceptance remains
-pending.
+**Status:** Code is tracked on `main`; no AWS environment was applied and Phase 6C acceptance
+remains pending.
+
+**Current backlog and completion status:** [`TODO.md`](TODO.md)
 
 ## Git boundary
 
 - Direct parent and Phase 6C-0 candidate: `b17595ace4159284253f07801e5402ea1ac34342`.
-- Candidate: the commit containing this record on the Phase 6C-1 local development branch.
+- Candidate: the commit containing this record.
 - Scope: Phase 6C-1 network, security, data, and edge code only.
 
 ## Implemented boundary

@@ -1,11 +1,14 @@
 # Phase 6C-0 Implementation Record
 
-**Status:** Implemented locally; live bootstrap apply and Phase 6C acceptance remain pending.
+**Status:** Implementation is tracked on `main`; live bootstrap apply and Phase 6C acceptance
+remain pending.
+
+**Current backlog and completion status:** [`TODO.md`](TODO.md)
 
 ## Git boundary
 
 - Direct parent and accepted Phase 6B boundary: `75adb8a0cc588fa5056da5725c504190978aa0a4`.
-- Candidate: the commit containing this record on the Phase 6C-0 local development branch.
+- Candidate: the commit containing this record.
 - Scope: Phase 6C-0 state, identity, account guardrails, and repository layout only.
 
 This unit does not claim a deployed state bucket, OIDC role, CloudTrail, cost-anomaly monitor,

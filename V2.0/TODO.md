@@ -1,14 +1,23 @@
-# LabViz Product Backlog (V2.1 local release)
+# LabViz Product Backlog (V2.1.1 local release)
+
+This file is the single source of truth for future work, completion status, release gates,
+compatibility issues, and deferred decisions. Update it first whenever the product status
+changes. Other Markdown files may explain a stable contract or preserve historical evidence,
+but they must not create a competing backlog.
+
+- **Current release:** V2.1.1 local self-hosted release, published on GitHub
+- **Status review:** 2026-09-10
+- **Version history:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
 This file records the V2.0 baseline, the ordered V2.1 work, and explicitly deferred work.
 
-> **Release note:** V2.1 is distributed as a local self-hosted application. The AWS Phase 6C/6D
-> items below are optional maintainer work and do not block the V2.1 local release. Local use relies
+> **Release note:** V2.1.1 is distributed as a local self-hosted application. The AWS Phase 6C/6D
+> items below are optional maintainer work and do not block the V2.1.1 local release. Local use relies
 > on automatically created SQLite and local object storage.
 
 ## V2.1 Roadmap
 
-**Planning checkpoint:** 2026-09-08
+**Planning checkpoint:** 2026-09-10
 
 **Release intent:** Improve the local-first workflow for non-programmer laboratory users and
 make structured 3D data scientifically legible. Keep the V2.0 local release stable while
@@ -200,8 +209,10 @@ features remain separate tracks.
 The frontend gates are `npm run verify` and `npm run test:e2e`. The API gate is documented in
 [`api/README.md`](api/README.md) and requires the Compose PostgreSQL/MinIO services for the full
 integration suite. The AWS single-region production runtime is approved in
-[`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md). Real SES evidence, cloud-resource IaC, restore
-evidence, quotas, observability/SLOs, and compliance remain explicit later Phase 6 work.
+[`PERSISTENCE_PHASE6.md`](PERSISTENCE_PHASE6.md). Real SES delivery, live cloud deployment and
+restore evidence, quotas, observability/SLOs, and compliance remain explicit later Phase 6 work. The
+Phase 6 code and workflow definitions may exist in the repository without constituting live AWS
+acceptance.
 
 The P2 dependency and architecture evidence is recorded in
 [`TECH_STACK_AUDIT.md`](TECH_STACK_AUDIT.md). P2 rendering consistency means shared scientific
@@ -286,7 +297,13 @@ Next:
 - [x] Phase 6-PRE-3: independently rerun the complete admission matrix and record `PASS` in [`PHASE6_PRE_ACCEPTANCE.md`](PHASE6_PRE_ACCEPTANCE.md).
 - [x] Phase 6 AWS dependency boundary: accept 6B application code, move infrastructure-dependent SES/IAM/ALB/CloudWatch evidence to the blocking 6C staging gate, and prohibit 6D before 6C acceptance. See [`PHASE6_AWS_DEPENDENCY_MATRIX.md`](PHASE6_AWS_DEPENDENCY_MATRIX.md).
 - [x] Phase 6B: add multi-host abuse protection, the SES v2 application boundary, and project-description editing. See [`PERSISTENCE_PHASE6B.md`](PERSISTENCE_PHASE6B.md).
-- [ ] Phase 6C: add production IaC, encrypted backup/restore automation and evidence, CloudWatch operations, runbooks, alerts, SLOs, CI/CD, and rollback. See [`PERSISTENCE_PHASE6C.md`](PERSISTENCE_PHASE6C.md).
+- [x] Phase 6C implementation: commit the production IaC, encrypted backup/restore automation,
+  CloudWatch operations, runbooks, alerts, SLO definitions, CI/CD workflows, and rollback logic.
+  Static checks and the infrastructure workflow are present in the repository; this does not
+  claim a live AWS deployment. See [`PERSISTENCE_PHASE6C.md`](PERSISTENCE_PHASE6C.md).
+- [ ] Phase 6C live acceptance: configure account-owned AWS/GitHub/DNS inputs, deploy one exact
+  staging candidate, and collect real SES, IAM, ALB, CloudWatch, backup/restore, rollback, and
+  cost evidence.
 - [ ] Phase 6D: add quotas, privacy/compliance review, load and recovery drills, and production-launch acceptance. See [`PERSISTENCE_PHASE6D.md`](PERSISTENCE_PHASE6D.md).
 
 ## Deferred Scientific Domain Model
@@ -297,7 +314,8 @@ Next:
 
 - [x] Introduce the minimum `Experiment` and physical `ExperimentRun` entities for repeated
   acquisitions, multi-file grouping, replicate identity, batch identity, and owner-scoped access.
-- [ ] Keep software `ProcessingRun` separate from any future physical laboratory `ExperimentRun`.
+- [x] Keep software `ProcessingRun` separate from the physical laboratory `ExperimentRun`; this
+  boundary is part of the accepted V21-P1-3 implementation.
 
 ## Figma Prototype Progress
 

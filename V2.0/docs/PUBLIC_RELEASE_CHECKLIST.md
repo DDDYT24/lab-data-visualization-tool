@@ -1,7 +1,8 @@
 # 公开发布检查清单
 
 本文面向仓库维护者，用于把本地版本发布到 GitHub。以下文件都应随源代码上传；本清单
-不要求上传用户数据或本机运行目录。
+不要求上传用户数据或本机运行目录。未来功能和完成状态只以 [`../TODO.md`](../TODO.md)
+为准，版本功能概览见 [`../../VERSION_BASELINE.md`](../../VERSION_BASELINE.md)。
 
 ## 应上传的内容
 
@@ -14,6 +15,8 @@
 | `SECURITY.md` | 安全报告者、维护者 | 报告问题和本地安全边界 |
 | `CONTRIBUTING.md` | 贡献者 | 开发环境、测试和公开文档约定 |
 | `CHANGELOG.md` | 所有用户 | 版本变化和已知限制 |
+| `VERSION_BASELINE.md` | 所有用户、维护者 | 各版本实际交付范围和边界 |
+| `V2.0/TODO.md` | 维护者 | 唯一的未来待办和完成状态来源 |
 
 ## 不应上传的内容
 
@@ -29,4 +32,5 @@
 2. 运行隐私边界检查，确认默认 API/网站只绑定回环地址，前端没有遥测或外部数据接口。
 3. 运行 API、前端、浏览器和 fixture 回归；把未配置的云端或真实邮件测试明确标为未验证。
 4. 检查 `git status` 和 `git diff --cached`，确认没有数据、密钥、构建缓存和本机路径。
-5. 更新 `CHANGELOG.md` 和 V2.1 发布说明，再创建版本标签和 GitHub Release。
+5. 更新 `VERSION_BASELINE.md`、`CHANGELOG.md` 和对应发布说明，再创建版本标签和
+   GitHub Release；不要在 README、PROJECT_PLAN 或 Phase 文档中维护另一份待办清单。
