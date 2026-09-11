@@ -1,7 +1,8 @@
 # Phase 6C AWS Infrastructure and Operations
 
-**Status:** Admitted by the Phase 6B application `PASS`; implementation may start. Final acceptance
-requires the complete real staging evidence defined below.
+**Status:** Phase 6C IaC, operations, backup/restore, runbook, and CI/CD code is present in the
+repository and on `main`. Final acceptance still requires the complete real staging evidence
+defined below. Current status is tracked only in [`TODO.md`](TODO.md).
 
 The versioned [`contracts/phase6-gates-v1.json`](contracts/phase6-gates-v1.json) contract makes this
 stage depend on the Phase 6B application gate and makes its `PASS` the only path into Phase 6D.

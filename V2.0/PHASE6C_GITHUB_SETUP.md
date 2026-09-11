@@ -1,11 +1,13 @@
 # Phase 6C GitHub and DNS setup
 
-The workflows are code-complete but intentionally inert until bootstrap, GitHub environments, DNS,
-secrets, and cost approval exist. Never store AWS access keys: all jobs use GitHub OIDC.
+The workflow definitions are present on remote `main` but remain intentionally inert until
+bootstrap, GitHub environments, DNS, secrets, and cost approval exist. Never store AWS access
+keys: all jobs use GitHub OIDC.
 
 The desired branch protection, environment, variable, and secret-name structure is versioned in
 [`contracts/phase6-github-governance-v1.json`](contracts/phase6-github-governance-v1.json). Its
-`prepared-not-applied` state is deliberate until the Phase 6 workflows exist on remote `main`.
+The `prepared-not-applied` state is now due to missing external prerequisites and GitHub settings,
+not missing workflow files. Current status is tracked in [`TODO.md`](TODO.md).
 
 ## 1. Select hosted zones, then bootstrap once from the MFA-backed IAM profile
 

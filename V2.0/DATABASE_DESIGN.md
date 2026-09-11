@@ -1,13 +1,14 @@
 # LabViz V2.0 Database and Storage Design
 
-**Status:** Production data route and initial AWS runtime confirmed; Phase 5B-3 storage implemented
+**Status:** Current persistence architecture reference for the V2.1.1 local release and optional
+Phase 6 cloud track. Current completion status is maintained in [`TODO.md`](TODO.md).
 **Decision date:** 2026-07-29
 **Phase 1 implementation:** 2026-07-29
 **Phase 2 implementation:** 2026-07-30 — see [`PERSISTENCE_PHASE2.md`](PERSISTENCE_PHASE2.md)
 **Phase 3 implementation:** 2026-07-30 — see [`PERSISTENCE_PHASE3.md`](PERSISTENCE_PHASE3.md)
 **Product source of truth:** [`prd.md`](prd.md)
 **Architecture source of truth:** [`PROJECT_PLAN.md`](PROJECT_PLAN.md)
-**Design process:** [`DATABASE_PLAN.md`](DATABASE_PLAN.md)
+**Version baseline:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
 ## 1. Confirmed Production Direction
 

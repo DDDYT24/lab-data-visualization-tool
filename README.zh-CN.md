@@ -5,10 +5,10 @@
 **把实验表格转换为清晰、可导出的科研图表，全程在本地运行。**
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-V2.1%20local-0f766e)
+![Release](https://img.shields.io/badge/release-V2.1.1%20local-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
+[English](README.md) · [简体中文](README.zh-CN.md) · [版本基准](VERSION_BASELINE.md) · [未来待办](V2.0/TODO.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
 
 </div>
 
@@ -109,7 +109,8 @@ XLSX 文件。网页端单文件上限为 50 MB。
 请保持默认服务绑定在 `127.0.0.1`。如果没有配置 HTTPS、安全 Cookie、生产邮件、
 备份、监控和多用户存储，不要把端口 `3000` 或 `8000` 暴露到公网。
 
-更多说明：[`隐私边界`](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) ·
+版本更新总览见 [`VERSION_BASELINE.md`](VERSION_BASELINE.md)，未来功能和完成状态只看
+[`V2.0/TODO.md`](V2.0/TODO.md)。更多说明：[`隐私边界`](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) ·
 [`离线安装`](V2.0/docs/OFFLINE_INSTALL.md) · [`备份与恢复`](V2.0/docs/BACKUP_RESTORE.md)。
 
 贡献代码请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题请阅读

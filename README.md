@@ -8,7 +8,7 @@
 ![Release](https://img.shields.io/badge/release-V2.1.1%20local-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [Privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [Offline install](V2.0/docs/OFFLINE_INSTALL.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [Version baseline](VERSION_BASELINE.md) · [Future backlog](V2.0/TODO.md) · [Privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [Offline install](V2.0/docs/OFFLINE_INSTALL.md)
 
 </div>
 
@@ -135,7 +135,8 @@ and MinIO Compose services. The complete command set is documented in
 | `V2.0/api/` | FastAPI processing service, SQLite persistence, and API tests |
 | `V1.1/` | Legacy Streamlit application |
 | `V2.0/docs/` | Privacy, offline installation, backup, and release guidance |
-| `V2.0/TODO.md` | Remaining product backlog |
+| `VERSION_BASELINE.md` | What V1.0, V1.1, V2.0, and V2.1 delivered |
+| `V2.0/TODO.md` | Single source of truth for future work and status |
 
 ## License
 

@@ -1,12 +1,13 @@
 # LabViz V2.0/V2.1 Project Plan
 
-**Status:** V2.0 local self-hosted release complete; V2.1 P0, P1, compatibility hardening, local
-privacy documentation, and the local release matrix are implemented on the V2.1 local development
-branch; publication remains pending and public-cloud deployment is optional.
+**Status:** V2.1.1 local self-hosted release published; V2.1 P0, P1, compatibility hardening,
+local privacy documentation, and the local release matrix are implemented and accepted. Public
+cloud deployment remains an optional maintainer track and is not a release requirement.
 **Product source of truth:** [`prd.md`](prd.md)
 **Prototype source of truth:** [LabViz V2.0 — Product Prototype](https://www.figma.com/design/xKdEwynLhAj2dyiqeEw58n)
-**V2.1 execution backlog:** [`TODO.md`](TODO.md#v21-roadmap)
+**Current status and execution backlog:** [`TODO.md`](TODO.md#v21-roadmap)
 **V2.1 release notes:** [`RELEASE_NOTES_V2.1.md`](RELEASE_NOTES_V2.1.md)
+**Version baseline:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
 ## 1. Delivery Strategy
 
@@ -189,8 +190,8 @@ self-hosting work.
 
 ### V2.1 — Structured 3D and research workflow
 
-**Status:** P0-1 through P0-3, P1-1 through P1-3, and C-1 through C-4 are implemented and verified
-on the V2.1 local development branch. The accepted result is published as the V2.1.1 local release.
+**Status:** P0-1 through P0-3, P1-1 through P1-3, and C-1 through C-6 are implemented, verified,
+and published as the V2.1.1 local release. Current completion status remains in [`TODO.md`](TODO.md).
 Detailed task IDs and acceptance criteria are tracked in [`TODO.md`](TODO.md).
 
 - **P0:** add structured-grid validation and explicit surface fields, make quality findings and
@@ -214,8 +215,9 @@ cloud, live-mail, or private-file test remains explicitly skipped; it is not a V
 
 ### Optional Phase 6 — Public-cloud runtime and operations
 
-**Status:** Container and application preparation are complete. AWS/staging evidence is not needed
-for the V2.0 local release and remains an optional future maintainer track.
+**Status:** Container, IaC, application, and CI/CD preparation are present. AWS/staging evidence is
+not needed for the V2.1.1 local release and remains an optional future maintainer track. Live
+Phase 6C/6D completion is intentionally not claimed.
 
 - Phase 6A makes the application container-deployable with fail-closed production configuration
   and real dependency readiness.

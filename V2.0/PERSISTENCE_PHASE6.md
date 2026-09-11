@@ -3,7 +3,8 @@
 **Status:** Phase 6-0 and Phase 6A were verified on 2026-08-09. Phase 6-PRE was accepted on
 2026-08-11; Phase 6B application implementation passed on 2026-08-12. The 2026-08-17 boundary
 correction admits Phase 6C while keeping all real AWS evidence blocking for Phase 6C acceptance.
-See [`PHASE6B_LOCAL_ACCEPTANCE.md`](PHASE6B_LOCAL_ACCEPTANCE.md).
+Current status is maintained in [`TODO.md`](TODO.md); see the historical acceptance record in
+[`PHASE6B_LOCAL_ACCEPTANCE.md`](PHASE6B_LOCAL_ACCEPTANCE.md).
 
 The versioned [`contracts/phase6-gates-v1.json`](contracts/phase6-gates-v1.json) contract encodes
 the acyclic PRE -> 6B application -> 6C cloud -> 6D launch dependency and the ownership of
@@ -76,9 +77,10 @@ Required deliverables:
 6. Unit, real PostgreSQL/MinIO integration, container build, frontend, browser, static-analysis,
    hooks, and diff checks pass.
 
-Phase 6A does not provision an AWS account or claim a live production release. Cloud-resource IaC,
-SES integration, multi-host abuse protection, backup automation/restore evidence, quotas,
-compliance review, dashboards, alerts, and SLOs remain explicitly deferred.
+Phase 6A does not provision an AWS account or claim a live production release. Phase 6C
+implementation code now exists for IaC, SES integration, multi-host abuse protection, backup
+automation, dashboards, alerts, and SLOs; live AWS deployment/evidence, restore proof, quotas, and
+compliance review remain explicitly deferred.
 
 ### Phase 6A implementation
 

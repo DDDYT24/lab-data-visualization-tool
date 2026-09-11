@@ -2,6 +2,9 @@ PASS
 
 # Phase 6-PRE Acceptance
 
+> Historical acceptance record. Current release status and future work are maintained in
+> [`TODO.md`](TODO.md) and [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md).
+
 - **Accepted on:** 2026-08-11
 - **Branch:** local development branch
 - **Base:** `f345e1adfc45dfe263ab11521c7969b6b8c7e326`

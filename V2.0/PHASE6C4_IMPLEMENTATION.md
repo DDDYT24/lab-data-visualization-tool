@@ -1,6 +1,12 @@
 # Phase 6C-4 Implementation Record
 
-**Status:** CI/CD code-complete locally; GitHub/AWS execution and Phase 6C acceptance remain pending.
+**Status:** CI/CD code is tracked on remote `main`. The generic CI and Phase 6C infrastructure
+static workflow have run; the protected foundation/release workflows have not run. AWS execution
+and Phase 6C acceptance remain pending.
+
+**Last reviewed:** 2026-09-10
+
+**Current backlog and completion status:** [`TODO.md`](TODO.md)
 
 ## Boundary
 

@@ -1,7 +1,9 @@
 # Phase 6C-2 Implementation Record
 
-**Status:** Code-complete locally; no AWS environment was applied and Phase 6C acceptance remains
-pending.
+**Status:** Code is tracked on `main`; no AWS environment was applied and Phase 6C acceptance
+remains pending.
+
+**Current backlog and completion status:** [`TODO.md`](TODO.md)
 
 ## Boundary
 
