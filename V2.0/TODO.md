@@ -459,7 +459,7 @@ explicit deployment/profile boundary.
 
 ### P7 - release candidate and V2.2 definition of done
 
-**Local checkpoint (2026-09-13, based on `292bdad` plus the current working-tree gates):** see
+**Local checkpoint (2026-09-13, based on commit `00051f3`):** see
 [`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification, 51 Playwright
 checks across Chromium/mobile Chromium/Firefox/WebKit, static Python gates, and the 7 + 9 + 23
 data matrix pass. The previous checkpoint recorded all 254 API tests with real local PostgreSQL 17
