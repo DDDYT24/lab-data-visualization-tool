@@ -4,6 +4,49 @@ import { chartSpecSchema } from "./chart-spec";
 
 export const apiVersionSchema = z.literal("v1");
 export const PROJECT_DESCRIPTION_MAX_UTF8_BYTES = 4_000;
+const localizedTextSchema = z.object({
+  en: z.string().min(1),
+  zh: z.string().min(1),
+});
+
+export const sampleFieldSchema = z.object({
+  name: z.string().min(1),
+  kind: z.enum(["number", "text", "datetime", "boolean"]),
+  role: z.enum(["x", "y", "z", "series", "group", "label", "error"]),
+  titleEn: z.string().min(1),
+  titleZh: z.string().min(1),
+});
+
+export const sampleExampleSchema = z.object({
+  apiVersion: apiVersionSchema,
+  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  filename: z.string().min(1),
+  byteSize: z.number().int().positive(),
+  mediaType: z.string().min(1),
+  format: z.enum(["csv", "tsv", "txt", "json", "xlsx"]),
+  sheetName: z.string().nullable(),
+  availableSheets: z.array(z.string()),
+  headerRow: z.number().int().positive(),
+  title: localizedTextSchema,
+  purpose: localizedTextSchema,
+  learningGoal: localizedTextSchema,
+  recommendedChart: z.enum(["line", "scatter", "bar", "histogram", "box", "heatmap", "surface3d"]),
+  difficulty: z.enum(["beginner", "intermediate"]),
+  fields: z.array(sampleFieldSchema).min(1),
+  rowCount: z.number().int().positive(),
+  qualityIssues: z.array(localizedTextSchema),
+  expectedQualityKinds: z.array(z.string()),
+  synthetic: z.literal(true),
+});
+
+export const sampleCatalogSchema = z.object({
+  apiVersion: apiVersionSchema,
+  catalogVersion: z.literal("v1"),
+  release: z.string().min(1),
+  syntheticOnly: z.literal(true),
+  examples: z.array(sampleExampleSchema).min(1),
+});
+
 export const projectDescriptionTextSchema = z.string().superRefine((value, ctx) => {
   if (value.includes("\0")) {
     ctx.addIssue({ code: "custom", message: "Description must not contain NUL." });
@@ -262,12 +305,19 @@ const fitPointSchema = z.object({
 const fitAnalysisSchema = z.object({
   model: z.enum(["linear", "polynomial", "exponential", "logarithmic", "power"]),
   equation: z.string(),
+  coefficients: z.array(z.number()).optional(),
   rSquared: z.number(),
   sampleSize: z.number().int().nonnegative().optional(),
   excludedCount: z.number().int().nonnegative().optional(),
-  fitMethod: z.enum(["ordinary-least-squares", "weighted-least-squares"]).optional(),
-  confidenceMethod: z.enum(["none", "student-t", "bootstrap"]).optional(),
-  intervalKind: z.enum(["none", "pointwise-mean"]).optional(),
+  fitMethod: z
+    .enum(["ordinary-least-squares", "weighted-least-squares", "robust-huber"])
+    .optional(),
+  confidenceMethod: z
+    .enum(["none", "student-t", "bootstrap", "working-hotelling"])
+    .optional(),
+  intervalKind: z.enum(["none", "pointwise-mean", "prediction", "simultaneous"]).optional(),
+  robustIterations: z.number().int().nonnegative().max(50).nullable().optional(),
+  robustConverged: z.boolean().nullable().optional(),
   points: z.array(fitPointSchema),
 });
 
@@ -421,6 +471,8 @@ export type CleaningDecision = z.infer<typeof cleaningDecisionSchema>;
 export type AuthState = z.infer<typeof authStateSchema>;
 export type ChartAnalysis = z.infer<typeof chartAnalysisSchema>;
 export type DataPreview = z.infer<typeof dataPreviewSchema>;
+export type SampleCatalog = z.infer<typeof sampleCatalogSchema>;
+export type SampleExample = z.infer<typeof sampleExampleSchema>;
 export type ExperimentContext = z.infer<typeof experimentContextSchema>;
 export type PreviewColumn = z.infer<typeof previewColumnSchema>;
 export type PreviewRow = z.infer<typeof previewRowSchema>;

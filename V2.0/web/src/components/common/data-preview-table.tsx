@@ -68,7 +68,7 @@ export function DataPreviewTable({
           bgcolor: "background.paper",
           borderColor: "divider",
           "& .MuiDataGrid-columnHeaders": {
-            bgcolor: "#F8FAFC",
+            bgcolor: "background.default",
           },
           "& .labviz-missing-cell": {
             bgcolor: "warning.light",

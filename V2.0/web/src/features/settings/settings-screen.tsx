@@ -4,6 +4,7 @@ import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import ComputerOutlinedIcon from "@mui/icons-material/ComputerOutlined";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import {
   Alert,
   Box,
@@ -90,6 +91,31 @@ export function SettingsScreen() {
         <Typography component="h2" sx={{ fontWeight: 750, pt: 2 }}>
           {t("languageSection")}
         </Typography>
+        <SettingsRow
+          control={
+            <FormControl fullWidth size="small">
+              <InputLabel id="appearance-label">{t("appearance")}</InputLabel>
+              <Select
+                label={t("appearance")}
+                labelId="appearance-label"
+                onChange={(event) =>
+                  updatePreferences({
+                    appearance: event.target.value as UserPreferences["appearance"],
+                  })
+                }
+                startAdornment={<PaletteOutlinedIcon sx={{ mr: 1 }} />}
+                value={preferences.appearance}
+              >
+                <MenuItem value="system">{t("appearanceOptions.system")}</MenuItem>
+                <MenuItem value="light">{t("appearanceOptions.light")}</MenuItem>
+                <MenuItem value="dark">{t("appearanceOptions.dark")}</MenuItem>
+              </Select>
+            </FormControl>
+          }
+          description={t("appearanceDescription")}
+          title={t("appearanceTitle")}
+        />
+        <Divider />
         <SettingsRow
           control={<LanguageSwitcher />}
           description={t("interfaceLanguageDescription")}

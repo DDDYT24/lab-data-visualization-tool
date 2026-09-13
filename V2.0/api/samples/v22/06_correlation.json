@@ -1,0 +1,182 @@
+[
+  {
+    "temperature_C": 18.0,
+    "signal_mV": 6.44,
+    "mass_mg": 41.2,
+    "recovery_pct": 84.16
+  },
+  {
+    "temperature_C": 18.4,
+    "signal_mV": 6.584,
+    "mass_mg": 42.934,
+    "recovery_pct": 84.787
+  },
+  {
+    "temperature_C": 18.8,
+    "signal_mV": 6.71,
+    "mass_mg": 44.543,
+    "recovery_pct": 84.996
+  },
+  {
+    "temperature_C": 19.2,
+    "signal_mV": 6.806,
+    "mass_mg": 46.048,
+    "recovery_pct": 84.72
+  },
+  {
+    "temperature_C": 19.6,
+    "signal_mV": 6.864,
+    "mass_mg": 47.482,
+    "recovery_pct": 84.298
+  },
+  {
+    "temperature_C": 20.0,
+    "signal_mV": 6.89,
+    "mass_mg": 48.885,
+    "recovery_pct": 84.145
+  },
+  {
+    "temperature_C": 20.4,
+    "signal_mV": 6.893,
+    "mass_mg": 50.301,
+    "recovery_pct": 84.38
+  },
+  {
+    "temperature_C": 20.8,
+    "signal_mV": 6.891,
+    "mass_mg": 51.771,
+    "recovery_pct": 84.726
+  },
+  {
+    "temperature_C": 21.2,
+    "signal_mV": 6.902,
+    "mass_mg": 53.333,
+    "recovery_pct": 84.794
+  },
+  {
+    "temperature_C": 21.6,
+    "signal_mV": 6.941,
+    "mass_mg": 55.012,
+    "recovery_pct": 84.464
+  },
+  {
+    "temperature_C": 22.0,
+    "signal_mV": 7.016,
+    "mass_mg": 56.822,
+    "recovery_pct": 84.021
+  },
+  {
+    "temperature_C": 22.4,
+    "signal_mV": 7.126,
+    "mass_mg": 58.762,
+    "recovery_pct": 83.902
+  },
+  {
+    "temperature_C": 22.8,
+    "signal_mV": 7.262,
+    "mass_mg": 60.816,
+    "recovery_pct": 84.295
+  },
+  {
+    "temperature_C": 23.2,
+    "signal_mV": 7.408,
+    "mass_mg": 62.956,
+    "recovery_pct": 84.953
+  },
+  {
+    "temperature_C": 23.6,
+    "signal_mV": 7.547,
+    "mass_mg": 65.145,
+    "recovery_pct": 85.395
+  },
+  {
+    "temperature_C": 24.0,
+    "signal_mV": 7.661,
+    "mass_mg": 67.34,
+    "recovery_pct": 85.324
+  },
+  {
+    "temperature_C": 24.4,
+    "signal_mV": 7.74,
+    "mass_mg": 69.498,
+    "recovery_pct": 84.873
+  },
+  {
+    "temperature_C": 24.8,
+    "signal_mV": 7.784,
+    "mass_mg": 71.579,
+    "recovery_pct": 84.474
+  },
+  {
+    "temperature_C": 25.2,
+    "signal_mV": 7.798,
+    "mass_mg": 73.552,
+    "recovery_pct": 84.455
+  },
+  {
+    "temperature_C": 25.6,
+    "signal_mV": 7.797,
+    "mass_mg": 75.398,
+    "recovery_pct": 84.755
+  },
+  {
+    "temperature_C": 26.0,
+    "signal_mV": 7.798,
+    "mass_mg": 77.113,
+    "recovery_pct": 85.004
+  },
+  {
+    "temperature_C": 26.4,
+    "signal_mV": 7.82,
+    "mass_mg": 78.705,
+    "recovery_pct": 84.89
+  },
+  {
+    "temperature_C": 26.8,
+    "signal_mV": 7.874,
+    "mass_mg": 80.197,
+    "recovery_pct": 84.477
+  },
+  {
+    "temperature_C": 27.2,
+    "signal_mV": 7.965,
+    "mass_mg": 81.623,
+    "recovery_pct": 84.162
+  },
+  {
+    "temperature_C": 27.6,
+    "signal_mV": 8.088,
+    "mass_mg": 83.025,
+    "recovery_pct": 84.315
+  },
+  {
+    "temperature_C": 28.0,
+    "signal_mV": 8.23,
+    "mass_mg": 84.447,
+    "recovery_pct": 84.93
+  },
+  {
+    "temperature_C": 28.4,
+    "signal_mV": 8.375,
+    "mass_mg": 85.929,
+    "recovery_pct": 85.607
+  },
+  {
+    "temperature_C": 28.8,
+    "signal_mV": 8.505,
+    "mass_mg": 87.507,
+    "recovery_pct": 85.889
+  },
+  {
+    "temperature_C": 29.2,
+    "signal_mV": 8.605,
+    "mass_mg": 89.205,
+    "recovery_pct": 85.65
+  },
+  {
+    "temperature_C": 29.6,
+    "signal_mV": 8.668,
+    "mass_mg": 91.035,
+    "recovery_pct": 85.189
+  }
+]

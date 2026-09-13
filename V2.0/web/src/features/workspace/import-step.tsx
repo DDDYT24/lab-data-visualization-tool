@@ -22,6 +22,7 @@ import { useState } from "react";
 
 import { DataPreviewTable } from "@/components/common/data-preview-table";
 import { ApiStatePanel } from "@/components/common/api-state-panel";
+import { ContextualTip } from "@/components/common/contextual-tip";
 import { formatBytes } from "@/features/import-data/file-policy";
 
 import { StepLayout } from "./step-layout";
@@ -35,6 +36,7 @@ export function ImportStep({
   onReimport: (sheetName: string | null, headerRow: number) => void;
 }) {
   const t = useTranslations("importData");
+  const helpT = useTranslations("help");
   const file = useWorkspaceStore((state) => state.selectedFile);
   const preview = useWorkspaceStore((state) => state.preview);
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
@@ -86,6 +88,11 @@ export function ImportStep({
 
   const inspector = (
     <Stack spacing={2}>
+      <ContextualTip
+        body={t("contextualTip")}
+        dismissLabel={helpT("dismissTip")}
+        id="import-settings"
+      />
       <Paper sx={{ border: 1, borderColor: "divider", p: 2.5 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
           <DescriptionOutlinedIcon color="primary" />

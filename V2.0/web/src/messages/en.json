@@ -37,6 +37,29 @@
     "dropBody": "Excel, CSV, TSV, TXT, or JSON · up to 50 MB on the website",
     "browse": "Choose a file",
     "sample": "Try sample data",
+    "sampleChooserTitle": "Choose an example dataset",
+    "sampleChooserDescription": "Every example is synthetic and works offline. Open one to see which table shape fits each visualization.",
+    "closeSampleChooser": "Close example chooser",
+    "sampleSyntheticNotice": "These values are synthetic teaching data. They are processed through the same workflow as an uploaded file.",
+    "sampleCatalogError": "The example catalog could not be loaded. You can still choose a local file.",
+    "openSample": "Open this example",
+    "sampleRows": "rows",
+    "sampleFields": "Fields",
+    "sampleLearningGoal": "Learn",
+    "sampleQualityLesson": "Quality lesson",
+    "sampleDifficulty": {
+      "beginner": "Beginner",
+      "intermediate": "Intermediate"
+    },
+    "sampleChartTypes": {
+      "line": "Line chart",
+      "scatter": "Scatter plot",
+      "bar": "Bar chart",
+      "histogram": "Histogram",
+      "box": "Box plot",
+      "heatmap": "Correlation heatmap",
+      "surface3d": "3D surface"
+    },
     "experimentMetadata": "Group repeated acquisitions",
     "optional": "Optional",
     "experimentTitle": "Experiment name",
@@ -115,6 +138,7 @@
     "xUnit": "X-axis unit",
     "yUnit": "Y-axis unit",
     "noNumericColumns": "No numeric columns were detected. Choose a different sheet or header row, or correct the source file before creating a chart.",
+    "contextualTip": "If the preview looks wrong, try a different worksheet or move the header row before continuing.",
     "unit": "Y-axis unit",
     "review": "Review data quality"
   },
@@ -261,6 +285,8 @@
     "surfaceSetupTitle": "Choose the three surface dimensions",
     "surfaceSetupDescription": "Select X and Y as the two grid coordinates, then select Z as the measured response. The preview will appear after all three fields are different.",
     "surfaceAxisHelp": "X and Y locate each point on the grid. Z is the measured value whose height and color form the surface.",
+    "dataTableTitle": "View the chart data as a table",
+    "dataTableDescription": "Use the table as a non-visual alternative to the chart. Highlighted cells correspond to quality findings in the current preview.",
     "surfaceDiagnostics": {
       "invalidValues": "The surface has {count} non-finite point(s). Fix or remove those rows.",
       "insufficientPoints": "A surface needs at least three complete points and two unique X and Y values.",
@@ -281,14 +307,17 @@
     "seriesColor": "{label} color",
     "analysis": "Fitting and uncertainty",
     "analysisHelp": "Fitting estimates a trend from the selected points. Uncertainty shows measurement spread or a supplied error column; choose only options supported by your experiment design.",
+    "contextualTip": "Choose X and Y from the numeric fields first. For a surface, use separate X, Y, and Z fields and keep the grid complete.",
     "groupHelp": "Grouping draws separate series for categories or repeated conditions without changing the measurements.",
     "fitModel": "Fit model",
     "fitMethod": "Fit method",
     "fitMethods": {
       "ordinary-least-squares": "Ordinary least squares",
-      "weighted-least-squares": "Weighted least squares"
+      "weighted-least-squares": "Weighted least squares",
+      "robust-huber": "Huber robust linear fit"
     },
     "weightedFitHelp": "Weighted least squares requires the error-bar option to use an existing error column whose values represent measurement standard deviation.",
+    "robustFitHelp": "Huber robust fitting is limited to linear models. It reduces the influence of large residuals, does not show a confidence band, and does not make biased data valid.",
     "fitModels": {
       "none": "No fitted curve",
       "linear": "Linear",
@@ -302,6 +331,12 @@
     "showRSquared": "Show R²",
     "confidenceBand": "Show confidence band",
     "confidenceMethod": "Confidence-band method",
+    "intervalKind": "Interval meaning",
+    "intervalKinds": {
+      "pointwise-mean": "Pointwise mean interval",
+      "prediction": "Prediction interval for one response",
+      "simultaneous": "Working-Hotelling simultaneous mean band"
+    },
     "confidenceMethods": {
       "student-t": "Student-t pointwise mean interval",
       "bootstrap": "Residual-bootstrap pointwise mean interval"
@@ -323,9 +358,10 @@
     "analysisFailed": "Scientific analysis could not be calculated for these fields.",
     "fitResult": "{label} fit",
     "analysisEvidence": "Sample size n={sampleSize}; {excludedCount} observation(s) excluded.",
+    "intervalEvidence": "Displayed interval: {meaning}.",
     "residualDiagnostic": "Residual diagnostic: RMSE={rmse}, mean residual={meanResidual}.",
     "residualTrend": "Residuals may still have a trend; the selected model may miss structure.",
-    "deferredMethods": "Deferred in this release: prediction intervals, simultaneous bands, robust fitting, and multiplicity correction.",
+    "deferredMethods": "Deferred in this release: multiplicity correction across series or groups.",
     "analysisAssumptions": "Assumptions and limitations",
     "limitations": "Limitations",
     "evidenceMessages": {
@@ -337,13 +373,21 @@
       "residualDescriptive": "Residual summaries are descriptive checks on the response scale.",
       "residualNoInference": "They do not establish independence, normality, or causality.",
       "rSquared": "R² describes in-sample association and does not establish causality.",
-      "pointwise": "The interval is pointwise for the fitted mean; prediction and simultaneous bands are deferred.",
+      "pointwise": "The interval is pointwise for the fitted mean and is not a prediction interval or a simultaneous confidence band.",
       "ordinary": "Ordinary least squares gives every included observation equal weight.",
-      "weighted": "Weighted fitting uses the supplied error column; robust fitting is deferred.",
+      "weighted": "Weighted fitting uses the supplied error column; it is not a robust estimator.",
+      "robustAssumption": "Huber IRLS uses a fixed tuning constant of 1.345 and the standardized X scale for a linear design.",
+      "robustLimit": "Huber downweights large residuals but does not make biased, confounded, or poorly designed data valid.",
+      "predictionAssumption": "The interval includes residual variation for one future response under the selected linear or polynomial model.",
+      "simultaneousAssumption": "The Working-Hotelling band covers the family of fitted mean values represented by the displayed linear or polynomial curve.",
+      "predictionConfidence": "The selected confidence level is interpreted for one future response.",
+      "simultaneousConfidence": "The selected confidence level is interpreted as a Working-Hotelling simultaneous mean band.",
+      "predictionLimit": "This prediction interval includes estimated residual variation and is not a simultaneous confidence band.",
+      "simultaneousLimit": "This simultaneous mean band is not a prediction interval.",
       "residualTrend": "A possible residual trend suggests the selected model may miss structure.",
-      "prediction": "Prediction intervals are not displayed by this release.",
-      "simultaneous": "Simultaneous confidence bands are not displayed by this release.",
-      "robust": "Robust regression is not displayed by this release.",
+      "prediction": "A prediction interval was not requested; a pointwise mean interval is a different estimand.",
+      "simultaneous": "A simultaneous confidence band was not requested; it is not interchangeable with a pointwise or prediction interval.",
+      "robust": "Huber robust fitting was not requested; it does not make biased or poorly designed data valid.",
       "multiplicity": "No multiplicity correction is applied across series or groups.",
       "weightedSelection": "Select weighted least squares only when an error column is scientifically justified.",
       "confidenceRequiresFit": "A confidence band is available only when a supported fit is selected.",
@@ -497,6 +541,14 @@
     "title": "Settings",
     "description": "Choose interface, figure, export, privacy, and storage defaults.",
     "languageSection": "Language and figure defaults",
+    "appearance": "Appearance",
+    "appearanceTitle": "Color theme",
+    "appearanceDescription": "Use the operating-system setting or choose a light/dark theme. This preference stays in this browser.",
+    "appearanceOptions": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
     "interfaceLanguage": "Interface language",
     "interfaceLanguageDescription": "The interface language does not replace text already entered in a figure.",
     "figureLanguage": "Figure text",
@@ -559,7 +611,51 @@
     "search": "Search help",
     "commonQuestions": "Common questions",
     "noMatchTitle": "No help article matches",
-    "noMatchDescription": "Try a broader phrase such as confidence interval, sampling, or original file."
+    "noMatchDescription": "Try a broader phrase such as confidence interval, sampling, or original file.",
+    "workflowTitle": "How an upload becomes a chart",
+    "workflowDescription": "Every local upload follows the same inspectable path. The browser configures the chart; the Python service performs the data work.",
+    "workflowSteps": {
+      "upload": "Upload file",
+      "receive": "FastAPI receives it",
+      "parse": "pandas parses the table",
+      "types": "Types are identified",
+      "quality": "Quality is checked",
+      "config": "Chart configuration is saved",
+      "draw": "ECharts draws the preview"
+    },
+    "exportNote": "PNG, SVG, and PDF are generated independently by the Python backend from the validated chart specification. The publication export does not reuse a screenshot of the browser.",
+    "tipsTitle": "Small tips at the decision points",
+    "tips": {
+      "import": "For a workbook, choose the measurement sheet and confirm the header row before re-importing.",
+      "inspect": "Keep is not the same as Remove: Exclude affects analysis and charts; Remove affects the cleaned copy too.",
+      "chart": "Use numeric X/Y/Z fields for quantitative charts. A regular rectangular grid is required for a 3D surface.",
+      "export": "Use 300 DPI for most manuscripts and 600 DPI when the journal or line detail requires it.",
+      "privacy": "Feedback is prepared locally and contains no source rows, chart values, filenames, email addresses, or project IDs."
+    },
+    "resetTips": "Show dismissed tips again",
+    "tipsReset": "Tips will appear again when you reach a decision point.",
+    "dismissTip": "Dismiss tip",
+    "browseExamples": "Browse example datasets",
+    "feedbackTitle": "Local feedback center",
+    "feedbackDescription": "Create a privacy-safe diagnostic note without an account. Copy or save it offline, or open a prefilled GitHub issue only after you review the external-site warning.",
+    "feedbackCategory": "Feedback type",
+    "feedbackCategories": {
+      "bug": "Bug",
+      "usability": "Usability",
+      "scientific": "Scientific method",
+      "feature": "Feature request"
+    },
+    "feedbackDescriptionLabel": "What happened or what would help?",
+    "feedbackDescriptionPlaceholder": "Describe the problem or idea without pasting experiment rows or private identifiers.",
+    "feedbackPrivacy": "Only the app version, operating-system/browser class, generic screen name, feedback type, and your description are included.",
+    "feedbackPreview": "Diagnostic preview",
+    "copyFeedback": "Copy diagnostic",
+    "saveFeedback": "Save diagnostic",
+    "openIssue": "Open GitHub issue",
+    "copiedFeedback": "Diagnostic copied to the clipboard.",
+    "savedFeedback": "Diagnostic saved as a local text file.",
+    "externalWarning": "GitHub is an external website. Review the diagnostic text before opening it. Continue?",
+    "feedbackIssueTitle": "LabViz feedback"
   },
   "common": {
     "row": "Row",
@@ -568,6 +664,15 @@
     "noPreviewDescription": "The service returned column metadata but no preview rows.",
     "surfaceUnavailableTitle": "3D preview is unavailable",
     "surfaceUnavailableDescription": "The optional WebGL renderer could not be loaded. The Python service can still validate and export the 3D figure.",
-    "chartPreview": "{title} {type} chart preview"
+    "chartPreview": "{title} {type} chart preview",
+    "surfaceControls": "3D surface controls",
+    "rotateLeft": "Rotate left",
+    "rotateRight": "Rotate right",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetView": "Reset view",
+    "toggleAxes": "Toggle axes",
+    "toggleLegend": "Toggle legend",
+    "lowCostFallback": "A lower-cost view is active for this device; the preview is sampled and the complete data remains available for analysis and export."
   }
 }

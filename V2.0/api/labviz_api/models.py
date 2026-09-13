@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -41,6 +41,59 @@ class SourceFile(ContractModel):
     sheet_name: str | None = None
     available_sheets: list[str] = Field(default_factory=list)
     header_row: int | None = Field(default=None, ge=1)
+
+
+class LocalizedText(ContractModel):
+    en: str = Field(min_length=1)
+    zh: str = Field(min_length=1)
+
+
+class SampleField(ContractModel):
+    name: str = Field(min_length=1)
+    kind: Literal["number", "text", "datetime", "boolean"]
+    role: Literal["x", "y", "z", "series", "group", "label", "error"]
+    title_en: str = Field(min_length=1, alias="titleEn")
+    title_zh: str = Field(min_length=1, alias="titleZh")
+
+
+class SampleAnswerKey(ContractModel):
+    preview_rows: int | None = Field(default=None, alias="previewRows", ge=1)
+    recommended_chart: str | None = Field(default=None, alias="recommendedChart")
+    required_quality_kinds: list[str] = Field(default_factory=list, alias="requiredQualityKinds")
+    export_formats: list[Literal["png", "svg", "pdf"]] = Field(
+        default_factory=lambda: cast(list[Literal["png", "svg", "pdf"]], ["png", "svg", "pdf"]),
+        alias="exportFormats",
+    )
+    expected_errors: list[str] = Field(default_factory=list, alias="expectedErrors")
+
+
+class SampleExample(VersionedModel):
+    slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    filename: str = Field(min_length=1)
+    byte_size: int = Field(alias="byteSize", ge=1)
+    media_type: str = Field(min_length=1)
+    format: Literal["csv", "tsv", "txt", "json", "xlsx"]
+    sheet_name: str | None = None
+    available_sheets: list[str] = Field(default_factory=list)
+    header_row: int = Field(default=1, ge=1)
+    title: LocalizedText
+    purpose: LocalizedText
+    learning_goal: LocalizedText
+    recommended_chart: Literal["line", "scatter", "bar", "histogram", "box", "heatmap", "surface3d"]
+    difficulty: Literal["beginner", "intermediate"]
+    fields: list[SampleField] = Field(min_length=1)
+    row_count: int = Field(ge=1)
+    quality_issues: list[LocalizedText] = Field(default_factory=list)
+    expected_quality_kinds: list[str] = Field(default_factory=list)
+    answer_key: SampleAnswerKey = Field(default_factory=SampleAnswerKey, alias="answerKey")
+    synthetic: bool = True
+
+
+class SampleCatalogResponse(VersionedModel):
+    catalog_version: Literal["v1"] = "v1"
+    release: str = "V2.2"
+    synthetic_only: bool = True
+    examples: list[SampleExample]
 
 
 class ProcessingJob(VersionedModel):
@@ -165,14 +218,17 @@ class SeriesSpec(ContractModel):
 class FittingSpec(ContractModel):
     model: Literal["none", "linear", "polynomial", "exponential", "logarithmic", "power"] = "none"
     polynomial_order: Literal[1, 2, 3] = 2
-    fit_method: Literal["ordinary-least-squares", "weighted-least-squares"] = (
-        "ordinary-least-squares"
-    )
+    fit_method: Literal[
+        "ordinary-least-squares",
+        "weighted-least-squares",
+        "robust-huber",
+    ] = "ordinary-least-squares"
     show_equation: bool = True
     show_r_squared: bool = True
     confidence_band: bool = False
     confidence_method: Literal["student-t", "bootstrap"] = "student-t"
     confidence_level: Literal[90, 95, 99] = 95
+    interval_kind: Literal["pointwise-mean", "prediction", "simultaneous"] = "pointwise-mean"
 
 
 class UncertaintySpec(ContractModel):
@@ -398,12 +454,19 @@ class FitPoint(ContractModel):
 class FitAnalysis(ContractModel):
     model: Literal["linear", "polynomial", "exponential", "logarithmic", "power"]
     equation: str
+    coefficients: list[float]
     r_squared: float
     sample_size: int = Field(ge=0)
     excluded_count: int = Field(ge=0)
-    fit_method: Literal["ordinary-least-squares", "weighted-least-squares"]
-    confidence_method: Literal["none", "student-t", "bootstrap"]
-    interval_kind: Literal["none", "pointwise-mean"]
+    fit_method: Literal[
+        "ordinary-least-squares",
+        "weighted-least-squares",
+        "robust-huber",
+    ]
+    confidence_method: Literal["none", "student-t", "bootstrap", "working-hotelling"]
+    interval_kind: Literal["none", "pointwise-mean", "prediction", "simultaneous"]
+    robust_iterations: int | None = Field(default=None, ge=0, le=50)
+    robust_converged: bool | None = None
     points: list[FitPoint]
 
 

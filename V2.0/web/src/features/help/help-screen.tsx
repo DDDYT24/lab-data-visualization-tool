@@ -9,7 +9,9 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
+  Button,
   InputAdornment,
   Paper,
   Stack,
@@ -17,10 +19,14 @@ import {
   Typography,
 } from "@mui/material";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
 import { ApiStatePanel } from "@/components/common/api-state-panel";
+import { ContextualTip, resetDismissedTips } from "@/components/common/contextual-tip";
+
+import { FeedbackCenter } from "./feedback-center";
 
 const guidesEn = [
   {
@@ -64,6 +70,18 @@ const questionsEn = [
     body: "It is a range calculated from the sample and selected confidence level. A 99% interval is normally wider than a 95% interval; it is not automatically a better analysis.",
   },
   {
+    title: "What is a prediction interval?",
+    body: "It estimates a range for one future response and includes residual variation, so it is normally wider than an interval for the fitted mean. It is not a guarantee for every future observation.",
+  },
+  {
+    title: "What is a simultaneous confidence band?",
+    body: "The Working–Hotelling band covers the displayed family of fitted mean values. It is different from a pointwise bootstrap band and from a prediction interval.",
+  },
+  {
+    title: "What does Huber robust fitting do?",
+    body: "Huber IRLS reduces the influence of large standardized residuals for a linear fit. It does not fix biased sampling, confounding, dependence, incorrect units, or a poorly designed experiment, and it does not provide a confidence band in V2.2.",
+  },
+  {
     title: "Does LabViz change the original file?",
     body: "No. Cleaning decisions apply to the project and cleaned copy. The uploaded source remains unchanged and is removed after local parsing.",
   },
@@ -83,6 +101,18 @@ const questionsZh = [
     body: "它是根据样本和所选置信水平计算出的范围。99% 区间通常比 95% 更宽，但并不自动代表分析更好。",
   },
   {
+    title: "什么是预测区间？",
+    body: "它估计一个未来响应值的范围，并包含残差变异，因此通常比拟合均值的区间更宽；它不是对每个未来观测值的保证。",
+  },
+  {
+    title: "什么是同时置信带？",
+    body: "Working–Hotelling 同时置信带覆盖当前显示的一组拟合均值。它不同于逐点 bootstrap 均值带，也不同于预测区间。",
+  },
+  {
+    title: "Huber 稳健拟合做什么？",
+    body: "Huber IRLS 会在线性拟合中降低较大标准化残差的影响。它不能修复抽样偏倚、混杂、观测不独立、单位错误或糟糕的实验设计；V2.2 也不会为它提供置信带。",
+  },
+  {
     title: "LabViz 会修改原始文件吗？",
     body: "不会。清洗决定只作用于项目和清洗副本。上传的源文件保持不变，并会在本机解析后删除。",
   },
@@ -100,15 +130,17 @@ export function HelpScreen() {
   const t = useTranslations("help");
   const locale = useLocale();
   const [search, setSearch] = useState("");
+  const [tipsReset, setTipsReset] = useState(false);
   const guides = locale === "zh" ? guidesZh : guidesEn;
   const questions = locale === "zh" ? questionsZh : questionsEn;
+  const articles = useMemo(() => [...guides, ...questions], [guides, questions]);
   const matches = useMemo(() => {
     const normalized = search.trim().toLowerCase();
     if (!normalized) return questions;
-    return questions.filter((question) =>
+    return articles.filter((question) =>
       `${question.title} ${question.body}`.toLowerCase().includes(normalized),
     );
-  }, [questions, search]);
+  }, [articles, questions, search]);
 
   return (
     <Stack spacing={3} sx={{ maxWidth: 1060 }}>
@@ -184,6 +216,100 @@ export function HelpScreen() {
         </Box>
       ) : null}
 
+      {!search ? (
+        <Paper sx={{ border: 1, borderColor: "divider", p: { xs: 2, md: 3 } }}>
+          <Stack spacing={2}>
+            <Typography component="h2" sx={{ fontWeight: 750 }}>
+              {t("workflowTitle")}
+            </Typography>
+            <Typography color="text.secondary" variant="body2">
+              {t("workflowDescription")}
+            </Typography>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              sx={{ flexWrap: "wrap" }}
+            >
+              {(
+                [
+                  "upload",
+                  "receive",
+                  "parse",
+                  "types",
+                  "quality",
+                  "config",
+                  "draw",
+                ] as const
+              ).map((step, index) => (
+                <Paper
+                  key={step}
+                  sx={{
+                    bgcolor: "action.hover",
+                    border: 1,
+                    borderColor: "divider",
+                    flex: "1 1 120px",
+                    p: 1.5,
+                  }}
+                >
+                  <Typography color="primary.main" variant="caption">
+                    {index + 1}
+                  </Typography>
+                  <Typography sx={{ fontWeight: 650 }} variant="body2">
+                    {t(`workflowSteps.${step}`)}
+                  </Typography>
+                </Paper>
+              ))}
+            </Stack>
+            <Typography color="text.secondary" variant="body2">
+              {t("exportNote")}
+            </Typography>
+          </Stack>
+        </Paper>
+      ) : null}
+
+      {!search ? (
+        <Paper sx={{ border: 1, borderColor: "divider", p: { xs: 2, md: 3 } }}>
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+            >
+              <Typography component="h2" sx={{ fontWeight: 750 }}>
+                {t("tipsTitle")}
+              </Typography>
+              <Button
+                onClick={() => {
+                  resetDismissedTips();
+                  setTipsReset(true);
+                }}
+                size="small"
+                variant="outlined"
+              >
+                {t("resetTips")}
+              </Button>
+            </Stack>
+            {tipsReset ? <Alert severity="success">{t("tipsReset")}</Alert> : null}
+            <ContextualTip
+              body={t("tips.privacy")}
+              dismissLabel={t("dismissTip")}
+              id="help-privacy"
+            />
+            <Typography color="text.secondary" variant="body2">
+              {t("tips.chart")}
+            </Typography>
+            <Button
+              component={Link}
+              href="/?examples=1"
+              sx={{ alignSelf: "flex-start" }}
+              variant="outlined"
+            >
+              {t("browseExamples")}
+            </Button>
+          </Stack>
+        </Paper>
+      ) : null}
+
       <Paper sx={{ border: 1, borderColor: "divider", overflow: "hidden" }}>
         <Stack
           direction="row"
@@ -219,6 +345,8 @@ export function HelpScreen() {
           ))
         )}
       </Paper>
+
+      <FeedbackCenter />
     </Stack>
   );
 }

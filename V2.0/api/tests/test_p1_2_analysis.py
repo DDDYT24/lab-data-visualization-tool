@@ -76,7 +76,7 @@ def test_bootstrap_and_weighted_fit_are_deterministic_and_disclosed() -> None:
     assert all(point["lower"] < point["upper"] for point in fit["points"])
     assert first_series["residualDiagnostic"]["status"] == "supported"
     assert any(
-        item["method"] == "prediction-band" and item["status"] == "deferred"
+        item["method"] == "prediction-band" and item["status"] == "not-requested"
         for item in first_series["disclosures"]
     )
     assert any(

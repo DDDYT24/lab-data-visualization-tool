@@ -10,6 +10,187 @@ const PNG_DATA_URL =
 const SVG_DATA_URL =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E";
 
+const localized = (en: string, zh: string) => ({ en, zh });
+const sampleField = (
+  name: string,
+  kind: "number" | "text",
+  role: "x" | "y" | "z" | "series" | "group" | "label" | "error",
+) => ({
+  name,
+  kind,
+  role,
+  titleEn: name,
+  titleZh: name,
+});
+
+const sampleCatalog = {
+  apiVersion: "v1",
+  catalogVersion: "v1",
+  release: "V2.2",
+  syntheticOnly: true,
+  examples: [
+    {
+      apiVersion: "v1",
+      slug: "time-series",
+      filename: "01_time_series.csv",
+      byteSize: 418,
+      mediaType: "text/csv",
+      format: "csv",
+      sheetName: null,
+      availableSheets: [],
+      headerRow: 1,
+      title: localized("Time-series response", "时间响应曲线"),
+      purpose: localized("Follow a response over time.", "观察响应随时间的变化。"),
+      learningGoal: localized("Choose a line chart and inspect quality flags.", "选择折线图并检查质量标记。"),
+      recommendedChart: "line",
+      difficulty: "beginner",
+      fields: [sampleField("time_min", "number", "x"), sampleField("response_mV", "number", "y")],
+      rowCount: 24,
+      qualityIssues: [localized("One missing and one unusual value are intentional.", "故意包含一个缺失值和一个异常值。")],
+      expectedQualityKinds: ["missing", "extreme-value"],
+      synthetic: true,
+    },
+    {
+      apiVersion: "v1",
+      slug: "repeated-runs",
+      filename: "02_repeated_runs.xlsx",
+      byteSize: 1_000,
+      mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      format: "xlsx",
+      sheetName: "Measurements",
+      availableSheets: ["Measurements", "Metadata"],
+      headerRow: 1,
+      title: localized("Repeated experiment runs", "重复实验运行"),
+      purpose: localized("Compare groups and replicates.", "比较分组和重复测量。"),
+      learningGoal: localized("Use long-format data with grouped lines.", "使用长表格式绘制分组折线。"),
+      recommendedChart: "line",
+      difficulty: "intermediate",
+      fields: [
+        sampleField("time_min", "number", "x"),
+        sampleField("response_mV", "number", "y"),
+        sampleField("condition", "text", "group"),
+      ],
+      rowCount: 24,
+      qualityIssues: [],
+      expectedQualityKinds: [],
+      synthetic: true,
+    },
+    {
+      apiVersion: "v1",
+      slug: "scatter-fit",
+      filename: "03_dose_response.tsv",
+      byteSize: 500,
+      mediaType: "text/tab-separated-values",
+      format: "tsv",
+      sheetName: null,
+      availableSheets: [],
+      headerRow: 1,
+      title: localized("Dose-response scatter", "剂量-响应散点"),
+      purpose: localized("Relate dose to response.", "观察剂量和响应的关系。"),
+      learningGoal: localized("Association is not causality.", "理解关联不等于因果。"),
+      recommendedChart: "scatter",
+      difficulty: "intermediate",
+      fields: [
+        sampleField("dose_uM", "number", "x"),
+        sampleField("response_mV", "number", "y"),
+        sampleField("batch", "text", "group"),
+      ],
+      rowCount: 18,
+      qualityIssues: [],
+      expectedQualityKinds: [],
+      synthetic: true,
+    },
+    {
+      apiVersion: "v1",
+      slug: "categorical-comparison",
+      filename: "04_group_comparison.txt",
+      byteSize: 500,
+      mediaType: "text/plain",
+      format: "txt",
+      sheetName: null,
+      availableSheets: [],
+      headerRow: 1,
+      title: localized("Categorical group comparison", "分类分组比较"),
+      purpose: localized("Compare named groups.", "比较不同命名分组。"),
+      learningGoal: localized("Use a box plot for categorical values.", "理解分类数据适合箱线图。"),
+      recommendedChart: "box",
+      difficulty: "beginner",
+      fields: [sampleField("group", "text", "group"), sampleField("measurement", "number", "y")],
+      rowCount: 18,
+      qualityIssues: [],
+      expectedQualityKinds: [],
+      synthetic: true,
+    },
+    {
+      apiVersion: "v1",
+      slug: "distribution",
+      filename: "05_distribution.json",
+      byteSize: 500,
+      mediaType: "application/json",
+      format: "json",
+      sheetName: null,
+      availableSheets: [],
+      headerRow: 1,
+      title: localized("Measurement distributions", "测量值分布"),
+      purpose: localized("Inspect spread and overlap.", "观察离散程度和重叠。"),
+      learningGoal: localized("Use a histogram for distributions.", "理解直方图适合展示分布。"),
+      recommendedChart: "histogram",
+      difficulty: "beginner",
+      fields: [sampleField("sample_id", "text", "label"), sampleField("measurement", "number", "y")],
+      rowCount: 48,
+      qualityIssues: [],
+      expectedQualityKinds: [],
+      synthetic: true,
+    },
+    {
+      apiVersion: "v1",
+      slug: "correlation-heatmap",
+      filename: "06_correlation.json",
+      byteSize: 500,
+      mediaType: "application/json",
+      format: "json",
+      sheetName: null,
+      availableSheets: [],
+      headerRow: 1,
+      title: localized("Multi-variable correlation", "多变量相关性"),
+      purpose: localized("Compare numeric relationships.", "比较数值变量之间的关系。"),
+      learningGoal: localized("A heatmap summarizes association, not causality.", "热力图概括关联而不是因果。"),
+      recommendedChart: "heatmap",
+      difficulty: "intermediate",
+      fields: [sampleField("temperature_C", "number", "series"), sampleField("signal_mV", "number", "series")],
+      rowCount: 30,
+      qualityIssues: [],
+      expectedQualityKinds: [],
+      synthetic: true,
+    },
+    {
+      apiVersion: "v1",
+      slug: "surface-3d",
+      filename: "07_surface3d.csv",
+      byteSize: 1_000,
+      mediaType: "text/csv",
+      format: "csv",
+      sheetName: null,
+      availableSheets: [],
+      headerRow: 1,
+      title: localized("Regular X/Y/Z surface", "规则 X/Y/Z 3D 曲面"),
+      purpose: localized("Visualize a complete rectangular grid.", "可视化完整矩形网格。"),
+      learningGoal: localized("Distinguish a surface from an irregular point cloud.", "区分结构化曲面和不规则散点云。"),
+      recommendedChart: "surface3d",
+      difficulty: "intermediate",
+      fields: [
+        sampleField("x_mm", "number", "x"),
+        sampleField("y_mm", "number", "y"),
+        sampleField("response_mV", "number", "z"),
+      ],
+      rowCount: 441,
+      qualityIssues: [],
+      expectedQualityKinds: [],
+      synthetic: true,
+    },
+  ],
+} as const;
+
 const chart = {
   schemaVersion: 1,
   type: "line",
@@ -144,6 +325,13 @@ export type ObservedChartSpec = {
   type: string;
   xAxis: { field: string };
   series: Array<{ field: string }>;
+  fitting?: {
+    model?: string;
+    fitMethod?: string;
+    confidenceBand?: boolean;
+    confidenceMethod?: string;
+    intervalKind?: string;
+  };
   export: { format: "png" | "svg" | "pdf" };
 };
 
@@ -157,6 +345,7 @@ export type MockApiObservations = {
   exportRequests: number;
   exportFormats: string[];
   exportCharts: ObservedChartSpec[];
+  sampleSlugs: string[];
   requests: string[];
   requestedEmail: string | null;
   savedCharts: ObservedChartSpec[];
@@ -168,6 +357,7 @@ export type MockApiObservations = {
 type MockApiOptions = {
   dataset?: "default" | "surface";
   dataDelayMs?: number;
+  lowPerformance?: boolean;
   deliveryMode?: "console" | "email";
   history?: "empty" | "saved";
   shareExpired?: boolean;
@@ -210,6 +400,7 @@ export async function installMockApi(
     exportRequests: 0,
     exportFormats: [],
     exportCharts: [],
+    sampleSlugs: [],
     requests: [],
     requestedEmail: null,
     savedCharts: [],
@@ -220,6 +411,12 @@ export async function installMockApi(
   let historyProjectVisible = options.history !== "empty";
   let projectDescription = "";
   let currentRevisionId = REVISION_1;
+  if (options.lowPerformance) {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, value: 2 });
+      Object.defineProperty(navigator, "deviceMemory", { configurable: true, value: 2 });
+    });
+  }
   const activeChart = options.dataset === "surface" ? surfaceChart : chart;
   const activePreview = options.dataset === "surface" ? surfacePreview : preview;
   const activeQuality = options.dataset === "surface" ? surfaceQuality : quality;
@@ -266,6 +463,35 @@ export async function installMockApi(
           mediaType: "text/csv",
           sheetName: null,
           headerRow: 1,
+        },
+        job: processingJob("queued"),
+        expiresAt: "2030-01-02T05:04:05Z",
+      });
+    }
+
+    if (method === "GET" && path === "/samples") {
+      return json(route, sampleCatalog);
+    }
+
+    const catalogSampleMatch = path.match(/^\/samples\/([^/]+)\/projects$/);
+    if (method === "POST" && catalogSampleMatch) {
+      const slug = decodeURIComponent(catalogSampleMatch[1]);
+      const sample = sampleCatalog.examples.find((item) => item.slug === slug);
+      if (!sample) return json(route, { code: "sample-not-found", message: "Not found" }, 404);
+      observations.sampleSlugs.push(slug);
+      return json(route, {
+        apiVersion: "v1",
+        projectId: PROJECT_ID,
+        storageMode: "temporary-cloud",
+        description: "",
+        currentRevisionId: null,
+        source: {
+          name: sample.filename,
+          size: sample.byteSize,
+          mediaType: sample.mediaType,
+          sheetName: sample.sheetName,
+          availableSheets: sample.availableSheets,
+          headerRow: sample.headerRow,
         },
         job: processingJob("queued"),
         expiresAt: "2030-01-02T05:04:05Z",
@@ -437,10 +663,17 @@ export async function installMockApi(
       method === "POST" &&
       path === `/projects/${PROJECT_ID}/chart-analysis`
     ) {
-      const body = request.postDataJSON() as {
-        chart: ObservedChartSpec & { fitting?: { model?: string } };
-      };
+      const body = request.postDataJSON() as { chart: ObservedChartSpec };
       const model = body.chart.fitting?.model ?? "none";
+      const fitMethod = body.chart.fitting?.fitMethod ?? "ordinary-least-squares";
+      const confidenceBand = body.chart.fitting?.confidenceBand ?? false;
+      const intervalKind = confidenceBand
+        ? body.chart.fitting?.intervalKind ?? "pointwise-mean"
+        : "none";
+      const confidenceMethod =
+        intervalKind === "simultaneous"
+          ? "working-hotelling"
+          : body.chart.fitting?.confidenceMethod ?? "none";
       observations.analysisCharts.push(body.chart);
       observations.analysisModels.push(model);
       if (options.dataset === "surface" && body.chart.type === "surface3d") {
@@ -500,9 +733,9 @@ export async function installMockApi(
                     rSquared: 0.98,
                     sampleSize: 4,
                     excludedCount: 0,
-                    fitMethod: "ordinary-least-squares",
-                    confidenceMethod: "student-t",
-                    intervalKind: "pointwise-mean",
+                    fitMethod,
+                    confidenceMethod,
+                    intervalKind,
                     points: [
                       { x: 0, y: 1, lower: 0.8, upper: 1.2 },
                       { x: 3, y: 4.3, lower: 4.1, upper: 4.5 },
@@ -521,7 +754,7 @@ export async function installMockApi(
                     maxAbsResidual: 0.24,
                     residualTrend: "none",
                     assumptions: ["Residual summaries are descriptive checks."],
-                    limitations: ["Prediction intervals are deferred."],
+                    limitations: [],
                   },
             disclosures:
               model === "none"
@@ -537,10 +770,31 @@ export async function installMockApi(
                     },
                     {
                       method: "prediction-band",
+                      status: intervalKind === "prediction" ? "supported" : "not-requested",
+                      sampleSize: 4,
+                      excludedCount: 0,
+                      limitations: [],
+                    },
+                    {
+                      method: "simultaneous-band",
+                      status: intervalKind === "simultaneous" ? "supported" : "not-requested",
+                      sampleSize: 4,
+                      excludedCount: 0,
+                      limitations: [],
+                    },
+                    {
+                      method: "robust-fitting",
+                      status: fitMethod === "robust-huber" ? "supported" : "not-requested",
+                      sampleSize: 4,
+                      excludedCount: 0,
+                      limitations: [],
+                    },
+                    {
+                      method: "multiple-comparison",
                       status: "deferred",
                       sampleSize: 4,
                       excludedCount: 0,
-                      limitations: ["Prediction intervals are not displayed by this release."],
+                      limitations: ["No multiplicity correction is applied across series or groups."],
                     },
                   ],
             warnings: [],

@@ -5,6 +5,7 @@ import { defaultChartSpec, type ChartSpec } from "@/domain/chart-spec";
 const storageKey = "labviz:user-preferences:v1";
 
 const userPreferencesSchema = z.object({
+  appearance: z.enum(["system", "light", "dark"]).default("system"),
   figureLanguage: z.enum(["same", "en", "zh"]),
   fontFamily: z.enum(["Arial", "Times New Roman"]),
   sizePreset: z.enum(["single-column", "double-column", "a4", "custom"]),
@@ -14,8 +15,10 @@ const userPreferencesSchema = z.object({
 });
 
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;
+export type AppearancePreference = UserPreferences["appearance"];
 
 export const defaultUserPreferences: UserPreferences = {
+  appearance: "system",
   figureLanguage: "same",
   fontFamily: defaultChartSpec.export.fontFamily,
   sizePreset: defaultChartSpec.export.sizePreset,
@@ -39,6 +42,7 @@ export function loadUserPreferences(): UserPreferences {
 export function saveUserPreferences(preferences: UserPreferences) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(storageKey, JSON.stringify(preferences));
+    window.dispatchEvent(new Event("labviz:preferences-changed"));
   }
 }
 

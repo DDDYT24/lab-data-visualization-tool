@@ -1,5 +1,6 @@
 "use client";
 
+import type { PaletteMode } from "@mui/material";
 import { alpha, createTheme } from "@mui/material/styles";
 
 export const chartPalette = [
@@ -11,46 +12,60 @@ export const chartPalette = [
   "#137C8B",
 ] as const;
 
-export const theme = createTheme({
+export const darkChartPalette = [
+  "#8DB7FF",
+  "#69D2C7",
+  "#FF9BAA",
+  "#C7A5FF",
+  "#F4C56F",
+  "#67DCE8",
+] as const;
+
+export function createLabvizTheme(mode: PaletteMode) {
+  const dark = mode === "dark";
+  const actionContrastText = dark ? "#0F172A" : "#FFFFFF";
+  return createTheme({
   cssVariables: {
     cssVarPrefix: "labviz",
   },
   palette: {
-    mode: "light",
+    mode,
     primary: {
-      main: "#2563EB",
-      dark: "#1D4ED8",
-      light: "#EAF1FF",
-      contrastText: "#FFFFFF",
+      main: dark ? "#8DB7FF" : "#2563EB",
+      dark: dark ? "#B7D0FF" : "#1D4ED8",
+      light: dark ? "#203A6C" : "#EAF1FF",
+      contrastText: actionContrastText,
     },
     secondary: {
-      main: "#0F766E",
-      dark: "#0B5F59",
-      light: "#E8F5F2",
-      contrastText: "#FFFFFF",
+      main: dark ? "#69D2C7" : "#0F766E",
+      dark: dark ? "#9AE5DD" : "#0B5F59",
+      light: dark ? "#164B49" : "#E8F5F2",
+      contrastText: actionContrastText,
     },
     background: {
-      default: "#F6F8FB",
-      paper: "#FFFFFF",
+      default: dark ? "#0F172A" : "#F6F8FB",
+      paper: dark ? "#172033" : "#FFFFFF",
     },
     text: {
-      primary: "#172033",
-      secondary: "#667085",
+      primary: dark ? "#F4F7FB" : "#172033",
+      secondary: dark ? "#B6C2D5" : "#667085",
     },
-    divider: "#D8DEE8",
+    divider: dark ? "#334155" : "#D8DEE8",
     success: {
-      main: "#1B6848",
-      dark: "#145038",
-      light: "#E9F6EF",
-      contrastText: "#FFFFFF",
+      main: dark ? "#75D6A2" : "#1B6848",
+      dark: dark ? "#A2E7BF" : "#145038",
+      light: dark ? "#183C31" : "#E9F6EF",
+      contrastText: actionContrastText,
     },
     warning: {
-      main: "#B7791F",
-      light: "#FFF6E5",
+      main: dark ? "#F4C56F" : "#B7791F",
+      light: dark ? "#4A3820" : "#FFF6E5",
+      contrastText: dark ? "#0F172A" : "#FFFFFF",
     },
     error: {
-      main: "#C43D4B",
-      light: "#FFF0F2",
+      main: dark ? "#FF9BAA" : "#C43D4B",
+      light: dark ? "#4C2530" : "#FFF0F2",
+      contrastText: actionContrastText,
     },
   },
   typography: {
@@ -140,4 +155,7 @@ export const theme = createTheme({
       },
     },
   },
-});
+  });
+}
+
+export const theme = createLabvizTheme("light");

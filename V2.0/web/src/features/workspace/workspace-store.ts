@@ -20,6 +20,7 @@ export type SelectedFile = {
   size: number;
   type: string;
   isSample: boolean;
+  sampleSlug?: string | null;
   sourceFile?: File;
   sheetName?: string | null;
   availableSheets?: string[];
@@ -156,6 +157,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
           size: session.source.size,
           type: session.source.mediaType,
           isSample: state.selectedFile?.isSample ?? false,
+          sampleSlug: state.selectedFile?.sampleSlug ?? null,
           sheetName: session.source.sheetName,
           availableSheets: session.source.availableSheets,
           headerRow: session.source.headerRow,
@@ -181,6 +183,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         size: workspace.session.source.size,
         type: workspace.session.source.mediaType,
         isSample: false,
+        sampleSlug: null,
         sheetName: workspace.session.source.sheetName,
         availableSheets: workspace.session.source.availableSheets,
         headerRow: workspace.session.source.headerRow,

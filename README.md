@@ -5,19 +5,27 @@
 **Turn raw experiment tables into clear, exportable visuals — locally.**
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-V2.1.1%20local-0f766e)
+![Release](https://img.shields.io/badge/release-V2.2.0--dev%20local--first-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [Version baseline](VERSION_BASELINE.md) · [Future backlog](V2.0/TODO.md) · [Privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [Offline install](V2.0/docs/OFFLINE_INSTALL.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [Version baseline](VERSION_BASELINE.md) · [Future backlog](V2.0/TODO.md) · [Privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [Offline install](V2.0/docs/OFFLINE_INSTALL.md) · [Statistics contract](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) · [Windows packaging contract](V2.0/packaging/windows/README.md)
 
 </div>
 
 LabViz is a local-first web application for importing, checking, cleaning,
-visualizing, and exporting experimental data. V2.1.1 combines a Next.js website
-with a FastAPI processing service. The default setup stores data on the user's
-computer and does not require a hosted website, AWS, Docker, PostgreSQL, or MinIO.
+visualizing, and exporting experimental data. The repository is currently developing
+V2.2.0-dev on top of the V2.1.1 local release: it adds versioned synthetic examples,
+appearance/accessibility improvements, bounded advanced statistics, and a Windows
+packaging contract. The default setup stores data on the user's computer and does
+not require a hosted website, AWS, Docker, PostgreSQL, or MinIO.
 
-## Quick start — V2.1.1
+## Quick start — V2.2.0-dev local checkout
+
+These commands run the developer checkout. The first launch intentionally creates
+`V2.0/api/.venv` and may download Python and website dependencies into this local
+checkout; that is local setup, not an AWS or hosted deployment. A bundled native
+installer is not released yet; its architecture and validation contract are in
+[`V2.0/packaging/windows/README.md`](V2.0/packaging/windows/README.md).
 
 Install the three tools below. Click a link to open the official download page:
 
@@ -84,8 +92,13 @@ Import data → Inspect quality → Confirm cleaning → Create chart → Export
 ```
 
 Supported inputs include CSV, TSV, delimited TXT, JSON, and XLSX. The web app
-provides quality summaries, safe cleaning decisions, seven 2D/3D chart types,
-project history, local sign-in, read-only sharing, and PNG/SVG/PDF exports.
+provides quality summaries, safe cleaning decisions, seven 2D/3D chart types, a
+chooser of synthetic teaching examples, project history, local sign-in, read-only
+sharing, accessible chart data tables, and PNG/SVG/PDF exports. The V2.2 statistics
+slice supports documented prediction intervals, Working–Hotelling simultaneous
+mean bands, and linear Huber robust fitting; see the
+[`statistics contract`](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) for assumptions and
+limitations.
 
 V1.1 remains available as a Python-only Streamlit application for users who need
 the smaller legacy interface: [`V1.1/`](V1.1/).
@@ -99,6 +112,7 @@ the smaller legacy interface: [`V1.1/`](V1.1/).
 | Node.js | 22.22.2 minimum; Node.js 24 verified by CI |
 | Hardware | CPU only; no GPU or external database server required |
 | Browser | A current modern browser; website port `3000`, API port `8000` |
+| Native installer | Not released; Windows packaging is architecture-only, and macOS/Linux packages are not advertised |
 
 ## Manual startup and development
 
@@ -121,7 +135,9 @@ and MinIO Compose services. The complete command set is documented in
 ## Troubleshooting
 
 - If `Set-Location` fails, run it from the parent directory of the clone, or
-  skip it when PowerShell is already in the repository.
+  skip it when PowerShell is already in the repository. Use
+  `Set-Location -LiteralPath 'C:\path\to\lab-data-visualization-tool'` for paths
+  containing spaces.
 - If Python is not found, install Python 3.12 or 3.13 and reopen PowerShell.
 - If Node.js is too old, install 22.22.2 or newer and reopen PowerShell.
 - If port `3000` or `8000` is busy, stop the process using it and run the launcher again.
@@ -133,9 +149,11 @@ and MinIO Compose services. The complete command set is documented in
 | --- | --- |
 | `V2.0/web/` | Next.js frontend and browser tests |
 | `V2.0/api/` | FastAPI processing service, SQLite persistence, and API tests |
+| `V2.0/api/samples/v22/` | Versioned synthetic examples and edge fixtures only |
+| `V2.0/packaging/windows/` | Windows local-first packaging contract and validator; no released installer yet |
 | `V1.1/` | Legacy Streamlit application |
-| `V2.0/docs/` | Privacy, offline installation, backup, and release guidance |
-| `VERSION_BASELINE.md` | What V1.0, V1.1, V2.0, and V2.1 delivered |
+| `V2.0/docs/` | Privacy, offline installation, backup, statistics, and release guidance |
+| `VERSION_BASELINE.md` | What V1.0, V1.1, V2.0, V2.1, and the V2.2-dev baseline deliver |
 | `V2.0/TODO.md` | Single source of truth for future work and status |
 
 ## License

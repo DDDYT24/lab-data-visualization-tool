@@ -1,7 +1,11 @@
-# 本地离线运行指南
+# LabViz V2.2 本地优先与离线运行指南
 
 本文面向最终用户和负责实验室电脑部署的管理员。LabViz 的运行路径是本地自托管：网站、API、
 SQLite 数据库和处理结果都在同一台电脑上。
+
+当前 V2.2.0-dev 仍使用开发代码仓库启动器；Windows 原生安装包只有架构契约和校验脚本，
+尚未发布绑定 Python/Node 运行时的安装器。未来安装器的生命周期规则见
+[`../packaging/windows/README.md`](../packaging/windows/README.md)。
 
 ## 首次安装
 

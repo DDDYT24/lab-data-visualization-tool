@@ -1,0 +1,60 @@
+{
+  "contractVersion": "v1",
+  "product": "LabViz",
+  "releaseLine": "V2.2",
+  "buildStatus": "architecture-only",
+  "platform": "windows-x64",
+  "localFirst": true,
+  "installer": {
+    "target": "per-user native installer",
+    "artifact": null,
+    "cleanMachineVerified": false,
+    "toolchain": "Installer technology is selected during the packaging implementation gate; no installer compiler is bundled in this repository."
+  },
+  "runtime": {
+    "api": "Bundle CPython 3.13.x with the locked API wheels and the ready-to-run LabViz API environment.",
+    "web": "Bundle Node.js 22.22.2 or newer with the Next.js standalone server and static assets.",
+    "runtimeDependencyInstall": false,
+    "networkRequiredAfterInstall": false
+  },
+  "layout": {
+    "programRoot": "%LOCALAPPDATA%\\Programs\\LabViz",
+    "dataRoot": "%LOCALAPPDATA%\\LabViz\\data",
+    "logRoot": "%LOCALAPPDATA%\\LabViz\\logs",
+    "backupRoot": "%LOCALAPPDATA%\\LabViz\\backups",
+    "webPort": 3000,
+    "apiPort": 8000,
+    "bindAddress": "127.0.0.1"
+  },
+  "upgradePolicy": {
+    "database": "Keep the SQLite database and local objects outside the program directory.",
+    "upgrade": "Install a new immutable program directory and retain local data by default.",
+    "rollback": "Keep the previous program version until the new health check succeeds.",
+    "uninstall": "Ask whether to retain or delete data; never delete it silently."
+  },
+  "include": [
+    "V2.0/api",
+    "V2.0/web/server.js",
+    "V2.0/web/.next/static",
+    "V2.0/api/samples/v22",
+    "V2.0/assets/labviz-logo.ico",
+    "V2.0/assets/labviz-logo.svg",
+    "runtime/python",
+    "runtime/node",
+    "bin/start-labviz-portable.cmd",
+    "bin/start-labviz-portable.ps1"
+  ],
+  "exclude": [
+    ".env",
+    ".env.*",
+    ".labviz",
+    ".venv",
+    "node_modules",
+    ".next/cache",
+    "outputs",
+    "playwright-report",
+    "test-results",
+    "raw user CSV/XLSX/TSV/TXT/JSON data",
+    "private keys and credentials"
+  ]
+}

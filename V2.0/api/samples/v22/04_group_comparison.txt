@@ -1,0 +1,19 @@
+group	measurement	batch
+Control	10.62	B2
+Control	11.18	B1
+Control	11.72	B2
+Control	12.28	B1
+Control	12.82	B2
+Control	13.38	B1
+Low dose	14.62	B2
+Low dose	15.18	B1
+Low dose	15.72	B2
+Low dose	16.27	B1
+Low dose	16.82	B2
+Low dose	17.38	B1
+High dose	20.62	B2
+High dose	21.18	B1
+High dose	21.73	B2
+High dose	22.27	B1
+High dose	22.82	B2
+High dose	35.38	B1

@@ -59,6 +59,7 @@ from .models import (
     QualityRulesRequest,
     RequestEmailCode,
     RequestEmailCodeResponse,
+    SampleCatalogResponse,
     SavedChartResponse,
     SharedChart,
     SharedDownloads,
@@ -90,6 +91,7 @@ from .processing import (
 )
 from .rate_limits import AuthRateLimitUnavailable
 from .repository import ProjectRepository
+from .sample_catalog import SampleCatalogError, catalog_response, sample_payload
 
 LOGGER = logging.getLogger(__name__)
 SESSION_COOKIE = "labviz_session"
@@ -455,7 +457,7 @@ def create_app(
 
     app = FastAPI(
         title="LabViz API",
-        version="2.1.1",
+        version="2.2.0-dev",
         description="Processing, quality review, chart export, history, sharing, and auth.",
         lifespan=lifespan,
     )
@@ -717,6 +719,69 @@ def create_app(
             media_type,
             None,
             1,
+        )
+        project = _require_project(repository, project_id)
+        return _project_session(repository, project)
+
+    @app.get(f"{API_PREFIX}/samples", response_model=SampleCatalogResponse)
+    def list_sample_catalog() -> SampleCatalogResponse:
+        try:
+            return catalog_response()
+        except SampleCatalogError as exc:
+            raise ApiProblem(503, "sample-catalog-unavailable", str(exc)) from exc
+
+    @app.post(
+        f"{API_PREFIX}/samples/{{sample_slug}}/projects",
+        response_model=ProjectSession,
+        status_code=202,
+    )
+    def create_catalog_sample_project(
+        sample_slug: str,
+        background_tasks: BackgroundTasks,
+        response: Response,
+        guest_cookie: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectStore = Depends(get_project_store),
+        current_settings: Settings = Depends(get_settings),
+    ) -> ProjectSession:
+        try:
+            sample, payload = sample_payload(sample_slug)
+            validate_upload(payload, sample.filename, current_settings.max_upload_bytes)
+        except SampleCatalogError as exc:
+            raise ApiProblem(404, "sample-not-found", str(exc)) from exc
+        except ProcessingError as exc:
+            raise ApiProblem(503, "sample-invalid", str(exc)) from exc
+
+        project_id = uuid4().hex
+        job_id = uuid4().hex
+        guest_token = _guest_token(guest_cookie)
+        _set_guest_cookie(response, guest_token, current_settings)
+        source = SourceFile(
+            name=sample.filename,
+            size=len(payload),
+            media_type=sample.media_type,
+            sheet_name=sample.sheet_name,
+            available_sheets=sample.available_sheets,
+            header_row=sample.header_row,
+        )
+        repository.create_project(
+            project_id=project_id,
+            job_id=job_id,
+            title=sample.title.en,
+            source=_model_json(source),
+            source_sha256=hashlib.sha256(payload).hexdigest(),
+            guest_token_digest=_guest_digest(guest_token),
+        )
+        background_tasks.add_task(
+            _process_project,
+            repository,
+            current_settings,
+            project_id,
+            job_id,
+            payload,
+            sample.filename,
+            sample.media_type,
+            sample.sheet_name,
+            sample.header_row,
         )
         project = _require_project(repository, project_id)
         return _project_session(repository, project)
