@@ -1,0 +1,186 @@
+{
+  "keyVersion": "v1",
+  "release": "V2.2",
+  "syntheticOnly": true,
+  "description": "Independent, hand-authored synthetic answers for the bounded V2.2 statistics contract.",
+  "cases": [
+    {
+      "id": "pointwise-linear",
+      "model": "linear",
+      "fitMethod": "ordinary-least-squares",
+      "confidenceBand": true,
+      "confidenceMethod": "student-t",
+      "intervalKind": "pointwise-mean",
+      "rows": [
+        {"x": 0, "y": 1.1},
+        {"x": 1, "y": 2.2},
+        {"x": 2, "y": 3.0},
+        {"x": 3, "y": 4.15},
+        {"x": 4, "y": 5.2},
+        {"x": 5, "y": 6.1},
+        {"x": 6, "y": 7.05},
+        {"x": 7, "y": 8.3}
+      ],
+      "expected": {
+        "sampleSize": 8,
+        "excludedCount": 0,
+        "rSquaredMin": 0.98,
+        "intervalStrict": true,
+        "confidenceDisclosure": "supported",
+        "predictionDisclosure": "not-requested",
+        "simultaneousDisclosure": "not-requested"
+      }
+    },
+    {
+      "id": "prediction-linear",
+      "model": "linear",
+      "fitMethod": "ordinary-least-squares",
+      "confidenceBand": true,
+      "confidenceMethod": "student-t",
+      "intervalKind": "prediction",
+      "rows": [
+        {"x": 0, "y": 2.0},
+        {"x": 1, "y": 2.9},
+        {"x": 2, "y": 4.2},
+        {"x": 3, "y": 4.8},
+        {"x": 4, "y": 6.1},
+        {"x": 5, "y": 6.9},
+        {"x": 6, "y": 8.2},
+        {"x": 7, "y": 8.8},
+        {"x": 8, "y": 10.1},
+        {"x": 9, "y": 11.0}
+      ],
+      "expected": {
+        "sampleSize": 10,
+        "excludedCount": 0,
+        "slopeRange": [0.95, 1.05],
+        "intervalStrict": true,
+        "confidenceMethod": "student-t",
+        "predictionDisclosure": "supported",
+        "simultaneousDisclosure": "not-requested"
+      }
+    },
+    {
+      "id": "simultaneous-polynomial",
+      "model": "polynomial",
+      "polynomialOrder": 2,
+      "fitMethod": "ordinary-least-squares",
+      "confidenceBand": true,
+      "confidenceMethod": "student-t",
+      "intervalKind": "simultaneous",
+      "rows": [
+        {"x": -4, "y": 15.7},
+        {"x": -3, "y": 11.8},
+        {"x": -2, "y": 9.2},
+        {"x": -1, "y": 5.9},
+        {"x": 0, "y": 5.1},
+        {"x": 1, "y": 6.4},
+        {"x": 2, "y": 9.9},
+        {"x": 3, "y": 13.9},
+        {"x": 4, "y": 19.0}
+      ],
+      "expected": {
+        "sampleSize": 9,
+        "excludedCount": 0,
+        "rSquaredMin": 0.98,
+        "intervalStrict": true,
+        "confidenceMethod": "working-hotelling",
+        "simultaneousDisclosure": "supported",
+        "predictionDisclosure": "not-requested"
+      }
+    },
+    {
+      "id": "robust-huber",
+      "model": "linear",
+      "fitMethod": "robust-huber",
+      "confidenceBand": false,
+      "confidenceMethod": "student-t",
+      "intervalKind": "pointwise-mean",
+      "rows": [
+        {"x": 0, "y": 4.0},
+        {"x": 1, "y": 5.6},
+        {"x": 2, "y": 6.9},
+        {"x": 3, "y": 8.6},
+        {"x": 4, "y": 9.8},
+        {"x": 5, "y": 11.5},
+        {"x": 6, "y": 12.9},
+        {"x": 7, "y": 14.6},
+        {"x": 8, "y": 16.0},
+        {"x": 9, "y": 80.0}
+      ],
+      "expected": {
+        "sampleSize": 10,
+        "excludedCount": 0,
+        "robustSlopeRange": [1.35, 1.65],
+        "robustIterationsMax": 50,
+        "robustConverged": true,
+        "confidenceMethod": "none",
+        "intervalKind": "none",
+        "robustDisclosure": "supported"
+      }
+    }
+  ],
+  "diagnosticCases": [
+    {
+      "id": "heteroscedastic-linear",
+      "model": "linear",
+      "fitMethod": "ordinary-least-squares",
+      "confidenceBand": true,
+      "confidenceMethod": "student-t",
+      "intervalKind": "prediction",
+      "rows": [
+        {"x": 0, "y": 1.0},
+        {"x": 1, "y": 2.1},
+        {"x": 2, "y": 2.7},
+        {"x": 3, "y": 4.5},
+        {"x": 4, "y": 3.8},
+        {"x": 5, "y": 7.2},
+        {"x": 6, "y": 5.6},
+        {"x": 7, "y": 10.4},
+        {"x": 8, "y": 7.1},
+        {"x": 9, "y": 13.0}
+      ],
+      "expected": {"sampleSize": 10, "intervalStrict": true, "predictionDisclosure": "supported"}
+    },
+    {
+      "id": "misleading-linear",
+      "model": "linear",
+      "fitMethod": "ordinary-least-squares",
+      "confidenceBand": false,
+      "confidenceMethod": "student-t",
+      "intervalKind": "pointwise-mean",
+      "rows": [
+        {"x": 0, "y": 0},
+        {"x": 1, "y": 1},
+        {"x": 2, "y": 4},
+        {"x": 3, "y": 9},
+        {"x": 4, "y": 16},
+        {"x": 5, "y": 25},
+        {"x": 6, "y": 36},
+        {"x": 7, "y": 49},
+        {"x": 8, "y": 64},
+        {"x": 9, "y": 81}
+      ],
+      "expected": {"sampleSize": 10, "residualTrend": "possible-trend"}
+    },
+    {
+      "id": "insufficient-polynomial",
+      "model": "polynomial",
+      "polynomialOrder": 3,
+      "fitMethod": "ordinary-least-squares",
+      "confidenceBand": false,
+      "confidenceMethod": "student-t",
+      "intervalKind": "pointwise-mean",
+      "rows": [{"x": 0, "y": 1}, {"x": 1, "y": 2}, {"x": 2, "y": 4}],
+      "expected": {"sampleSize": 3, "fitStatus": "insufficient-data"}
+    }
+  ],
+  "failureCases": [
+    {"id": "robust-polynomial", "code": "unsupported-robust-model"},
+    {"id": "prediction-exponential", "code": "unsupported-interval-model"},
+    {"id": "prediction-bootstrap", "code": "unsupported-interval-method"},
+    {"id": "prediction-without-band", "code": "invalid-interval"},
+    {"id": "robust-with-band", "code": "robust-interval-unsupported"},
+    {"id": "singular-polynomial", "code": "fit-not-suitable"}
+  ]
+}

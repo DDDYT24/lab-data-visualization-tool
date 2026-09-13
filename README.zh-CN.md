@@ -5,23 +5,29 @@
 **把实验表格转换为清晰、可导出的科研图表，全程在本地运行。**
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-V2.1.1%20local-0f766e)
+![Release](https://img.shields.io/badge/release-V2.2.0--dev%20local--first-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [版本基准](VERSION_BASELINE.md) · [未来待办](V2.0/TODO.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
+[English](README.md) · [简体中文](README.zh-CN.md) · [版本基准](VERSION_BASELINE.md) · [未来待办](V2.0/TODO.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [统计契约](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) · [Windows 打包契约](V2.0/packaging/windows/README.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
 
 </div>
 
-LabViz V2.1.1 是当前本地发布版本，由 Next.js 网站和 FastAPI 科研处理
-服务组成。它支持数据导入、质量检查、清洗、绘图、项目历史、本地验证码登录、
-只读分享，以及 PNG、SVG、PDF 科研图像导出。
+当前仓库正在 V2.1.1 本地发布版本之上开发 V2.2.0-dev。V2.2 增加了版本化的
+合成示例、浅色/暗色/跟随系统主题、可访问性改进、有限范围的高级统计，以及
+Windows 本地打包契约；它仍然是 Next.js 网站和 FastAPI 科研处理服务组成的本地优先版本。
+它支持数据导入、质量检查、清洗、绘图、项目历史、本地验证码登录、只读分享，以及
+PNG、SVG、PDF 科研图像导出。
 
 本项目不提供官方在线网站。普通使用者不需要购买域名，也不需要 AWS、DNS、
 Docker、PostgreSQL、MinIO 或付费邮件服务。
 
-## 快速开始 V2.1.1
+## 快速开始 V2.2.0-dev（本地代码仓库）
 
-V2.1 继续使用 `V2.0/` 作为代码目录。先点击下面的官方下载链接安装三个工具：
+下面的命令运行的是开发版代码仓库，不是已经发布的原生安装包。第一次启动会在本机创建
+`V2.0/api/.venv`，并可能下载 Python/API 和网站依赖；这些下载只发生在当前电脑的本地
+开发环境中，不代表 AWS 或公网部署。Windows 安装包目前只有架构和校验契约，尚未发布。
+
+V2.2 继续使用 `V2.0/` 作为代码目录。先点击下面的官方下载链接安装三个工具：
 
 - [Git for Windows](https://git-scm.com/download/win)；macOS/Linux 使用 [Git downloads](https://git-scm.com/downloads)
 - [Python 3.12 或 3.13](https://www.python.org/downloads/)
@@ -74,14 +80,17 @@ chmod +x start-labviz.sh
 导入数据 → 检查质量 → 确认清洗方式 → 创建图表 → 导出结果
 ```
 
-打开网站后可点击“使用示例数据”，也可以上传 CSV、TSV、分隔符 TXT、JSON 或
-XLSX 文件。网页端单文件上限为 50 MB。
+打开网站后可点击“使用示例数据”并选择不同教学数据，也可以上传 CSV、TSV、分隔符 TXT、
+JSON 或 XLSX 文件。网页端单文件上限为 50 MB。V2.2 的高级统计包括有明确假设和限制的
+预测区间、Working–Hotelling 同时均值带，以及仅适用于线性模型的 Huber 稳健拟合；详见
+[`V2.2 统计契约`](V2.0/docs/STATISTICS_CONTRACT_V2.2.md)。
 
 主要功能包括：
 
 - 缺失值、重复行、字段类型、唯一值和内存占用检查；
 - 删除重复行，以及保留、删除、前向填充、后向填充、均值填充或中位数填充；
 - 折线图、散点图、柱状图、直方图、箱线图、相关性热力图和 3D 曲面图；
+- 多种合成示例选择器、暗色主题、移动端 3D 旋转/缩放/重置，以及图表数据表替代方式；
 - 完整清洗数据 CSV，以及 PNG、SVG、PDF 图像导出；
 - 本地项目历史、描述修订、本地登录和只读分享链接。
 
@@ -124,7 +133,8 @@ XLSX 文件。网页端单文件上限为 50 MB。
 终端一（API）：
 
 ```powershell
-Set-Location .\V2.0\api
+# 以下命令假设当前 PowerShell 已在仓库根目录：lab-data-visualization-tool
+Set-Location -LiteralPath '.\V2.0\api'
 # 推荐 Python 3.12；如果未安装 3.12，请将下一行的 py -3.12 改为 py -3.13。
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -136,7 +146,7 @@ python -m uvicorn labviz_api.main:app --reload --host 127.0.0.1 --port 8000
 终端二（网站）：
 
 ```powershell
-Set-Location .\V2.0\web
+Set-Location -LiteralPath '.\V2.0\web'
 $env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run dev -- --hostname 127.0.0.1 --port 3000
@@ -165,7 +175,7 @@ npm run dev -- --hostname 127.0.0.1 --port 3000
 网站验证：
 
 ```powershell
-Set-Location .\V2.0\web
+Set-Location -LiteralPath '.\V2.0\web'
 $env:NEXT_TELEMETRY_DISABLED = "1"
 npm ci
 npm run verify

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import io
 import json
 import math
@@ -18,6 +19,7 @@ import matplotlib
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
+from scipy.stats import f as fisher_f
 from scipy.stats import t as student_t
 
 from .models import ChartSpec, JsonScalar
@@ -96,6 +98,44 @@ def _validate_xlsx_archive(payload: bytes) -> None:
         ) from exc
 
 
+def _validate_delimited_headers(payload: bytes, suffix: str, header_row: int) -> None:
+    if suffix not in {".csv", ".tsv", ".txt"}:
+        return
+    try:
+        text = payload.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ProcessingError(
+            "The text file is not valid UTF-8 data.", "invalid-text-encoding"
+        ) from exc
+    if suffix == ".csv":
+        delimiter = ","
+    elif suffix == ".tsv":
+        delimiter = "\t"
+    else:
+        try:
+            delimiter = csv.Sniffer().sniff(text[:8192], delimiters=",\t;|").delimiter
+        except csv.Error:
+            delimiter = "\t" if "\t" in text else ","
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    header: list[str] | None = None
+    for _ in range(header_row):
+        try:
+            header = next(reader)
+        except StopIteration:
+            break
+    if header is None:
+        return
+    column_names = [
+        str(column).strip() or f"Column {index + 1}" for index, column in enumerate(header)
+    ]
+    duplicates = [name for name, count in Counter(column_names).items() if count > 1]
+    if duplicates:
+        raise ProcessingError(
+            f"Column names must be unique after trimming: {', '.join(sorted(duplicates))}",
+            "duplicate-columns",
+        )
+
+
 def load_dataframe(
     payload: bytes,
     filename: str,
@@ -110,6 +150,7 @@ def load_dataframe(
     pandas_header = header_row - 1
 
     try:
+        _validate_delimited_headers(payload, suffix, header_row)
         if suffix == ".csv":
             frame = pd.read_csv(source, header=pandas_header, encoding="utf-8-sig")
         elif suffix == ".tsv":
@@ -930,6 +971,34 @@ def validate_chart_fields(frame: pd.DataFrame, chart: ChartSpec) -> None:
                 "invalid-fit-method",
             )
         numeric_fields.append(chart.uncertainty.error_field)
+    if chart.fitting.fit_method == "robust-huber":
+        if chart.fitting.model != "linear":
+            raise ProcessingError(
+                "Huber robust fitting is currently supported only for a linear model.",
+                "unsupported-robust-model",
+            )
+        if chart.fitting.confidence_band:
+            raise ProcessingError(
+                "Huber robust fitting does not display a confidence band in this release.",
+                "robust-interval-unsupported",
+            )
+    if chart.fitting.interval_kind != "pointwise-mean":
+        if chart.fitting.model == "none" or not chart.fitting.confidence_band:
+            raise ProcessingError(
+                "Select a supported fit and show a confidence band before choosing this interval.",
+                "invalid-interval",
+            )
+        if chart.fitting.confidence_method != "student-t":
+            raise ProcessingError(
+                "Prediction and simultaneous intervals currently use the Student-t method.",
+                "unsupported-interval-method",
+            )
+        if chart.fitting.model not in {"linear", "polynomial"}:
+            raise ProcessingError(
+                "Prediction and simultaneous intervals currently support linear and "
+                "polynomial models.",
+                "unsupported-interval-model",
+            )
     _numeric(frame, sorted(set(numeric_fields)))
 
 
@@ -959,30 +1028,82 @@ def _fit_equation(model: str, coefficients: np.ndarray[Any, Any]) -> str:
     return "y = " + " + ".join(terms).replace("+ -", "− ")
 
 
-def _deferred_analysis_disclosures(
-    *, sample_size: int, excluded_count: int
+def _advanced_analysis_disclosures(
+    *,
+    sample_size: int,
+    excluded_count: int,
+    fit_method: str | None = None,
+    interval_kind: str = "none",
 ) -> list[dict[str, Any]]:
+    prediction_selected = interval_kind == "prediction"
+    simultaneous_selected = interval_kind == "simultaneous"
+    robust_selected = fit_method == "robust-huber"
     return [
         {
             "method": "prediction-band",
-            "status": "deferred",
+            "status": "supported" if prediction_selected else "not-requested",
             "sampleSize": sample_size,
             "excludedCount": excluded_count,
-            "limitations": ["Prediction intervals are not displayed by this release."],
+            "assumptions": (
+                [
+                    "The interval includes residual variation for one future response under "
+                    "the selected linear or polynomial model."
+                ]
+                if prediction_selected
+                else []
+            ),
+            "limitations": (
+                []
+                if prediction_selected
+                else [
+                    "A prediction interval was not requested for this result; a pointwise mean "
+                    "interval is a different estimand."
+                ]
+            ),
         },
         {
             "method": "simultaneous-band",
-            "status": "deferred",
+            "status": "supported" if simultaneous_selected else "not-requested",
             "sampleSize": sample_size,
             "excludedCount": excluded_count,
-            "limitations": ["Simultaneous confidence bands are not displayed by this release."],
+            "assumptions": (
+                [
+                    "The Working-Hotelling band covers the family of fitted mean values "
+                    "represented by the displayed linear or polynomial curve."
+                ]
+                if simultaneous_selected
+                else []
+            ),
+            "limitations": (
+                []
+                if simultaneous_selected
+                else [
+                    "A simultaneous confidence band was not requested; it is not "
+                    "interchangeable with a pointwise or prediction interval."
+                ]
+            ),
         },
         {
             "method": "robust-fitting",
-            "status": "deferred",
+            "status": "supported" if robust_selected else "not-requested",
             "sampleSize": sample_size,
             "excludedCount": excluded_count,
-            "limitations": ["Robust regression is not displayed by this release."],
+            "assumptions": (
+                [
+                    "Huber IRLS downweights large standardized residuals with a fixed tuning "
+                    "constant of 1.345."
+                ]
+                if robust_selected
+                else []
+            ),
+            "limitations": (
+                []
+                if robust_selected
+                else [
+                    "Huber robust fitting was not requested for this result; it does not make "
+                    "biased or poorly designed data valid."
+                ]
+            ),
         },
         {
             "method": "multiple-comparison",
@@ -1062,6 +1183,19 @@ def _fit_analysis(
     if error_values is not None:
         weight_scale = 1 / np.maximum(np.abs(error_values), 1e-12)
 
+    robust_iterations: int | None = None
+    robust_converged: bool | None = None
+    robust_design: np.ndarray[Any, Any] | None = None
+    robust_x_center: float | None = None
+    robust_x_scale: float | None = None
+    if fitting.fit_method == "robust-huber":
+        robust_x_center = float(np.mean(transformed_x))
+        robust_x_scale = float(np.std(transformed_x))
+        if not math.isfinite(robust_x_scale) or robust_x_scale <= 1e-12:
+            robust_x_scale = 1.0
+        standardized_x = (transformed_x - robust_x_center) / robust_x_scale
+        robust_design = np.column_stack((standardized_x, np.ones(len(standardized_x))))
+
     def solve(response: np.ndarray[Any, Any]) -> tuple[np.ndarray[Any, Any], int]:
         solve_design = design
         solve_response = response
@@ -1073,7 +1207,73 @@ def _fit_analysis(
         )
         return coefficients, int(rank)
 
-    coefficients, rank = solve(transformed_y)
+    def solve_huber(response: np.ndarray[Any, Any]) -> tuple[np.ndarray[Any, Any], int, int]:
+        assert robust_design is not None
+        assert robust_x_center is not None
+        assert robust_x_scale is not None
+        try:
+            standardized_coefficients, _residuals, rank, _singular = np.linalg.lstsq(
+                robust_design, response, rcond=None
+            )
+        except np.linalg.LinAlgError as exc:
+            raise ProcessingError(
+                "Huber robust fitting could not solve the selected points.",
+                "robust-not-converged",
+            ) from exc
+        if int(rank) < parameter_count:
+            raise ProcessingError(
+                "The selected points cannot support a stable robust fitted curve.",
+                "fit-not-suitable",
+            )
+
+        for iteration in range(1, 51):
+            residuals = response - robust_design @ standardized_coefficients
+            center = float(np.median(residuals))
+            mad = float(np.median(np.abs(residuals - center)))
+            mad_scale = 1.4826 * mad
+            scale = mad_scale if mad_scale > 1e-12 else max(float(np.std(residuals)), 1e-12)
+            standardized_residuals = np.abs(residuals - center) / (1.345 * scale)
+            weights = np.where(standardized_residuals <= 1, 1.0, 1.0 / standardized_residuals)
+            sqrt_weights = np.sqrt(np.maximum(weights, 1e-12))
+            try:
+                next_coefficients, _residuals, next_rank, _singular = np.linalg.lstsq(
+                    robust_design * sqrt_weights[:, None],
+                    response * sqrt_weights,
+                    rcond=None,
+                )
+            except np.linalg.LinAlgError as exc:
+                raise ProcessingError(
+                    "Huber robust fitting could not solve the selected points.",
+                    "robust-not-converged",
+                ) from exc
+            if int(next_rank) < parameter_count:
+                raise ProcessingError(
+                    "The selected points cannot support a stable robust fitted curve.",
+                    "fit-not-suitable",
+                )
+            if np.linalg.norm(next_coefficients - standardized_coefficients) <= 1e-10 * (
+                1 + np.linalg.norm(standardized_coefficients)
+            ):
+                standardized_coefficients = next_coefficients
+                coefficients = np.array(
+                    [
+                        standardized_coefficients[0] / robust_x_scale,
+                        standardized_coefficients[1]
+                        - standardized_coefficients[0] * robust_x_center / robust_x_scale,
+                    ]
+                )
+                return coefficients, int(next_rank), iteration
+            standardized_coefficients = next_coefficients
+        raise ProcessingError(
+            "Huber robust fitting did not converge within 50 iterations.",
+            "robust-not-converged",
+        )
+
+    if fitting.fit_method == "robust-huber":
+        coefficients, rank, robust_iterations = solve_huber(transformed_y)
+        robust_converged = True
+    else:
+        coefficients, rank = solve(transformed_y)
     if rank < parameter_count:
         raise ProcessingError(
             "The selected points cannot support a stable fitted curve.", "fit-not-suitable"
@@ -1103,9 +1303,13 @@ def _fit_analysis(
     lower: np.ndarray[Any, Any] | None = None
     upper: np.ndarray[Any, Any] | None = None
     degrees_of_freedom = len(x) - parameter_count
-    confidence_method: Literal["none", "student-t", "bootstrap"] = "none"
+    confidence_method: Literal["none", "student-t", "bootstrap", "working-hotelling"] = "none"
+    interval_kind = "none"
     if fitting.confidence_band:
-        confidence_method = fitting.confidence_method
+        interval_kind = fitting.interval_kind
+        confidence_method = (
+            "working-hotelling" if interval_kind == "simultaneous" else fitting.confidence_method
+        )
         residuals = transformed_y - fitted_transformed
         if fitting.confidence_method == "bootstrap":
             rng = np.random.default_rng(1729)
@@ -1153,10 +1357,23 @@ def _fit_analysis(
                 weighted_design = design * weight_scale[:, None]
                 covariance = residual_variance * np.linalg.pinv(weighted_design.T @ weighted_design)
             variance = np.einsum("ij,jk,ik->i", grid_design, covariance, grid_design)
-            critical = float(
-                student_t.ppf((1 + fitting.confidence_level / 100) / 2, degrees_of_freedom)
-            )
-            delta = critical * np.sqrt(np.maximum(variance, 0))
+            if interval_kind == "simultaneous":
+                fisher_quantile = float(
+                    fisher_f.ppf(
+                        fitting.confidence_level / 100,
+                        parameter_count,
+                        degrees_of_freedom,
+                    )
+                )
+                critical = math.sqrt(parameter_count * fisher_quantile)
+            else:
+                critical = float(
+                    student_t.ppf((1 + fitting.confidence_level / 100) / 2, degrees_of_freedom)
+                )
+            interval_variance = variance
+            if interval_kind == "prediction":
+                interval_variance = variance + residual_variance
+            delta = critical * np.sqrt(np.maximum(interval_variance, 0))
             if fitting.model in {"exponential", "power"}:
                 lower, upper = np.exp(grid_transformed - delta), np.exp(grid_transformed + delta)
             else:
@@ -1203,21 +1420,40 @@ def _fit_analysis(
     fit_limitations = [
         "R² describes in-sample association and does not establish causality.",
     ]
-    if fitting.confidence_band:
+    if fitting.confidence_band and interval_kind == "pointwise-mean":
         fit_limitations.append(
-            "The interval is pointwise for the fitted mean; prediction and simultaneous bands "
-            "are deferred."
+            "The interval is pointwise for the fitted mean and is not a prediction interval "
+            "or a simultaneous confidence band."
+        )
+    elif fitting.confidence_band and interval_kind == "prediction":
+        fit_limitations.append(
+            "The prediction interval includes estimated residual variation for one future "
+            "response and is not a simultaneous band."
+        )
+    elif fitting.confidence_band and interval_kind == "simultaneous":
+        fit_limitations.append(
+            "The Working-Hotelling band covers the displayed family of fitted mean values "
+            "and is not a prediction interval."
         )
     fit_assumptions = [
         "The selected model form is appropriate for the scientific question.",
         "Complete finite observations are representative of the intended analysis set.",
     ]
-    if fitting.fit_method == "weighted-least-squares":
+    if fitting.fit_method == "robust-huber":
+        fit_assumptions.append(
+            "Huber IRLS uses a fixed tuning constant of 1.345 and the standardized X scale "
+            "for a linear design."
+        )
+        fit_limitations.append(
+            "Huber downweights large residuals but does not make biased, confounded, or poorly "
+            "designed data valid."
+        )
+    elif fitting.fit_method == "weighted-least-squares":
         fit_assumptions.append(
             "The supplied error column is proportional to measurement standard deviation."
         )
         fit_limitations.append(
-            "Weighted fitting uses the supplied error column; robust fitting is deferred."
+            "Weighted fitting uses the supplied error column; it is not a robust estimator."
         )
     else:
         fit_limitations.append(
@@ -1242,12 +1478,30 @@ def _fit_analysis(
             "sampleSize": int(len(x)),
             "excludedCount": int(excluded_count),
             "assumptions": (
-                ["The selected confidence level is interpreted as a pointwise mean interval."]
+                [
+                    (
+                        "The selected confidence level is interpreted as a pointwise mean interval."
+                        if interval_kind == "pointwise-mean"
+                        else "The selected confidence level is interpreted for one future response."
+                        if interval_kind == "prediction"
+                        else "The selected confidence level is interpreted as a "
+                        "Working-Hotelling simultaneous mean band."
+                    )
+                ]
                 if fitting.confidence_band
                 else []
             ),
             "limitations": (
-                ["This is not a prediction interval or a simultaneous confidence band."]
+                [
+                    (
+                        "This pointwise mean interval is not a prediction interval or a "
+                        "simultaneous confidence band."
+                        if interval_kind == "pointwise-mean"
+                        else "This prediction interval is not a simultaneous confidence band."
+                        if interval_kind == "prediction"
+                        else "This simultaneous mean band is not a prediction interval."
+                    )
+                ]
                 if fitting.confidence_band
                 else []
             ),
@@ -1281,20 +1535,26 @@ def _fit_analysis(
                 else []
             ),
         },
-        *_deferred_analysis_disclosures(
-            sample_size=int(len(x)), excluded_count=int(excluded_count)
+        *_advanced_analysis_disclosures(
+            sample_size=int(len(x)),
+            excluded_count=int(excluded_count),
+            fit_method=fitting.fit_method,
+            interval_kind=interval_kind,
         ),
     ]
     return (
         {
             "model": fitting.model,
             "equation": _fit_equation(fitting.model, coefficients),
+            "coefficients": [float(value) for value in coefficients],
             "rSquared": r_squared,
             "sampleSize": int(len(x)),
             "excludedCount": int(excluded_count),
             "fitMethod": fitting.fit_method,
             "confidenceMethod": confidence_method,
-            "intervalKind": "pointwise-mean" if fitting.confidence_band else "none",
+            "intervalKind": interval_kind,
+            "robustIterations": robust_iterations,
+            "robustConverged": robust_converged,
             "points": points,
         },
         warnings,
@@ -1504,7 +1764,10 @@ def _default_analysis_disclosures(
                 "scientifically justified."
             ],
         },
-        *_deferred_analysis_disclosures(sample_size=sample_size, excluded_count=excluded_count),
+        *_advanced_analysis_disclosures(
+            sample_size=sample_size,
+            excluded_count=excluded_count,
+        ),
     ]
 
 
@@ -1838,18 +2101,22 @@ def _analysis_export_note(analyses: list[dict[str, Any]]) -> str:
             continue
         diagnostic = analysis.get("residualDiagnostic") or {}
         confidence = fit.get("confidenceMethod", "none")
-        interval = (
-            f"pointwise {confidence} mean interval"
-            if confidence != "none"
-            else "no confidence band"
-        )
+        interval_kind = fit.get("intervalKind", "none")
+        if interval_kind == "pointwise-mean":
+            interval = f"pointwise {confidence} mean interval"
+        elif interval_kind == "prediction":
+            interval = f"{confidence} prediction interval"
+        elif interval_kind == "simultaneous":
+            interval = f"{confidence} simultaneous mean band"
+        else:
+            interval = "no confidence band"
         rmse = diagnostic.get("rmse")
         residual_note = f", residual RMSE={float(rmse):.4g}" if rmse is not None else ""
         notes.append(
             f"{analysis['label']}: n={fit['sampleSize']}, excluded={fit['excludedCount']}; "
             f"{fit['fitMethod']}, {interval}{residual_note}. "
             "Assumptions: selected model form and representative complete observations. "
-            "Deferred: prediction/simultaneous bands, robust fitting, and multiplicity correction."
+            "Deferred: multiplicity correction across series or groups."
         )
     return "\n".join(notes)
 
@@ -2188,14 +2455,18 @@ def render_chart(
             styled_text.set_fontsize(export.font_size)
     figure.tight_layout(rect=(0, 0.1, 1, 1) if footer_note else None)
     output = io.BytesIO()
-    figure.savefig(
-        output,
-        format=export.format,
-        dpi=export.dpi,
-        bbox_inches="tight",
-        facecolor=("none" if export.transparent_background else export.background_color),
-        transparent=export.transparent_background,
-    )
+    save_kwargs: dict[str, Any] = {
+        "format": export.format,
+        "dpi": export.dpi,
+        "bbox_inches": "tight",
+        "facecolor": "none" if export.transparent_background else export.background_color,
+        "transparent": export.transparent_background,
+    }
+    if export.format == "svg":
+        with matplotlib.rc_context({"svg.fonttype": "none"}):
+            figure.savefig(output, **save_kwargs)
+    else:
+        figure.savefig(output, **save_kwargs)
     return output.getvalue()
 
 

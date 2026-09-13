@@ -1,4 +1,4 @@
-# LabViz Product Backlog (V2.1.1 local release)
+# LabViz Product Backlog (V2.2 active development; V2.1.1 current release)
 
 This file is the single source of truth for future work, completion status, release gates,
 compatibility issues, and deferred decisions. Update it first whenever the product status
@@ -6,10 +6,12 @@ changes. Other Markdown files may explain a stable contract or preserve historic
 but they must not create a competing backlog.
 
 - **Current release:** V2.1.1 local self-hosted release, published on GitHub
-- **Status review:** 2026-09-10
+- **Status review:** 2026-09-12
+- **Working line:** V2.2.0-dev local-first development; not a release tag or installer
 - **Version history:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
-This file records the V2.0 baseline, the ordered V2.1 work, and explicitly deferred work.
+This file records the V2.0 baseline, completed V2.1 work, the ordered V2.2 plan, and explicitly
+deferred work.
 
 > **Release note:** V2.1.1 is distributed as a local self-hosted application. The AWS Phase 6C/6D
 > items below are optional maintainer work and do not block the V2.1.1 local release. Local use relies
@@ -166,13 +168,11 @@ features remain separate tracks.
   values in a separately versioned migration after confirming API and saved-history compatibility.
 - [ ] Add a true no-store mode only if users require processing without local persistence; define
   its refresh, history, export, and crash-recovery semantics before implementation.
-- [ ] Evaluate large-surface performance, adaptive sampling, irregular-surface triangulation,
-  accessible data-table alternatives, color-vision-safe palettes, and mobile 3D controls.
-- [ ] Resume the optional AWS Phase 6C/6D track only with account-owned credentials, staging
-  evidence, backups, monitoring, quotas, privacy/compliance review, load/recovery drills, and
-  rollback evidence.
-- [ ] Build native installers, external identity providers, team workspaces, billing, and other
-  commercial features only after the local workflow and usage evidence justify them.
+
+Large-surface performance, accessible alternatives, mobile 3D, native packaging, cloud sync,
+external identity, and team workspaces have been promoted to the numbered V2.2 tracks below. AWS
+Phase 6C/6D remains an optional source of live infrastructure evidence for `V22-P6`; billing remains
+post-V2.2 work.
 
 ### V2.1 definition of done
 
@@ -187,6 +187,230 @@ features remain separate tracks.
 - [x] A fresh PostgreSQL 17 database reaches Alembic head and returns a clean `alembic check`.
 - [x] `npm run verify`, `npm run test:e2e`, and the documented API gate pass; skipped live/cloud
   checks are reported as skipped and do not count as evidence.
+
+## V2.2 Roadmap (active; V2.2.0-dev)
+
+**Planning checkpoint:** 2026-09-12
+
+**Release intent:** Make the local-first product easier to learn, more comfortable on desktop and
+mobile, and scientifically stronger without weakening the V2.1 data and privacy contracts. V2.2
+must ship user-facing examples, contextual guidance, a privacy-safe feedback path, dark mode,
+advanced mobile 3D, and a bounded advanced-analysis slice. A Windows installer is the first native
+packaging target. Cloud synchronization, team collaboration, and external identity are an optional
+server-backed preview track and must not block or silently change the local release.
+
+### P0 - freeze contracts and expand the test foundation
+
+- [x] **V22-P0-1: Define one versioned example catalog and fixture manifest.** Each entry must have
+  a stable slug, bilingual title and description, format, row/column shape, field roles, intended
+  chart, learning goal, expected quality findings, and answer-keyed output facts. Bundle examples
+  with the application so they work offline and label every value as synthetic.
+  - **Acceptance:** at least seven user-facing examples cover time-series lines, grouped repeated
+    runs with uncertainty, X/Y scatter and fitting, categorical comparison, distributions,
+    correlation heatmaps, and a regular X/Y/Z surface. Format mirrors cover CSV, TSV/TXT, JSON,
+    and multi-sheet XLSX; negative fixtures cover malformed headers, mixed types, missing values,
+  outliers, duplicate surface coordinates, incomplete grids, non-finite values, BOM headers, and
+  Unicode filenames.
+  - **Evidence (2026-09-12):** `V2.0/api/samples/v22/manifest.json` contains seven public and nine
+    edge synthetic entries. `tests/test_v22_samples.py` validates the version, formats, schemas,
+    quality expectations, and tracked byte sizes.
+- [ ] **V22-P0-2: Turn the data corpus into one repeatable matrix runner.** Keep the existing
+  23-dataset V2.1 matrix, add every public example and V2.2 edge fixture, and run the same manifest
+  through import, preview, quality, cleaning, recommendation, chart analysis, and PNG/SVG/PDF plus
+  cleaned-data export. Store machine-readable results and fail when an answer key changes without
+  an explicit review.
+  - **Acceptance:** every dataset records pass/fail/skip with a reason; public examples complete the
+    browser workflow; invalid inputs fail with localized, actionable errors; the runner never counts
+    an unconfigured cloud, live-mail, private-file, operating-system, or GPU check as passed.
+  - **Current evidence and limitation (2026-09-12):** `python -m scripts.run_v22_matrix` passes all seven
+    public and nine edge fixtures through local processing and exports, and explicitly reports the
+    historical 23-dataset V2.1 corpus as `skip` because it is not tracked in this bundle. The
+    historical corpus must be restored and rerun before this item can be checked.
+- [ ] **V22-P0-3: Establish user-comfort performance and compatibility budgets before feature work.**
+  Measure import-to-ready time, first-chart render, chart interaction, export, and peak memory on a
+  small example, a medium dataset, a large dataset near the documented local limit, and 21 x 21 and
+  101 x 101 surfaces. Record the reference machine and set reviewed regression thresholds rather
+  than relying on subjective impressions.
+  - **Acceptance:** Chromium, Firefox, and WebKit desktop smoke flows pass; the supported mobile
+    viewport and touch flow pass; large-data sampling is disclosed; no supported case crashes,
+    freezes without progress, or hides a failure behind an empty chart.
+  - **Current evidence and limitation (2026-09-12):** `python -m scripts.measure_v22_performance`
+    records this Windows 11 / Python 3.12.14 / pandas 3.0.5 baseline (milliseconds): tables 24/1,000/10,000
+    rows load 8.36/1.56/8.39, quality 10.10/9.96/32.77, analysis 4.32/9.66/37.79, and PNG render
+    187.51/170.67/319.29; surfaces 21×21 quality/analysis/PNG 74.09/105.67/543.87 and 101×101
+    234.38/214.26/633.33. The configured browser evidence is Chromium plus mobile; Firefox/WebKit
+    and peak-memory budgets still require a named test environment and reviewed thresholds.
+
+### P1 - example gallery and first-run learning
+
+- [x] **V22-P1-1: Replace the single fixed sample button with an example chooser.** Present compact
+  cards grouped by learning goal, with a tiny schema preview, recommended visualization, difficulty,
+  expected quality lesson, and an explicit `Open example` action. Keep normal file upload equally
+  prominent and allow users to reopen the chooser from Help and an empty workspace.
+  - **Evidence (2026-09-12):** `example-gallery.spec.ts` verifies seven cards, bilingual content,
+    keyboard activation, and a selected sample route; the catalog is bundled and served by the
+    local API.
+- [x] **V22-P1-2: Generalize the sample API and preserve offline behavior.** Replace the hard-coded
+  thermal-response route with a catalog endpoint and stable per-slug project creation while keeping
+  the old route as a compatibility alias for one release. Example projects must pass through the
+  real processing pipeline and must not contain a privileged shortcut unavailable to uploaded data.
+  - **Evidence (2026-09-12):** `test_v22_samples.py` exercises every public catalog entry through
+    import, preview, quality, cleaning, recommendation, analysis, cleaned-data export, and PNG/SVG/PDF
+    exports. The old sample route remains covered by the API compatibility tests.
+- [ ] **V22-P1-3: Test every example as a teaching workflow.** For each card, assert its metadata,
+  intended recommendation, important quality findings, editable chart, export provenance, browser
+  back/refresh behavior, English/Chinese copy, keyboard access, and mobile layout. Add a regression
+  preventing a card from pointing to a missing or mismatched fixture.
+  - **Current evidence and limitation (2026-09-12):** backend coverage is complete for the seven
+    public examples and browser coverage verifies the chooser and one selected workflow. Full
+    per-card browser back/refresh and every-locale/mobile combination remains open.
+
+### P2 - help, contextual tips, and feedback center
+
+- [x] **V22-P2-1: Restructure Help around user tasks.** Add searchable sections for choosing data,
+  fixing import problems, understanding quality warnings, selecting a chart, fitting and intervals,
+  3D surfaces, exporting, privacy/storage, and troubleshooting. Link relevant example cards from
+  each section and show the supported table shape next to the explanation.
+  - **Evidence (2026-09-12):** Help search, workflow explanation, examples link, and localized
+    guidance cards are covered by the Help browser tests.
+- [x] **V22-P2-2: Add short contextual tips without interrupting work.** Show dismissible tips only
+  where a decision is made, such as sheet/header selection, keep/exclude/remove, X/Y/Z assignment,
+  confidence versus prediction intervals, sampling, and export resolution. Tips must be bilingual,
+  keyboard accessible, locally stored, and recoverable from Help after dismissal.
+  - **Evidence (2026-09-12):** contextual-tip unit/browser tests verify dismissal and recovery;
+    tips are stored in localStorage and expose accessible controls.
+- [x] **V22-P2-3: Add a privacy-safe local feedback center.** Let users choose bug, usability,
+  scientific-method, or feature-request feedback; preview and copy a diagnostic summary; and open a
+  prefilled GitHub issue when the user explicitly continues. By default include only app version,
+  operating system/browser class, current screen, and a user-written description - never source
+  rows, chart values, filenames, email addresses, project titles, or persistent identifiers.
+  - **Acceptance:** the center works without an account, remains useful offline through copy/save,
+     warns before opening an external site, and has an automated privacy regression proving that
+     protected fields and raw data are absent. A future server submission endpoint requires separate
+     consent, retention, abuse-protection, and deletion contracts.
+  - **Evidence (2026-09-12):** `help-feedback.spec.ts` and diagnostic unit tests verify offline copy,
+    external-site warning behavior, and exclusion of project IDs, filenames, source rows, and other
+    protected fields from the diagnostic preview.
+
+### P3 - appearance, accessibility, and advanced mobile 3D
+
+- [x] **V22-P3-1: Implement a complete dark theme.** Provide system, light, and dark choices; persist
+  the selection locally; theme every loading/empty/error/dialog/table/chart state; and define dark
+  chart palettes independently from publication export defaults. PNG/SVG/PDF must remain readable
+  and must not unexpectedly inherit a dark background.
+  - **Evidence (2026-09-12):** `appearance.spec.ts` verifies explicit dark persistence and system
+    scheme changes; the theme uses a separate dark chart palette and export settings remain backend
+    controlled. The browser appearance suite passes.
+- [x] **V22-P3-2: Harden color and non-visual access.** Verify WCAG AA text and control contrast,
+  serious/critical Axe results, visible focus, reduced motion, color-vision-safe chart palettes,
+  grayscale/print behavior, and an accessible data-table alternative for every chart family.
+  - **Evidence (2026-09-12):** the dark action contrast regression passes at the 4.5:1 AA threshold;
+    the visual/accessibility suite reports no serious or critical Axe violations; the grayscale
+    render contract and chart data-table tests pass. Full manual screen-reader certification is not
+    claimed.
+- [ ] **V22-P3-3: Make 3D usable on supported mobile screens.** Add documented one-finger rotate,
+  two-finger zoom/pan, reset-view, axis/legend toggles, loading/progress, and a lower-cost fallback
+  for devices that cannot render the full surface smoothly. Never replace scientific points without
+  disclosing the sampling or fallback.
+  - **Acceptance:** touch gestures do not conflict with page scrolling, controls meet the minimum
+    touch-target size, orientation changes preserve the chart specification, and the regular,
+    incomplete, duplicated, and larger-surface fixtures pass mobile browser tests.
+  - **Evidence and limitation (2026-09-12):** desktop and mobile Chromium tests cover the regular
+    21×21 surface, touch controls, rotate/zoom/reset, axes/legend toggles, point sampling disclosure,
+    and the low-cost fallback contract. The API matrix covers incomplete and duplicated surfaces;
+    a full mobile browser matrix for those invalid states and a larger surface remains open.
+
+### P4 - bounded advanced statistics
+
+- [x] **V22-P4-1: Add prediction intervals as a separate result from mean-response confidence
+  intervals.** Define supported models and assumptions first; expose sample size, exclusions,
+  confidence level, interval meaning, and limitations in the UI and exported figure.
+  - **Evidence (2026-09-12):** the prediction answer key and API/frontend/export tests verify the
+    separate interval kind, wider prediction width, sample/exclusion evidence, and Student-t method.
+- [x] **V22-P4-2: Add the first simultaneous confidence-band method.** Name the method, document the
+  family of values it covers, and prevent it from being presented as interchangeable with pointwise
+  bootstrap bands or prediction intervals.
+  - **Evidence (2026-09-12):** Working–Hotelling is named in the API, UI, export footer, contract,
+    and answer-keyed tests; prediction, pointwise, and simultaneous disclosures are distinct.
+- [x] **V22-P4-3: Add one robust-regression method only after its contract is accepted.** Document the
+  loss/influence rule, convergence behavior, scaling, unsupported cases, and the fact that robust
+  fitting does not make biased or poorly designed data valid.
+  - **Evidence (2026-09-12):** Huber IRLS is restricted to linear fitting, records iterations and
+    convergence, rejects unsupported models and confidence bands, and is covered by the robust
+    answer-key case and failure-code tests.
+- [x] **V22-P4-4: Require independent answer keys for every shipped method.** Compare coefficients,
+  intervals, residual facts, and failure states against an independently implemented reference on
+  clean, noisy, outlier-heavy, heteroscedastic, insufficient, singular, and misleading datasets.
+  The API, localized UI, chart preview, and all export formats must disclose the same method facts.
+  - **Evidence (2026-09-12):** `statistics_answer_keys.json` is synthetic-only and hand-authored;
+    `test_v22_statistics.py` checks deterministic coefficients/intervals, residual and failure
+    cases, API payloads, and PNG/SVG/PDF signatures. The answer key is not a substitute for a
+    domain expert review of a user's study design.
+
+> User-defined fitting models and broad multiple-comparison automation remain post-V2.2 research
+> until safe expression validation, reproducibility, and scientifically defensible guidance are
+> specified.
+
+### P5 - local packaging and upgrade experience
+
+- [x] **V22-P5-1: Decide and document the native packaging architecture.** Prefer a bundled local
+  runtime that opens LabViz without requiring Git, Python, Node.js, or PowerShell knowledge. Define
+  ports, process lifecycle, updates, logs, data location, backup, crash recovery, and uninstall data
+  handling before selecting the packager.
+  - **Evidence (2026-09-12):** `V2.0/packaging/windows/package-manifest.json`, the packaging README,
+    portable launcher contract, icon sources, and PowerShell validator define per-user paths,
+    loopback ports, bundled-runtime expectations, health checks, upgrade/rollback/uninstall data
+    rules, and forbidden user-data artifacts. Contract tests and PowerShell parser checks pass.
+- [ ] **V22-P5-2: Ship and test the Windows installer first.** Verify clean install, offline launch,
+  upgrade from V2.1.1, rollback, repair/reinstall, non-administrator behavior where supported,
+  antivirus/signing expectations, paths with spaces and non-ASCII characters, and uninstall with an
+  explicit keep/delete-local-data choice.
+  - **Current limitation (2026-09-12):** no installer compiler, bundled CPython/Node runtimes,
+    signed artifact, or clean Windows machine is available in this repository. This item remains
+    open; the portable launcher is a contract, not an installer or offline-install evidence.
+- [ ] **V22-P5-3: Reuse the accepted packaging contract for macOS and Linux.** Do not advertise a
+  platform package until it passes clean-machine installation, launch, upgrade, export, backup, and
+  removal tests on named supported versions. macOS/Linux packaging may follow V2.2 Windows GA as a
+  V2.2.x deliverable if signing hardware or test machines are unavailable.
+  - **Current limitation (2026-09-12):** no macOS or Linux native package is implemented or
+    advertised; support remains the developer checkout path only.
+
+### P6 - optional server-backed collaboration preview
+
+This track increases hosting, storage, identity, security, abuse-prevention, monitoring, support,
+and compliance cost. It is not part of the offline local definition of done and must stay behind an
+explicit deployment/profile boundary.
+
+- [ ] **V22-P6-1: Approve a measured cloud cost and data-governance model** before enabling cloud
+  synchronization. Define storage and project quotas, retention/deletion, encryption, backup and
+  restore, regional placement, audit events, incident response, and who operates the service.
+- [ ] **V22-P6-2: Define two-way synchronization semantics** for stable identities, offline edits,
+  conflicts, duplicate devices, deletion propagation, partial uploads, retries, encryption, and
+  downgrade back to local-only use. Build destructive conflict and recovery tests before rollout.
+- [ ] **V22-P6-3: Add Google and Microsoft OIDC only after the server session model is accepted.**
+  Test account linking, provider-email changes, revoked consent, duplicate identities, token expiry,
+  CSRF/state/nonce validation, logout, and account deletion. Login must not imply Drive or Graph file
+  access unless separately requested and consented.
+- [ ] **V22-P6-4: Add team workspaces through least-privilege roles.** Define owner/admin/editor/
+  viewer capabilities, invitations, removal, ownership transfer, project isolation, audit history,
+  and concurrent-edit conflict behavior. Cross-tenant access tests and real staging evidence are
+  mandatory; mocks alone do not count as acceptance.
+
+### P7 - release candidate and V2.2 definition of done
+
+- [ ] All seven or more public examples are bundled offline, have bilingual teaching metadata, and
+  complete import-to-export browser workflows with answer-keyed results.
+- [ ] The existing 23-dataset V2.1 regression matrix and every V2.2 example, edge, format-parity,
+  statistics, mobile, theme, privacy, and packaging gate pass with a machine-readable report.
+- [ ] `ruff`, formatting, MyPy, the complete API/PostgreSQL/MinIO gate, `npm run verify`, desktop and
+  mobile Playwright, visual/accessibility checks, and clean-install tests pass at the release commit.
+- [ ] No serious or critical accessibility issue remains; reviewed performance budgets pass or an
+  explicit limitation and fallback is shown before the user starts the expensive operation.
+- [ ] Help, contextual tips, feedback privacy, theme behavior, every new scientific method, and all
+  supported package/upgrade instructions are complete in English and Simplified Chinese.
+- [ ] Release notes and `VERSION_BASELINE.md` distinguish shipped local features, optional preview
+  features, skipped external checks, and deferred work. V2.2 is not marked complete until this list
+  is supported by reproducible evidence from the release commit.
 
 ## V2.0 Closeout Gate
 
@@ -225,8 +449,9 @@ and style semantics, not pixel-identical output from different rendering engines
 
 The latest checkpoint includes the chart-inspector spacing regression fix and the current general
 desktop/mobile browser gates. The V2.1 `surface3d` field/grid contract, grid-aware quality and
-recommendation behavior, dedicated browser preview/export regression, and beginner guidance are
-complete under `V21-P0-1` through `V21-P0-3` and `V21-P1-1`. P1 analysis/model work remains open.
+recommendation behavior, dedicated browser preview/export regression, beginner guidance,
+scientific-method slice, and experiment-level model are complete under `V21-P0-1` through
+`V21-P1-3`.
 
 Completed:
 
@@ -345,20 +570,18 @@ Resume after the Figma MCP quota resets:
 
 ## Platform Support
 
-- [ ] Build and package the deferred Windows desktop application after the website workflow is stable.
-- [ ] Define optional local/cloud two-way synchronization, stable identity mapping, conflict resolution, offline edits, deletion propagation, and encryption before implementing desktop cloud sync.
-- [ ] Add a macOS installer and complete macOS compatibility testing.
-- [ ] Add a Linux installer and complete Linux distribution testing.
+Native packaging is now tracked only by `V22-P5`. Optional local/cloud synchronization is tracked
+only by `V22-P6-1` and `V22-P6-2`.
 
 ## Authentication
 
-- [ ] Add Google sign-in after email one-time-code authentication is stable.
-- [ ] Add Microsoft sign-in after email one-time-code authentication is stable.
+Google and Microsoft sign-in are now tracked only by `V22-P6-3` and remain optional server-backed
+preview work.
 
 ## Appearance and Accessibility
 
-- [ ] Design and implement a high-quality dark theme.
-- [ ] Test additional chart palettes for color-vision deficiencies and print workflows.
+Dark mode, accessible alternatives, color-vision palettes, and print behavior are now tracked only
+by `V22-P3`.
 
 ## Advanced Analysis
 
@@ -367,12 +590,12 @@ Resume after the Figma MCP quota resets:
 > export disclosures are accepted.
 
 - [x] Evaluate bootstrap confidence intervals for the first supported residual-bootstrap slice.
-- [ ] Evaluate simultaneous confidence bands and prediction intervals.
-- [ ] Evaluate robust regression; weighted least squares is supported only with a scientifically
-  justified error column and remains bounded by the P1-2 disclosure contract.
 - [x] Add residual diagnostics and document multiple-comparison correction as explicitly deferred
   until a comparison design and correction policy are accepted.
 - [ ] Evaluate user-defined fitting models with strong validation and guidance.
+
+Prediction intervals, simultaneous confidence bands, robust regression, and their answer-keyed
+evidence are now tracked only by `V22-P4`.
 
 ## Cloud and Commercial Features
 
@@ -381,9 +604,10 @@ Resume after the Figma MCP quota resets:
 - [ ] Evaluate six-panel figures as part of a paid cloud workflow.
 - [ ] Evaluate batch processing, batch export, journal presets, and priority processing.
 - [ ] Add billing only after the free workflow and activation metrics are validated.
-- [ ] Add team workspaces, roles, organization administration, and institutional controls.
+- [ ] Evaluate organization administration and institutional controls after the bounded
+  `V22-P6-4` team-workspace preview has real usage and security evidence.
 
 ## Mobile
 
 - [ ] Evaluate advanced mobile data cleaning after the desktop workflow is stable.
-- [ ] Evaluate mobile multi-panel editing and advanced 3D controls.
+- [ ] Evaluate mobile multi-panel editing after the V2.2 advanced-3D controls are accepted.

@@ -1,13 +1,15 @@
-# LabViz V2.1 API
+# LabViz V2.2 local-first API
 
 ## 普通本地用户
 
-普通用户只需运行仓库根目录的启动脚本。默认使用 Python 自带的 SQLite 和
+普通用户只需运行仓库根目录的 V2.2 启动脚本。默认使用 Python 自带的 SQLite 和
 `.labviz/objects/` 本地对象目录；FastAPI、Uvicorn 以及科学计算依赖会安装到
 `V2.0/api/.venv`。不需要单独安装数据库服务器、Docker、PostgreSQL、MinIO 或外部邮件服务。
 数据边界、离线安装和备份方式分别见 [`../docs/PRIVACY_DATA_BOUNDARY.md`](../docs/PRIVACY_DATA_BOUNDARY.md)、
 [`../docs/OFFLINE_INSTALL.md`](../docs/OFFLINE_INSTALL.md) 和
 [`../docs/BACKUP_RESTORE.md`](../docs/BACKUP_RESTORE.md)。
+V2.2 高级统计的模型、区间含义、假设和稳定失败码见
+[`../docs/STATISTICS_CONTRACT_V2.2.md`](../docs/STATISTICS_CONTRACT_V2.2.md)。
 
 下面的 PostgreSQL、对象存储、Worker 和生产配置是维护者扩展与集成测试说明，不是普通本地
 部署的必需步骤。
@@ -94,6 +96,17 @@ version and an explicit migration plan. Quality findings retain readable v1 summ
 fallbacks and now also carry locale-independent message codes and scalar parameters; the web
 client owns the final English or Simplified Chinese rendering. Existing persisted quality
 documents without those optional fields remain readable.
+
+Run the tracked synthetic V2.2 matrix and local performance baseline from this directory with the
+Python 3.12/3.13 virtual environment:
+
+```powershell
+& '.venv\Scripts\python.exe' -m scripts.run_v22_matrix
+& '.venv\Scripts\python.exe' -m scripts.measure_v22_performance
+```
+
+The matrix intentionally reports the historical 23-dataset V2.1 corpus as skipped when that
+private/historical corpus is not present; a skip is not a pass.
 
 HTTP uploads accept an optional `Idempotency-Key`. The key is scoped to the anonymous browser
 session and stores a canonical request fingerprint containing the payload hash, filename, media

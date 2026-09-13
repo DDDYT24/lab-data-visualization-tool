@@ -12,6 +12,7 @@ import {
   gridColor,
 } from "@/domain/chart-render-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
+import { darkChartPalette } from "@/theme/theme";
 
 type SeriesOptionRecord = Record<string, unknown>;
 
@@ -100,17 +101,40 @@ function panelGrids(panelCount: number) {
   }));
 }
 
+type ChartColorMode = "light" | "dark";
+
+function previewSeriesColor({
+  colorMode,
+  configuredColor,
+  grayscale,
+  grouped,
+  index,
+}: {
+  colorMode: ChartColorMode;
+  configuredColor: string;
+  grayscale: boolean;
+  grouped: boolean;
+  index: number;
+}) {
+  if (colorMode === "dark" && !grayscale) {
+    return darkChartPalette[index % darkChartPalette.length];
+  }
+  return chartSeriesColor({ configuredColor, grayscale, grouped, index });
+}
+
 function analysisSeries(
   analysis: ChartAnalysis | undefined,
   spec: ChartSpec,
   panelAxisIndexes: Array<{ primary: number; secondary: number | null }>,
+  colorMode: ChartColorMode,
 ) {
   if (!analysis) return [];
   const derived: SeriesOptionRecord[] = [];
   for (const [resultIndex, result] of analysis.series.entries()) {
     const sourceSeries = spec.series.find((item) => item.field === result.field);
     if (!sourceSeries) continue;
-    const seriesColor = chartSeriesColor({
+    const seriesColor = previewSeriesColor({
+      colorMode,
       configuredColor: sourceSeries.color,
       grayscale: spec.export.grayscalePreview,
       grouped: Boolean(spec.groupField),
@@ -212,35 +236,54 @@ function analysisSeries(
 
 export function buildChartOption({
   analysis,
+  colorMode = "light",
   excludedFindingIds,
   findings,
   preview,
   spec,
+  showAxes = true,
+  showLegend = true,
+  surfacePointLimit,
+  surfaceView,
 }: {
   analysis?: ChartAnalysis;
+  colorMode?: ChartColorMode;
   excludedFindingIds: string[];
   findings: QualityFinding[];
   preview: DataPreview;
   spec: ChartSpec;
+  showAxes?: boolean;
+  showLegend?: boolean;
+  surfacePointLimit?: number;
+  surfaceView?: {
+    alpha: number;
+    beta: number;
+    distance: number;
+  };
 }): EChartsOption {
   const rows = visibleRows(preview, findings, excludedFindingIds);
   const colors = spec.series.map((series, index) =>
-    chartSeriesColor({
+    previewSeriesColor({
+      colorMode,
       configuredColor: series.color,
       grayscale: spec.export.grayscalePreview,
       grouped: false,
       index,
     }),
   );
+  const chartAxisColor = colorMode === "dark" ? "#B6C2D5" : "#475467";
+  const chartGridColor = colorMode === "dark" ? "#475569" : gridColor;
   const common = {
     animation: false,
     backgroundColor: spec.export.transparentBackground
       ? "transparent"
-      : spec.export.backgroundColor,
+      : colorMode === "dark"
+        ? "#172033"
+        : spec.export.backgroundColor,
     color: colors,
-    legend: legendOption(spec.export.legendPosition),
+    legend: showLegend ? legendOption(spec.export.legendPosition) : { show: false },
     textStyle: {
-      color: "#172033",
+      color: colorMode === "dark" ? "#F4F7FB" : "#172033",
       fontFamily: spec.export.fontFamily,
       fontSize: spec.export.fontSize,
     },
@@ -346,19 +389,26 @@ export function buildChartOption({
     const analysisData = analysis?.preview.surfacePoints.length
       ? analysis.preview.surfacePoints.map((point) => [point.x, point.y, point.z])
       : fallbackData;
-    const data = surfaceDiagnostic?.status === "valid" || !surfaceDiagnostic
+    const fullData = surfaceDiagnostic?.status === "valid" || !surfaceDiagnostic
       ? analysisData
       : [];
+    const step = surfacePointLimit && fullData.length > surfacePointLimit
+      ? Math.ceil(fullData.length / surfacePointLimit)
+      : 1;
+    const data = step > 1 ? fullData.filter((_point, index) => index % step === 0) : fullData;
     const zValues = data.map((point) => point[2]);
     return {
       ...common,
       grid3D: {
-        axisLine: { lineStyle: { color: "#667085" } },
+        axisLine: { show: showAxes, lineStyle: { color: chartAxisColor } },
         boxDepth: 80,
         boxHeight: 80,
         boxWidth: 120,
         viewControl: {
+          alpha: surfaceView?.alpha,
           autoRotate: false,
+          beta: surfaceView?.beta,
+          distance: surfaceView?.distance,
           panSensitivity: 1,
           projection: "perspective",
           rotateSensitivity: 1,
@@ -369,12 +419,20 @@ export function buildChartOption({
         max: zValues.length ? Math.max(...zValues) : 1,
         min: zValues.length ? Math.min(...zValues) : 0,
       },
-      xAxis3D: { name: axisName(spec.xAxis.title, spec.xAxis.unit), type: "value" },
-      yAxis3D: { name: spec.series[0]?.label ?? "Y", type: "value" },
-      zAxis3D: { name: spec.series[1]?.label ?? spec.yAxis.title, type: "value" },
+      xAxis3D: {
+        axisLine: { show: showAxes },
+        name: axisName(spec.xAxis.title, spec.xAxis.unit),
+        type: "value",
+      },
+      yAxis3D: { axisLine: { show: showAxes }, name: spec.series[0]?.label ?? "Y", type: "value" },
+      zAxis3D: {
+        axisLine: { show: showAxes },
+        name: spec.series[1]?.label ?? spec.yAxis.title,
+        type: "value",
+      },
       series: [{
         data,
-        dataShape: surfaceDiagnostic
+        dataShape: step === 1 && surfaceDiagnostic
           ? [surfaceDiagnostic.yCount, surfaceDiagnostic.xCount]
           : undefined,
         shading: "lambert",
@@ -385,13 +443,13 @@ export function buildChartOption({
 
   const grids = panelGrids(spec.panelCount);
   const xAxes: Array<Record<string, unknown>> = grids.map((_, panelIndex) => ({
-    axisLabel: { color: "#475467" },
+    axisLabel: { color: chartAxisColor },
     gridIndex: panelIndex,
     name: axisName(spec.xAxis.title, spec.xAxis.unit),
     nameGap: 30,
     nameLocation: "middle" as const,
     splitLine: {
-      lineStyle: { color: gridColor },
+      lineStyle: { color: chartGridColor },
       show: spec.export.gridVisible,
     },
     type: spec.type === "bar" ? ("category" as const) : ("value" as const),
@@ -405,7 +463,7 @@ export function buildChartOption({
       nameGap: 42,
       nameLocation: "middle",
       splitLine: {
-        lineStyle: { color: gridColor },
+        lineStyle: { color: chartGridColor },
         show: spec.export.gridVisible,
       },
       type: "value",
@@ -472,7 +530,8 @@ export function buildChartOption({
               (typeof point[0] === "number" || typeof point[0] === "string") &&
               typeof point[1] === "number",
           );
-    const seriesColor = chartSeriesColor({
+    const seriesColor = previewSeriesColor({
+      colorMode,
       configuredColor: series.color,
       grayscale: spec.export.grayscalePreview,
       grouped: Boolean(spec.groupField),
@@ -510,7 +569,7 @@ export function buildChartOption({
     grid: grids,
     series: [
       ...sourceSeries,
-      ...analysisSeries(analysis, spec, panelAxisIndexes),
+      ...analysisSeries(analysis, spec, panelAxisIndexes, colorMode),
     ] as EChartsOption["series"],
     xAxis: xAxes,
     yAxis: yAxes,

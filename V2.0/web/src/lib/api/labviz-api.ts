@@ -14,6 +14,7 @@ import {
   projectWorkspaceSchema,
   qualityReportSchema,
   requestEmailCodeResponseSchema,
+  sampleCatalogSchema,
   savedChartResponseSchema,
   shareLinkSchema,
   sharedChartSchema,
@@ -22,6 +23,7 @@ import {
   type CleaningDecision,
   type ProcessingJob,
   type ProjectSession,
+  type SampleCatalog,
   type SharedChart,
 } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
@@ -131,6 +133,17 @@ export const labvizApi = {
 
   createSampleProject(signal?: AbortSignal): Promise<ProjectSession> {
     return request("/samples/thermal-response/projects", projectSessionSchema, {
+      method: "POST",
+      signal,
+    });
+  },
+
+  listSamples(signal?: AbortSignal): Promise<SampleCatalog> {
+    return request("/samples", sampleCatalogSchema, { signal });
+  },
+
+  createCatalogSampleProject(slug: string, signal?: AbortSignal): Promise<ProjectSession> {
+    return request(`/samples/${encodeURIComponent(slug)}/projects`, projectSessionSchema, {
       method: "POST",
       signal,
     });

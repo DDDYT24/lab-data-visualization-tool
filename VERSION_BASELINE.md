@@ -1,6 +1,6 @@
 # LabViz Version Baseline
 
-- **Last reviewed:** 2026-09-10
+- **Last reviewed:** 2026-09-12
 - **Current release:** V2.1.1
 - **Future backlog and completion status:** [`V2.0/TODO.md`](V2.0/TODO.md)
 
@@ -17,6 +17,7 @@ For future work, open `V2.0/TODO.md` first.
 | **V2.0.0** | First supported Next.js + FastAPI local self-hosted release | Added the browser workflow `Import → Inspect → Clean → Chart → Export`, real API-backed upload/progress/preview/quality/cleaning flows, seven chart types, fitting and publication controls, PNG/SVG/PDF export, local history, email-code sessions, descriptions, read-only sharing, bilingual UI/docs, one-command launchers, local SQLite/object storage, and the PostgreSQL/S3-compatible/Worker production route | Ordinary use remains local; AWS, public DNS, paid mail, Docker, external databases, and public hosting are optional maintainer paths, not user prerequisites |
 | **V2.1.0** | Structured 3D and research-workflow release | Added structured-grid/surface validation with explicit X/Y/Z roles, grid-aware quality findings and chart recommendations, browser/export parity for 3D surfaces, beginner guidance, ordinary/weighted fitting with Student-t and residual-bootstrap pointwise bands, residual diagnostics and limitations, minimum `Experiment`/`ExperimentRun` lineage, UTF-8 BOM handling, Unicode-safe downloads, migration-name reconciliation, and the local privacy/offline/backup documentation set | Prediction intervals, simultaneous bands, robust regression, multiplicity correction, desktop installers, team features, billing, and AWS Phase 6C/6D live acceptance remain deferred in `TODO.md` |
 | **V2.1.1** | Current security patch release | Updated Next.js, Sharp, Nanoid, Vitest and related dependencies; aligned API and website version metadata; preserved V2.1.0 behavior and local data paths | No new scientific workflow or data-format change; it does not claim a deployed cloud service |
+| **V2.2.0-dev** | Active unreleased local-first development line | Added versioned synthetic example/edge fixtures, example chooser, help tips and privacy-safe feedback diagnostics, system/light/dark themes, accessible chart tables, mobile 3D controls and fallback disclosure, prediction intervals, Working–Hotelling simultaneous mean bands, linear Huber IRLS, answer-keyed statistics tests, and a Windows packaging/lifecycle contract | Not a release tag; the historical 23-dataset matrix is currently reported as skipped in the V2.2 runner, the Windows installer and bundled runtimes are not shipped, and cloud sync, teams, Google/Microsoft login, and AWS deployment remain deferred |
 
 ## Release references
 
@@ -24,6 +25,7 @@ For future work, open `V2.0/TODO.md` first.
   formal release tag.
 - V1.1 is retained under [`V1.1/`](V1.1/) as the legacy Streamlit application.
 - V2.0.0, V2.1.0, and V2.1.1 are the repository release tags.
+- V2.2.0-dev is a development baseline only; it has no release tag or installer artifact.
 - User-facing installation instructions live in [`README.md`](README.md) and
   [`README.zh-CN.md`](README.zh-CN.md).
 - Detailed release notes are [`V2.0/RELEASE_NOTES_V2.0.md`](V2.0/RELEASE_NOTES_V2.0.md),

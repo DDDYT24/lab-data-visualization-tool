@@ -37,6 +37,29 @@
     "dropBody": "Excel、CSV、TSV、TXT 或 JSON · 网站最大 50 MB",
     "browse": "选择文件",
     "sample": "使用示例数据",
+    "sampleChooserTitle": "选择示例数据",
+    "sampleChooserDescription": "所有示例都是合成数据并支持离线使用。打开示例，了解不同表格结构适合哪种可视化。",
+    "closeSampleChooser": "关闭示例选择器",
+    "sampleSyntheticNotice": "这些数值仅用于教学。它们会经过与用户上传文件相同的真实处理流程。",
+    "sampleCatalogError": "示例目录暂时无法载入，但你仍然可以选择本机文件。",
+    "openSample": "打开此示例",
+    "sampleRows": "行",
+    "sampleFields": "字段",
+    "sampleLearningGoal": "学习目标",
+    "sampleQualityLesson": "质量提示",
+    "sampleDifficulty": {
+      "beginner": "入门",
+      "intermediate": "进阶"
+    },
+    "sampleChartTypes": {
+      "line": "折线图",
+      "scatter": "散点图",
+      "bar": "柱状图",
+      "histogram": "直方图",
+      "box": "箱线图",
+      "heatmap": "相关性热力图",
+      "surface3d": "3D 曲面图"
+    },
     "experimentMetadata": "归组重复采集数据",
     "optional": "可选",
     "experimentTitle": "实验名称",
@@ -115,6 +138,7 @@
     "xUnit": "X 轴单位",
     "yUnit": "Y 轴单位",
     "noNumericColumns": "未检测到数值列。请切换工作表或表头行，或先修正源文件，再创建图表。",
+    "contextualTip": "如果预览不符合预期，可以在继续前更换工作表或调整表头行。",
     "unit": "Y 轴单位",
     "review": "检查数据质量"
   },
@@ -261,6 +285,8 @@
     "surfaceSetupTitle": "请选择曲面的三个维度",
     "surfaceSetupDescription": "用 X 和 Y 表示两个网格坐标，再用 Z 表示测量结果。三个字段互不相同时才会显示预览。",
     "surfaceAxisHelp": "X 和 Y 用于定位网格点，Z 是测量值，决定曲面的高度和颜色。",
+    "dataTableTitle": "以表格查看图表数据",
+    "dataTableDescription": "表格可以作为图表的非视觉替代方式；当前预览中与质量问题对应的单元格会被突出显示。",
     "surfaceDiagnostics": {
       "invalidValues": "曲面包含 {count} 个非有限点，请修正或删除这些行。",
       "insufficientPoints": "曲面至少需要 3 个完整点，以及至少 2 个不同的 X 值和 Y 值。",
@@ -281,14 +307,17 @@
     "seriesColor": "{label} 颜色",
     "analysis": "拟合与不确定度",
     "analysisHelp": "拟合用于估计所选数据点的趋势；不确定性用于显示测量离散程度或指定误差列。请只选择实验设计能够支持的选项。",
+    "contextualTip": "先从数值字段中选择 X 和 Y；绘制曲面时要使用不同的 X、Y、Z 字段，并保持网格完整。",
     "groupHelp": "分组会按类别或重复条件绘制独立系列，不会修改测量数据。",
     "fitModel": "拟合模型",
     "fitMethod": "拟合方法",
     "fitMethods": {
       "ordinary-least-squares": "普通最小二乘",
-      "weighted-least-squares": "加权最小二乘"
+      "weighted-least-squares": "加权最小二乘",
+      "robust-huber": "Huber 稳健线性拟合"
     },
     "weightedFitHelp": "加权最小二乘需要在误差棒中选择“使用已有误差列”；误差值应代表测量标准差。",
+    "robustFitHelp": "Huber 稳健拟合目前仅支持线性模型。它会降低大残差的影响，不显示置信带，也不会让有偏数据变得有效。",
     "fitModels": {
       "none": "不使用拟合曲线",
       "linear": "线性",
@@ -302,6 +331,12 @@
     "showRSquared": "显示 R²",
     "confidenceBand": "显示置信带",
     "confidenceMethod": "置信带方法",
+    "intervalKind": "区间含义",
+    "intervalKinds": {
+      "pointwise-mean": "拟合均值点态区间",
+      "prediction": "单个响应的预测区间",
+      "simultaneous": "Working-Hotelling 同时均值带"
+    },
     "confidenceMethods": {
       "student-t": "Student-t 点态均值区间",
       "bootstrap": "残差 Bootstrap 点态均值区间"
@@ -323,9 +358,10 @@
     "analysisFailed": "当前字段无法完成科研分析计算。",
     "fitResult": "{label} 拟合结果",
     "analysisEvidence": "样本量 n={sampleSize}；排除 {excludedCount} 个观测。",
+    "intervalEvidence": "当前显示区间：{meaning}。",
     "residualDiagnostic": "残差诊断：RMSE={rmse}，平均残差={meanResidual}。",
     "residualTrend": "残差可能仍存在趋势，当前模型可能遗漏结构。",
-    "deferredMethods": "暂未提供：预测区间、同时置信带、稳健拟合和多重比较校正。",
+    "deferredMethods": "暂未提供：系列或分组之间的多重比较校正。",
     "analysisAssumptions": "假设与限制",
     "limitations": "限制",
     "evidenceMessages": {
@@ -337,13 +373,21 @@
       "residualDescriptive": "残差汇总是响应尺度上的描述性检查。",
       "residualNoInference": "它不能证明独立性、正态性或因果关系。",
       "rSquared": "R² 描述样本内关联，不能证明因果关系。",
-      "pointwise": "该区间是拟合均值的点态区间；预测区间和同时置信带延期。",
+      "pointwise": "该区间是拟合均值的点态区间，不是预测区间或同时置信带。",
       "ordinary": "普通最小二乘为每个纳入观测赋予相同权重。",
-      "weighted": "加权拟合使用指定误差列；稳健拟合延期。",
+      "weighted": "加权拟合使用指定误差列；它不是稳健估计量。",
+      "robustAssumption": "Huber IRLS 对线性设计使用固定调节常数 1.345 和标准化 X 尺度。",
+      "robustLimit": "Huber 会降低大残差的影响，但不会让有偏、混杂或设计不佳的数据变得有效。",
+      "predictionAssumption": "该区间在所选线性或多项式模型下，为一个未来响应纳入残差变异。",
+      "simultaneousAssumption": "Working-Hotelling 同时带覆盖显示曲线所代表的整组线性或多项式拟合均值。",
+      "predictionConfidence": "置信水平解释为单个未来响应的预测区间。",
+      "simultaneousConfidence": "置信水平解释为 Working-Hotelling 同时均值带。",
+      "predictionLimit": "该预测区间包含估计残差变异，不是同时置信带。",
+      "simultaneousLimit": "该同时均值带不是预测区间。",
       "residualTrend": "残差可能仍有趋势，所选模型可能遗漏结构。",
-      "prediction": "当前版本不显示预测区间。",
-      "simultaneous": "当前版本不显示同时置信带。",
-      "robust": "当前版本不显示稳健回归。",
+      "prediction": "当前结果没有请求预测区间；拟合均值点态区间是不同的统计量。",
+      "simultaneous": "当前结果没有请求同时置信带；它不能与点态区间或预测区间互换。",
+      "robust": "当前结果没有请求 Huber 稳健拟合；它不会让有偏或设计不佳的数据变得有效。",
       "multiplicity": "当前未对系列或分组执行多重比较校正。",
       "weightedSelection": "只有在误差列具有科研依据时才选择加权最小二乘。",
       "confidenceRequiresFit": "只有选择受支持的拟合后才能显示置信带。",
@@ -497,6 +541,14 @@
     "title": "设置",
     "description": "设置界面、图表、导出、隐私与存储默认值。",
     "languageSection": "语言与图表默认值",
+    "appearance": "外观",
+    "appearanceTitle": "颜色主题",
+    "appearanceDescription": "可以跟随操作系统，也可以选择浅色或暗色主题；选择会保存在此浏览器中。",
+    "appearanceOptions": {
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "暗色"
+    },
     "interfaceLanguage": "界面语言",
     "interfaceLanguageDescription": "切换界面语言不会替换已经输入到图表中的文字。",
     "figureLanguage": "图表文字",
@@ -559,7 +611,51 @@
     "search": "搜索帮助",
     "commonQuestions": "常见问题",
     "noMatchTitle": "没有匹配的帮助内容",
-    "noMatchDescription": "可尝试搜索置信区间、抽样或原始文件等更宽泛的词语。"
+    "noMatchDescription": "可尝试搜索置信区间、抽样或原始文件等更宽泛的词语。",
+    "workflowTitle": "上传文件如何变成图表",
+    "workflowDescription": "每次本地上传都遵循同一条可检查流程。浏览器负责图表配置，Python 服务负责数据处理。",
+    "workflowSteps": {
+      "upload": "上传文件",
+      "receive": "FastAPI 接收",
+      "parse": "pandas 解析表格",
+      "types": "识别字段类型",
+      "quality": "检查数据质量",
+      "config": "保存图表配置",
+      "draw": "ECharts 绘制预览"
+    },
+    "exportNote": "PNG、SVG 和 PDF 由 Python 后端根据已验证的图表配置独立生成；论文导出不会复用浏览器截图。",
+    "tipsTitle": "在关键决定处给你的小提示",
+    "tips": {
+      "import": "导入工作簿时，先选择测量工作表并确认表头行，再重新导入。",
+      "inspect": "“保留”不等于“删除”：排除会影响分析和图表，删除还会影响清洗副本。",
+      "chart": "定量图表使用数值型 X/Y/Z 字段；3D 曲面必须是规则的完整矩形网格。",
+      "export": "大多数论文使用 300 DPI；期刊或线条细节有要求时再使用 600 DPI。",
+      "privacy": "反馈在本机生成，不包含原始数据行、图表数值、文件名、邮箱或项目 ID。"
+    },
+    "resetTips": "再次显示已关闭的小提示",
+    "tipsReset": "下次进入决定环节时，小提示会再次出现。",
+    "dismissTip": "关闭提示",
+    "browseExamples": "浏览示例数据",
+    "feedbackTitle": "本地反馈中心",
+    "feedbackDescription": "无需账户即可生成隐私安全的诊断说明。你可以离线复制或保存，也可以在阅读外部网站提示后，再打开预填的 GitHub issue。",
+    "feedbackCategory": "反馈类型",
+    "feedbackCategories": {
+      "bug": "错误",
+      "usability": "使用体验",
+      "scientific": "科研方法",
+      "feature": "功能建议"
+    },
+    "feedbackDescriptionLabel": "发生了什么，或什么功能会有帮助？",
+    "feedbackDescriptionPlaceholder": "请描述问题或想法，不要粘贴实验数据行或私人标识符。",
+    "feedbackPrivacy": "仅包含应用版本、操作系统/浏览器类别、泛化的页面名称、反馈类型和你的描述。",
+    "feedbackPreview": "诊断预览",
+    "copyFeedback": "复制诊断信息",
+    "saveFeedback": "保存诊断信息",
+    "openIssue": "打开 GitHub issue",
+    "copiedFeedback": "诊断信息已复制到剪贴板。",
+    "savedFeedback": "诊断信息已保存为本地文本文件。",
+    "externalWarning": "GitHub 是外部网站。打开前请检查诊断文字。继续吗？",
+    "feedbackIssueTitle": "LabViz 反馈"
   },
   "common": {
     "row": "行号",
@@ -568,6 +664,15 @@
     "noPreviewDescription": "处理服务返回了列信息，但没有可预览的数据行。",
     "surfaceUnavailableTitle": "3D 预览暂不可用",
     "surfaceUnavailableDescription": "可选的 WebGL 渲染器未能载入；Python 服务仍可验证并导出 3D 图表。",
-    "chartPreview": "{title} {type} 图表预览"
+    "chartPreview": "{title} {type} 图表预览",
+    "surfaceControls": "3D 曲面控制",
+    "rotateLeft": "向左旋转",
+    "rotateRight": "向右旋转",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "resetView": "重置视图",
+    "toggleAxes": "切换坐标轴",
+    "toggleLegend": "切换图例",
+    "lowCostFallback": "当前设备已启用低成本视图；预览经过抽样，但完整数据仍用于分析和导出。"
   }
 }

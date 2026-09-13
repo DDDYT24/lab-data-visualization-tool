@@ -60,7 +60,11 @@ export function useWorkspaceProject(initialProjectId?: string) {
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!selectedFile) throw new Error("No file selected");
-      if (selectedFile.isSample) return labvizApi.createSampleProject();
+      if (selectedFile.isSample) {
+        return selectedFile.sampleSlug
+          ? labvizApi.createCatalogSampleProject(selectedFile.sampleSlug)
+          : labvizApi.createSampleProject();
+      }
       if (!selectedFile.sourceFile) {
         throw new Error("The selected file is no longer available.");
       }

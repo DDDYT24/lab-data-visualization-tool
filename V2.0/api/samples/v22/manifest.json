@@ -1,0 +1,675 @@
+{
+  "catalogVersion": "v1",
+  "release": "V2.2",
+  "syntheticOnly": true,
+  "statisticsAnswerKeyFile": "statistics_answer_keys.json",
+  "examples": [
+    {
+      "slug": "time-series",
+      "visibility": "public",
+      "filename": "01_time_series.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "title": {
+        "en": "Time-series response",
+        "zh": "时间响应曲线"
+      },
+      "purpose": {
+        "en": "Follow a measurement over time and inspect missing or unusual points.",
+        "zh": "观察测量值随时间变化，并检查缺失或异常点。"
+      },
+      "learningGoal": {
+        "en": "Learn when a line chart is appropriate and why quality findings matter.",
+        "zh": "理解什么时候适合用折线图，以及为什么要先检查数据质量。"
+      },
+      "recommendedChart": "line",
+      "difficulty": "beginner",
+      "fields": [
+        {
+          "name": "time_min",
+          "kind": "number",
+          "role": "x",
+          "titleEn": "Time",
+          "titleZh": "时间"
+        },
+        {
+          "name": "response_mV",
+          "kind": "number",
+          "role": "y",
+          "titleEn": "Response",
+          "titleZh": "响应"
+        },
+        {
+          "name": "temperature_C",
+          "kind": "number",
+          "role": "series",
+          "titleEn": "Temperature",
+          "titleZh": "温度"
+        }
+      ],
+      "rowCount": 24,
+      "qualityIssues": [
+        {
+          "en": "One missing response and one unusual response are intentional.",
+          "zh": "故意包含一个缺失响应值和一个异常响应值。"
+        }
+      ],
+      "expectedQualityKinds": [
+        "missing",
+        "extreme-value"
+      ],
+      "answerKey": {
+        "previewRows": 24,
+        "recommendedChart": "line",
+        "requiredQualityKinds": [
+          "missing",
+          "extreme-value"
+        ],
+        "exportFormats": [
+          "png",
+          "svg",
+          "pdf"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 418
+    },
+    {
+      "slug": "repeated-runs",
+      "visibility": "public",
+      "filename": "02_repeated_runs.xlsx",
+      "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "format": "xlsx",
+      "sheetName": "Measurements",
+      "availableSheets": [
+        "Measurements",
+        "Metadata"
+      ],
+      "headerRow": 1,
+      "title": {
+        "en": "Repeated experiment runs",
+        "zh": "重复实验运行"
+      },
+      "purpose": {
+        "en": "Compare control and treatment runs with replicate identifiers and error values.",
+        "zh": "比较对照和处理组，并保留重复编号与误差值。"
+      },
+      "learningGoal": {
+        "en": "Learn how long-format repeated measurements support grouped lines and error bars.",
+        "zh": "理解长表格式的重复测量如何支持分组折线和误差棒。"
+      },
+      "recommendedChart": "line",
+      "difficulty": "intermediate",
+      "fields": [
+        {
+          "name": "time_min",
+          "kind": "number",
+          "role": "x",
+          "titleEn": "Time",
+          "titleZh": "时间"
+        },
+        {
+          "name": "response_mV",
+          "kind": "number",
+          "role": "y",
+          "titleEn": "Response",
+          "titleZh": "响应"
+        },
+        {
+          "name": "condition",
+          "kind": "text",
+          "role": "group",
+          "titleEn": "Condition",
+          "titleZh": "条件"
+        },
+        {
+          "name": "replicate",
+          "kind": "text",
+          "role": "label",
+          "titleEn": "Replicate",
+          "titleZh": "重复"
+        },
+        {
+          "name": "error_sd_mV",
+          "kind": "number",
+          "role": "error",
+          "titleEn": "SD",
+          "titleZh": "标准差"
+        }
+      ],
+      "rowCount": 24,
+      "qualityIssues": [],
+      "expectedQualityKinds": [],
+      "answerKey": {
+        "previewRows": 24,
+        "recommendedChart": "line",
+        "requiredQualityKinds": [],
+        "exportFormats": [
+          "png",
+          "svg",
+          "pdf"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 6015
+    },
+    {
+      "slug": "scatter-fit",
+      "visibility": "public",
+      "filename": "03_dose_response.tsv",
+      "mediaType": "text/tab-separated-values",
+      "format": "tsv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "title": {
+        "en": "Dose-response scatter",
+        "zh": "剂量-响应散点"
+      },
+      "purpose": {
+        "en": "Relate a numeric dose to a response and compare candidate fits.",
+        "zh": "观察数值剂量与响应的关系，并比较候选拟合。"
+      },
+      "learningGoal": {
+        "en": "Learn why an association and a fitted curve do not prove causality.",
+        "zh": "理解相关关系和拟合曲线并不等于因果关系。"
+      },
+      "recommendedChart": "scatter",
+      "difficulty": "intermediate",
+      "fields": [
+        {
+          "name": "dose_uM",
+          "kind": "number",
+          "role": "x",
+          "titleEn": "Dose",
+          "titleZh": "剂量"
+        },
+        {
+          "name": "response_mV",
+          "kind": "number",
+          "role": "y",
+          "titleEn": "Response",
+          "titleZh": "响应"
+        },
+        {
+          "name": "batch",
+          "kind": "text",
+          "role": "group",
+          "titleEn": "Batch",
+          "titleZh": "批次"
+        }
+      ],
+      "rowCount": 18,
+      "qualityIssues": [
+        {
+          "en": "One high response is intentional so residual checks are visible.",
+          "zh": "故意包含一个偏高响应值，便于观察残差检查。"
+        }
+      ],
+      "expectedQualityKinds": [
+        "extreme-value"
+      ],
+      "answerKey": {
+        "previewRows": 18,
+        "recommendedChart": "scatter",
+        "requiredQualityKinds": [
+          "extreme-value"
+        ],
+        "exportFormats": [
+          "png",
+          "svg",
+          "pdf"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 254
+    },
+    {
+      "slug": "categorical-comparison",
+      "visibility": "public",
+      "filename": "04_group_comparison.txt",
+      "mediaType": "text/plain",
+      "format": "txt",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "title": {
+        "en": "Categorical group comparison",
+        "zh": "分类分组比较"
+      },
+      "purpose": {
+        "en": "Compare distributions across named experimental groups.",
+        "zh": "比较不同实验分组中的测量分布。"
+      },
+      "learningGoal": {
+        "en": "Learn when grouped bars or box plots communicate categories clearly.",
+        "zh": "理解什么时候分组柱状图或箱线图更适合表达分类数据。"
+      },
+      "recommendedChart": "box",
+      "difficulty": "beginner",
+      "fields": [
+        {
+          "name": "group",
+          "kind": "text",
+          "role": "group",
+          "titleEn": "Group",
+          "titleZh": "分组"
+        },
+        {
+          "name": "measurement",
+          "kind": "number",
+          "role": "y",
+          "titleEn": "Measurement",
+          "titleZh": "测量值"
+        },
+        {
+          "name": "batch",
+          "kind": "text",
+          "role": "label",
+          "titleEn": "Batch",
+          "titleZh": "批次"
+        }
+      ],
+      "rowCount": 18,
+      "qualityIssues": [
+        {
+          "en": "The high-dose group contains one intentionally unusual replicate.",
+          "zh": "高剂量组故意包含一个较异常的重复值。"
+        }
+      ],
+      "expectedQualityKinds": [
+        "extreme-value"
+      ],
+      "answerKey": {
+        "previewRows": 18,
+        "recommendedChart": "box",
+        "requiredQualityKinds": [
+          "extreme-value"
+        ],
+        "exportFormats": [
+          "png",
+          "svg",
+          "pdf"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 367
+    },
+    {
+      "slug": "distribution",
+      "visibility": "public",
+      "filename": "05_distribution.json",
+      "mediaType": "application/json",
+      "format": "json",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "title": {
+        "en": "Measurement distributions",
+        "zh": "测量值分布"
+      },
+      "purpose": {
+        "en": "Inspect the spread and overlap of two synthetic measurement groups.",
+        "zh": "观察两组模拟测量值的离散程度和重叠情况。"
+      },
+      "learningGoal": {
+        "en": "Learn how histograms show distributions rather than individual time trends.",
+        "zh": "理解直方图展示的是分布，而不是单个时间趋势。"
+      },
+      "recommendedChart": "histogram",
+      "difficulty": "beginner",
+      "fields": [
+        {
+          "name": "sample_id",
+          "kind": "text",
+          "role": "label",
+          "titleEn": "Sample ID",
+          "titleZh": "样本编号"
+        },
+        {
+          "name": "group",
+          "kind": "text",
+          "role": "group",
+          "titleEn": "Group",
+          "titleZh": "分组"
+        },
+        {
+          "name": "measurement",
+          "kind": "number",
+          "role": "y",
+          "titleEn": "Measurement",
+          "titleZh": "测量值"
+        }
+      ],
+      "rowCount": 48,
+      "qualityIssues": [],
+      "expectedQualityKinds": [],
+      "answerKey": {
+        "previewRows": 48,
+        "recommendedChart": "histogram",
+        "requiredQualityKinds": [],
+        "exportFormats": [
+          "png",
+          "svg",
+          "pdf"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 4174
+    },
+    {
+      "slug": "correlation-heatmap",
+      "visibility": "public",
+      "filename": "06_correlation.json",
+      "mediaType": "application/json",
+      "format": "json",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "title": {
+        "en": "Multi-variable correlation",
+        "zh": "多变量相关性"
+      },
+      "purpose": {
+        "en": "Compare pairwise relationships among several numeric measurements.",
+        "zh": "比较多个数值测量之间的两两关系。"
+      },
+      "learningGoal": {
+        "en": "Learn that a heatmap summarizes associations and is not a causal model.",
+        "zh": "理解热力图概括的是关联关系，并不是因果模型。"
+      },
+      "recommendedChart": "heatmap",
+      "difficulty": "intermediate",
+      "fields": [
+        {
+          "name": "temperature_C",
+          "kind": "number",
+          "role": "series",
+          "titleEn": "Temperature",
+          "titleZh": "温度"
+        },
+        {
+          "name": "signal_mV",
+          "kind": "number",
+          "role": "series",
+          "titleEn": "Signal",
+          "titleZh": "信号"
+        },
+        {
+          "name": "mass_mg",
+          "kind": "number",
+          "role": "series",
+          "titleEn": "Mass",
+          "titleZh": "质量"
+        },
+        {
+          "name": "recovery_pct",
+          "kind": "number",
+          "role": "series",
+          "titleEn": "Recovery",
+          "titleZh": "回收率"
+        }
+      ],
+      "rowCount": 30,
+      "qualityIssues": [],
+      "expectedQualityKinds": [],
+      "answerKey": {
+        "previewRows": 30,
+        "recommendedChart": "heatmap",
+        "requiredQualityKinds": [],
+        "exportFormats": [
+          "png",
+          "svg",
+          "pdf"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 3470
+    },
+    {
+      "slug": "surface-3d",
+      "visibility": "public",
+      "filename": "07_surface3d.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "title": {
+        "en": "Regular X/Y/Z surface",
+        "zh": "规则 X/Y/Z 3D 曲面"
+      },
+      "purpose": {
+        "en": "Visualize a complete rectangular grid with X, Y, and measured Z values.",
+        "zh": "可视化包含 X、Y 和测量 Z 值的完整矩形网格。"
+      },
+      "learningGoal": {
+        "en": "Learn the difference between a valid structured surface and an irregular point cloud.",
+        "zh": "理解有效结构化曲面与不规则散点云的区别。"
+      },
+      "recommendedChart": "surface3d",
+      "difficulty": "intermediate",
+      "fields": [
+        {
+          "name": "x_mm",
+          "kind": "number",
+          "role": "x",
+          "titleEn": "X",
+          "titleZh": "X"
+        },
+        {
+          "name": "y_mm",
+          "kind": "number",
+          "role": "y",
+          "titleEn": "Y",
+          "titleZh": "Y"
+        },
+        {
+          "name": "response_mV",
+          "kind": "number",
+          "role": "z",
+          "titleEn": "Response",
+          "titleZh": "响应"
+        }
+      ],
+      "rowCount": 441,
+      "qualityIssues": [],
+      "expectedQualityKinds": [],
+      "answerKey": {
+        "previewRows": 441,
+        "recommendedChart": "surface3d",
+        "requiredQualityKinds": [],
+        "exportFormats": [
+          "png",
+          "svg",
+          "pdf"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 6936
+    },
+    {
+      "slug": "missing-values",
+      "visibility": "edge",
+      "filename": "edge_missing.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "missing"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "missing"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 36
+    },
+    {
+      "slug": "duplicate-rows",
+      "visibility": "edge",
+      "filename": "edge_duplicate.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "duplicate"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "duplicate"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 45
+    },
+    {
+      "slug": "mixed-types",
+      "visibility": "edge",
+      "filename": "edge_mixed_types.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "type-conflict"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "type-conflict"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 60
+    },
+    {
+      "slug": "outlier",
+      "visibility": "edge",
+      "filename": "edge_outlier.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "extreme-value"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "extreme-value"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 180
+    },
+    {
+      "slug": "bom-header",
+      "visibility": "edge",
+      "filename": "edge_bom.txt",
+      "mediaType": "text/plain",
+      "format": "txt",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "bom-normalized"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "bom-normalized"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 36
+    },
+    {
+      "slug": "unicode-filename",
+      "visibility": "edge",
+      "filename": "edge_中文文件名.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "unicode-download"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "unicode-download"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 33
+    },
+    {
+      "slug": "invalid-surface-duplicate",
+      "visibility": "edge",
+      "filename": "edge_surface_invalid.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "surface-duplicate-coordinates"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "surface-duplicate-coordinates"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 36
+    },
+    {
+      "slug": "invalid-surface-missing-grid",
+      "visibility": "edge",
+      "filename": "edge_surface_missing_grid.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "surface-missing-grid"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "surface-missing-grid"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 24
+    },
+    {
+      "slug": "duplicate-columns",
+      "visibility": "edge",
+      "filename": "edge_duplicate_columns.csv",
+      "mediaType": "text/csv",
+      "format": "csv",
+      "sheetName": null,
+      "availableSheets": [],
+      "headerRow": 1,
+      "expectedErrors": [
+        "duplicate-columns"
+      ],
+      "answerKey": {
+        "expectedErrors": [
+          "duplicate-columns"
+        ]
+      },
+      "synthetic": true,
+      "byteSize": 18
+    }
+  ]
+}

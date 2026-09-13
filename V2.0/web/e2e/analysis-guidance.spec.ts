@@ -20,7 +20,7 @@ test("exposes analysis method, evidence, and deferred-method disclosures", async
   await expect(page.getByText(/Sample size n=4/)).toBeVisible();
   await expect(page.getByText(/Residual diagnostic: RMSE=0.1500/)).toBeVisible();
   await expect(
-    page.getByText(/Deferred in this release: prediction intervals/),
+    page.getByText(/Deferred in this release: multiplicity correction/),
   ).toBeVisible();
 
   await expect.poll(() => {

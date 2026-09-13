@@ -45,3 +45,32 @@ test("keeps the supporting history state readable on mobile", async ({ page }) =
   );
   expect(overflow).toBeLessThanOrEqual(1);
 });
+
+test("keeps the regular surface controls usable on mobile", async ({ page }) => {
+  await installMockApi(page, { dataset: "surface", lowPerformance: true });
+  await page.goto("/workspace/project-e2e?step=chart");
+
+  await page.getByRole("combobox", { name: "Chart type" }).click();
+  await page.getByRole("option", { name: "3D surface" }).click();
+  await page.getByRole("combobox", { name: "X field" }).click();
+  await page.getByRole("option", { name: "X", exact: true }).click();
+  await page.getByRole("combobox", { name: "Surface Y field" }).click();
+  await page.getByRole("option", { name: "Y", exact: true }).click();
+  await page.getByRole("combobox", { name: "Surface Z field" }).click();
+  await page.getByRole("option", { name: "Z", exact: true }).click();
+
+  const surface = page.locator('main [role="img"][data-surface-support="ready"]');
+  await expect(surface).toBeVisible();
+  await expect(surface).toHaveAttribute("data-surface-point-count", "441");
+  await expect(surface).toHaveAttribute("data-surface-fallback", "low-cost");
+
+  const controls = page.getByLabel("3D surface controls");
+  await expect(controls.getByRole("button", { name: "Reset view" })).toBeVisible();
+  await controls.getByRole("button", { name: "Rotate right" }).tap();
+  await expect(surface).toHaveAttribute("data-surface-view", "25:60:100");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});

@@ -19,11 +19,14 @@ import {
   Typography,
 } from "@mui/material";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { validateWebFile } from "@/features/import-data/file-policy";
 import { useWorkspaceStore } from "@/features/workspace/workspace-store";
+import type { SampleExample } from "@/domain/api-contract";
+
+import { ExampleGallery } from "./example-gallery";
 
 type HomeError =
   | "invalid-type"
@@ -35,6 +38,7 @@ type HomeError =
 export function HomeScreen() {
   const t = useTranslations("home");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
   const selectFile = useWorkspaceStore((state) => state.selectFile);
   const [error, setError] = useState<HomeError>(null);
@@ -43,6 +47,9 @@ export function HomeScreen() {
   const [runLabel, setRunLabel] = useState("");
   const [replicateId, setReplicateId] = useState("");
   const [batchId, setBatchId] = useState("");
+  const [exampleGalleryOpen, setExampleGalleryOpen] = useState(
+    () => searchParams.get("examples") === "1",
+  );
 
   const openWorkspace = (file: File) => {
     if (!experimentTitle.trim() && (runLabel.trim() || replicateId.trim() || batchId.trim())) {
@@ -80,13 +87,15 @@ export function HomeScreen() {
     }
   };
 
-  const useSample = () => {
+  const useSample = (sample: SampleExample) => {
     selectFile({
-      name: "labviz-sample.csv",
-      size: 18_432,
-      type: "text/csv",
+      name: sample.filename,
+      size: sample.byteSize,
+      type: sample.mediaType,
       isSample: true,
+      sampleSlug: sample.slug,
     });
+    setExampleGalleryOpen(false);
     router.push("/workspace/new");
   };
 
@@ -272,7 +281,7 @@ export function HomeScreen() {
                     <Button onClick={() => inputRef.current?.click()} variant="contained">
                       {t("browse")}
                     </Button>
-                    <Button onClick={useSample} variant="outlined">
+                    <Button onClick={() => setExampleGalleryOpen(true)} variant="outlined">
                       {t("sample")}
                     </Button>
                   </Stack>
@@ -328,6 +337,11 @@ export function HomeScreen() {
           <Typography variant="body2">{t("privacyBody")}</Typography>
         </Alert>
       </Container>
+      <ExampleGallery
+        onClose={() => setExampleGalleryOpen(false)}
+        onSelect={useSample}
+        open={exampleGalleryOpen}
+      />
     </>
   );
 }

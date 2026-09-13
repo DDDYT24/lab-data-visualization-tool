@@ -3,6 +3,19 @@
 版本功能基准见 [`VERSION_BASELINE.md`](VERSION_BASELINE.md)；未来待办和完成状态只以
 [`V2.0/TODO.md`](V2.0/TODO.md) 为准。
 
+## V2.2.0-dev（本地优先，未发布）
+
+- 增加版本化的 7 个合成教学示例、9 个边界 fixture 和统一导入/质量/分析/导出回归入口；
+  历史 V2.1 的 23 个数据集仍需恢复到当前环境后才能重新计入验证。
+- 增加系统、浅色、暗色主题和本地保存，移动端 3D 旋转/缩放/平移/重置控制、低成本降级提示，
+  图表数据表替代方式，以及 WCAG/Axe 和灰度可读性回归。
+- 增加 prediction interval、Working–Hotelling simultaneous mean band 和线性 Huber IRLS
+  稳健拟合；统计契约、失败码、独立合成答案键和导出一致性见
+  [`V2.0/docs/STATISTICS_CONTRACT_V2.2.md`](V2.0/docs/STATISTICS_CONTRACT_V2.2.md)。
+- 增加 Windows 本地优先打包契约、可复用 SVG/PNG/ICO 图标和候选包校验器；当前没有原生安装器、
+  绑定运行时或 clean-machine 安装证据。
+- V2.2 仍不包含云端同步、团队协作、真实 Google/Microsoft 登录或 AWS 部署。
+
 ## V2.1.1
 
 - 将 Next.js 更新至 16.3.4，修复影响 Windows 本地服务的安全公告。

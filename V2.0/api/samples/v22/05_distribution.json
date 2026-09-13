@@ -1,0 +1,242 @@
+[
+  {
+    "sample_id": "S01",
+    "group": "Control",
+    "measurement": 4.04
+  },
+  {
+    "sample_id": "S02",
+    "group": "Control",
+    "measurement": 4.88
+  },
+  {
+    "sample_id": "S03",
+    "group": "Control",
+    "measurement": 5.72
+  },
+  {
+    "sample_id": "S04",
+    "group": "Control",
+    "measurement": 4.52
+  },
+  {
+    "sample_id": "S05",
+    "group": "Control",
+    "measurement": 5.36
+  },
+  {
+    "sample_id": "S06",
+    "group": "Control",
+    "measurement": 4.16
+  },
+  {
+    "sample_id": "S07",
+    "group": "Control",
+    "measurement": 5.0
+  },
+  {
+    "sample_id": "S08",
+    "group": "Control",
+    "measurement": 5.84
+  },
+  {
+    "sample_id": "S09",
+    "group": "Control",
+    "measurement": 4.64
+  },
+  {
+    "sample_id": "S10",
+    "group": "Control",
+    "measurement": 5.48
+  },
+  {
+    "sample_id": "S11",
+    "group": "Control",
+    "measurement": 4.28
+  },
+  {
+    "sample_id": "S12",
+    "group": "Control",
+    "measurement": 5.12
+  },
+  {
+    "sample_id": "S13",
+    "group": "Control",
+    "measurement": 5.96
+  },
+  {
+    "sample_id": "S14",
+    "group": "Control",
+    "measurement": 4.76
+  },
+  {
+    "sample_id": "S15",
+    "group": "Control",
+    "measurement": 5.6
+  },
+  {
+    "sample_id": "S16",
+    "group": "Control",
+    "measurement": 4.4
+  },
+  {
+    "sample_id": "S17",
+    "group": "Control",
+    "measurement": 5.24
+  },
+  {
+    "sample_id": "S18",
+    "group": "Control",
+    "measurement": 4.04
+  },
+  {
+    "sample_id": "S19",
+    "group": "Control",
+    "measurement": 4.88
+  },
+  {
+    "sample_id": "S20",
+    "group": "Control",
+    "measurement": 5.72
+  },
+  {
+    "sample_id": "S21",
+    "group": "Control",
+    "measurement": 4.52
+  },
+  {
+    "sample_id": "S22",
+    "group": "Control",
+    "measurement": 5.36
+  },
+  {
+    "sample_id": "S23",
+    "group": "Control",
+    "measurement": 4.16
+  },
+  {
+    "sample_id": "S24",
+    "group": "Control",
+    "measurement": 5.0
+  },
+  {
+    "sample_id": "S25",
+    "group": "Treatment",
+    "measurement": 6.64
+  },
+  {
+    "sample_id": "S26",
+    "group": "Treatment",
+    "measurement": 5.44
+  },
+  {
+    "sample_id": "S27",
+    "group": "Treatment",
+    "measurement": 6.28
+  },
+  {
+    "sample_id": "S28",
+    "group": "Treatment",
+    "measurement": 5.08
+  },
+  {
+    "sample_id": "S29",
+    "group": "Treatment",
+    "measurement": 5.92
+  },
+  {
+    "sample_id": "S30",
+    "group": "Treatment",
+    "measurement": 6.76
+  },
+  {
+    "sample_id": "S31",
+    "group": "Treatment",
+    "measurement": 5.56
+  },
+  {
+    "sample_id": "S32",
+    "group": "Treatment",
+    "measurement": 6.4
+  },
+  {
+    "sample_id": "S33",
+    "group": "Treatment",
+    "measurement": 5.2
+  },
+  {
+    "sample_id": "S34",
+    "group": "Treatment",
+    "measurement": 6.04
+  },
+  {
+    "sample_id": "S35",
+    "group": "Treatment",
+    "measurement": 4.84
+  },
+  {
+    "sample_id": "S36",
+    "group": "Treatment",
+    "measurement": 5.68
+  },
+  {
+    "sample_id": "S37",
+    "group": "Treatment",
+    "measurement": 6.52
+  },
+  {
+    "sample_id": "S38",
+    "group": "Treatment",
+    "measurement": 5.32
+  },
+  {
+    "sample_id": "S39",
+    "group": "Treatment",
+    "measurement": 6.16
+  },
+  {
+    "sample_id": "S40",
+    "group": "Treatment",
+    "measurement": 4.96
+  },
+  {
+    "sample_id": "S41",
+    "group": "Treatment",
+    "measurement": 5.8
+  },
+  {
+    "sample_id": "S42",
+    "group": "Treatment",
+    "measurement": 6.64
+  },
+  {
+    "sample_id": "S43",
+    "group": "Treatment",
+    "measurement": 5.44
+  },
+  {
+    "sample_id": "S44",
+    "group": "Treatment",
+    "measurement": 6.28
+  },
+  {
+    "sample_id": "S45",
+    "group": "Treatment",
+    "measurement": 5.08
+  },
+  {
+    "sample_id": "S46",
+    "group": "Treatment",
+    "measurement": 5.92
+  },
+  {
+    "sample_id": "S47",
+    "group": "Treatment",
+    "measurement": 6.76
+  },
+  {
+    "sample_id": "S48",
+    "group": "Treatment",
+    "measurement": 5.56
+  }
+]

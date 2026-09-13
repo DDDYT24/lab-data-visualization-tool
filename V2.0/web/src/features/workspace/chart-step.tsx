@@ -2,6 +2,7 @@
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import {
   Accordion,
   AccordionDetails,
@@ -26,6 +27,8 @@ import { useTranslations } from "next-intl";
 
 import { ApiStatePanel } from "@/components/common/api-state-panel";
 import { ChartCanvas } from "@/components/common/chart-canvas";
+import { ContextualTip } from "@/components/common/contextual-tip";
+import { DataPreviewTable } from "@/components/common/data-preview-table";
 import type { ChartAnalysis } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
@@ -52,6 +55,7 @@ export function ChartStep({
   onContinue: () => void;
 }) {
   const t = useTranslations("chart");
+  const helpT = useTranslations("help");
   const projectId = useWorkspaceStore((state) => state.projectId);
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
   const issueActions = useWorkspaceStore((state) => state.issueActions);
@@ -272,15 +276,34 @@ export function ChartStep({
     if (value.startsWith("Residual summaries")) return t("evidenceMessages.residualDescriptive");
     if (value.startsWith("They do not establish")) return t("evidenceMessages.residualNoInference");
     if (value.startsWith("R² describes")) return t("evidenceMessages.rSquared");
-    if (value.startsWith("The interval is pointwise")) return t("evidenceMessages.pointwise");
     if (value.startsWith("Ordinary least squares")) return t("evidenceMessages.ordinary");
     if (value.startsWith("Weighted fitting")) return t("evidenceMessages.weighted");
-    if (value.startsWith("A possible residual trend")) return t("evidenceMessages.residualTrend");
-    if (value.startsWith("Prediction intervals")) return t("evidenceMessages.prediction");
-    if (value.startsWith("Simultaneous confidence bands")) {
-      return t("evidenceMessages.simultaneous");
+    if (value.startsWith("Huber IRLS")) return t("evidenceMessages.robustAssumption");
+    if (value.startsWith("Huber downweights")) return t("evidenceMessages.robustLimit");
+    if (value.startsWith("The interval includes residual")) {
+      return t("evidenceMessages.predictionAssumption");
     }
-    if (value.startsWith("Robust regression")) return t("evidenceMessages.robust");
+    if (value.startsWith("The Working-Hotelling band covers the family")) {
+      return t("evidenceMessages.simultaneousAssumption");
+    }
+    if (value.startsWith("The prediction interval includes")) {
+      return t("evidenceMessages.predictionLimit");
+    }
+    if (value.startsWith("The Working-Hotelling band covers the displayed")) {
+      return t("evidenceMessages.simultaneousLimit");
+    }
+    if (value.startsWith("The selected confidence level is interpreted for one future")) {
+      return t("evidenceMessages.predictionConfidence");
+    }
+    if (value.startsWith("The selected confidence level is interpreted as a Working-Hotelling")) {
+      return t("evidenceMessages.simultaneousConfidence");
+    }
+    if (value.startsWith("This pointwise mean interval")) return t("evidenceMessages.pointwise");
+    if (value.startsWith("This prediction interval")) return t("evidenceMessages.predictionLimit");
+    if (value.startsWith("This simultaneous mean band")) {
+      return t("evidenceMessages.simultaneousLimit");
+    }
+    if (value.startsWith("A possible residual trend")) return t("evidenceMessages.residualTrend");
     if (value.startsWith("No multiplicity correction")) return t("evidenceMessages.multiplicity");
     if (value.startsWith("Select weighted least squares")) {
       return t("evidenceMessages.weightedSelection");
@@ -302,6 +325,15 @@ export function ChartStep({
     const uniqueAssumptions = [...new Set(assumptions)];
     const uniqueLimitations = [...new Set(limitations)];
     const hasDeferredMethod = disclosures.some((item) => item.status === "deferred");
+    const intervalKind = series.fit?.intervalKind;
+    const intervalMeaning =
+      intervalKind === "pointwise-mean"
+        ? t("intervalKinds.pointwise-mean")
+        : intervalKind === "prediction"
+          ? t("intervalKinds.prediction")
+          : intervalKind === "simultaneous"
+            ? t("intervalKinds.simultaneous")
+            : null;
     return (
       <Stack spacing={0.5} sx={{ mt: 0.75 }}>
         {series.fit ? (
@@ -318,6 +350,11 @@ export function ChartStep({
               meanResidual: residual.meanResidual?.toFixed(4) ?? "—",
               rmse: residual.rmse.toFixed(4),
             })}
+          </Typography>
+        ) : null}
+        {intervalMeaning ? (
+          <Typography variant="caption">
+            {t("intervalEvidence", { meaning: intervalMeaning })}
           </Typography>
         ) : null}
         {residual?.residualTrend === "possible-trend" ? (
@@ -397,6 +434,11 @@ export function ChartStep({
 
   const canvas = (
     <Stack spacing={1.5}>
+      <ContextualTip
+        body={t("contextualTip")}
+        dismissLabel={helpT("dismissTip")}
+        id="chart-fields"
+      />
       <Paper sx={{ border: 1, borderColor: "divider", p: { xs: 1, md: 2 } }}>
         {surfaceNeedsAnotherField ? (
           <ApiStatePanel
@@ -435,6 +477,21 @@ export function ChartStep({
           />
         )}
       </Paper>
+      <Accordion disableGutters elevation={0} sx={{ border: 1, borderColor: "divider" }}>
+        <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+          <Typography sx={{ fontWeight: 700 }}>{t("dataTableTitle")}</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Typography color="text.secondary" sx={{ mb: 1.5 }} variant="body2">
+            {t("dataTableDescription")}
+          </Typography>
+          <DataPreviewTable
+            findings={quality.findings}
+            emphasizeIssues
+            preview={preview}
+          />
+        </AccordionDetails>
+      </Accordion>
       {preview.sampled ? (
         <Alert severity="info">
           {t("sampled", {
@@ -857,6 +914,9 @@ export function ChartStep({
                         fitting: {
                           ...chartSpec.fitting,
                           model: event.target.value as ChartSpec["fitting"]["model"],
+                          intervalKind: ["linear", "polynomial"].includes(event.target.value)
+                            ? chartSpec.fitting.intervalKind
+                            : "pointwise-mean",
                         },
                       })
                     }
@@ -882,16 +942,24 @@ export function ChartStep({
                         fitting: {
                           ...chartSpec.fitting,
                           fitMethod: event.target.value as ChartSpec["fitting"]["fitMethod"],
+                          confidenceBand:
+                            event.target.value === "robust-huber"
+                              ? false
+                              : chartSpec.fitting.confidenceBand,
+                          intervalKind:
+                            event.target.value === "robust-huber"
+                              ? "pointwise-mean"
+                              : chartSpec.fitting.intervalKind,
                         },
                       })
                     }
                     value={chartSpec.fitting.fitMethod}
                   >
-                    {(["ordinary-least-squares", "weighted-least-squares"] as const).map(
+                    {(["ordinary-least-squares", "weighted-least-squares", "robust-huber"] as const).map(
                       (method) => (
-                        <MenuItem key={method} value={method}>
-                          {t(`fitMethods.${method}`)}
-                        </MenuItem>
+                      <MenuItem key={method} value={method}>
+                        {t(`fitMethods.${method}`)}
+                      </MenuItem>
                       ),
                     )}
                   </Select>
@@ -899,6 +967,11 @@ export function ChartStep({
                 {chartSpec.fitting.fitMethod === "weighted-least-squares" ? (
                   <Typography color="text.secondary" variant="caption">
                     {t("weightedFitHelp")}
+                  </Typography>
+                ) : null}
+                {chartSpec.fitting.fitMethod === "robust-huber" ? (
+                  <Typography color="text.secondary" variant="caption">
+                    {t("robustFitHelp")}
                   </Typography>
                 ) : null}
                 {chartSpec.fitting.model === "polynomial" ? (
@@ -953,6 +1026,7 @@ export function ChartStep({
                   control={
                     <Switch
                       checked={chartSpec.fitting.confidenceBand}
+                      disabled={chartSpec.fitting.fitMethod === "robust-huber"}
                       onChange={(event) =>
                         updateChart({
                           fitting: { ...chartSpec.fitting, confidenceBand: event.target.checked },
@@ -963,28 +1037,69 @@ export function ChartStep({
                   label={t("confidenceBand")}
                 />
                 {chartSpec.fitting.confidenceBand ? (
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="confidence-method-label">{t("confidenceMethod")}</InputLabel>
-                    <Select
-                      label={t("confidenceMethod")}
-                      labelId="confidence-method-label"
-                      onChange={(event) =>
-                        updateChart({
-                          fitting: {
-                            ...chartSpec.fitting,
-                            confidenceMethod: event.target.value as ChartSpec["fitting"]["confidenceMethod"],
-                          },
-                        })
-                      }
-                      value={chartSpec.fitting.confidenceMethod}
-                    >
-                      {(["student-t", "bootstrap"] as const).map((method) => (
-                        <MenuItem key={method} value={method}>
-                          {t(`confidenceMethods.${method}`)}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="interval-kind-label">{t("intervalKind")}</InputLabel>
+                      <Select
+                        label={t("intervalKind")}
+                        labelId="interval-kind-label"
+                        onChange={(event) =>
+                          updateChart({
+                            fitting: {
+                              ...chartSpec.fitting,
+                              intervalKind: event.target.value as ChartSpec["fitting"]["intervalKind"],
+                              confidenceMethod:
+                                event.target.value === "pointwise-mean"
+                                  ? chartSpec.fitting.confidenceMethod
+                                  : "student-t",
+                            },
+                          })
+                        }
+                        value={chartSpec.fitting.intervalKind}
+                      >
+                        {(["pointwise-mean", "prediction", "simultaneous"] as const)
+                          .filter(
+                            (kind) =>
+                              kind === "pointwise-mean" ||
+                              ["linear", "polynomial"].includes(chartSpec.fitting.model),
+                          )
+                          .map((kind) => (
+                            <MenuItem key={kind} value={kind}>
+                              {t(`intervalKinds.${kind}`)}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="confidence-method-label">{t("confidenceMethod")}</InputLabel>
+                      <Select
+                        disabled={chartSpec.fitting.intervalKind !== "pointwise-mean"}
+                        label={t("confidenceMethod")}
+                        labelId="confidence-method-label"
+                        onChange={(event) =>
+                          updateChart({
+                            fitting: {
+                              ...chartSpec.fitting,
+                              confidenceMethod: event.target.value as ChartSpec["fitting"]["confidenceMethod"],
+                            },
+                          })
+                        }
+                        value={chartSpec.fitting.confidenceMethod}
+                      >
+                        {(["student-t", "bootstrap"] as const)
+                          .filter(
+                            (method) =>
+                              chartSpec.fitting.intervalKind === "pointwise-mean" ||
+                              method === "student-t",
+                          )
+                          .map((method) => (
+                            <MenuItem key={method} value={method}>
+                              {t(`confidenceMethods.${method}`)}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                  </>
                 ) : null}
                 <FormControl fullWidth size="small">
                   <InputLabel id="uncertainty-mode-label">{t("errorBars")}</InputLabel>

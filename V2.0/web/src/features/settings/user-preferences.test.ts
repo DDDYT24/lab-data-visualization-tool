@@ -43,4 +43,15 @@ describe("user preferences", () => {
     expect(loadUserPreferences()).toEqual(defaultUserPreferences);
     expect(window.localStorage.length).toBe(0);
   });
+
+  it("keeps the appearance choice and accepts older preference records", () => {
+    saveUserPreferences({ ...defaultUserPreferences, appearance: "dark" });
+    expect(loadUserPreferences().appearance).toBe("dark");
+
+    window.localStorage.setItem(
+      "labviz:user-preferences:v1",
+      JSON.stringify({ ...defaultUserPreferences, appearance: undefined }),
+    );
+    expect(loadUserPreferences().appearance).toBe("system");
+  });
 });
