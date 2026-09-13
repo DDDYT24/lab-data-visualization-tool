@@ -233,7 +233,7 @@ runs the web and API processes on loopback and is local deployment, not a hosted
    web runtimes, build an unsigned test artifact first, validate local health/lifecycle/data paths,
    then decide signing and antivirus handling. Test on a disposable clean Windows environment with
    spaces and Chinese characters in the user path.
-5. **Release-candidate rerun (`P7`):** run static checks, all 254 API/PostgreSQL/MinIO tests, data
+5. **Release-candidate rerun (`P7`):** run static checks, all 257 API/PostgreSQL/MinIO tests, data
    matrix, frontend verify, live/mock browser matrices, accessibility, performance budgets, package
    validation, install/upgrade/rollback/uninstall, and privacy/forbidden-artifact checks from the
    exact candidate commit. Store machine-readable results outside tracked user-data paths.
@@ -425,9 +425,12 @@ runs the web and API processes on loopback and is local deployment, not a hosted
   upgrade from V2.1.1, rollback, repair/reinstall, non-administrator behavior where supported,
   antivirus/signing expectations, paths with spaces and non-ASCII characters, and uninstall with an
   explicit keep/delete-local-data choice.
-  - **Current limitation (2026-09-12):** no installer compiler, bundled CPython/Node runtimes,
-    signed artifact, or clean Windows machine is available in this repository. This item remains
-    open; the portable launcher is a contract, not an installer or offline-install evidence.
+  - **Current limitation (2026-09-13):** the repository contains no installer compiler or bundled
+    CPython/Node runtimes, and no signed artifact or clean Windows machine is available. The local
+    toolchain probe found only the .NET SDK; no Inno Setup, WiX, or NSIS compiler was available.
+    The package validator correctly rejects the repository checkout because it is not a staged
+    candidate package. This item remains open; the portable launcher is a contract, not an
+    installer or offline-install evidence.
 - [ ] **V22-P5-3: Reuse the accepted packaging contract for macOS and Linux.** Do not advertise a
   platform package until it passes clean-machine installation, launch, upgrade, export, backup, and
   removal tests on named supported versions. macOS/Linux packaging may follow V2.2 Windows GA as a
