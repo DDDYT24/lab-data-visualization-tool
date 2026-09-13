@@ -94,6 +94,7 @@ export function HomeScreen() {
       type: sample.mediaType,
       isSample: true,
       sampleSlug: sample.slug,
+      recommendedChart: sample.recommendedChart,
     });
     setExampleGalleryOpen(false);
     router.push("/workspace/new");

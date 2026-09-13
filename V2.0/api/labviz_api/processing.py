@@ -6,10 +6,12 @@ import csv
 import io
 import json
 import math
+import os
 import re
 import zlib
 from collections import Counter
 from datetime import date, datetime
+from functools import lru_cache
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
@@ -18,6 +20,7 @@ from zipfile import BadZipFile, ZipFile
 import matplotlib
 import numpy as np
 import pandas as pd
+from matplotlib import font_manager
 from matplotlib.figure import Figure
 from scipy.stats import f as fisher_f
 from scipy.stats import t as student_t
@@ -43,12 +46,103 @@ MAX_XLSX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
 MAX_GRID_CANDIDATE_COLUMNS = 12
 MIN_GRID_COVERAGE = 0.8
 UNIT_PATTERN = re.compile(r"^\s*(.*?)\s*(?:\(([^()]+)\)|\[([^\[\]]+)\])\s*$")
+CJK_FONT_ENV = "LABVIZ_CJK_FONT_PATH"
+CJK_FONT_NAMES = (
+    "NotoSansSC-VF.ttf",
+    "NotoSansCJKsc-Regular.otf",
+    "NotoSansCJK-Regular.ttc",
+    "msyh.ttc",
+    "simsun.ttc",
+    "Deng.ttf",
+    "PingFang.ttc",
+)
 
 
 class ProcessingError(ValueError):
     def __init__(self, message: str, code: str = "processing-failed") -> None:
         super().__init__(message)
         self.code = code
+
+
+def _cjk_font_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    configured = os.environ.get(CJK_FONT_ENV, "").strip()
+    if configured:
+        candidates.append(Path(configured).expanduser())
+
+    asset_root = Path(__file__).resolve().parents[2] / "assets" / "fonts"
+    candidates.extend(asset_root / name for name in CJK_FONT_NAMES)
+
+    windir = os.environ.get("WINDIR", "")
+    if windir:
+        candidates.extend(Path(windir) / "Fonts" / name for name in CJK_FONT_NAMES)
+
+    candidates.extend(
+        Path(path) / name
+        for path in (
+            "/usr/share/fonts/opentype/noto",
+            "/usr/share/fonts/truetype/noto",
+            "/usr/local/share/fonts",
+            "/System/Library/Fonts",
+            "/Library/Fonts",
+        )
+        for name in CJK_FONT_NAMES
+    )
+    return candidates
+
+
+@lru_cache(maxsize=1)
+def _cjk_font_info() -> tuple[str, str] | None:
+    """Return a registered CJK family and its source path, if one is available."""
+    seen: set[Path] = set()
+    for candidate in _cjk_font_candidates():
+        resolved = candidate.resolve() if candidate.exists() else candidate
+        if resolved in seen or not resolved.is_file():
+            continue
+        seen.add(resolved)
+        try:
+            font_manager.fontManager.addfont(str(resolved))
+            family = font_manager.FontProperties(fname=str(resolved)).get_name()
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if family:
+            return family, str(resolved)
+    return None
+
+
+def _contains_cjk(value: object) -> bool:
+    text = str(value)
+    return any(
+        0x2E80 <= ord(character) <= 0x2FFF
+        or 0x3040 <= ord(character) <= 0x30FF
+        or 0x31A0 <= ord(character) <= 0x31FF
+        or 0x3400 <= ord(character) <= 0x4DBF
+        or 0x4E00 <= ord(character) <= 0x9FFF
+        or 0xAC00 <= ord(character) <= 0xD7AF
+        for character in text
+    )
+
+
+def _chart_needs_cjk_font(frame: pd.DataFrame, chart: ChartSpec) -> bool:
+    visible_text = [
+        chart.title,
+        chart.subtitle,
+        chart.x_axis.title,
+        chart.x_axis.unit,
+        chart.y_axis.title,
+        chart.y_axis.unit,
+        *(item.label for item in chart.series),
+    ]
+    if any(_contains_cjk(value) for value in visible_text):
+        return True
+    for column in frame.columns:
+        if _contains_cjk(column):
+            return True
+        if not pd.api.types.is_numeric_dtype(frame[column]) and any(
+            _contains_cjk(value) for value in frame[column].dropna()
+        ):
+            return True
+    return False
 
 
 class GridShape(TypedDict):
@@ -797,23 +891,76 @@ def _trend_inconsistent_mask(series: pd.Series[Any]) -> tuple[np.ndarray[Any, An
     return result, r_squared
 
 
-def default_chart_spec(frame: pd.DataFrame) -> dict[str, Any]:
+def default_chart_spec(
+    frame: pd.DataFrame,
+    preferred_type: str | None = None,
+) -> dict[str, Any]:
     numeric_columns = [str(column) for column in frame.select_dtypes(include="number").columns]
+    text_columns = [
+        str(column) for column in frame.select_dtypes(include=["object", "str"]).columns
+    ]
     if len(numeric_columns) >= 2:
         x_field, y_field = numeric_columns[:2]
     elif numeric_columns:
         x_field = y_field = numeric_columns[0]
     else:
         x_field = y_field = str(frame.columns[0])
+
+    chart_type = (
+        preferred_type
+        if preferred_type
+        in {
+            "line",
+            "scatter",
+            "bar",
+            "histogram",
+            "box",
+            "heatmap",
+            "surface3d",
+        }
+        else "line"
+    )
+    if chart_type in {"histogram", "box"} and text_columns:
+        x_field = text_columns[0]
+    if chart_type == "surface3d" and len(numeric_columns) >= 3:
+        x_field, y_field = numeric_columns[:2]
+        series_fields = numeric_columns[1:3]
+    elif chart_type == "heatmap" and len(numeric_columns) >= 2:
+        x_field, y_field = numeric_columns[:2]
+        series_fields = numeric_columns
+    else:
+        series_fields = [y_field]
+
     x_label, x_unit = _column_label_and_unit(x_field)
     y_label, y_unit = _column_label_and_unit(y_field)
+    series = [
+        {
+            "field": field,
+            "label": _column_label_and_unit(field)[0],
+            "color": color,
+            **({"panel": 1} if chart_type == "surface3d" else {}),
+        }
+        for field, color in zip(
+            series_fields,
+            ("#2563EB", "#0F766E", "#D97706", "#7C3AED", "#DB2777"),
+            strict=False,
+        )
+    ]
+    if chart_type == "surface3d":
+        # A surface panel is intentionally encoded as one Y and one Z series.
+        series[0]["label"] = _column_label_and_unit(series_fields[0])[0]
+        series[1]["label"] = _column_label_and_unit(series_fields[1])[0]
+    group_field = (
+        text_columns[0] if chart_type in {"line", "scatter", "bar"} and text_columns else None
+    )
     return {
         "schemaVersion": 1,
-        "type": "line",
+        "type": chart_type,
         "title": f"{y_label} over {x_label}",
         "xAxis": {"field": x_field, "title": x_label, "unit": x_unit or ""},
         "yAxis": {"field": y_field, "title": y_label, "unit": y_unit or ""},
-        "series": [{"field": y_field, "label": y_label, "color": "#2563EB"}],
+        "series": series,
+        "groupField": group_field,
         "panelCount": 1,
         "export": {
             "format": "png",
@@ -2130,6 +2277,18 @@ def render_chart(
     if frame.empty:
         raise ProcessingError("There are no rows available to export.", "empty-chart-data")
     export = chart.export_settings
+    resolved_font_family: str = export.font_family
+    resolved_font_properties: Any | None = None
+    if _chart_needs_cjk_font(frame, chart):
+        cjk_font = _cjk_font_info()
+        if cjk_font is None:
+            raise ProcessingError(
+                "Chinese labels require a CJK-capable font. Install Noto Sans SC or set "
+                f"{CJK_FONT_ENV} to an OFL-compatible font file.",
+                "cjk-font-unavailable",
+            )
+        resolved_font_family = cjk_font[0]
+        resolved_font_properties = font_manager.FontProperties(fname=cjk_font[1])
     sizes = {
         "single-column": (3.35, 2.6),
         "double-column": (7.1, 4.4),
@@ -2450,7 +2609,10 @@ def render_chart(
         )
     for text in figure.findobj(match=lambda item: hasattr(item, "set_fontfamily")):
         styled_text = cast(Any, text)
-        styled_text.set_fontfamily(export.font_family)
+        if resolved_font_properties is not None:
+            styled_text.set_fontproperties(resolved_font_properties)
+        else:
+            styled_text.set_fontfamily(resolved_font_family)
         if hasattr(styled_text, "get_fontsize") and styled_text.get_fontsize() == 10:
             styled_text.set_fontsize(export.font_size)
     figure.tight_layout(rect=(0, 0.1, 1, 1) if footer_note else None)

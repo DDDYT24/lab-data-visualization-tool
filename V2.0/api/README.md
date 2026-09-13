@@ -102,11 +102,14 @@ Python 3.12/3.13 virtual environment:
 
 ```powershell
 & '.venv\Scripts\python.exe' -m scripts.run_v22_matrix
-& '.venv\Scripts\python.exe' -m scripts.measure_v22_performance
+& '.venv\Scripts\python.exe' -m scripts.measure_v22_performance --repetitions 3
 ```
 
 The matrix intentionally reports the historical 23-dataset V2.1 corpus as skipped when that
 private/historical corpus is not present; a skip is not a pass.
+The performance command repeats each synthetic case, reports min/mean/p95/max/stdev timings,
+checks the versioned budgets in `samples/v22/performance_budgets.json`, and exits non-zero on a
+budget violation. Use `--output <ignored-json-path>` to save a machine-readable report.
 
 HTTP uploads accept an optional `Idempotency-Key`. The key is scoped to the anonymous browser
 session and stores a canonical request fingerprint containing the payload hash, filename, media

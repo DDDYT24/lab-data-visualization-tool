@@ -337,6 +337,7 @@ def _process_project(
     media_type: str,
     requested_sheet_name: str | None = None,
     header_row: int = 1,
+    preferred_chart_type: str | None = None,
 ) -> None:
     try:
         repository.update_job(
@@ -374,7 +375,7 @@ def _process_project(
         )
         preview = build_preview(project_id, frame)
         quality = build_quality_report(project_id, frame)
-        chart = default_chart_spec(frame)
+        chart = default_chart_spec(frame, preferred_chart_type)
         repository.complete_project(
             project_id=project_id,
             source=_model_json(source),
@@ -782,6 +783,7 @@ def create_app(
             sample.media_type,
             sample.sheet_name,
             sample.header_row,
+            sample.recommended_chart,
         )
         project = _require_project(repository, project_id)
         return _project_session(repository, project)

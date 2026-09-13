@@ -218,14 +218,17 @@ runs the web and API processes on loopback and is local deployment, not a hosted
 1. **Performance contract (`V22-P0-3`):** add cross-platform process peak-memory measurement,
    first-chart and interaction timing, repeated-run variance, and reviewed warning/failure budgets
    for 24/1,000/10,000-row tables and 21×21/101×101 surfaces. Keep the existing disclosed mobile
-   sampling fallback.
+   sampling fallback. The implementation and first reference run are now available; threshold review
+   remains a release decision.
 2. **Live browser release paths:** run every bundled example from card selection through the real
    FastAPI processing path, editable chart, and export in Chromium. Keep Firefox/WebKit as supported
    desktop smoke engines and run the regular/invalid/large 3D mobile matrix. Do not count the
-   mock-backed UI suite as live-API evidence.
+   mock-backed UI suite as live-API evidence. The seven-example Chromium path is now covered by a
+   separately enabled live test; it must still be rerun on the exact release candidate.
 3. **Export typography closure:** choose and document a redistributable CJK-capable font strategy,
    verify English/Chinese labels in PNG/SVG/PDF, and remove the current missing-glyph warning before
-   promising exact Chinese export fidelity.
+   promising exact Chinese export fidelity. The current Windows resolver/test pass; installer
+   bundling and clean-machine proof remain coupled to P5-2.
 4. **Windows installer (`V22-P5-2`):** select the packager, assemble pinned CPython/Node/standalone
    web runtimes, build an unsigned test artifact first, validate local health/lifecycle/data paths,
    then decide signing and antivirus handling. Test on a disposable clean Windows environment with
@@ -276,14 +279,19 @@ runs the web and API processes on loopback and is local deployment, not a hosted
   - **Acceptance:** Chromium, Firefox, and WebKit desktop smoke flows pass; the supported mobile
     viewport and touch flow pass; large-data sampling is disclosed; no supported case crashes,
     freezes without progress, or hides a failure behind an empty chart.
-  - **Current evidence and limitation (2026-09-13):** on Windows 11 / Python 3.12.14 / pandas 3.0.5,
-    tables with 24/1,000/10,000 rows load in 10.08/1.92/6.12 ms, run quality checks in
-    12.20/10.34/20.16 ms, analyze in 4.66/8.95/11.22 ms, and render PNG in
-    190.08/174.62/172.10 ms. The 21×21 and 101×101 surfaces complete quality/analysis/PNG in
-    35.88/43.37/303.82 ms and 127.23/80.81/319.69 ms. Chromium, mobile Chromium, Firefox, and
-    WebKit smoke flows pass, including disclosed large-surface sampling. Process-level peak memory,
-    browser interaction timing, and reviewed pass/fail budgets remain open, so this item stays
-    unchecked.
+  - **Current evidence and limitation (2026-09-13):** the repeated local runner executes each case
+    three times on Windows 11 / Python 3.12.14 / pandas 3.0.5 and records min/mean/p95/max/stdev.
+    Conservative maxima are: 24 rows load/preview/quality/analysis/PNG `9.23/4.09/15.48/6.58/267.40`
+    ms; 1,000 rows `2.34/23.32/17.80/20.50/321.28` ms; 10,000 rows
+    `8.48/22.77/38.03/24.21/293.68` ms; 21×21 surface quality/analysis/PNG
+    `117.66/173.91/793.18` ms; and 101×101 `222.16/200.93/934.86` ms. Maximum whole-case times
+    are `295.39/383.22/374.52/1084.75/1263.12` ms respectively, and process peak memory is
+    `206.77 MiB`. The browser responsiveness run measured sample-import-to-ready `1,943 ms`,
+    first-chart `846 ms`, and chart interaction `478 ms`, all below the proposed limits. The
+    versioned performance report returns `pass` with zero violations, while
+    `performance_budgets.json` remains `status: proposed` pending maintainer review. Live
+    seven-example timing is intentionally a separate workflow. This item stays unchecked until
+    the thresholds are reviewed and the exact release candidate is rerun.
 
 ### P1 - example gallery and first-run learning
 
@@ -310,8 +318,10 @@ runs the web and API processes on loopback and is local deployment, not a hosted
     all four output formats. `example-gallery.spec.ts` opens each of the seven cards by keyboard and
     verifies metadata, route, persisted refresh state, and browser back behavior; the chooser
     renders all seven Chinese titles, and `mobile.spec.ts` opens all seven cards without horizontal
-    overflow. Browser tests mock transport while the API suite independently exercises the real
-    processing path; no sample-only processing shortcut is counted.
+    overflow. The separately enabled `live-samples.spec.ts` now opens all seven cards through the
+    real FastAPI path, checks each recommended chart type, renders the editable chart, prepares the
+    export, and downloads a real PNG successfully. Browser tests mock transport only where stated;
+    no sample-only processing shortcut is counted. The live test still needs an exact-candidate rerun.
 
 ### P2 - help, contextual tips, and feedback center
 
@@ -449,28 +459,35 @@ explicit deployment/profile boundary.
 
 ### P7 - release candidate and V2.2 definition of done
 
-**Local checkpoint (2026-09-13, based on `292bdad`):** see
-[`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification, 50 Playwright
-checks across Chromium/mobile Chromium/Firefox/WebKit, all 254 API tests with real local
-PostgreSQL 17 and MinIO, static Python gates, and the 7 + 9 + 23 data matrix pass. Two live-API
-browser tests were intentionally skipped in the mock-backed browser matrix. Native installer,
-clean-machine/platform gates, and reviewed performance/memory budgets remain unavailable.
-Therefore P7 remains open.
+**Local checkpoint (2026-09-13, based on `292bdad` plus the current working-tree gates):** see
+[`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification, 51 Playwright
+checks across Chromium/mobile Chromium/Firefox/WebKit, static Python gates, and the 7 + 9 + 23
+data matrix pass. The previous checkpoint recorded all 254 API tests with real local PostgreSQL 17
+and MinIO; the current P0-P3 changes have targeted API regressions and the matrix rerun, while the
+full API gate remains part of P7. The separately
+enabled live Chromium flow now passes all seven examples through real API processing and PNG
+download; it is not part of the mock-backed count. Native installer and clean-machine/platform
+gates remain unavailable. The first repeated performance/memory run has zero budget violations,
+but the thresholds remain proposed and the exact release-candidate rerun is open. Therefore P7
+remains open.
 
-**Remaining release blockers:** `V22-P0-3`; seven real-API example browser paths; CJK export-font
-closure; `V22-P5-2` Windows artifact and clean-machine lifecycle evidence; final exact-commit rerun
-and bilingual release documentation. `V22-P5-3`, all P6 items, the legacy storage-state rename,
+**Remaining release blockers:** review/approve `V22-P0-3` thresholds and rerun them on the exact
+candidate; CJK installer font bundling/clean-machine closure; `V22-P5-2` Windows artifact and
+clean-machine lifecycle evidence; final exact-commit rerun and bilingual release documentation.
+`V22-P5-3`, all P6 items, the legacy storage-state rename,
 no-store mode, public AWS acceptance, billing, and broader mobile editing are explicitly non-blocking
 follow-up work.
 
 - [ ] All seven or more public examples are bundled offline, have bilingual teaching metadata, and
   complete import-to-export browser workflows with answer-keyed results.
-  - **Remaining:** bundled metadata and API answer keys pass; every card still needs one real-API
-    browser path through editable chart and export at the release candidate.
+  - **Current evidence:** bundled metadata and API answer keys pass; the separately enabled live
+    Chromium workflow passes all seven cards through editable chart and PNG export. The exact
+    release-candidate rerun remains required before this final P7 checklist item can be checked.
 - [ ] The existing 23-dataset V2.1 regression matrix and every V2.2 example, edge, format-parity,
   statistics, mobile, theme, privacy, and packaging gate pass with a machine-readable report.
-  - **Remaining:** the 7 + 9 + 23 data matrix passes; performance-budget and real installer lifecycle
-    results must be added to one release-candidate report.
+  - **Remaining:** the 7 + 9 + 23 data matrix passes; repeated performance results now exist with
+    zero violations, but performance review and real installer lifecycle results must be added to
+    one release-candidate report.
 - [ ] `ruff`, formatting, MyPy, the complete API/PostgreSQL/MinIO gate, `npm run verify`, desktop and
   mobile Playwright, visual/accessibility checks, and clean-install tests pass at the release commit.
   - **Remaining:** current code gates pass, but they must be rerun after the installer exists on the
@@ -482,7 +499,8 @@ follow-up work.
 - [ ] Help, contextual tips, feedback privacy, theme behavior, every new scientific method, and all
   supported package/upgrade instructions are complete in English and Simplified Chinese.
   - **Remaining:** application copy and method contracts pass; final Windows install/upgrade/
-    uninstall instructions and CJK export-font verification remain.
+    uninstall instructions and installer-side CJK font verification remain. The current Windows
+    API PNG/SVG/PDF CJK regression passes without missing-glyph warnings.
 - [ ] Release notes and `VERSION_BASELINE.md` distinguish shipped local features, optional preview
   features, skipped external checks, and deferred work. V2.2 is not marked complete until this list
   is supported by reproducible evidence from the release commit.
