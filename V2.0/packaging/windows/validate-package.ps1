@@ -26,6 +26,7 @@ $requiredFiles = @(
     "package-manifest.json",
     "bin\start-labviz-portable.cmd",
     "bin\start-labviz-portable.ps1",
+    "V2.0\web\server.js",
     "V2.0\assets\labviz-logo.ico",
     "V2.0\assets\labviz-logo.svg"
 )
@@ -37,12 +38,20 @@ $missing = @(
 if ($missing.Count -gt 0) {
     throw "Candidate package is missing: $($missing -join ', ')"
 }
+$requiredDirectories = @("V2.0\web\.next\static", "V2.0\web\node_modules")
+$missingDirectories = @(
+    $requiredDirectories | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $resolvedRoot $_) -PathType Container)
+    }
+)
+if ($missingDirectories.Count -gt 0) {
+    throw "Candidate package is missing required production directories: $($missingDirectories -join ', ')"
+}
 
 $forbiddenPatterns = @(
     "(^|[\\/])\.env(?:\.|$)",
     "(^|[\\/])\.labviz(?:[\\/]|$)",
     "(^|[\\/])\.venv(?:[\\/]|$)",
-    "(^|[\\/])node_modules(?:[\\/]|$)",
     "(^|[\\/])\.next[\\/]cache(?:[\\/]|$)",
     "(^|[\\/])outputs(?:[\\/]|$)",
     "(^|[\\/])playwright-report(?:[\\/]|$)",
@@ -51,7 +60,15 @@ $forbiddenPatterns = @(
 $violations = @(
     Get-ChildItem -LiteralPath $resolvedRoot -Recurse -Force -File |
         ForEach-Object {
-            $relative = $_.FullName.Substring($resolvedRoot.Length).TrimStart('\\', '/')
+            $relative = $_.FullName.Substring($resolvedRoot.Length).TrimStart('\', '/')
+            $isAllowedProductionNodeModules =
+                $relative.Equals("V2.0\web\node_modules", [StringComparison]::OrdinalIgnoreCase) -or
+                $relative.StartsWith("V2.0\web\node_modules\", [StringComparison]::OrdinalIgnoreCase)
+            if ($relative -match "(^|[\\/])node_modules(?:[\\/]|$)" -and
+                -not $isAllowedProductionNodeModules) {
+                [pscustomobject]@{ Path = $relative; Rule = "node_modules outside traced production web runtime" }
+                return
+            }
             foreach ($pattern in $forbiddenPatterns) {
                 if ($relative -match $pattern) {
                     [pscustomobject]@{ Path = $relative; Rule = $pattern }

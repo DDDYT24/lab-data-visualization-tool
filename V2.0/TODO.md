@@ -431,6 +431,12 @@ runs the web and API processes on loopback and is local deployment, not a hosted
     The package validator correctly rejects the repository checkout because it is not a staged
     candidate package. This item remains open; the portable launcher is a contract, not an
     installer or offline-install evidence.
+  - **Candidate evidence (2026-09-13):** `stage-candidate.ps1` produced a disposable candidate
+    from Next standalone output, locked API production dependencies, Python 3.12.14, and Node.js
+    24.17.0. `validate-package.ps1 -RequireBundledRuntimes` passed, and the portable launcher
+    returned Web 200 plus API `/health` 200 from a path containing spaces. This proves candidate
+    staging and the local path boundary only; it does not close the native-installer, Python 3.13,
+    upgrade/rollback/uninstall, signing, or clean-machine gates.
 - [ ] **V22-P5-3: Reuse the accepted packaging contract for macOS and Linux.** Do not advertise a
   platform package until it passes clean-machine installation, launch, upgrade, export, backup, and
   removal tests on named supported versions. macOS/Linux packaging may follow V2.2 Windows GA as a
@@ -468,10 +474,12 @@ checks across Chromium/mobile Chromium/Firefox/WebKit, static Python gates, and 
 data matrix pass. The complete API/PostgreSQL/MinIO gate now passes 257 tests on a fresh dedicated
 local Compose project; the original development volume was preserved. The separately
 enabled live Chromium flow now passes all seven examples through real API processing and PNG
-download; it is not part of the mock-backed count. Native installer and clean-machine/platform
-gates remain unavailable. The first repeated performance/memory run has zero budget violations,
-but the thresholds remain proposed and the exact release-candidate rerun is open. Therefore P7
-remains open.
+download; it is not part of the mock-backed count. A disposable Windows candidate also passes
+package validation and a path-with-spaces portable Web/API health smoke using Python 3.12.14 and
+Node.js 24.17.0; it is not a native installer or release artifact. Native installer and
+clean-machine/platform gates remain unavailable. The first repeated performance/memory run has
+zero budget violations, but the thresholds remain proposed and the exact release-candidate rerun
+is open. Therefore P7 remains open.
 
 **Remaining release blockers:** review/approve `V22-P0-3` thresholds and rerun them on the exact
 candidate; CJK installer font bundling/clean-machine closure; `V22-P5-2` Windows artifact and
