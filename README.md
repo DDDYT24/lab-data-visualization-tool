@@ -8,7 +8,7 @@
 ![Release](https://img.shields.io/badge/release-V2.2.0--dev%20local--first-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [Version baseline](VERSION_BASELINE.md) · [Future backlog](V2.0/TODO.md) · [Privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [Offline install](V2.0/docs/OFFLINE_INSTALL.md) · [Statistics contract](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) · [Windows packaging contract](V2.0/packaging/windows/README.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [Version baseline](VERSION_BASELINE.md) · [Future backlog](V2.0/TODO.md) · [P7 test checkpoint](V2.0/docs/V2.2_P7_TEST_REPORT.md) · [Privacy boundary](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [Offline install](V2.0/docs/OFFLINE_INSTALL.md) · [Statistics contract](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) · [Windows packaging contract](V2.0/packaging/windows/README.md)
 
 </div>
 

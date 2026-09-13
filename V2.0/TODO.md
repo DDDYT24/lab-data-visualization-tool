@@ -214,7 +214,7 @@ server-backed preview track and must not block or silently change the local rele
   - **Evidence (2026-09-12):** `V2.0/api/samples/v22/manifest.json` contains seven public and nine
     edge synthetic entries. `tests/test_v22_samples.py` validates the version, formats, schemas,
     quality expectations, and tracked byte sizes.
-- [ ] **V22-P0-2: Turn the data corpus into one repeatable matrix runner.** Keep the existing
+- [x] **V22-P0-2: Turn the data corpus into one repeatable matrix runner.** Keep the existing
   23-dataset V2.1 matrix, add every public example and V2.2 edge fixture, and run the same manifest
   through import, preview, quality, cleaning, recommendation, chart analysis, and PNG/SVG/PDF plus
   cleaned-data export. Store machine-readable results and fail when an answer key changes without
@@ -222,10 +222,13 @@ server-backed preview track and must not block or silently change the local rele
   - **Acceptance:** every dataset records pass/fail/skip with a reason; public examples complete the
     browser workflow; invalid inputs fail with localized, actionable errors; the runner never counts
     an unconfigured cloud, live-mail, private-file, operating-system, or GPU check as passed.
-  - **Current evidence and limitation (2026-09-12):** `python -m scripts.run_v22_matrix` passes all seven
-    public and nine edge fixtures through local processing and exports, and explicitly reports the
-    historical 23-dataset V2.1 corpus as `skip` because it is not tracked in this bundle. The
-    historical corpus must be restored and rerun before this item can be checked.
+  - **Evidence and boundary (2026-09-13):** `python -m scripts.run_v22_matrix --output <ignored-json>`
+    passes all seven public fixtures, all nine V2.2 edge fixtures, and all 23 historical V2.1
+    datasets. Valid datasets run import validation, preview, quality, cleaning, recommendation,
+    chart analysis, cleaned CSV, and PNG/SVG/PDF export; expected-invalid datasets compare stable
+    error codes. The historical corpus remains an ignored local synthetic test package rather than
+    tracked user data, so a clean release machine must provide it with `--historical-root`; a missing
+    corpus is reported as `skip`, never `pass`.
 - [ ] **V22-P0-3: Establish user-comfort performance and compatibility budgets before feature work.**
   Measure import-to-ready time, first-chart render, chart interaction, export, and peak memory on a
   small example, a medium dataset, a large dataset near the documented local limit, and 21 x 21 and
@@ -234,12 +237,14 @@ server-backed preview track and must not block or silently change the local rele
   - **Acceptance:** Chromium, Firefox, and WebKit desktop smoke flows pass; the supported mobile
     viewport and touch flow pass; large-data sampling is disclosed; no supported case crashes,
     freezes without progress, or hides a failure behind an empty chart.
-  - **Current evidence and limitation (2026-09-12):** `python -m scripts.measure_v22_performance`
-    records this Windows 11 / Python 3.12.14 / pandas 3.0.5 baseline (milliseconds): tables 24/1,000/10,000
-    rows load 8.36/1.56/8.39, quality 10.10/9.96/32.77, analysis 4.32/9.66/37.79, and PNG render
-    187.51/170.67/319.29; surfaces 21×21 quality/analysis/PNG 74.09/105.67/543.87 and 101×101
-    234.38/214.26/633.33. The configured browser evidence is Chromium plus mobile; Firefox/WebKit
-    and peak-memory budgets still require a named test environment and reviewed thresholds.
+  - **Current evidence and limitation (2026-09-13):** on Windows 11 / Python 3.12.14 / pandas 3.0.5,
+    tables with 24/1,000/10,000 rows load in 10.08/1.92/6.12 ms, run quality checks in
+    12.20/10.34/20.16 ms, analyze in 4.66/8.95/11.22 ms, and render PNG in
+    190.08/174.62/172.10 ms. The 21×21 and 101×101 surfaces complete quality/analysis/PNG in
+    35.88/43.37/303.82 ms and 127.23/80.81/319.69 ms. Chromium, mobile Chromium, Firefox, and
+    WebKit smoke flows pass, including disclosed large-surface sampling. Process-level peak memory,
+    browser interaction timing, and reviewed pass/fail budgets remain open, so this item stays
+    unchecked.
 
 ### P1 - example gallery and first-run learning
 
@@ -257,13 +262,17 @@ server-backed preview track and must not block or silently change the local rele
   - **Evidence (2026-09-12):** `test_v22_samples.py` exercises every public catalog entry through
     import, preview, quality, cleaning, recommendation, analysis, cleaned-data export, and PNG/SVG/PDF
     exports. The old sample route remains covered by the API compatibility tests.
-- [ ] **V22-P1-3: Test every example as a teaching workflow.** For each card, assert its metadata,
+- [x] **V22-P1-3: Test every example as a teaching workflow.** For each card, assert its metadata,
   intended recommendation, important quality findings, editable chart, export provenance, browser
   back/refresh behavior, English/Chinese copy, keyboard access, and mobile layout. Add a regression
   preventing a card from pointing to a missing or mismatched fixture.
-  - **Current evidence and limitation (2026-09-12):** backend coverage is complete for the seven
-    public examples and browser coverage verifies the chooser and one selected workflow. Full
-    per-card browser back/refresh and every-locale/mobile combination remains open.
+  - **Evidence (2026-09-13):** `test_v22_samples.py` validates every card-to-fixture mapping,
+    bilingual metadata, recommendation/quality answer keys, real processing, export provenance, and
+    all four output formats. `example-gallery.spec.ts` opens each of the seven cards by keyboard and
+    verifies metadata, route, persisted refresh state, and browser back behavior; the chooser
+    renders all seven Chinese titles, and `mobile.spec.ts` opens all seven cards without horizontal
+    overflow. Browser tests mock transport while the API suite independently exercises the real
+    processing path; no sample-only processing shortcut is counted.
 
 ### P2 - help, contextual tips, and feedback center
 
@@ -308,17 +317,19 @@ server-backed preview track and must not block or silently change the local rele
     the visual/accessibility suite reports no serious or critical Axe violations; the grayscale
     render contract and chart data-table tests pass. Full manual screen-reader certification is not
     claimed.
-- [ ] **V22-P3-3: Make 3D usable on supported mobile screens.** Add documented one-finger rotate,
+- [x] **V22-P3-3: Make 3D usable on supported mobile screens.** Add documented one-finger rotate,
   two-finger zoom/pan, reset-view, axis/legend toggles, loading/progress, and a lower-cost fallback
   for devices that cannot render the full surface smoothly. Never replace scientific points without
   disclosing the sampling or fallback.
   - **Acceptance:** touch gestures do not conflict with page scrolling, controls meet the minimum
     touch-target size, orientation changes preserve the chart specification, and the regular,
     incomplete, duplicated, and larger-surface fixtures pass mobile browser tests.
-  - **Evidence and limitation (2026-09-12):** desktop and mobile Chromium tests cover the regular
-    21×21 surface, touch controls, rotate/zoom/reset, axes/legend toggles, point sampling disclosure,
-    and the low-cost fallback contract. The API matrix covers incomplete and duplicated surfaces;
-    a full mobile browser matrix for those invalid states and a larger surface remains open.
+  - **Evidence and limitation (2026-09-13):** mobile Chromium covers the regular 21×21 surface,
+    duplicate-coordinate and missing-cell diagnostics, and a 101×101 surface with disclosed
+    low-cost sampling. It sends a real two-touch browser event, checks `pan-y` page-scroll
+    coexistence, 44×44 controls, rotate/reset/axis/legend controls, orientation preservation, and
+    the bilingual gesture guidance. This is automated browser-device emulation, not a claim of
+    certification on every physical phone or GPU.
 
 ### P4 - bounded advanced statistics
 
@@ -397,6 +408,14 @@ explicit deployment/profile boundary.
   mandatory; mocks alone do not count as acceptance.
 
 ### P7 - release candidate and V2.2 definition of done
+
+**Local checkpoint (2026-09-13, based on `292bdad`):** see
+[`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification, 50 Playwright
+checks across Chromium/mobile Chromium/Firefox/WebKit, all 254 API tests with real local
+PostgreSQL 17 and MinIO, static Python gates, and the 7 + 9 + 23 data matrix pass. Two live-API
+browser tests were intentionally skipped in the mock-backed browser matrix. Native installer,
+clean-machine/platform gates, and reviewed performance/memory budgets remain unavailable.
+Therefore P7 remains open.
 
 - [ ] All seven or more public examples are bundled offline, have bilingual teaching metadata, and
   complete import-to-export browser workflows with answer-keyed results.

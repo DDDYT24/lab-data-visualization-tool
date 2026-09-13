@@ -673,6 +673,7 @@
     "resetView": "重置视图",
     "toggleAxes": "切换坐标轴",
     "toggleLegend": "切换图例",
-    "lowCostFallback": "当前设备已启用低成本视图；预览经过抽样，但完整数据仍用于分析和导出。"
+    "lowCostFallback": "当前设备已启用低成本视图；预览经过抽样，但完整数据仍用于分析和导出。",
+    "surfaceGestureHint": "在曲面上单指拖动可旋转，双指捏合可缩放和平移；手势不便时可使用按钮并重置视角。"
   }
 }

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -99,7 +99,7 @@ def _chart_for(example: dict[str, Any], export_format: str = "png") -> dict[str,
 def _ready_project(client: TestClient, slug: str) -> dict[str, Any]:
     response = client.post(f"/api/v1/samples/{slug}/projects")
     assert response.status_code == 202, response.text
-    session = response.json()
+    session = cast(dict[str, Any], response.json())
     job = client.get(f"/api/v1/jobs/{session['job']['id']}")
     assert job.status_code == 200, job.text
     assert job.json()["stage"] == "ready", job.text
