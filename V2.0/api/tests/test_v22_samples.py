@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
+import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
@@ -14,9 +16,11 @@ from labviz_api.main import create_app
 from labviz_api.models import ChartSpec, SampleExample
 from labviz_api.processing import (
     ProcessingError,
+    _cjk_font_info,
     analyze_chart,
     build_quality_report,
     load_dataframe,
+    render_chart,
 )
 from labviz_api.repository import ProjectRepository
 
@@ -158,6 +162,7 @@ def test_v22_public_samples_run_import_preview_quality_analysis_and_exports(
         assert quality.status_code == 200, quality.text
         assert workspace.status_code == 200, workspace.text
         assert preview.json()["totalRows"] == example["rowCount"]
+        assert workspace.json()["chart"]["type"] == example["recommendedChart"]
         quality_kinds = {item["kind"] for item in quality.json()["findings"]}
         assert set(example["expectedQualityKinds"]).issubset(quality_kinds)
         cleaning = client.patch(
@@ -258,3 +263,38 @@ def test_v22_edge_fixtures_cover_quality_grid_encoding_and_unicode_filename(
     cleaned = api_client.get(f"/api/v1/projects/{project_id}/exports/cleaned-data.csv")
     assert cleaned.status_code == 200
     assert "filename*=UTF-8''" in cleaned.headers["content-disposition"]
+
+
+def test_cjk_exports_use_a_cjk_capable_font_without_missing_glyph_warnings() -> None:
+    if _cjk_font_info() is None:
+        pytest.skip("No CJK-capable font is installed for this environment.")
+
+    frame = [{"时间": 0, "响应": 1.0}, {"时间": 1, "响应": 2.0}]
+    chart_payload: dict[str, Any] = {
+        "schemaVersion": 1,
+        "type": "line",
+        "title": "中文实验结果",
+        "xAxis": {"field": "时间", "title": "时间（分钟）", "unit": "分"},
+        "yAxis": {"field": "响应", "title": "响应值", "unit": "毫伏"},
+        "series": [{"field": "响应", "label": "实验响应", "color": "#2563EB"}],
+        "panelCount": 1,
+        "export": {
+            "format": "png",
+            "dpi": 300,
+            "sizePreset": "single-column",
+            "grayscalePreview": False,
+        },
+    }
+    data_frame = pd.DataFrame(frame)
+    for export_format, signature in (
+        ("png", b"\x89PNG\r\n\x1a\n"),
+        ("svg", b"<?xml"),
+        ("pdf", b"%PDF"),
+    ):
+        chart_payload["export"]["format"] = export_format
+        chart = ChartSpec.model_validate(chart_payload)
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            rendered = render_chart(data_frame, chart)
+        assert rendered.startswith(signature)
+        assert not any("Glyph" in str(item.message) for item in captured)

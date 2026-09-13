@@ -25,6 +25,7 @@ export type SelectedFile = {
   sheetName?: string | null;
   availableSheets?: string[];
   headerRow?: number | null;
+  recommendedChart?: ChartSpec["type"] | null;
   experimentTitle?: string | null;
   runLabel?: string | null;
   replicateId?: string | null;
@@ -239,10 +240,70 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       const numericColumns = preview.columns.filter(
         (column) => column.kind === "number",
       );
+      const textColumns = preview.columns.filter((column) => column.kind === "text");
       const xColumn = numericColumns[0];
       const yColumn = numericColumns[1] ?? numericColumns[0];
+      const sampleType = state.selectedFile?.recommendedChart;
+      const sampleValueColumn =
+        sampleType && ["histogram", "box"].includes(sampleType)
+          ? numericColumns[0]
+          : numericColumns[1] ?? numericColumns[0];
+      const sampleSeries =
+        sampleType === "surface3d"
+          ? numericColumns.slice(1, 3)
+          : sampleType === "heatmap"
+            ? numericColumns
+            : sampleValueColumn
+              ? [sampleValueColumn]
+              : [];
+      const sampleXColumn =
+        sampleType && ["histogram", "box"].includes(sampleType)
+          ? textColumns[0] ?? sampleValueColumn
+          : xColumn;
+      const recommendedChartSpec =
+        sampleType && sampleXColumn && sampleValueColumn && sampleSeries.length > 0
+          ? {
+              ...state.chartSpec,
+              type: sampleType,
+              xAxis: {
+                field: sampleXColumn.field,
+                title: sampleXColumn.label,
+                unit: sampleXColumn.unit ?? "",
+              },
+              yAxis: {
+                field:
+                  sampleType === "surface3d"
+                    ? sampleSeries[0].field
+                    : sampleValueColumn.field,
+                title:
+                  sampleType === "surface3d"
+                    ? sampleSeries[0].label
+                    : sampleValueColumn.label,
+                unit:
+                  sampleType === "surface3d"
+                    ? sampleSeries[0].unit ?? ""
+                    : sampleValueColumn.unit ?? "",
+              },
+              series: sampleSeries.map((column, index) => ({
+                ...state.chartSpec.series[index % Math.max(state.chartSpec.series.length, 1)],
+                field: column.field,
+                label: column.label,
+                color:
+                  state.chartSpec.series[index]?.color ??
+                  ["#2563EB", "#0F766E", "#D97706", "#7C3AED"][index],
+                panel: 1,
+                yAxis: "primary" as const,
+              })),
+              groupField:
+                ["line", "scatter", "bar"].includes(sampleType) && textColumns[0]
+                  ? textColumns[0].field
+                  : null,
+              panelCount: 1,
+            }
+          : null;
       const chartSpec =
-        xColumn && yColumn
+        recommendedChartSpec ??
+        (xColumn && yColumn
           ? {
               ...state.chartSpec,
               xAxis: {
@@ -263,7 +324,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
                 },
               ],
             }
-          : state.chartSpec;
+          : state.chartSpec);
 
       return {
         preview,

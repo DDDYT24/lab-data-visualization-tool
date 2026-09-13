@@ -1,0 +1,61 @@
+{
+  "contractVersion": "v1",
+  "status": "proposed",
+  "description": "Initial local release budgets for the processing reference machine. Values are milliseconds per stage and MiB for the whole process peak.",
+  "tabular": {
+    "24": {
+      "stages": {
+        "load_ms": 1000,
+        "preview_ms": 1000,
+        "quality_ms": 1000,
+        "analysis_ms": 1000,
+        "png_render_ms": 4000
+      },
+      "total_ms": 8000
+    },
+    "1000": {
+      "stages": {
+        "load_ms": 1500,
+        "preview_ms": 1500,
+        "quality_ms": 1500,
+        "analysis_ms": 1500,
+        "png_render_ms": 4000
+      },
+      "total_ms": 10000
+    },
+    "10000": {
+      "stages": {
+        "load_ms": 3000,
+        "preview_ms": 3000,
+        "quality_ms": 3000,
+        "analysis_ms": 3000,
+        "png_render_ms": 5000
+      },
+      "total_ms": 16000
+    }
+  },
+  "surface": {
+    "21": {
+      "stages": {
+        "quality_ms": 3000,
+        "analysis_ms": 3000,
+        "png_render_ms": 5000
+      },
+      "total_ms": 12000
+    },
+    "101": {
+      "stages": {
+        "quality_ms": 6000,
+        "analysis_ms": 6000,
+        "png_render_ms": 8000
+      },
+      "total_ms": 20000
+    }
+  },
+  "browser": {
+    "sample_import_to_ready_ms": 15000,
+    "first_chart_ms": 15000,
+    "chart_interaction_ms": 3000
+  },
+  "process_peak_memory_mib": 1024
+}

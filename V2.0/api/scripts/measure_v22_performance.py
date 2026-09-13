@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
+import ctypes
 import io
 import json
+import os
 import platform
 import sys
 import time
 from collections.abc import Callable
+from ctypes import wintypes
+from importlib import import_module
+from math import ceil
+from pathlib import Path
+from statistics import fmean, pstdev
 from typing import Any
 
 import pandas as pd
@@ -21,6 +29,8 @@ from labviz_api.processing import (
     load_dataframe,
     render_chart,
 )
+
+BUDGETS_PATH = Path(__file__).resolve().parents[1] / "samples" / "v22" / "performance_budgets.json"
 
 
 def _measure(function: Callable[[], Any]) -> tuple[float, Any]:
@@ -121,15 +131,161 @@ def _surface_baseline(side: int) -> dict[str, Any]:
     }
 
 
+def _process_peak_memory_bytes() -> int | None:
+    """Return the process peak working set without adding a runtime dependency."""
+    if os.name == "nt":
+
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("page_fault_count", wintypes.DWORD),
+                ("peak_working_set_size", ctypes.c_size_t),
+                ("working_set_size", ctypes.c_size_t),
+                ("quota_peak_paged_pool_usage", ctypes.c_size_t),
+                ("quota_paged_pool_usage", ctypes.c_size_t),
+                ("quota_peak_non_paged_pool_usage", ctypes.c_size_t),
+                ("quota_non_paged_pool_usage", ctypes.c_size_t),
+                ("pagefile_usage", ctypes.c_size_t),
+                ("peak_pagefile_usage", ctypes.c_size_t),
+            ]
+
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        try:
+            get_current_process = ctypes.windll.kernel32.GetCurrentProcess
+            get_process_memory_info = ctypes.windll.psapi.GetProcessMemoryInfo
+            get_process_memory_info.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(ProcessMemoryCounters),
+                wintypes.DWORD,
+            ]
+            get_process_memory_info.restype = wintypes.BOOL
+            if get_process_memory_info(get_current_process(), ctypes.byref(counters), counters.cb):
+                return int(counters.peak_working_set_size)
+        except (AttributeError, OSError):
+            return None
+        return None
+
+    try:
+        resource_module: Any = import_module("resource")
+        value = resource_module.getrusage(resource_module.RUSAGE_SELF).ru_maxrss
+        return int(value if platform.system() == "Darwin" else value * 1024)
+    except (ImportError, OSError):
+        return None
+
+
+def _timing_stats(runs: list[float]) -> dict[str, float]:
+    ordered = sorted(runs)
+    percentile_index = max(0, min(len(ordered) - 1, ceil(len(ordered) * 0.95) - 1))
+    return {
+        "min_ms": min(ordered),
+        "mean_ms": round(fmean(ordered), 2),
+        "p95_ms": ordered[percentile_index],
+        "max_ms": max(ordered),
+        "stdev_ms": round(pstdev(ordered), 2),
+    }
+
+
+def _aggregate_cases(runs: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    aggregated: list[dict[str, Any]] = []
+    for index in range(len(runs[0])):
+        case_runs = [run[index] for run in runs]
+        stage_names = list(case_runs[0]["timings"])
+        stats = {
+            stage: _timing_stats([case["timings"][stage] for case in case_runs])
+            for stage in stage_names
+        }
+        aggregated.append(
+            {
+                key: value
+                for key, value in case_runs[0].items()
+                if key not in {"timings", "png_bytes"}
+            }
+            | {
+                "repetitions": len(case_runs),
+                "timings": {stage: values["max_ms"] for stage, values in stats.items()},
+                "timing_stats": stats,
+                "max_total_ms": round(max(sum(case["timings"].values()) for case in case_runs), 2),
+                "png_bytes": max(case["png_bytes"] for case in case_runs),
+            }
+        )
+    return aggregated
+
+
+def _budget_violations(result: dict[str, Any], budgets: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
+    for case in result["tabular"]:
+        budget = budgets["tabular"][str(case["rows"])]
+        for stage, limit in budget["stages"].items():
+            observed = case["timings"][stage]
+            if observed > limit:
+                violations.append(f"tabular/{case['rows']}/{stage}={observed}ms>{limit}ms")
+        total = case.get("max_total_ms", sum(case["timings"].values()))
+        if total > budget["total_ms"]:
+            violations.append(f"tabular/{case['rows']}/total={total:.2f}ms>{budget['total_ms']}ms")
+
+    for case in result["surface"]:
+        budget = budgets["surface"][str(case["side"])]
+        for stage, limit in budget["stages"].items():
+            observed = case["timings"][stage]
+            if observed > limit:
+                violations.append(f"surface/{case['side']}/{stage}={observed}ms>{limit}ms")
+        total = case.get("max_total_ms", sum(case["timings"].values()))
+        if total > budget["total_ms"]:
+            violations.append(f"surface/{case['side']}/total={total:.2f}ms>{budget['total_ms']}ms")
+
+    peak = result.get("process_peak_memory_mib")
+    if peak is not None and peak > budgets["process_peak_memory_mib"]:
+        violations.append(f"process/peak_memory={peak}MiB>{budgets['process_peak_memory_mib']}MiB")
+    return violations
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, help="also write the JSON report to this path")
+    parser.add_argument(
+        "--repetitions",
+        type=int,
+        default=3,
+        help="number of times to repeat every case (default: 3)",
+    )
+    arguments = parser.parse_args()
+    if not 1 <= arguments.repetitions <= 20:
+        parser.error("--repetitions must be between 1 and 20")
+    budgets = json.loads(BUDGETS_PATH.read_text(encoding="utf-8"))
+    tabular_runs = [
+        [_tabular_baseline(size) for size in (24, 1_000, 10_000)]
+        for _ in range(arguments.repetitions)
+    ]
+    surface_runs = [
+        [_surface_baseline(side) for side in (21, 101)] for _ in range(arguments.repetitions)
+    ]
     result = {
         "python": sys.version.split()[0],
         "platform": platform.platform(),
         "pandas": pd.__version__,
-        "tabular": [_tabular_baseline(size) for size in (24, 1_000, 10_000)],
-        "surface": [_surface_baseline(side) for side in (21, 101)],
+        "repetitions": arguments.repetitions,
+        "tabular": _aggregate_cases(tabular_runs),
+        "surface": _aggregate_cases(surface_runs),
     }
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    peak_bytes = _process_peak_memory_bytes()
+    result["process_peak_memory_mib"] = (
+        round(peak_bytes / (1024 * 1024), 2) if peak_bytes is not None else None
+    )
+    violations = _budget_violations(result, budgets)
+    result["budget"] = {
+        "contractVersion": budgets["contractVersion"],
+        "reviewStatus": budgets["status"],
+        "status": "fail" if violations else "pass",
+        "violations": violations,
+    }
+    serialized = json.dumps(result, ensure_ascii=False, indent=2)
+    if arguments.output:
+        arguments.output.parent.mkdir(parents=True, exist_ok=True)
+        arguments.output.write_text(serialized + "\n", encoding="utf-8")
+    print(serialized)
+    if violations:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
