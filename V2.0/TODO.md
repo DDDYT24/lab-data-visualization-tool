@@ -459,12 +459,11 @@ explicit deployment/profile boundary.
 
 ### P7 - release candidate and V2.2 definition of done
 
-**Local checkpoint (2026-09-13, based on commit `00051f3`):** see
+**Local checkpoint (2026-09-13, based on commit `e003e31`):** see
 [`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification, 51 Playwright
 checks across Chromium/mobile Chromium/Firefox/WebKit, static Python gates, and the 7 + 9 + 23
-data matrix pass. The previous checkpoint recorded all 254 API tests with real local PostgreSQL 17
-and MinIO; the current P0-P3 changes have targeted API regressions and the matrix rerun, while the
-full API gate remains part of P7. The separately
+data matrix pass. The complete API/PostgreSQL/MinIO gate now passes 257 tests on a fresh dedicated
+local Compose project; the original development volume was preserved. The separately
 enabled live Chromium flow now passes all seven examples through real API processing and PNG
 download; it is not part of the mock-backed count. Native installer and clean-machine/platform
 gates remain unavailable. The first repeated performance/memory run has zero budget violations,
@@ -485,13 +484,14 @@ follow-up work.
     release-candidate rerun remains required before this final P7 checklist item can be checked.
 - [ ] The existing 23-dataset V2.1 regression matrix and every V2.2 example, edge, format-parity,
   statistics, mobile, theme, privacy, and packaging gate pass with a machine-readable report.
-  - **Remaining:** the 7 + 9 + 23 data matrix passes; repeated performance results now exist with
-    zero violations, but performance review and real installer lifecycle results must be added to
-    one release-candidate report.
+  - **Current evidence:** the 7 + 9 + 23 data matrix passes; repeated performance results have zero
+    violations; and the complete API/PostgreSQL/MinIO gate passes 257 tests. Performance review and
+    real installer lifecycle results must still be added to one release-candidate report.
 - [ ] `ruff`, formatting, MyPy, the complete API/PostgreSQL/MinIO gate, `npm run verify`, desktop and
   mobile Playwright, visual/accessibility checks, and clean-install tests pass at the release commit.
-  - **Remaining:** current code gates pass, but they must be rerun after the installer exists on the
-    exact candidate commit; clean-install evidence is absent.
+  - **Current evidence and limitation:** current static, frontend, browser, and full API gates pass;
+    they must be rerun after the installer exists on the exact candidate commit, and clean-install
+    evidence is absent.
 - [ ] No serious or critical accessibility issue remains; reviewed performance budgets pass or an
   explicit limitation and fallback is shown before the user starts the expensive operation.
   - **Remaining:** automated accessibility passes; reviewed timing/memory budgets and physical-device
