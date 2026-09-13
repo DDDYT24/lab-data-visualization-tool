@@ -6,7 +6,8 @@
 ## V2.2.0-dev（本地优先，未发布）
 
 - 增加版本化的 7 个合成教学示例、9 个边界 fixture 和统一导入/质量/分析/导出回归入口；
-  历史 V2.1 的 23 个数据集仍需恢复到当前环境后才能重新计入验证。
+  本机保留的历史 V2.1 23 数据集已重新纳入同一矩阵并全部通过；测试包和结果保持忽略，
+  不作为产品数据提交。
 - 增加系统、浅色、暗色主题和本地保存，移动端 3D 旋转/缩放/平移/重置控制、低成本降级提示，
   图表数据表替代方式，以及 WCAG/Axe 和灰度可读性回归。
 - 增加 prediction interval、Working–Hotelling simultaneous mean band 和线性 Huber IRLS
@@ -14,6 +15,9 @@
   [`V2.0/docs/STATISTICS_CONTRACT_V2.2.md`](V2.0/docs/STATISTICS_CONTRACT_V2.2.md)。
 - 增加 Windows 本地优先打包契约、可复用 SVG/PNG/ICO 图标和候选包校验器；当前没有原生安装器、
   绑定运行时或 clean-machine 安装证据。
+- 增加七个示例逐卡返回/刷新/键盘/移动端回归、Firefox/WebKit smoke，以及规则、缺失、重复和
+  101×101 曲面的移动端 3D 回归；254 个 API 测试已通过本机 PostgreSQL 17/MinIO 验证，P7
+  检查点仍因性能预算和实机安装验证开放。
 - V2.2 仍不包含云端同步、团队协作、真实 Google/Microsoft 登录或 AWS 部署。
 
 ## V2.1.1

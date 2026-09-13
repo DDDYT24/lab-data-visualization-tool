@@ -673,6 +673,7 @@
     "resetView": "Reset view",
     "toggleAxes": "Toggle axes",
     "toggleLegend": "Toggle legend",
-    "lowCostFallback": "A lower-cost view is active for this device; the preview is sampled and the complete data remains available for analysis and export."
+    "lowCostFallback": "A lower-cost view is active for this device; the preview is sampled and the complete data remains available for analysis and export.",
+    "surfaceGestureHint": "Touch the surface with one finger to rotate; pinch with two fingers to zoom and pan. Use the buttons to reset or when gestures are difficult."
   }
 }

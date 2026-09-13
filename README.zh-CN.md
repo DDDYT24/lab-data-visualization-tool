@@ -8,7 +8,7 @@
 ![Release](https://img.shields.io/badge/release-V2.2.0--dev%20local--first-0f766e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [版本基准](VERSION_BASELINE.md) · [未来待办](V2.0/TODO.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [统计契约](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) · [Windows 打包契约](V2.0/packaging/windows/README.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
+[English](README.md) · [简体中文](README.zh-CN.md) · [版本基准](VERSION_BASELINE.md) · [未来待办](V2.0/TODO.md) · [P7 测试检查点](V2.0/docs/V2.2_P7_TEST_REPORT.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [统计契约](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) · [Windows 打包契约](V2.0/packaging/windows/README.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
 
 </div>
 

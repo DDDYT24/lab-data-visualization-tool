@@ -284,7 +284,8 @@
           "default": "ordinary-least-squares",
           "enum": [
             "ordinary-least-squares",
-            "weighted-least-squares"
+            "weighted-least-squares",
+            "robust-huber"
           ],
           "title": "Fitmethod",
           "type": "string"
@@ -322,6 +323,16 @@
           ],
           "title": "Confidencelevel",
           "type": "integer"
+        },
+        "intervalKind": {
+          "default": "pointwise-mean",
+          "enum": [
+            "pointwise-mean",
+            "prediction",
+            "simultaneous"
+          ],
+          "title": "Intervalkind",
+          "type": "string"
         }
       },
       "title": "FittingSpec",

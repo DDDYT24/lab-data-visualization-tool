@@ -277,11 +277,13 @@ const quality = {
   ],
 };
 
-const surfacePoints = Array.from({ length: 21 * 21 }, (_, index) => {
-  const x = -5 + (index % 21) * 0.5;
-  const y = -5 + Math.floor(index / 21) * 0.5;
+const createSurfacePoints = (side: number) => Array.from({ length: side * side }, (_, index) => {
+  const x = -5 + (index % side) * 0.5;
+  const y = -5 + Math.floor(index / side) * 0.5;
   return { panel: 1, x, y, z: x ** 2 + y ** 2 };
 });
+
+const surfacePoints = createSurfacePoints(21);
 
 const surfaceChart = {
   ...chart,
@@ -358,6 +360,7 @@ type MockApiOptions = {
   dataset?: "default" | "surface";
   dataDelayMs?: number;
   lowPerformance?: boolean;
+  surfaceCase?: "regular" | "duplicate" | "missing" | "large";
   deliveryMode?: "console" | "email";
   history?: "empty" | "saved";
   shareExpired?: boolean;
@@ -417,9 +420,60 @@ export async function installMockApi(
       Object.defineProperty(navigator, "deviceMemory", { configurable: true, value: 2 });
     });
   }
+  const surfaceCase = options.surfaceCase ?? "regular";
+  const surfaceSide = surfaceCase === "large" ? 101 : 21;
+  const completeSurfacePoints = createSurfacePoints(surfaceSide);
+  const activeSurfacePoints =
+    surfaceCase === "duplicate"
+      ? [...completeSurfacePoints, completeSurfacePoints[0]]
+      : surfaceCase === "missing"
+        ? completeSurfacePoints.slice(0, -1)
+        : completeSurfacePoints;
+  const activeSurfaceDiagnostic = {
+    panel: 1,
+    xField: "x",
+    yField: "y",
+    zField: "z",
+    xCount: surfaceSide,
+    yCount: surfaceSide,
+    expectedPoints: surfaceSide * surfaceSide,
+    usablePoints: activeSurfacePoints.length,
+    duplicateCoordinatePairs: surfaceCase === "duplicate" ? 1 : 0,
+    duplicateCoordinateRows: surfaceCase === "duplicate" ? 2 : 0,
+    missingGridCells: surfaceCase === "missing" ? 1 : 0,
+    nonFinitePoints: 0,
+    uniformXSpacing: true,
+    uniformYSpacing: true,
+    collinear: false,
+    status:
+      surfaceCase === "duplicate"
+        ? "duplicate-coordinates"
+        : surfaceCase === "missing"
+          ? "missing-grid"
+          : "valid",
+  };
   const activeChart = options.dataset === "surface" ? surfaceChart : chart;
-  const activePreview = options.dataset === "surface" ? surfacePreview : preview;
-  const activeQuality = options.dataset === "surface" ? surfaceQuality : quality;
+  const activePreview =
+    options.dataset === "surface"
+      ? {
+          ...surfacePreview,
+          rows: activeSurfacePoints.slice(0, 200).map(({ x, y, z }, index) => ({
+            rowId: index + 1,
+            x,
+            y,
+            z,
+          })),
+          totalRows: activeSurfacePoints.length,
+        }
+      : preview;
+  const activeQuality =
+    options.dataset === "surface"
+      ? {
+          ...surfaceQuality,
+          totalRows: activeSurfacePoints.length,
+          validRows: activeSurfacePoints.length,
+        }
+      : quality;
 
   await page.context().route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -513,7 +567,7 @@ export async function installMockApi(
           currentRevisionId: options.descriptionLoading ? null : currentRevisionId,
           source: {
             name: options.dataset === "surface" ? "07_surface3d.csv" : "experiment-1.87mb.csv",
-            size: options.dataset === "surface" ? 8_192 : 1_960_000,
+            size: options.dataset === "surface" ? activeSurfacePoints.length * 24 : 1_960_000,
             mediaType: "text/csv",
             sheetName: null,
             availableSheets: [],
@@ -685,27 +739,8 @@ export async function installMockApi(
             histograms: [],
             boxes: [],
             heatmaps: [],
-            surfaceDiagnostics: [
-              {
-                panel: 1,
-                xField: "x",
-                yField: "y",
-                zField: "z",
-                xCount: 21,
-                yCount: 21,
-                expectedPoints: 441,
-                usablePoints: 441,
-                duplicateCoordinatePairs: 0,
-                duplicateCoordinateRows: 0,
-                missingGridCells: 0,
-                nonFinitePoints: 0,
-                uniformXSpacing: true,
-                uniformYSpacing: true,
-                collinear: false,
-                status: "valid",
-              },
-            ],
-            surfacePoints,
+            surfaceDiagnostics: [activeSurfaceDiagnostic],
+            surfacePoints: activeSurfacePoints,
           },
           recommendations: [],
         });

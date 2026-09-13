@@ -145,12 +145,13 @@ export function ChartCanvas({
         data-surface-fallback={isSurface && lowCostFallback ? "low-cost" : undefined}
         data-surface-point-count={isSurface ? surfaceSeries?.data?.length ?? 0 : undefined}
         data-surface-support={isSurface ? surfaceSupport : undefined}
+        data-touch-action={isSurface ? "pan-y" : undefined}
         data-surface-view={isSurface ? `${surfaceView.alpha}:${surfaceView.beta}:${surfaceView.distance}` : undefined}
         role="img"
         sx={{
           bgcolor: "background.paper",
           minHeight: height,
-          touchAction: isSurface ? "none" : undefined,
+          touchAction: isSurface ? "pan-y" : undefined,
           width: "100%",
         }}
       >
@@ -166,7 +167,12 @@ export function ChartCanvas({
           aria-label={t("surfaceControls")}
           direction={{ xs: "column", sm: "row" }}
           spacing={1}
-          sx={{ borderTop: 1, borderColor: "divider", p: 1.5 }}
+          sx={{
+            borderTop: 1,
+            borderColor: "divider",
+            p: 1.5,
+            "& .MuiButton-root": { minHeight: 44 },
+          }}
         >
           <Button
             onClick={() => setSurfaceView((view) => ({ ...view, beta: view.beta - 20 }))}
@@ -210,6 +216,13 @@ export function ChartCanvas({
             {t("toggleLegend")}
           </Button>
         </Stack>
+      ) : null}
+      {isSurface ? (
+        <Box sx={{ px: 1.5, pt: 1 }}>
+          <Typography color="text.secondary" data-surface-gesture-hint variant="caption">
+            {t("surfaceGestureHint")}
+          </Typography>
+        </Box>
       ) : null}
       {isSurface && lowCostFallback ? (
         <Box sx={{ px: 1.5, pb: 1.5 }}>
