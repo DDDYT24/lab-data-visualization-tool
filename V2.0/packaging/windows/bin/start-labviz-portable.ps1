@@ -3,7 +3,8 @@ param(
     [ValidateRange(1, 65535)]
     [int]$WebPort = 3000,
     [ValidateRange(1, 65535)]
-    [int]$ApiPort = 8000
+    [int]$ApiPort = 8000,
+    [switch]$SkipOpenBrowser
 )
 
 Set-StrictMode -Version Latest
@@ -41,7 +42,8 @@ try {
         "-m", "uvicorn", "labviz_api.main:app", "--host", "127.0.0.1", "--port", "$ApiPort"
     ) -WorkingDirectory $apiRoot -RedirectStandardOutput (Join-Path $logRoot "api.log") `
         -RedirectStandardError (Join-Path $logRoot "api.error.log") -NoNewWindow -PassThru
-    $webProcess = Start-Process -FilePath $node -ArgumentList @($webServer) -WorkingDirectory $packageRoot `
+    $quotedWebServer = '"{0}"' -f $webServer
+    $webProcess = Start-Process -FilePath $node -ArgumentList @($quotedWebServer) -WorkingDirectory $packageRoot `
         -RedirectStandardOutput (Join-Path $logRoot "web.log") `
         -RedirectStandardError (Join-Path $logRoot "web.error.log") -NoNewWindow -PassThru
     $webReady = $false
@@ -69,7 +71,9 @@ try {
         if (-not ($webReady -and $apiReady)) { Start-Sleep -Seconds 1 }
     } while (-not ($webReady -and $apiReady) -and (Get-Date) -lt $deadline)
     if ((Get-Date) -ge $deadline) { throw "LabViz web server health check timed out." }
-    Start-Process "http://127.0.0.1:$WebPort"
+    if (-not $SkipOpenBrowser) {
+        Start-Process "http://127.0.0.1:$WebPort"
+    }
     while ($true) {
         Start-Sleep -Seconds 1
         $apiProcess.Refresh()
