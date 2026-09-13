@@ -190,14 +190,53 @@ post-V2.2 work.
 
 ## V2.2 Roadmap (active; V2.2.0-dev)
 
-**Planning checkpoint:** 2026-09-12
+**Planning checkpoint:** 2026-09-13 (replanned after the first P7 local gate)
 
-**Release intent:** Make the local-first product easier to learn, more comfortable on desktop and
-mobile, and scientifically stronger without weakening the V2.1 data and privacy contracts. V2.2
-must ship user-facing examples, contextual guidance, a privacy-safe feedback path, dark mode,
-advanced mobile 3D, and a bounded advanced-analysis slice. A Windows installer is the first native
-packaging target. Cloud synchronization, team collaboration, and external identity are an optional
-server-backed preview track and must not block or silently change the local release.
+**Release intent:** V2.2.0 is a local-first product release for researchers who should be able to
+learn from an offline example, import a supported table, inspect and clean it, create a scientifically
+described chart, and export the result without uploading experiment data to a public service. It
+keeps the V2.1 privacy/data contracts, adds the completed P0-P4 product work, and targets a per-user
+Windows installer that does not require Git, Python, Node.js, or PowerShell knowledge. The installer
+runs the web and API processes on loopback and is local deployment, not a hosted website.
+
+### Replanned V2.2 completion boundary
+
+| Workstream | Current state | Blocks V2.2.0? | Completion boundary |
+| --- | --- | --- | --- |
+| P0 examples and data matrix | P0-1/P0-2 complete; P0-3 partial | Yes | Add process peak-memory and browser timing measurements, approve regression thresholds, and make the report fail when a budget is exceeded. |
+| P1 example teaching workflows | Complete | No further feature work | Preserve the seven-card API/browser regressions and rerun them at the release commit. |
+| P2 help, tips, and feedback privacy | Complete | No further feature work | Preserve bilingual and privacy regressions; do not add a server submission endpoint in V2.2.0. |
+| P3 theme, accessibility, and mobile 3D | Complete in automated browser coverage | Manual release QA only | Recheck principal screens, keyboard/focus behavior, and one physical Windows touch device if available; do not claim universal phone/GPU certification. |
+| P4 bounded advanced statistics | Complete | Independent review and release rerun | Preserve answer keys and method limitations; user-defined formulas and broad multiplicity automation remain excluded. |
+| P5 Windows package | Architecture complete; installer open | Yes | Produce a per-user offline-capable Windows artifact and pass clean install, upgrade, rollback, repair, paths, uninstall, and local-data-retention tests. |
+| P5 macOS/Linux packages | Not implemented | No; target V2.2.x or later | Announce packages only after named native machines pass the same lifecycle suite. Developer-checkout instructions are not package evidence. |
+| P6 cloud/team/OIDC preview | Deferred | No | Requires a separately approved server cost, privacy, identity, tenancy, and operations plan. No AWS resources or real Google/Microsoft login belong to V2.2.0. |
+| P7 release candidate | In progress | Yes | Close only the remaining gates below on the exact release commit, then update final release notes and version metadata. |
+
+### Remaining V2.2.0 execution order
+
+1. **Performance contract (`V22-P0-3`):** add cross-platform process peak-memory measurement,
+   first-chart and interaction timing, repeated-run variance, and reviewed warning/failure budgets
+   for 24/1,000/10,000-row tables and 21×21/101×101 surfaces. Keep the existing disclosed mobile
+   sampling fallback.
+2. **Live browser release paths:** run every bundled example from card selection through the real
+   FastAPI processing path, editable chart, and export in Chromium. Keep Firefox/WebKit as supported
+   desktop smoke engines and run the regular/invalid/large 3D mobile matrix. Do not count the
+   mock-backed UI suite as live-API evidence.
+3. **Export typography closure:** choose and document a redistributable CJK-capable font strategy,
+   verify English/Chinese labels in PNG/SVG/PDF, and remove the current missing-glyph warning before
+   promising exact Chinese export fidelity.
+4. **Windows installer (`V22-P5-2`):** select the packager, assemble pinned CPython/Node/standalone
+   web runtimes, build an unsigned test artifact first, validate local health/lifecycle/data paths,
+   then decide signing and antivirus handling. Test on a disposable clean Windows environment with
+   spaces and Chinese characters in the user path.
+5. **Release-candidate rerun (`P7`):** run static checks, all 254 API/PostgreSQL/MinIO tests, data
+   matrix, frontend verify, live/mock browser matrices, accessibility, performance budgets, package
+   validation, install/upgrade/rollback/uninstall, and privacy/forbidden-artifact checks from the
+   exact candidate commit. Store machine-readable results outside tracked user-data paths.
+6. **Release documentation:** update both READMEs, `CHANGELOG.md`, `VERSION_BASELINE.md`, the P7
+   report, and this file; change `2.2.0-dev` metadata only after every blocking gate passes. Creating
+   a tag or pushing GitHub still requires an explicit user request.
 
 ### P0 - freeze contracts and expand the test foundation
 
@@ -383,8 +422,9 @@ server-backed preview track and must not block or silently change the local rele
   platform package until it passes clean-machine installation, launch, upgrade, export, backup, and
   removal tests on named supported versions. macOS/Linux packaging may follow V2.2 Windows GA as a
   V2.2.x deliverable if signing hardware or test machines are unavailable.
-  - **Current limitation (2026-09-12):** no macOS or Linux native package is implemented or
-    advertised; support remains the developer checkout path only.
+  - **Current limitation and release boundary (2026-09-13):** no macOS or Linux native package is
+    implemented or advertised; support remains the developer checkout path only. This item is a
+    V2.2.x-or-later follow-up and does not block V2.2.0 Windows GA.
 
 ### P6 - optional server-backed collaboration preview
 
@@ -417,19 +457,37 @@ browser tests were intentionally skipped in the mock-backed browser matrix. Nati
 clean-machine/platform gates, and reviewed performance/memory budgets remain unavailable.
 Therefore P7 remains open.
 
+**Remaining release blockers:** `V22-P0-3`; seven real-API example browser paths; CJK export-font
+closure; `V22-P5-2` Windows artifact and clean-machine lifecycle evidence; final exact-commit rerun
+and bilingual release documentation. `V22-P5-3`, all P6 items, the legacy storage-state rename,
+no-store mode, public AWS acceptance, billing, and broader mobile editing are explicitly non-blocking
+follow-up work.
+
 - [ ] All seven or more public examples are bundled offline, have bilingual teaching metadata, and
   complete import-to-export browser workflows with answer-keyed results.
+  - **Remaining:** bundled metadata and API answer keys pass; every card still needs one real-API
+    browser path through editable chart and export at the release candidate.
 - [ ] The existing 23-dataset V2.1 regression matrix and every V2.2 example, edge, format-parity,
   statistics, mobile, theme, privacy, and packaging gate pass with a machine-readable report.
+  - **Remaining:** the 7 + 9 + 23 data matrix passes; performance-budget and real installer lifecycle
+    results must be added to one release-candidate report.
 - [ ] `ruff`, formatting, MyPy, the complete API/PostgreSQL/MinIO gate, `npm run verify`, desktop and
   mobile Playwright, visual/accessibility checks, and clean-install tests pass at the release commit.
+  - **Remaining:** current code gates pass, but they must be rerun after the installer exists on the
+    exact candidate commit; clean-install evidence is absent.
 - [ ] No serious or critical accessibility issue remains; reviewed performance budgets pass or an
   explicit limitation and fallback is shown before the user starts the expensive operation.
+  - **Remaining:** automated accessibility passes; reviewed timing/memory budgets and physical-device
+    spot checks remain.
 - [ ] Help, contextual tips, feedback privacy, theme behavior, every new scientific method, and all
   supported package/upgrade instructions are complete in English and Simplified Chinese.
+  - **Remaining:** application copy and method contracts pass; final Windows install/upgrade/
+    uninstall instructions and CJK export-font verification remain.
 - [ ] Release notes and `VERSION_BASELINE.md` distinguish shipped local features, optional preview
   features, skipped external checks, and deferred work. V2.2 is not marked complete until this list
   is supported by reproducible evidence from the release commit.
+  - **Remaining:** existing documents correctly say `2.2.0-dev`; final release metadata and notes
+    wait for all blocking gates.
 
 ## V2.0 Closeout Gate
 
