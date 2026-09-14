@@ -6,12 +6,43 @@ changes. Other Markdown files may explain a stable contract or preserve historic
 but they must not create a competing backlog.
 
 - **Current release:** V2.1.1 local self-hosted release, published on GitHub
-- **Status review:** 2026-09-12
-- **Working line:** V2.2.0-dev local-first development; not a release tag or installer
+- **Status review:** 2026-09-14
+- **Working line:** V2.2.0-dev local-first development; not a release tag or public installer
 - **Version history:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
 This file records the V2.0 baseline, completed V2.1 work, the ordered V2.2 plan, and explicitly
 deferred work.
+
+### Latest consolidated verification checkpoint (2026-09-14)
+
+This checkpoint supersedes older statements below about proposed budgets, missing CJK assets,
+and browser coverage, but does not close P7 or declare V2.2 released.
+
+- Performance implementation enforces the versioned budgets, records PNG/SVG/PDF stages,
+  median/range and process peak memory, and fails if peak-memory measurement is unavailable.
+  Python 3.12.14 completed three repetitions for 24/1,000/10,000 rows and 21×21/101×101
+  surfaces with zero violations; the recorded peak was 212.25 MiB. The budget file is
+  `status: enforced` for this reference machine, not a guarantee for every machine.
+- The real seven-example workflow passed through FastAPI in Chromium, Firefox, and WebKit.
+  Each engine checked recommendations, editable charts, PNG/SVG/PDF downloads, cleaned CSV
+  downloads, keyboard access, refresh/back behavior, and bilingual gallery content. The two
+  live API compatibility flows also passed.
+- The mock browser suite passed 55 checks with 5 intentional opt-in live skips. Repeated
+  browser performance passed 12/12 across Chromium, Firefox, WebKit, and mobile Chromium.
+  Frontend verification passed 48 Vitest tests, TypeScript, ESLint and production build.
+- The full API/PostgreSQL/MinIO suite passed 257 tests on an independent local Compose project.
+  The 7 public + 9 edge + 23 historical synthetic matrix also passed. No experimental user
+  data was uploaded.
+- A disposable candidate with Python 3.12.14, Node.js 24.17.0, standalone Next output,
+  production API dependencies and bundled OFL Noto Sans SC passed package validation. Unsigned
+  Inno Setup test installers passed 2.2.0 install, 2.2.1 upgrade, rollback, repair/reinstall,
+  path-with-spaces health checks and default local-data retention on this Windows machine.
+- Remaining P5-2 limits are a clean/disconnected machine, a real V2.1.1 upgrade, signing and
+  antivirus review. P5-3 has no native macOS/Linux package or named test machine. P7 still
+  requires an exact release-commit rerun and final release metadata. Cloud sync, teams,
+  external login, AWS deployment and GitHub push remain out of scope for this local pass.
+- E2E builds use ignored `.next-e2e`; existing `V2.0/web/next-env.d.ts` and this TODO file
+  remain protected working-tree files and were not reset, restored or deleted.
 
 > **Release note:** V2.1.1 is distributed as a local self-hosted application. The AWS Phase 6C/6D
 > items below are optional maintainer work and do not block the V2.1.1 local release. Local use relies
@@ -271,7 +302,7 @@ runs the web and API processes on loopback and is local deployment, not a hosted
     error codes. The historical corpus remains an ignored local synthetic test package rather than
     tracked user data, so a clean release machine must provide it with `--historical-root`; a missing
     corpus is reported as `skip`, never `pass`.
-- [ ] **V22-P0-3: Establish user-comfort performance and compatibility budgets before feature work.**
+- [x] **V22-P0-3: Establish user-comfort performance and compatibility budgets before feature work.**
   Measure import-to-ready time, first-chart render, chart interaction, export, and peak memory on a
   small example, a medium dataset, a large dataset near the documented local limit, and 21 x 21 and
   101 x 101 surfaces. Record the reference machine and set reviewed regression thresholds rather
@@ -279,19 +310,21 @@ runs the web and API processes on loopback and is local deployment, not a hosted
   - **Acceptance:** Chromium, Firefox, and WebKit desktop smoke flows pass; the supported mobile
     viewport and touch flow pass; large-data sampling is disclosed; no supported case crashes,
     freezes without progress, or hides a failure behind an empty chart.
-  - **Current evidence and limitation (2026-09-13):** the repeated local runner executes each case
-    three times on Windows 11 / Python 3.12.14 / pandas 3.0.5 and records min/mean/p95/max/stdev.
+  - **Evidence and limitation (2026-09-14):** the repeated local runner executes each case
+    three times on Windows 11 / Python 3.12.14 / pandas 3.0.5 and records median/range and
+    process peak memory for PNG/SVG/PDF.
     Conservative maxima are: 24 rows load/preview/quality/analysis/PNG `9.23/4.09/15.48/6.58/267.40`
     ms; 1,000 rows `2.34/23.32/17.80/20.50/321.28` ms; 10,000 rows
     `8.48/22.77/38.03/24.21/293.68` ms; 21×21 surface quality/analysis/PNG
     `117.66/173.91/793.18` ms; and 101×101 `222.16/200.93/934.86` ms. Maximum whole-case times
     are `295.39/383.22/374.52/1084.75/1263.12` ms respectively, and process peak memory is
-    `206.77 MiB`. The browser responsiveness run measured sample-import-to-ready `1,943 ms`,
-    first-chart `846 ms`, and chart interaction `478 ms`, all below the proposed limits. The
-    versioned performance report returns `pass` with zero violations, while
-    `performance_budgets.json` remains `status: proposed` pending maintainer review. Live
-    seven-example timing is intentionally a separate workflow. This item stays unchecked until
-    the thresholds are reviewed and the exact release candidate is rerun.
+    `212.25 MiB`. The browser responsiveness run measured sample-import-to-ready `1,943 ms`,
+    first-chart `846 ms`, and chart interaction `478 ms`, all below the enforced
+    reference-machine limits. The versioned performance report returns `pass` with zero
+    violations, and `performance_budgets.json` is `status: enforced`. The repeated browser run
+    passed 12/12 across Chromium, Firefox, WebKit, and mobile Chromium; the real seven-example
+    flow passed in each desktop engine. These thresholds remain reference-machine limits and
+    are not a guarantee for every machine.
 
 ### P1 - example gallery and first-run learning
 
@@ -313,15 +346,16 @@ runs the web and API processes on loopback and is local deployment, not a hosted
   intended recommendation, important quality findings, editable chart, export provenance, browser
   back/refresh behavior, English/Chinese copy, keyboard access, and mobile layout. Add a regression
   preventing a card from pointing to a missing or mismatched fixture.
-  - **Evidence (2026-09-13):** `test_v22_samples.py` validates every card-to-fixture mapping,
+  - **Evidence (2026-09-14):** `test_v22_samples.py` validates every card-to-fixture mapping,
     bilingual metadata, recommendation/quality answer keys, real processing, export provenance, and
     all four output formats. `example-gallery.spec.ts` opens each of the seven cards by keyboard and
     verifies metadata, route, persisted refresh state, and browser back behavior; the chooser
     renders all seven Chinese titles, and `mobile.spec.ts` opens all seven cards without horizontal
     overflow. The separately enabled `live-samples.spec.ts` now opens all seven cards through the
     real FastAPI path, checks each recommended chart type, renders the editable chart, prepares the
-    export, and downloads a real PNG successfully. Browser tests mock transport only where stated;
-    no sample-only processing shortcut is counted. The live test still needs an exact-candidate rerun.
+    export, and downloads real PNG/SVG/PDF plus cleaned CSV files successfully. Browser tests mock
+    transport only where stated; no sample-only processing shortcut is counted. The live flow
+    passed in Chromium, Firefox, and WebKit, while exact release-commit rerun remains a P7 gate.
 
 ### P2 - help, contextual tips, and feedback center
 
@@ -356,9 +390,11 @@ runs the web and API processes on loopback and is local deployment, not a hosted
   the selection locally; theme every loading/empty/error/dialog/table/chart state; and define dark
   chart palettes independently from publication export defaults. PNG/SVG/PDF must remain readable
   and must not unexpectedly inherit a dark background.
-  - **Evidence (2026-09-12):** `appearance.spec.ts` verifies explicit dark persistence and system
-    scheme changes; the theme uses a separate dark chart palette and export settings remain backend
-    controlled. The browser appearance suite passes.
+  - **Evidence (2026-09-14):** `appearance.spec.ts` verifies explicit light/dark switching from
+    the header, local persistence and system-scheme behavior; the inline SVG LabViz wordmark uses
+    contrast-safe theme fills so “Lab” remains readable in both themes. The theme uses a separate
+    dark chart palette and export settings remain backend controlled. The browser appearance suite
+    passes.
 - [x] **V22-P3-2: Harden color and non-visual access.** Verify WCAG AA text and control contrast,
   serious/critical Axe results, visible focus, reduced motion, color-vision-safe chart palettes,
   grayscale/print behavior, and an accessible data-table alternative for every chart family.
@@ -425,18 +461,18 @@ runs the web and API processes on loopback and is local deployment, not a hosted
   upgrade from V2.1.1, rollback, repair/reinstall, non-administrator behavior where supported,
   antivirus/signing expectations, paths with spaces and non-ASCII characters, and uninstall with an
   explicit keep/delete-local-data choice.
-  - **Current limitation (2026-09-13):** the repository contains no installer compiler or bundled
-    CPython/Node runtimes, and no signed artifact or clean Windows machine is available. The local
-    toolchain probe found only the .NET SDK; no Inno Setup, WiX, or NSIS compiler was available.
-    The package validator correctly rejects the repository checkout because it is not a staged
-    candidate package. This item remains open; the portable launcher is a contract, not an
-    installer or offline-install evidence.
-  - **Candidate evidence (2026-09-13):** `stage-candidate.ps1` produced a disposable candidate
-    from Next standalone output, locked API production dependencies, Python 3.12.14, and Node.js
-    24.17.0. `validate-package.ps1 -RequireBundledRuntimes` passed, and the portable launcher
-    returned Web 200 plus API `/health` 200 from a path containing spaces. This proves candidate
-    staging and the local path boundary only; it does not close the native-installer, Python 3.13,
-    upgrade/rollback/uninstall, signing, or clean-machine gates.
+  - **Current limitation (2026-09-14):** an Inno Setup 6.7.3 compiler was available on this
+    Windows development machine and produced unsigned 2.2.0/2.2.1 test installers from a
+    disposable candidate. The source and lifecycle harness are tracked, but no signed/public
+    artifact or clean/disconnected Windows machine is available. This item remains open for
+    real V2.1.1 upgrade, offline/clean-install, signing/antivirus, and release-packaging evidence.
+  - **Candidate and current-machine evidence (2026-09-14):** `stage-candidate.ps1` produced a
+    candidate from Next standalone output, locked API production dependencies, Python 3.12.14,
+    Node.js 24.17.0 and bundled Noto Sans SC. `validate-package.ps1 -RequireBundledRuntimes`
+    passed. `test-installer.ps1` passed 2.2.0 install, 2.2.1 upgrade, rollback, repair/reinstall,
+    health checks from a path containing spaces, and silent uninstall with local data retained by
+    default. These results are current-machine lifecycle evidence, not clean-machine, disconnected,
+    signed, antivirus or real-V2.1.1-upgrade evidence.
 - [ ] **V22-P5-3: Reuse the accepted packaging contract for macOS and Linux.** Do not advertise a
   platform package until it passes clean-machine installation, launch, upgrade, export, backup, and
   removal tests on named supported versions. macOS/Linux packaging may follow V2.2 Windows GA as a
@@ -468,55 +504,55 @@ explicit deployment/profile boundary.
 
 ### P7 - release candidate and V2.2 definition of done
 
-**Local checkpoint (2026-09-13, based on commit `e003e31`):** see
-[`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification, 51 Playwright
-checks across Chromium/mobile Chromium/Firefox/WebKit, static Python gates, and the 7 + 9 + 23
-data matrix pass. The complete API/PostgreSQL/MinIO gate now passes 257 tests on a fresh dedicated
-local Compose project; the original development volume was preserved. The separately
-enabled live Chromium flow now passes all seven examples through real API processing and PNG
-download; it is not part of the mock-backed count. A disposable Windows candidate also passes
-package validation and a path-with-spaces portable Web/API health smoke using Python 3.12.14 and
-Node.js 24.17.0; it is not a native installer or release artifact. Native installer and
-clean-machine/platform gates remain unavailable. The first repeated performance/memory run has
-zero budget violations, but the thresholds remain proposed and the exact release-candidate rerun
-is open. Therefore P7 remains open.
+**Local checkpoint (2026-09-14, current working tree):** see
+[`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification includes
+48 Vitest tests, lint, typecheck, production build, 55 mock browser passes with 5 intentional
+opt-in skips, and 12/12 repeated browser performance passes across desktop/mobile projects. The
+7 + 9 + 23 data matrix and full API/PostgreSQL/MinIO gate pass on fresh local test services.
+The real seven-example flow passes through FastAPI in Chromium, Firefox, and WebKit with all
+PNG/SVG/PDF and cleaned CSV downloads. The enforced performance budgets have zero violations.
+An unsigned Inno Setup test installer passes current Windows install/upgrade/rollback/repair/
+uninstall-retention checks from a disposable candidate. P7 remains open because exact
+release-commit, clean/disconnected Windows, real V2.1.1 upgrade, signing/antivirus and final
+release metadata are not yet proven.
 
-**Remaining release blockers:** review/approve `V22-P0-3` thresholds and rerun them on the exact
-candidate; CJK installer font bundling/clean-machine closure; `V22-P5-2` Windows artifact and
-clean-machine lifecycle evidence; final exact-commit rerun and bilingual release documentation.
+**Remaining release blockers:** exact release-commit rerun; clean/disconnected Windows install,
+real V2.1.1 upgrade, signing/antivirus and CJK visual verification; `V22-P5-2` evidence; and
+final exact-commit bilingual release documentation.
 `V22-P5-3`, all P6 items, the legacy storage-state rename,
 no-store mode, public AWS acceptance, billing, and broader mobile editing are explicitly non-blocking
 follow-up work.
 
 - [ ] All seven or more public examples are bundled offline, have bilingual teaching metadata, and
   complete import-to-export browser workflows with answer-keyed results.
-  - **Current evidence:** bundled metadata and API answer keys pass; the separately enabled live
-    Chromium workflow passes all seven cards through editable chart and PNG export. The exact
-    release-candidate rerun remains required before this final P7 checklist item can be checked.
+  - **Current evidence:** bundled metadata and API answer keys pass; the live workflow passes all
+    seven cards through FastAPI in Chromium, Firefox, and WebKit with editable charts, PNG/SVG/PDF
+    exports and cleaned CSV downloads. The exact release-commit rerun remains required before
+    this final P7 checklist item can be checked.
 - [ ] The existing 23-dataset V2.1 regression matrix and every V2.2 example, edge, format-parity,
   statistics, mobile, theme, privacy, and packaging gate pass with a machine-readable report.
-  - **Current evidence:** the 7 + 9 + 23 data matrix passes; repeated performance results have zero
-    violations; and the complete API/PostgreSQL/MinIO gate passes 257 tests. Performance review and
-    real installer lifecycle results must still be added to one release-candidate report.
+  - **Current evidence:** the 7 + 9 + 23 data matrix passes; enforced repeated performance results
+    have zero violations; and the complete API/PostgreSQL/MinIO gate passes 257 tests. Current
+    Windows installer lifecycle evidence is recorded in the P7 report, but exact release-commit
+    and clean-machine evidence remain open.
 - [ ] `ruff`, formatting, MyPy, the complete API/PostgreSQL/MinIO gate, `npm run verify`, desktop and
   mobile Playwright, visual/accessibility checks, and clean-install tests pass at the release commit.
   - **Current evidence and limitation:** current static, frontend, browser, and full API gates pass;
-    they must be rerun after the installer exists on the exact candidate commit, and clean-install
-    evidence is absent.
+    they must be rerun on the exact release commit, and clean/disconnected install evidence is absent.
 - [ ] No serious or critical accessibility issue remains; reviewed performance budgets pass or an
   explicit limitation and fallback is shown before the user starts the expensive operation.
-  - **Remaining:** automated accessibility passes; reviewed timing/memory budgets and physical-device
-    spot checks remain.
+  - **Remaining:** automated accessibility and enforced reference-machine timing/memory budgets pass;
+    manual screen-reader/domain review and physical-device/GPU spot checks remain.
 - [ ] Help, contextual tips, feedback privacy, theme behavior, every new scientific method, and all
   supported package/upgrade instructions are complete in English and Simplified Chinese.
-  - **Remaining:** application copy and method contracts pass; final Windows install/upgrade/
-    uninstall instructions and installer-side CJK font verification remain. The current Windows
-    API PNG/SVG/PDF CJK regression passes without missing-glyph warnings.
+  - **Remaining:** application copy and method contracts pass; current Windows install/upgrade/
+    uninstall instructions and bundled-font regression pass. Clean-machine, signed-installer and
+    cross-platform CJK visual verification remain.
 - [ ] Release notes and `VERSION_BASELINE.md` distinguish shipped local features, optional preview
   features, skipped external checks, and deferred work. V2.2 is not marked complete until this list
   is supported by reproducible evidence from the release commit.
-  - **Remaining:** existing documents correctly say `2.2.0-dev`; final release metadata and notes
-    wait for all blocking gates.
+  - **Remaining:** README, CHANGELOG and VERSION_BASELINE now describe the current local evidence
+    and limitations; final release metadata and notes wait for all blocking gates.
 
 ## V2.0 Closeout Gate
 

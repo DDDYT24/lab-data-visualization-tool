@@ -16,15 +16,16 @@ LabViz is a local-first web application for importing, checking, cleaning,
 visualizing, and exporting experimental data. The repository is currently developing
 V2.2.0-dev on top of the V2.1.1 local release: it adds versioned synthetic examples,
 appearance/accessibility improvements, bounded advanced statistics, and a Windows
-packaging contract. The default setup stores data on the user's computer and does
+packaging/lifecycle contract. The default setup stores data on the user's computer and does
 not require a hosted website, AWS, Docker, PostgreSQL, or MinIO.
 
 ## Quick start — V2.2.0-dev local checkout
 
 These commands run the developer checkout. The first launch intentionally creates
 `V2.0/api/.venv` and may download Python and website dependencies into this local
-checkout; that is local setup, not an AWS or hosted deployment. A bundled native
-installer is not released yet; its architecture and validation contract are in
+checkout; that is local setup, not an AWS or hosted deployment. An unsigned Inno Setup
+test-installer source and disposable candidate can be built locally, but no signed/public
+installer release exists; its lifecycle contract is in
 [`V2.0/packaging/windows/README.md`](V2.0/packaging/windows/README.md).
 
 Install the three tools below. Click a link to open the official download page:
@@ -112,7 +113,7 @@ the smaller legacy interface: [`V1.1/`](V1.1/).
 | Node.js | 22.22.2 minimum; Node.js 24 verified by CI |
 | Hardware | CPU only; no GPU or external database server required |
 | Browser | A current modern browser; website port `3000`, API port `8000` |
-| Native installer | Not released; Windows packaging is architecture-only, and macOS/Linux packages are not advertised |
+| Native installer | No signed/public release; an unsigned Windows test installer is locally reproducible, and macOS/Linux packages are not advertised |
 
 ## Manual startup and development
 
@@ -150,7 +151,7 @@ and MinIO Compose services. The complete command set is documented in
 | `V2.0/web/` | Next.js frontend and browser tests |
 | `V2.0/api/` | FastAPI processing service, SQLite persistence, and API tests |
 | `V2.0/api/samples/v22/` | Versioned synthetic examples and edge fixtures only |
-| `V2.0/packaging/windows/` | Windows local-first packaging contract and validator; no released installer yet |
+| `V2.0/packaging/windows/` | Windows local-first packaging/lifecycle contract, unsigned test-installer source, and validator |
 | `V1.1/` | Legacy Streamlit application |
 | `V2.0/docs/` | Privacy, offline installation, backup, statistics, and release guidance |
 | `VERSION_BASELINE.md` | What V1.0, V1.1, V2.0, V2.1, and the V2.2-dev baseline deliver |

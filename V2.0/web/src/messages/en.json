@@ -9,7 +9,9 @@
     "signIn": "Sign in",
     "signOut": "Sign out",
     "settings": "Settings",
-    "menu": "Open navigation and account menu"
+    "menu": "Open navigation and account menu",
+    "switchToLightTheme": "Switch to light theme",
+    "switchToDarkTheme": "Switch to dark theme"
   },
   "auth": {
     "title": "Sign in with email",

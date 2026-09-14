@@ -1,6 +1,8 @@
 "use client";
 
 import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined";
+import Brightness4RoundedIcon from "@mui/icons-material/Brightness4Rounded";
+import Brightness7RoundedIcon from "@mui/icons-material/Brightness7Rounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
@@ -18,28 +20,36 @@ import {
   Menu,
   MenuItem,
   Stack,
+  Tooltip,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
-import labvizLogo from "../../../../assets/labviz-logo.png";
-
 import { EmailCodeDialog } from "@/features/auth/email-code-dialog";
+import {
+  loadUserPreferences,
+  saveUserPreferences,
+} from "@/features/settings/user-preferences";
 import { labvizApi } from "@/lib/api/labviz-api";
 
 import { LanguageSwitcher } from "./language-switcher";
+import { LabvizLogo } from "./labviz-logo";
 
 export function AppHeader() {
   const t = useTranslations("app");
+  const theme = useTheme();
   const queryClient = useQueryClient();
   const [signInOpen, setSignInOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const authQuery = useQuery({
     queryKey: ["auth-state"],
-    queryFn: ({ signal }) => labvizApi.getAuthState(signal),
+    // This small public request is intentionally allowed to finish across route
+    // changes. WebKit reports a cancelled same-origin fetch as a page error,
+    // while React Query still ignores a stale result after navigation.
+    queryFn: () => labvizApi.getAuthState(),
   });
   const logoutMutation = useMutation({
     mutationFn: () => labvizApi.logout(),
@@ -50,6 +60,12 @@ export function AppHeader() {
     },
   });
   const user = authQuery.data?.authenticated ? authQuery.data.user : null;
+  const toggleTheme = () => {
+    saveUserPreferences({
+      ...loadUserPreferences(),
+      appearance: theme.palette.mode === "dark" ? "light" : "dark",
+    });
+  };
 
   return (
     <>
@@ -81,16 +97,7 @@ export function AppHeader() {
                 spacing={1.25}
                 sx={{ alignItems: "center" }}
               >
-                <Image
-                  alt="LabViz"
-                  priority
-                  src={labvizLogo}
-                  style={{
-                    height: "34px",
-                    objectFit: "contain",
-                    width: "102px",
-                  }}
-                />
+                <LabvizLogo />
               </Stack>
               <Stack
                 direction="row"
@@ -114,6 +121,29 @@ export function AppHeader() {
                 variant="outlined"
                 sx={{ display: { xs: "none", sm: "inline-flex" } }}
               />
+              <Tooltip
+                title={
+                  theme.palette.mode === "dark"
+                    ? t("switchToLightTheme")
+                    : t("switchToDarkTheme")
+                }
+              >
+                <IconButton
+                  aria-label={
+                    theme.palette.mode === "dark"
+                      ? t("switchToLightTheme")
+                      : t("switchToDarkTheme")
+                  }
+                  onClick={toggleTheme}
+                  size="small"
+                >
+                  {theme.palette.mode === "dark" ? (
+                    <Brightness7RoundedIcon />
+                  ) : (
+                    <Brightness4RoundedIcon />
+                  )}
+                </IconButton>
+              </Tooltip>
               <LanguageSwitcher />
               <Button
                 onClick={(event) =>

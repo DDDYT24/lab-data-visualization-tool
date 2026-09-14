@@ -1,5 +1,13 @@
 :root {
+  color-scheme: light dark;
+}
+
+html[data-labviz-theme="light"] {
   color-scheme: light;
+}
+
+html[data-labviz-theme="dark"] {
+  color-scheme: dark;
 }
 
 html,

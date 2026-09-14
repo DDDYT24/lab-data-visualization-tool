@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import csv
 import io
 import json
@@ -20,6 +21,7 @@ from zipfile import BadZipFile, ZipFile
 import matplotlib
 import numpy as np
 import pandas as pd
+from fontTools import subset
 from matplotlib import font_manager
 from matplotlib.figure import Figure
 from scipy.stats import f as fisher_f
@@ -2626,6 +2628,26 @@ def render_chart(
     }
     if export.format == "svg":
         with matplotlib.rc_context({"svg.fonttype": "none"}):
+            figure.savefig(output, **save_kwargs)
+        if resolved_font_properties is not None:
+            # Embed only used glyphs; SVG text remains selectable without OS fonts.
+            font = subset.load_font(str(resolved_font_properties.get_file()), subset.Options())
+            subsetter = subset.Subsetter()
+            subsetter.populate(
+                text="".join(item.get_text() for item in figure.findobj(matplotlib.text.Text))
+            )
+            subsetter.subset(font)
+            font_buffer = io.BytesIO()
+            font.save(font_buffer)
+            font.close()
+            encoded = base64.b64encode(font_buffer.getvalue()).decode("ascii")
+            css = (
+                f"<style>@font-face{{font-family:'{resolved_font_family}';"
+                f"src:url(data:font/ttf;base64,{encoded}) format('truetype');}}</style>"
+            )
+            return output.getvalue().replace(b"<defs>", b"<defs>" + css.encode("utf-8"), 1)
+    elif export.format == "pdf":
+        with matplotlib.rc_context({"pdf.fonttype": 42}):
             figure.savefig(output, **save_kwargs)
     else:
         figure.savefig(output, **save_kwargs)

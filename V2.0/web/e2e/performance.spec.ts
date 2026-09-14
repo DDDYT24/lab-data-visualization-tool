@@ -1,11 +1,12 @@
 import { expect, test } from "./fixtures";
 
 import { installMockApi } from "./support/mock-api";
+import budgets from "../../api/samples/v22/performance_budgets.json";
 
 const BROWSER_BUDGETS = {
-  sampleImportToReadyMs: 15_000,
-  firstChartMs: 15_000,
-  chartInteractionMs: 3_000,
+  sampleImportToReadyMs: budgets.browser.sample_import_to_ready_ms,
+  firstChartMs: budgets.browser.first_chart_ms,
+  chartInteractionMs: budgets.browser.chart_interaction_ms,
 } as const;
 
 test("meets the local browser responsiveness budgets", async ({ page }) => {

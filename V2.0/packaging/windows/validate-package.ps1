@@ -24,6 +24,8 @@ if ($manifest.localFirst -ne $true) {
 
 $requiredFiles = @(
     "package-manifest.json",
+    "V2.0\assets\fonts\NotoSansSC-VF.ttf",
+    "V2.0\assets\fonts\OFL.txt",
     "bin\start-labviz-portable.cmd",
     "bin\start-labviz-portable.ps1",
     "V2.0\web\server.js",

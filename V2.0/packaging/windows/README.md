@@ -1,8 +1,9 @@
 # LabViz Windows packaging contract
 
-This directory defines the V2.2 local-first Windows packaging contract. It is an architecture and
-validation aid, not a released installer. The repository currently does not contain bundled Python
-or Node runtimes, a signed installer, or clean-machine installation evidence.
+This directory defines the V2.2 local-first Windows packaging contract. It now includes an Inno
+Setup source for a per-user test installer, but it is not a released or signed installer. The
+repository still does not contain bundled Python or Node runtimes, and clean-machine installation
+evidence is not part of the repository.
 
 ## Target architecture
 
@@ -86,6 +87,38 @@ both web and API loopback health checks before opening the browser; automated sm
 `-SkipOpenBrowser`. It keeps user data below
 `%LOCALAPPDATA%\LabViz`.
 
-P5-1 (architecture and lifecycle contract) is implemented here. P5-2 (a real installer and clean
-machine tests) remains open until a packager, bundled runtimes, signing decision, and clean Windows
-test machine are available. macOS/Linux packages are not advertised by this contract.
+### Local test installer
+
+`LabViz.iss` installs each candidate under a versioned directory below
+`%LOCALAPPDATA%\Programs\LabViz\versions\<version>`. The stable launcher records the active
+version and `set-labviz-version.ps1` can select an already-installed version for rollback. The
+application data remains under `%LOCALAPPDATA%\LabViz`; uninstall asks whether to keep it and
+defaults to keeping it.
+
+Compile a disposable test installer from the packaging directory after staging a candidate:
+
+```powershell
+& 'C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe' `
+  '/DCandidateRoot=C:\path\to\staged\LabViz' `
+  '/DOutputDir=C:\path\to\outputs\v22-installer' `
+  .\LabViz.iss
+```
+
+The lifecycle harness accepts a second setup executable when testing an upgrade:
+
+```powershell
+.\test-installer.ps1 `
+  -SetupExe 'C:\path\to\LabViz-Setup-2.2.0.exe' `
+  -UpgradeSetupExe 'C:\path\to\LabViz-Setup-2.2.1.exe' `
+  -TestRoot 'C:\path with spaces\labviz-installer-test'
+```
+
+It checks installation and loopback health, coexistence of two versions, rollback,
+repair/reinstall, and silent uninstall with local data retained by default. The harness
+does not replace clean-machine, disconnected, signing, antivirus, or real V2.1.1 upgrade
+evidence.
+
+P5-1 (architecture and lifecycle contract) and the installer source are implemented here. P5-2
+remains open until the compiled package passes clean-install, offline, upgrade, rollback, repair,
+path, uninstall, signing, and clean-machine tests. macOS/Linux packages are not advertised by
+this contract.

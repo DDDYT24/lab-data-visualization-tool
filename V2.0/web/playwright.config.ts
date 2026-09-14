@@ -39,24 +39,24 @@ export default defineConfig({
     },
     {
       name: "mobile-chromium",
-      testMatch: /mobile\.spec\.ts/,
+      testMatch: /(?:mobile|performance)\.spec\.ts/,
       use: { ...devices["Pixel 5"] },
     },
     {
       name: "firefox-smoke",
-      testMatch: /cross-browser\.spec\.ts/,
+      testMatch: /(?:cross-browser|performance|live-samples)\.spec\.ts/,
       use: { ...devices["Desktop Firefox"] },
     },
     {
       name: "webkit-smoke",
-      testMatch: /cross-browser\.spec\.ts/,
+      testMatch: /(?:cross-browser|performance|live-samples)\.spec\.ts/,
       use: { ...devices["Desktop Safari"] },
     },
   ],
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: `npm run prepare:e2e && npm run build && npm run start -- --hostname localhost --port ${port}`,
+        command: `npm run build && npm run start -- --hostname localhost --port ${port}`,
         env: {
           ...process.env,
           LABVIZ_E2E_BUILD: "1",

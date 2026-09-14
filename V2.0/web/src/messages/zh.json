@@ -9,7 +9,9 @@
     "signIn": "登录",
     "signOut": "退出登录",
     "settings": "设置",
-    "menu": "打开导航和账户菜单"
+    "menu": "打开导航和账户菜单",
+    "switchToLightTheme": "切换到浅色主题",
+    "switchToDarkTheme": "切换到暗色主题"
   },
   "auth": {
     "title": "使用邮箱登录",
