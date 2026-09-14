@@ -2,14 +2,14 @@
   "contractVersion": "v1",
   "product": "LabViz",
   "releaseLine": "V2.2",
-  "buildStatus": "architecture-only",
+  "buildStatus": "test-installer-source",
   "platform": "windows-x64",
   "localFirst": true,
   "installer": {
     "target": "per-user native installer",
     "artifact": null,
     "cleanMachineVerified": false,
-    "toolchain": "Installer technology is selected during the packaging implementation gate; no installer compiler is bundled in this repository."
+    "toolchain": "Inno Setup 6 source is included for reproducible local test builds; the compiler itself is not redistributed."
   },
   "runtime": {
     "api": "Bundle CPython 3.13.x with the locked API wheels and the ready-to-run LabViz API environment.",
@@ -34,6 +34,7 @@
   },
   "include": [
     "V2.0/api",
+    "V2.0/assets/fonts",
     "V2.0/web/server.js",
     "V2.0/web/.next/static",
     "V2.0/web/node_modules",
@@ -43,7 +44,12 @@
     "runtime/python",
     "runtime/node",
     "bin/start-labviz-portable.cmd",
-    "bin/start-labviz-portable.ps1"
+    "bin/start-labviz-portable.ps1",
+    "bin/start-labviz-installed.cmd",
+    "bin/start-labviz-installed.ps1",
+    "bin/set-labviz-version.ps1",
+    "LabViz.iss",
+    "test-installer.ps1"
   ],
   "exclude": [
     ".env",

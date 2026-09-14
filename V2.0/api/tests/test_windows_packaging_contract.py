@@ -15,7 +15,7 @@ def test_windows_package_contract_is_local_first_and_honest_about_release_status
     assert manifest["releaseLine"] == "V2.2"
     assert manifest["platform"] == "windows-x64"
     assert manifest["localFirst"] is True
-    assert manifest["buildStatus"] == "architecture-only"
+    assert manifest["buildStatus"] == "test-installer-source"
     assert manifest["installer"]["artifact"] is None
     assert manifest["installer"]["cleanMachineVerified"] is False
     assert manifest["runtime"]["runtimeDependencyInstall"] is False
@@ -31,6 +31,10 @@ def test_windows_package_contract_is_local_first_and_honest_about_release_status
     assert "V2.0/api/samples/v22" in included
     assert "V2.0/assets/labviz-logo.ico" in included
     assert "V2.0/assets/labviz-logo.svg" in included
+    assert "V2.0/assets/fonts" in included
+    fonts = REPO_ROOT / "V2.0" / "assets" / "fonts"
+    assert (fonts / "NotoSansSC-VF.ttf").is_file()
+    assert "SIL OPEN FONT LICENSE" in (fonts / "OFL.txt").read_text(encoding="utf-8")
     excluded = "\n".join(manifest["exclude"]).lower()
     for prohibited in (".env", ".labviz", ".venv", "node_modules", "raw user", "credentials"):
         assert prohibited in excluded
@@ -61,6 +65,14 @@ def test_windows_packaging_scripts_protect_the_data_boundary() -> None:
     assert "health check" in launcher
     assert "SkipOpenBrowser" in launcher
     assert "quotedWebServer" in launcher
+    assert (PACKAGING_ROOT / "LabViz.iss").is_file()
+    installer_source = (PACKAGING_ROOT / "LabViz.iss").read_text(encoding="utf-8")
+    assert "PrivilegesRequired=lowest" in installer_source
+    assert "start-labviz-installed.ps1" in installer_source
+    assert (PACKAGING_ROOT / "test-installer.ps1").is_file()
+    assert "Silent uninstall did not preserve local data" in (
+        PACKAGING_ROOT / "test-installer.ps1"
+    ).read_text(encoding="utf-8")
 
 
 def test_reusable_labviz_icon_sources_are_present() -> None:

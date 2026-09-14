@@ -1,6 +1,6 @@
 {
   "contractVersion": "v1",
-  "status": "proposed",
+  "status": "enforced",
   "description": "Initial local release budgets for the processing reference machine. Values are milliseconds per stage and MiB for the whole process peak.",
   "tabular": {
     "24": {
@@ -9,9 +9,11 @@
         "preview_ms": 1000,
         "quality_ms": 1000,
         "analysis_ms": 1000,
-        "png_render_ms": 4000
+        "png_render_ms": 4000,
+        "svg_render_ms": 4000,
+        "pdf_render_ms": 4000
       },
-      "total_ms": 8000
+      "total_ms": 16000
     },
     "1000": {
       "stages": {
@@ -19,9 +21,11 @@
         "preview_ms": 1500,
         "quality_ms": 1500,
         "analysis_ms": 1500,
-        "png_render_ms": 4000
+        "png_render_ms": 4000,
+        "svg_render_ms": 4000,
+        "pdf_render_ms": 4000
       },
-      "total_ms": 10000
+      "total_ms": 18000
     },
     "10000": {
       "stages": {
@@ -29,9 +33,11 @@
         "preview_ms": 3000,
         "quality_ms": 3000,
         "analysis_ms": 3000,
-        "png_render_ms": 5000
+        "png_render_ms": 5000,
+        "svg_render_ms": 5000,
+        "pdf_render_ms": 5000
       },
-      "total_ms": 16000
+      "total_ms": 26000
     }
   },
   "surface": {
@@ -39,17 +45,21 @@
       "stages": {
         "quality_ms": 3000,
         "analysis_ms": 3000,
-        "png_render_ms": 5000
+        "png_render_ms": 5000,
+        "svg_render_ms": 5000,
+        "pdf_render_ms": 5000
       },
-      "total_ms": 12000
+      "total_ms": 22000
     },
     "101": {
       "stages": {
         "quality_ms": 6000,
         "analysis_ms": 6000,
-        "png_render_ms": 8000
+        "png_render_ms": 8000,
+        "svg_render_ms": 8000,
+        "pdf_render_ms": 8000
       },
-      "total_ms": 20000
+      "total_ms": 36000
     }
   },
   "browser": {

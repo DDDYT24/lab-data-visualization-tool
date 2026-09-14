@@ -30,6 +30,8 @@ def test_repeated_performance_runs_use_conservative_maxima_and_publish_variance(
     assert result["timing_stats"]["load_ms"] == {
         "min_ms": 5.0,
         "mean_ms": 6.0,
+        "median_ms": 6.0,
+        "range_ms": 2.0,
         "p95_ms": 7.0,
         "max_ms": 7.0,
         "stdev_ms": 0.82,

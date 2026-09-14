@@ -13,10 +13,11 @@ import sys
 import time
 from collections.abc import Callable
 from ctypes import wintypes
+from functools import partial
 from importlib import import_module
 from math import ceil
 from pathlib import Path
-from statistics import fmean, pstdev
+from statistics import fmean, median, pstdev
 from typing import Any
 
 import pandas as pd
@@ -106,6 +107,12 @@ def _tabular_baseline(row_count: int) -> dict[str, Any]:
     chart = _line_chart()
     timings["analysis_ms"], _ = _measure(lambda: analyze_chart(frame, chart))
     timings["png_render_ms"], rendered = _measure(lambda: render_chart(frame, chart))
+    for export_format in ("svg", "pdf"):
+        export_chart = ChartSpec.model_validate(chart.model_dump(mode="json"))
+        export_chart.export_settings.format = export_format
+        timings[f"{export_format}_render_ms"], _ = _measure(
+            partial(render_chart, frame, export_chart)
+        )
     return {
         "rows": row_count,
         "bytes": len(payload),
@@ -121,6 +128,12 @@ def _surface_baseline(side: int) -> dict[str, Any]:
     timings["quality_ms"], _ = _measure(lambda: build_quality_report("surface", frame))
     timings["analysis_ms"], analysis = _measure(lambda: analyze_chart(frame, chart))
     timings["png_render_ms"], rendered = _measure(lambda: render_chart(frame, chart))
+    for export_format in ("svg", "pdf"):
+        export_chart = ChartSpec.model_validate(chart.model_dump(mode="json"))
+        export_chart.export_settings.format = export_format
+        timings[f"{export_format}_render_ms"], _ = _measure(
+            partial(render_chart, frame, export_chart)
+        )
     diagnostic = analysis["preview"]["surfaceDiagnostics"][0]
     return {
         "side": side,
@@ -180,6 +193,8 @@ def _timing_stats(runs: list[float]) -> dict[str, float]:
     return {
         "min_ms": min(ordered),
         "mean_ms": round(fmean(ordered), 2),
+        "median_ms": round(median(ordered), 2),
+        "range_ms": round(max(ordered) - min(ordered), 2),
         "p95_ms": ordered[percentile_index],
         "max_ms": max(ordered),
         "stdev_ms": round(pstdev(ordered), 2),
@@ -235,6 +250,8 @@ def _budget_violations(result: dict[str, Any], budgets: dict[str, Any]) -> list[
             violations.append(f"surface/{case['side']}/total={total:.2f}ms>{budget['total_ms']}ms")
 
     peak = result.get("process_peak_memory_mib")
+    if peak is None:
+        violations.append("process/peak_memory=unavailable")
     if peak is not None and peak > budgets["process_peak_memory_mib"]:
         violations.append(f"process/peak_memory={peak}MiB>{budgets['process_peak_memory_mib']}MiB")
     return violations

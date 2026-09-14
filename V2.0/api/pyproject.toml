@@ -25,5 +25,5 @@ strict = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*", "matplotlib.*", "numpy.*", "openpyxl.*", "pandas.*", "pyarrow.*", "scipy.*"]
+module = ["boto3.*", "botocore.*", "fontTools.*", "matplotlib.*", "numpy.*", "openpyxl.*", "pandas.*", "pyarrow.*", "scipy.*"]
 ignore_missing_imports = true

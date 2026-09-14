@@ -7,8 +7,8 @@ CJK-capable font before rendering any figure that contains CJK text.
 ## V2.2 strategy
 
 - The redistributable target is **Noto Sans SC**, distributed under the SIL Open Font License
-  1.1. A future Windows installer should ship the required font file and its license notice in
-  the installer payload; it must not redistribute Microsoft YaHei, SimSun, PingFang, or another
+  1.1. The repository now includes the font and license in `V2.0/assets/fonts/`; Windows
+  candidate staging copies both and package validation requires both. It must not redistribute Microsoft YaHei, SimSun, PingFang, or another
   operating-system font.
 - A developer or installer may select an explicit licensed font with the `LABVIZ_CJK_FONT_PATH`
   environment variable. The path should point to a local `.ttf`, `.otf`, or supported `.ttc`
@@ -33,10 +33,10 @@ From `V2.0/api`, using the repository's Python 3.12/3.13 environment:
 & .venv\Scripts\python.exe -m pytest tests/test_v22_samples.py::test_cjk_exports_use_a_cjk_capable_font_without_missing_glyph_warnings -q
 ```
 
-The test renders the same Chinese-labelled chart as PNG, SVG, and PDF and fails if a Matplotlib
-missing-glyph warning is emitted. The current Windows verification environment resolved
-`Noto Sans SC` from `C:\Windows\Fonts\NotoSansSC-VF.ttf`; that is machine evidence only, not a
-claim that the future installer is complete.
+The test restricts the resolver to the bundled asset, renders the same Chinese-labelled chart
+as PNG, SVG, and PDF, and fails on missing-glyph warnings. SVG retains text nodes and embeds
+a subset font as a data URL. PDF embeds TrueType glyphs and a Unicode map. Structural tests
+check these properties; they do not replace visual inspection on other operating systems.
 
-Installer work remains responsible for bundling an OFL-compliant font, preserving the license
-notice, and repeating this test on a clean machine without relying on Windows fonts.
+Clean-machine installer testing remains open. Restricting the resolver in a regression test
+demonstrates independence from system fonts, not a completed clean-Windows installation test.

@@ -13,12 +13,13 @@
 - 增加 prediction interval、Working–Hotelling simultaneous mean band 和线性 Huber IRLS
   稳健拟合；统计契约、失败码、独立合成答案键和导出一致性见
   [`V2.0/docs/STATISTICS_CONTRACT_V2.2.md`](V2.0/docs/STATISTICS_CONTRACT_V2.2.md)。
-- 增加 Windows 本地优先打包契约、可复用 SVG/PNG/ICO 图标和候选包校验器；当前没有原生安装器、
-  绑定运行时或 clean-machine 安装证据。
+- 增加 Windows 本地优先打包与生命周期契约、可复用 SVG/PNG/ICO 图标、OFL CJK 字体资源、
+  Inno Setup 未签名测试安装包源码和候选包校验器；当前没有签名或面向公众发布的安装包。
 - 增加七个示例逐卡返回/刷新/键盘/移动端回归、Firefox/WebKit smoke，以及规则、缺失、重复和
   101×101 曲面的移动端 3D 回归；257 个 API 测试已在独立的本机 PostgreSQL 17/MinIO
-  Compose 环境通过。重复性能运行当前没有预算违规，但阈值仍待维护者确认；P7 检查点仍因
-  性能预算审阅、原生安装包和全新机器安装验证开放。
+  Compose 环境通过。3 次重复性能运行已启用机器可读阈值，当前零违规；当前 Windows 隔离目录已
+  通过 2.2.0 安装、2.2.1 升级、回滚、修复/重装、路径空格、健康检查和默认保留本地数据的卸载流程。
+  真实 V2.1.1 升级、断网全新机器、签名/防病毒验证仍未完成，因此 P7 仍开放。
 - V2.2 仍不包含云端同步、团队协作、真实 Google/Microsoft 登录或 AWS 部署。
 
 ## V2.1.1

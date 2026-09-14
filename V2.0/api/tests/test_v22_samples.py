@@ -265,9 +265,14 @@ def test_v22_edge_fixtures_cover_quality_grid_encoding_and_unicode_filename(
     assert "filename*=UTF-8''" in cleaned.headers["content-disposition"]
 
 
-def test_cjk_exports_use_a_cjk_capable_font_without_missing_glyph_warnings() -> None:
-    if _cjk_font_info() is None:
-        pytest.skip("No CJK-capable font is installed for this environment.")
+def test_cjk_exports_use_a_cjk_capable_font_without_missing_glyph_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundled_font = SAMPLES_ROOT.parents[2] / "assets" / "fonts" / "NotoSansSC-VF.ttf"
+    assert bundled_font.is_file()
+    monkeypatch.setattr("labviz_api.processing._cjk_font_candidates", lambda: [bundled_font])
+    _cjk_font_info.cache_clear()
+    assert _cjk_font_info() is not None
 
     frame = [{"时间": 0, "响应": 1.0}, {"时间": 1, "响应": 2.0}]
     chart_payload: dict[str, Any] = {
@@ -298,3 +303,11 @@ def test_cjk_exports_use_a_cjk_capable_font_without_missing_glyph_warnings() -> 
             rendered = render_chart(data_frame, chart)
         assert rendered.startswith(signature)
         assert not any("Glyph" in str(item.message) for item in captured)
+        if export_format == "svg":
+            assert b"data:font/ttf;base64," in rendered
+            assert "中文实验结果" in rendered.decode("utf-8")
+            assert b"<text" in rendered
+        if export_format == "pdf":
+            assert b"/FontFile2" in rendered
+            assert b"/ToUnicode" in rendered
+    _cjk_font_info.cache_clear()

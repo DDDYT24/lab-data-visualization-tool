@@ -43,6 +43,7 @@ outputs/
 # Node and Next.js
 node_modules/
 .next/
+.next-e2e/
 coverage/
 *.tsbuildinfo
 playwright-report/

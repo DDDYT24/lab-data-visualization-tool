@@ -209,6 +209,7 @@ Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -Relat
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "LICENSE"
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "V2.0\assets\labviz-logo.ico"
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "V2.0\assets\labviz-logo.svg"
+Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "V2.0\assets\fonts"
 Copy-RelativeEntry -SourceRoot $packagingRoot -DestinationRoot $outputAbsolute -RelativePath "bin\start-labviz-portable.cmd"
 Copy-RelativeEntry -SourceRoot $packagingRoot -DestinationRoot $outputAbsolute -RelativePath "bin\start-labviz-portable.ps1"
 

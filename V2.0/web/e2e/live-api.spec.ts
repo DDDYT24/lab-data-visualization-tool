@@ -1,4 +1,6 @@
 import { expect, test } from "./fixtures";
+import path from "node:path";
+import manifest from "../../api/samples/v22/manifest.json";
 
 import { createCsvNearSize } from "./support/mock-api";
 
@@ -58,8 +60,9 @@ test("processes and exports a generated 1.87 MB CSV through the live FastAPI ser
 test("processes the configured real workbook through the live FastAPI service", async ({
   page,
 }) => {
-  const workbookPath = process.env.LABVIZ_E2E_FILE;
-  test.skip(!workbookPath, "Set LABVIZ_E2E_FILE to validate a private local workbook.");
+  const workbookPath = process.env.LABVIZ_E2E_FILE ?? path.resolve(
+    "../api/samples/v22", manifest.examples.find((entry) => entry.format === "xlsx")!.filename,
+  );
   test.setTimeout(240_000);
 
   await page.goto("/");
@@ -69,6 +72,5 @@ test("processes the configured real workbook through the live FastAPI service", 
   await expect(
     page.getByRole("heading", { name: "Confirm your data" }),
   ).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByText("1.9 MB", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Review data quality" })).toBeEnabled();
 });

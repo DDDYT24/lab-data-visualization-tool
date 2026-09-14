@@ -41,6 +41,25 @@ test("persists an explicit dark theme across navigation", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
+test("switches between light and dark directly from the application header", async ({ page }) => {
+  await installMockApi(page);
+  await page.goto("/");
+
+  const switchToDark = page.getByRole("button", { name: "Switch to dark theme" });
+  await expect(switchToDark).toBeVisible();
+  await switchToDark.click();
+  await expect(page.locator("html")).toHaveAttribute("data-labviz-theme", "dark");
+  await expect(page.locator('svg[aria-label="LabViz"] text')).toHaveAttribute(
+    "fill", "#F4F7FB",
+  );
+
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-labviz-theme", "light");
+  await expect(page.locator('svg[aria-label="LabViz"] text')).toHaveAttribute(
+    "fill", "#172033",
+  );
+});
+
 test("follows the operating-system color scheme when System is selected", async ({ page }) => {
   await installMockApi(page);
   await page.emulateMedia({ colorScheme: "dark" });
