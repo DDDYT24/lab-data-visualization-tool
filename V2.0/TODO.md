@@ -30,19 +30,20 @@ and browser coverage, but does not close P7 or declare V2.2 released.
 - The mock browser suite passed 55 checks with 5 intentional opt-in live skips. Repeated
   browser performance passed 12/12 across Chromium, Firefox, WebKit, and mobile Chromium.
   Frontend verification passed 48 Vitest tests, TypeScript, ESLint and production build.
-- The full API/PostgreSQL/MinIO suite passed 257 tests on an independent local Compose project.
+- The full API/PostgreSQL/MinIO suite passed 263 tests on an independent local Compose project.
   The 7 public + 9 edge + 23 historical synthetic matrix also passed. No experimental user
   data was uploaded.
-- A disposable candidate with Python 3.12.14, Node.js 24.17.0, standalone Next output,
+- A disposable candidate with Python 3.13.7, Node.js 24.17.0, standalone Next output,
   production API dependencies and bundled OFL Noto Sans SC passed package validation. Unsigned
   Inno Setup test installers passed 2.2.0 install, 2.2.1 upgrade, rollback, repair/reinstall,
-  path-with-spaces health checks and default local-data retention on this Windows machine.
+  path-with-spaces health checks, default local-data retention and explicit local-data deletion
+  on this Windows machine.
 - Remaining P5-2 limits are a clean/disconnected machine, a real V2.1.1 upgrade, signing and
   antivirus review. P5-3 has no native macOS/Linux package or named test machine. P7 still
   requires an exact release-commit rerun and final release metadata. Cloud sync, teams,
   external login, AWS deployment and GitHub push remain out of scope for this local pass.
-- E2E builds use ignored `.next-e2e`; existing `V2.0/web/next-env.d.ts` and this TODO file
-  remain protected working-tree files and were not reset, restored or deleted.
+- E2E builds use ignored `.next-e2e`; the existing `V2.0/web/next-env.d.ts` modification was
+  preserved and remains the only protected uncommitted working-tree file.
 
 > **Release note:** V2.1.1 is distributed as a local self-hosted application. The AWS Phase 6C/6D
 > items below are optional maintainer work and do not block the V2.1.1 local release. Local use relies
@@ -341,12 +342,12 @@ cleaning/multi-panel editing, persisted-state renaming, no-store mode, ESLint 10
   - **Evidence and limitation (2026-09-14):** the repeated local runner executes each case
     three times on Windows 11 / Python 3.12.14 / pandas 3.0.5 and records median/range and
     process peak memory for PNG/SVG/PDF.
-    Conservative maxima are: 24 rows load/preview/quality/analysis/PNG `9.23/4.09/15.48/6.58/267.40`
-    ms; 1,000 rows `2.34/23.32/17.80/20.50/321.28` ms; 10,000 rows
-    `8.48/22.77/38.03/24.21/293.68` ms; 21×21 surface quality/analysis/PNG
-    `117.66/173.91/793.18` ms; and 101×101 `222.16/200.93/934.86` ms. Maximum whole-case times
-    are `295.39/383.22/374.52/1084.75/1263.12` ms respectively, and process peak memory is
-    `212.25 MiB`. The browser responsiveness run measured sample-import-to-ready `1,943 ms`,
+    Conservative maxima are: 24 rows load/preview/quality/analysis/PNG `7.32/3.97/17.46/12.41/364.24`
+    ms; 1,000 rows `2.71/22.97/18.72/24.95/316.72` ms; 10,000 rows
+    `8.89/27.54/37.92/24.88/326.85` ms; 21×21 surface quality/analysis/PNG
+    `61.58/102.54/532.92` ms; and 101×101 `226.35/244.04/804.92` ms. Maximum whole-case times
+    are `1136.03/1240.62/1187.58/2145.54/3937.08` ms respectively, and process peak memory is
+    `212.38 MiB`. The browser responsiveness run measured sample-import-to-ready `1,943 ms`,
     first-chart `846 ms`, and chart interaction `478 ms`, all below the enforced
     reference-machine limits. The versioned performance report returns `pass` with zero
     violations, and `performance_budgets.json` is `status: enforced`. The repeated browser run
@@ -537,11 +538,11 @@ explicit deployment/profile boundary.
 [`docs/V2.2_P7_TEST_REPORT.md`](docs/V2.2_P7_TEST_REPORT.md). Frontend verification includes
 48 Vitest tests, lint, typecheck, production build, 55 mock browser passes with 5 intentional
 opt-in skips, and 12/12 repeated browser performance passes across desktop/mobile projects. The
-7 + 9 + 23 data matrix and full API/PostgreSQL/MinIO gate pass on fresh local test services.
+7 + 9 + 23 data matrix and full 263-test API/PostgreSQL/MinIO gate pass on fresh local test services.
 The real seven-example flow passes through FastAPI in Chromium, Firefox, and WebKit with all
 PNG/SVG/PDF and cleaned CSV downloads. The enforced performance budgets have zero violations.
 An unsigned Inno Setup test installer passes current Windows install/upgrade/rollback/repair/
-uninstall-retention checks from a disposable candidate. P7 remains open because exact
+uninstall-retention/deletion checks from a disposable candidate. P7 remains open because exact
 release-commit, clean/disconnected Windows, real V2.1.1 upgrade, signing/antivirus and final
 release metadata are not yet proven.
 
@@ -561,7 +562,7 @@ follow-up work.
 - [ ] The existing 23-dataset V2.1 regression matrix and every V2.2 example, edge, format-parity,
   statistics, mobile, theme, privacy, and packaging gate pass with a machine-readable report.
   - **Current evidence:** the 7 + 9 + 23 data matrix passes; enforced repeated performance results
-    have zero violations; and the complete API/PostgreSQL/MinIO gate passes 257 tests. Current
+    have zero violations; and the complete API/PostgreSQL/MinIO gate passes 263 tests. Current
     Windows installer lifecycle evidence is recorded in the P7 report, but exact release-commit
     and clean-machine evidence remain open.
 - [ ] `ruff`, formatting, MyPy, the complete API/PostgreSQL/MinIO gate, `npm run verify`, desktop and

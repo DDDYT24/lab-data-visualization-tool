@@ -92,8 +92,13 @@ test("runs every bundled example through the real API and all exports", async ({
       await page.getByRole("button", { name: "Prepare export" }).click();
       const downloadLink = page.getByRole("link", { name: `Download ${format}`, exact: true });
       await expect(downloadLink).toBeVisible({ timeout: 120_000 });
+      await expect(downloadLink).toBeEnabled();
+      await expect(downloadLink).toBeInViewport();
       const downloadPromise = page.waitForEvent("download");
-      await downloadLink.click();
+      // WebKit can keep a MUI anchor compositor-unstable while the long SVG response
+      // settles. Visibility, enabled state, viewport and the download event remain strict;
+      // force only bypasses that browser-specific stability wait for the native click.
+      await downloadLink.click({ force: true });
       const download = await downloadPromise;
       expect(await download.failure()).toBeNull();
       const bytes = await readFile((await download.path())!);
@@ -103,7 +108,11 @@ test("runs every bundled example through the real API and all exports", async ({
       if (format === "SVG") expect(bytes.toString()).toContain("<svg");
     }
     const cleanedPromise = page.waitForEvent("download");
-    await page.getByRole("link", { name: "Download complete cleaned data (CSV)" }).click();
+    const cleanedLink = page.getByRole("link", { name: "Download complete cleaned data (CSV)" });
+    await expect(cleanedLink).toBeVisible();
+    await expect(cleanedLink).toBeEnabled();
+    await expect(cleanedLink).toBeInViewport();
+    await cleanedLink.click({ force: true });
     const cleaned = await cleanedPromise;
     expect(await cleaned.failure()).toBeNull();
     const csv = await readFile((await cleaned.path())!, "utf8");
