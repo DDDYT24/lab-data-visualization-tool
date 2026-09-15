@@ -1,54 +1,152 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
-    [ValidateRange(1, 65535)]
-    [int]$WebPort = 3000,
-    [ValidateRange(1, 65535)]
-    [int]$ApiPort = 8000,
-    [switch]$SkipOpenBrowser
+    [ValidateRange(1, 65535)][int]$WebPort = 3000,
+    [ValidateRange(1, 65535)][int]$ApiPort = 8000,
+    [switch]$SkipOpenBrowser,
+    [switch]$HealthCheckOnly,
+    [string]$ImportData
 )
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-
-$installRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$versionsRoot = Join-Path $installRoot "versions"
-$currentVersionFile = Join-Path $installRoot "current-version.txt"
-
-function Get-VersionDirectory {
-    param([string]$Version)
-
-    if ([string]::IsNullOrWhiteSpace($Version) -or $Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9.-]+)?$') {
-        throw "The installed LabViz version marker is invalid."
+$installRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+$currentFile = Join-Path $installRoot "current-version.txt"
+$pendingFile = Join-Path $installRoot "pending-version.txt"
+$journalFile = Join-Path $installRoot "upgrade.json"
+$receiptFile = Join-Path $installRoot "last-upgrade.json"
+$userRoot = Join-Path $env:LOCALAPPDATA "LabViz"
+$dataRoot = Join-Path $userRoot "data"
+$logRoot = Join-Path $userRoot "logs"
+New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
+$mutex = New-Object Threading.Mutex($false, ("Local\LabViz-" + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value))
+$ownsMutex = $false
+try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
+if (-not $ownsMutex) {
+    $mutex.Dispose()
+    if ($ImportData) { throw "Stop LabViz before importing / 请先退出 LabViz。" }
+    $running = Join-Path $logRoot "running.json"
+    if ((Test-Path -LiteralPath $running) -and -not $SkipOpenBrowser) {
+        $url = (Get-Content -LiteralPath $running -Raw | ConvertFrom-Json).webUrl
+        if ($url -match '^http://127\.0\.0\.1:[0-9]+$') { Start-Process $url }
     }
-    $candidate = Join-Path $versionsRoot $Version
-    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
-        throw "The selected LabViz version is not installed: $Version"
+    Write-Host "LabViz is already running or starting / LabViz 已在运行或正在启动。"
+    return
+}
+function Get-VersionRoot([string]$Version) {
+    if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9.-]+)?$') {
+        throw "Invalid version / 版本标记无效。"
     }
-    return $candidate
+    $root = Join-Path $installRoot "versions\$Version"
+    if (-not (Test-Path -LiteralPath (Join-Path $root "bin\start-labviz-portable.ps1"))) {
+        throw "Incomplete installation; reinstall LabViz / 安装不完整，请重新安装。"
+    }
+    return $root
 }
-
-if (Test-Path -LiteralPath $currentVersionFile -PathType Leaf) {
-    $version = (Get-Content -LiteralPath $currentVersionFile -Raw).Trim()
-} else {
-    $version = @(
-        Get-ChildItem -LiteralPath $versionsRoot -Directory -ErrorAction SilentlyContinue |
-            Sort-Object Name -Descending |
-            Select-Object -First 1 -ExpandProperty Name
-    ) | Select-Object -First 1
+function Write-AtomicFile([string]$Path, [string]$Value, [Text.Encoding]$Encoding) {
+    $temporary = "$Path.new-" + [guid]::NewGuid().ToString("N")
+    if (Test-Path -LiteralPath $Path) {
+        # File.Replace requires a real same-volume backup path on Windows.
+        # Keep that backup beside the marker until the replacement succeeds.
+        $backup = "$Path.replace-" + [guid]::NewGuid().ToString("N")
+        try {
+            [IO.File]::WriteAllText($temporary, $Value, $Encoding)
+            [IO.File]::Replace($temporary, $Path, $backup)
+        } finally {
+            if (Test-Path -LiteralPath $temporary) {
+                Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+            }
+            if (Test-Path -LiteralPath $backup) {
+                Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } else {
+        try {
+            [IO.File]::WriteAllText($temporary, $Value, $Encoding)
+            [IO.File]::Move($temporary, $Path)
+        } finally {
+            if (Test-Path -LiteralPath $temporary) {
+                Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }
-
-$versionRoot = Get-VersionDirectory -Version $version
-$portableLauncher = Join-Path $versionRoot "bin\start-labviz-portable.ps1"
-if (-not (Test-Path -LiteralPath $portableLauncher -PathType Leaf)) {
-    throw "The selected LabViz version is incomplete: $versionRoot"
+function Write-Marker([string]$Path, [string]$Value) {
+    Write-AtomicFile $Path $Value ([Text.Encoding]::ASCII)
 }
-
-$portableArguments = @{
-    WebPort = $WebPort
-    ApiPort = $ApiPort
+function Write-Transaction([string]$Path, $Transaction) {
+    Write-AtomicFile $Path ($Transaction | ConvertTo-Json -Depth 5) ([Text.Encoding]::UTF8)
 }
-if ($SkipOpenBrowser) {
-    $portableArguments.SkipOpenBrowser = $true
+function Invoke-DataTool([string]$Root, [string]$Action, [string]$Source, [string]$Destination) {
+    & (Join-Path $Root "runtime\python\python.exe") (Join-Path $PSScriptRoot "local-data.py") $Action $Source $Destination
+    if ($LASTEXITCODE -ne 0) { throw "Data operation failed; originals retained / 数据操作失败，原数据已保留。" }
 }
-& $portableLauncher @portableArguments
-exit $LASTEXITCODE
+function Restore-Transaction($Transaction) {
+    $backupRoot = [IO.Path]::GetFullPath((Join-Path $userRoot "backups")) + "\"
+    if ($Transaction.backup -and -not ([IO.Path]::GetFullPath($Transaction.backup).StartsWith($backupRoot, [StringComparison]::OrdinalIgnoreCase))) {
+        throw "Invalid backup path / 备份路径无效。"
+    }
+    $runtimeRoot = Get-VersionRoot $Transaction.candidate
+    if ($Transaction.backup) {
+        Invoke-DataTool $runtimeRoot "restore" $Transaction.backup $dataRoot
+    } elseif (Test-Path -LiteralPath $dataRoot) {
+        # Preserve candidate-created data without exposing it to the previous runtime.
+        Move-Item -LiteralPath $dataRoot -Destination (Join-Path $userRoot ("data.failed-" + [guid]::NewGuid().ToString("N")))
+    }
+    if ($Transaction.previous) { Write-Marker $currentFile $Transaction.previous }
+    if (Test-Path -LiteralPath $pendingFile) { Remove-Item -LiteralPath $pendingFile }
+    Remove-Item -LiteralPath $journalFile
+    Write-Host "Upgrade restored; failed data retained / 已恢复升级前状态，失败版本的数据副本已保留。"
+}
+try {
+    # A crash between snapshot and successful activation is recovered before another start.
+    if (Test-Path -LiteralPath $journalFile) {
+        Restore-Transaction (Get-Content -LiteralPath $journalFile -Raw | ConvertFrom-Json)
+    }
+    $previous = if (Test-Path -LiteralPath $currentFile) { (Get-Content -LiteralPath $currentFile -Raw).Trim() } else { "" }
+    $version = if (Test-Path -LiteralPath $pendingFile) { (Get-Content -LiteralPath $pendingFile -Raw).Trim() } else { $previous }
+    $versionRoot = Get-VersionRoot $version
+    if ($ImportData) {
+        Invoke-DataTool $versionRoot "import" $ImportData $dataRoot
+        Write-Host "Import completed; source retained / 迁移完成，原目录已保留。"
+        return
+    }
+    $arguments = @{ WebPort = $WebPort; ApiPort = $ApiPort; SkipOpenBrowser = $true; HealthCheckOnly = $true }
+    if (Test-Path -LiteralPath $pendingFile) {
+        $backup = ""
+        if (Test-Path -LiteralPath (Join-Path $dataRoot "labviz-v2.db")) {
+            $backup = Join-Path $userRoot ("backups\upgrade-" + [guid]::NewGuid().ToString("N"))
+            Invoke-DataTool $versionRoot "snapshot" $dataRoot $backup
+        } elseif ((Test-Path -LiteralPath $dataRoot) -and @(Get-ChildItem -LiteralPath $dataRoot -Force).Count -gt 0) {
+            throw "Unrecognized local data; backup and repair first / 本地数据状态异常，请先备份并修复。"
+        }
+        $transaction = @{ previous = $previous; candidate = $version; backup = $backup }
+        Write-Transaction $journalFile $transaction
+        try {
+            if ($previous -and ([version]($version.Split('-')[0]) -lt [version]($previous.Split('-')[0]))) {
+                if (-not (Test-Path -LiteralPath $receiptFile)) { throw "Rollback snapshot unavailable / 缺少回滚快照。" }
+                $receipt = Get-Content -LiteralPath $receiptFile -Raw | ConvertFrom-Json
+                if ($receipt.previous -ne $version -or -not $receipt.backup) { throw "No matching rollback snapshot / 无匹配回滚快照。" }
+                Invoke-DataTool $versionRoot "restore" $receipt.backup $dataRoot
+            }
+            & (Join-Path $versionRoot "bin\start-labviz-portable.ps1") @arguments
+            Write-Marker $currentFile $version
+            Write-Transaction $receiptFile $transaction
+            Remove-Item -LiteralPath $pendingFile
+            Remove-Item -LiteralPath $journalFile
+        } catch {
+            $failure = $_
+            Restore-Transaction ([pscustomobject]$transaction)
+            if (-not $previous) { throw $failure }
+            $versionRoot = Get-VersionRoot $previous
+        }
+    }
+    $arguments.HealthCheckOnly = [bool]$HealthCheckOnly
+    $arguments.SkipOpenBrowser = [bool]$SkipOpenBrowser
+    & (Join-Path $versionRoot "bin\start-labviz-portable.ps1") @arguments
+} catch {
+    $_ | Out-String | Add-Content -LiteralPath (Join-Path $logRoot "launcher.error.log")
+    Write-Host "LabViz could not start / LabViz 启动失败。Logs / 日志: $logRoot" -ForegroundColor Red
+    throw
+} finally {
+    $mutex.ReleaseMutex()
+    $mutex.Dispose()
+}

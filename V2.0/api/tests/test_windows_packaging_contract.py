@@ -69,10 +69,13 @@ def test_windows_packaging_scripts_protect_the_data_boundary() -> None:
     installer_source = (PACKAGING_ROOT / "LabViz.iss").read_text(encoding="utf-8")
     assert "PrivilegesRequired=lowest" in installer_source
     assert "start-labviz-installed.ps1" in installer_source
+    assert "GetEnv('LOCALAPPDATA')" in installer_source
+    assert "data.retained-*" in installer_source
+    assert "TestDeleteData" in installer_source
     assert (PACKAGING_ROOT / "test-installer.ps1").is_file()
-    assert "Silent uninstall did not preserve local data" in (
-        PACKAGING_ROOT / "test-installer.ps1"
-    ).read_text(encoding="utf-8")
+    installer_test = (PACKAGING_ROOT / "test-installer.ps1").read_text(encoding="utf-8")
+    assert "Silent uninstall did not preserve local data" in installer_test
+    assert "DeleteDataSetupExe" in installer_test
 
 
 def test_reusable_labviz_icon_sources_are_present() -> None:

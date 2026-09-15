@@ -28,6 +28,9 @@ $requiredFiles = @(
     "V2.0\assets\fonts\OFL.txt",
     "bin\start-labviz-portable.cmd",
     "bin\start-labviz-portable.ps1",
+    "bin\process-job.ps1",
+    "bin\local-data.py",
+    "bin\maintain-labviz.ps1",
     "V2.0\web\server.js",
     "V2.0\assets\labviz-logo.ico",
     "V2.0\assets\labviz-logo.svg"

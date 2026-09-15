@@ -12,6 +12,8 @@
     "toolchain": "Inno Setup 6 source is included for reproducible local test builds; the compiler itself is not redistributed."
   },
   "runtime": {
+    "releasePythonMinor": "3.13",
+    "validatedDevelopmentCandidatePython": "3.12.14",
     "api": "Bundle CPython 3.13.x with the locked API wheels and the ready-to-run LabViz API environment.",
     "web": "Bundle Node.js 22.22.2 or newer with the Next.js standalone server and static assets.",
     "runtimeDependencyInstall": false,
@@ -45,11 +47,16 @@
     "runtime/node",
     "bin/start-labviz-portable.cmd",
     "bin/start-labviz-portable.ps1",
+    "bin/process-job.ps1",
+    "bin/local-data.py",
+    "bin/maintain-labviz.ps1",
     "bin/start-labviz-installed.cmd",
     "bin/start-labviz-installed.ps1",
     "bin/set-labviz-version.ps1",
     "LabViz.iss",
-    "test-installer.ps1"
+    "test-installer.ps1",
+    "test-launcher.ps1",
+    "languages/ChineseSimplified.isl"
   ],
   "exclude": [
     ".env",
