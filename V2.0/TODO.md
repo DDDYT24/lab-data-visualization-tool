@@ -21,7 +21,7 @@ and browser coverage, but does not close P7 or declare V2.2 released.
 - Performance implementation enforces the versioned budgets, records PNG/SVG/PDF stages,
   median/range and process peak memory, and fails if peak-memory measurement is unavailable.
   Python 3.12.14 completed three repetitions for 24/1,000/10,000 rows and 21×21/101×101
-  surfaces with zero violations; the recorded peak was 212.25 MiB. The budget file is
+  surfaces with zero violations; the recorded peak was 212.38 MiB. The budget file is
   `status: enforced` for this reference machine, not a guarantee for every machine.
 - The real seven-example workflow passed through FastAPI in Chromium, Firefox, and WebKit.
   Each engine checked recommendations, editable charts, PNG/SVG/PDF downloads, cleaned CSV
@@ -293,9 +293,18 @@ isolated Chinese/spaced data path; they are not clean-machine installation evide
   not release files or GitHub uploads. The current developer candidate remains Python 3.12.14, while
   the final installer target is Python 3.13.x.
 
-Changes remain uncommitted pending the final P7/release gate. Previous P7 results apply to d5ce311,
-not these new launcher changes. The protected next-env.d.ts edit is preserved. No clean-machine,
-disconnected, signed or real historical V2.1.1 pass is claimed by the historical counts below.
+Stages 3/4 were committed as `698daa7`; stage 5/6 test updates and evidence were committed as
+`215a9f4`. The protected next-env.d.ts edit is preserved. The latest consolidated checkpoint
+supersedes the older d5ce311 evidence; an exact final-release rerun remains open.
+
+**Stage 7 delivery checkpoint (2026-09-14):** bilingual README, CHANGELOG, version baseline and
+P7 report are reconciled for the unreleased candidate. Installer SHA-256 identities are recorded
+in the P7 report. API `2.2.0.dev0` and Web `2.2.0-dev` retain equivalent development versions.
+Installer labels 2.2.0/2.2.1 exercise lifecycle transitions and are not public release versions.
+Final promotion to 2.2.0, a release tag and final artifact build remain pending P5-2/P7 evidence.
+Delivery validation: four local-privacy boundary tests pass on Python 3.12; `git diff --check`
+passes, and all three listed installer SHA-256 values were read from the local artifacts.
+No clean-machine, disconnected, signed or real historical V2.1.1 pass is claimed.
 
 Cloud synchronization, teams, Google/Microsoft login and AWS are excluded from these stages.
 Post-V2.2 local follow-ups remain: native macOS/Linux packages, custom formulas, advanced mobile

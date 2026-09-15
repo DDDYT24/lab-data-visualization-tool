@@ -19,6 +19,15 @@ appearance/accessibility improvements, bounded advanced statistics, and a Window
 packaging/lifecycle contract. The default setup stores data on the user's computer and does
 not require a hosted website, AWS, Docker, PostgreSQL, or MinIO.
 
+## V2.2 candidate delivery status
+
+V2.1.1 remains the released version. The V2.2 development candidate has passed the local
+263-test API gate, synthetic data matrices, browser flows and current-machine Windows installer
+lifecycle checks. Test installers labelled 2.2.0/2.2.1 are unsigned upgrade-test artifacts, not
+public releases. Verification scope and artifact SHA-256 hashes are in the
+[P7 report](V2.0/docs/V2.2_P7_TEST_REPORT.md); remaining release gates live in
+[TODO](V2.0/TODO.md). Native macOS/Linux packages are later work.
+
 ## Quick start — V2.2.0-dev local checkout
 
 These commands run the developer checkout. The first launch intentionally creates
