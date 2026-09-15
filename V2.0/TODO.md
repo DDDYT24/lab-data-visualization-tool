@@ -221,56 +221,84 @@ post-V2.2 work.
 
 ## V2.2 Roadmap (active; V2.2.0-dev)
 
-**Planning checkpoint:** 2026-09-13 (replanned after the first P7 local gate)
+**Planning checkpoint:** 2026-09-14 (stages 1–4 implementation and current-machine evidence complete; release gates open)
 
-**Release intent:** V2.2.0 is a local-first product release for researchers who should be able to
-learn from an offline example, import a supported table, inspect and clean it, create a scientifically
-described chart, and export the result without uploading experiment data to a public service. It
-keeps the V2.1 privacy/data contracts, adds the completed P0-P4 product work, and targets a per-user
-Windows installer that does not require Git, Python, Node.js, or PowerShell knowledge. The installer
-runs the web and API processes on loopback and is local deployment, not a hosted website.
+**Release intent:** V2.2.0 is a local-first Windows product. Users install bundled runtimes,
+learn with offline examples, import/clean/analyze/export data, and keep projects on their computer.
 
-### Replanned V2.2 completion boundary
+### Current scope and acceptance
 
-| Workstream | Current state | Blocks V2.2.0? | Completion boundary |
-| --- | --- | --- | --- |
-| P0 examples and data matrix | P0-1/P0-2 complete; P0-3 partial | Yes | Add process peak-memory and browser timing measurements, approve regression thresholds, and make the report fail when a budget is exceeded. |
-| P1 example teaching workflows | Complete | No further feature work | Preserve the seven-card API/browser regressions and rerun them at the release commit. |
-| P2 help, tips, and feedback privacy | Complete | No further feature work | Preserve bilingual and privacy regressions; do not add a server submission endpoint in V2.2.0. |
-| P3 theme, accessibility, and mobile 3D | Complete in automated browser coverage | Manual release QA only | Recheck principal screens, keyboard/focus behavior, and one physical Windows touch device if available; do not claim universal phone/GPU certification. |
-| P4 bounded advanced statistics | Complete | Independent review and release rerun | Preserve answer keys and method limitations; user-defined formulas and broad multiplicity automation remain excluded. |
-| P5 Windows package | Architecture complete; installer open | Yes | Produce a per-user offline-capable Windows artifact and pass clean install, upgrade, rollback, repair, paths, uninstall, and local-data-retention tests. |
-| P5 macOS/Linux packages | Not implemented | No; target V2.2.x or later | Announce packages only after named native machines pass the same lifecycle suite. Developer-checkout instructions are not package evidence. |
-| P6 cloud/team/OIDC preview | Deferred | No | Requires a separately approved server cost, privacy, identity, tenancy, and operations plan. No AWS resources or real Google/Microsoft login belong to V2.2.0. |
-| P7 release candidate | In progress | Yes | Close only the remaining gates below on the exact release commit, then update final release notes and version metadata. |
+| Workstream | Status | Remaining acceptance |
+| --- | --- | --- |
+| P0 data and performance | Implemented; reference-machine evidence recorded | Preserve 7 + 9 + 23 matrix and enforced budgets; rerun affected gates at release. |
+| P1 examples | Implemented; live desktop-engine evidence recorded | Offline installed-product verification. |
+| P2 help and feedback | Implemented | Installed bilingual/privacy review. |
+| P3 appearance and mobile 3D | Implemented; automated coverage recorded | Installed-product visual/keyboard review; name real-device coverage separately. |
+| P4 statistics | Implemented; answer tests recorded | Verify installed previews/exports and independent answers. |
+| P5 Windows | Current-machine lifecycle evidence passes; release gates open | Clean/disconnected, real V2.1.1, signing and antivirus evidence. |
+| P5 macOS/Linux | Deferred to V2.2.x or later | Native-machine build and lifecycle evidence before announcing packages. |
+| P7 release | Open | Frozen source/build configuration, complete tests, final metadata and artifact hashes. |
 
-### Remaining V2.2.0 execution order
+### Execution stages
 
-1. **Performance contract (`V22-P0-3`):** add cross-platform process peak-memory measurement,
-   first-chart and interaction timing, repeated-run variance, and reviewed warning/failure budgets
-   for 24/1,000/10,000-row tables and 21×21/101×101 surfaces. Keep the existing disclosed mobile
-   sampling fallback. The implementation and first reference run are now available; threshold review
-   remains a release decision.
-2. **Live browser release paths:** run every bundled example from card selection through the real
-   FastAPI processing path, editable chart, and export in Chromium. Keep Firefox/WebKit as supported
-   desktop smoke engines and run the regular/invalid/large 3D mobile matrix. Do not count the
-   mock-backed UI suite as live-API evidence. The seven-example Chromium path is now covered by a
-   separately enabled live test; it must still be rerun on the exact release candidate.
-3. **Export typography closure:** choose and document a redistributable CJK-capable font strategy,
-   verify English/Chinese labels in PNG/SVG/PDF, and remove the current missing-glyph warning before
-   promising exact Chinese export fidelity. The current Windows resolver/test pass; installer
-   bundling and clean-machine proof remain coupled to P5-2.
-4. **Windows installer (`V22-P5-2`):** select the packager, assemble pinned CPython/Node/standalone
-   web runtimes, build an unsigned test artifact first, validate local health/lifecycle/data paths,
-   then decide signing and antivirus handling. Test on a disposable clean Windows environment with
-   spaces and Chinese characters in the user path.
-5. **Release-candidate rerun (`P7`):** run static checks, all 257 API/PostgreSQL/MinIO tests, data
-   matrix, frontend verify, live/mock browser matrices, accessibility, performance budgets, package
-   validation, install/upgrade/rollback/uninstall, and privacy/forbidden-artifact checks from the
-   exact candidate commit. Store machine-readable results outside tracked user-data paths.
-6. **Release documentation:** update both READMEs, `CHANGELOG.md`, `VERSION_BASELINE.md`, the P7
-   report, and this file; change `2.2.0-dev` metadata only after every blocking gate passes. Creating
-   a tag or pushing GitHub still requires an explicit user request.
+1. **Baseline and status:** preserve working-tree changes, reconcile this file and test evidence.
+   Python 3.12.14 is the current validated development/candidate runtime. Python 3.13 remains the
+   final packaging target from the accepted plan; a 3.12 candidate does not satisfy that target.
+   Keep the staging script's explicit Python 3.13 assertion for final packaging.
+2. **Windows experience:** bilingual startup/maintenance guidance, per-user shortcuts, free-port
+   selection, single-instance ownership, health timeouts, logs, graceful shutdown and child cleanup.
+   Validate with Windows PowerShell 5.1 as used by the installed shortcut, not just PowerShell 7.
+3. **Migration and recovery:** import a stopped V2.1.1 SQLite/object directory into an empty
+   installed data directory; never merge or change source data. Snapshot before version activation;
+   test health failures, interrupted upgrades, compatible program/data rollback and repair.
+   Imported guest ownership/browser sessions need explicit end-to-end evidence before closure.
+4. **Clean Windows:** standard user, no developer tools, disconnected first launch, Chinese/spaced
+   paths, restart, upgrades, repair and both uninstall choices; signing/antivirus evidence separately.
+5. **Product review:** theme/logo, all principal states, CJK exports, seven examples, statistical
+   parity, privacy, keyboard/accessibility and regular/invalid/large mobile 3D.
+6. **P7 candidate gate:** complete API/integration, synthetic matrices, static/frontend, live/mock
+   browser and performance tests plus packaging lifecycle. Record actual counts and all skips.
+7. **Delivery:** bilingual README, CHANGELOG, version baseline, this TODO and test report; align
+   final versions and artifact hashes, then local commit. GitHub publication needs explicit request.
+
+**Current implementation checkpoint (2026-09-14):** stages 1–4 implementation and current-machine
+evidence are complete; release gates remain open. Stage 2 launcher implementation passes the host-level
+experience checks: occupied preferred port,
+duplicate start, graceful stop, forced-parent termination with child cleanup, and restart after an
+abandoned mutex. These checks use real API/Web processes and Windows PowerShell 5.1 with an
+isolated Chinese/spaced data path; they are not clean-machine installation evidence.
+
+- Python 3.12.14: packaging contracts and synthetic snapshot/import tests **9 passed**. Ruff checks pass.
+- All packaging PowerShell scripts parse under Windows PowerShell 5.1. Inno Setup 6.7.3 compiles
+  the bilingual installer source, and the latest unsigned 2.2.0/2.2.1 test EXEs pass the current
+  host lifecycle harness. Maintenance dialogs have not had manual visual acceptance.
+- `outputs/v22-stage12-candidate-20260914` was staged and passed package structure validation.
+  It is a Python 3.12.14 development candidate, not the required final Python 3.13 release.
+- A cold API import during investigation took about 208 seconds and exceeded the 90-second
+  startup health deadline; warm host checks passed. Cold/clean-machine startup remains open.
+- Stage 3 local migration/recovery evidence passes: the real installed launcher completed upgrade,
+  data rollback, injected startup failure recovery, interrupted-upgrade recovery, and a synthetic
+  V2.1.1-style import from a Chinese/spaced `.labviz` path. The import retained a guest project and
+  object bytes, left source hashes unchanged, reset the old browser session, and reopened through
+  the real API. A real historical V2.1.1 installation and browser-cookie/guest-token journey are
+  still outside this fixture and remain a release limitation.
+- Stage 4 current-machine installer evidence passes with bundled Python 3.13.7 and Node.js:
+  install, loopback health, version coexistence, upgrade, rollback, repair/reinstall, a non-elevated
+  user token, Chinese/spaced install and data paths, default data retention, and explicit deletion
+  of data plus retained/failed transaction copies. The source-only Inno compiler check and the
+  test-only deletion build are reproducible; signed/antivirus, disconnected clean-machine and
+  independent standard-user installation evidence are still unavailable.
+- The 3.13 candidate and unsigned test installers are disposable artifacts under `outputs` and are
+  not release files or GitHub uploads. The current developer candidate remains Python 3.12.14, while
+  the final installer target is Python 3.13.x.
+
+Changes remain uncommitted pending the final P7/release gate. Previous P7 results apply to d5ce311,
+not these new launcher changes. The protected next-env.d.ts edit is preserved. No clean-machine,
+disconnected, signed or real historical V2.1.1 pass is claimed by the historical counts below.
+
+Cloud synchronization, teams, Google/Microsoft login and AWS are excluded from these stages.
+Post-V2.2 local follow-ups remain: native macOS/Linux packages, custom formulas, advanced mobile
+cleaning/multi-panel editing, persisted-state renaming, no-store mode, ESLint 10 and Figma cleanup.
 
 ### P0 - freeze contracts and expand the test foundation
 
@@ -466,13 +494,14 @@ runs the web and API processes on loopback and is local deployment, not a hosted
     disposable candidate. The source and lifecycle harness are tracked, but no signed/public
     artifact or clean/disconnected Windows machine is available. This item remains open for
     real V2.1.1 upgrade, offline/clean-install, signing/antivirus, and release-packaging evidence.
-  - **Candidate and current-machine evidence (2026-09-14):** `stage-candidate.ps1` produced a
-    candidate from Next standalone output, locked API production dependencies, Python 3.12.14,
-    Node.js 24.17.0 and bundled Noto Sans SC. `validate-package.ps1 -RequireBundledRuntimes`
-    passed. `test-installer.ps1` passed 2.2.0 install, 2.2.1 upgrade, rollback, repair/reinstall,
-    health checks from a path containing spaces, and silent uninstall with local data retained by
-    default. These results are current-machine lifecycle evidence, not clean-machine, disconnected,
-    signed, antivirus or real-V2.1.1-upgrade evidence.
+  - **Candidate and current-machine evidence (2026-09-14):** `stage-candidate.ps1 -RequirePython313`
+    produced a Python 3.13.7 candidate from Next standalone output, locked API dependencies,
+    Node.js 24.17.0 and bundled Noto Sans SC; `validate-package.ps1 -RequireBundledRuntimes`
+    passed. The non-elevated host lifecycle run passed 2.2.0 install, 2.2.1 upgrade, rollback,
+    repair/reinstall, health checks from Chinese/spaced program and data paths, and default
+    local-data retention. A separate test-only deletion build removed data, logs, backups and
+    retained/failed transaction copies. These results are current-machine lifecycle evidence, not
+    clean-machine, disconnected, signed, antivirus or real-V2.1.1-upgrade evidence.
 - [ ] **V22-P5-3: Reuse the accepted packaging contract for macOS and Linux.** Do not advertise a
   platform package until it passes clean-machine installation, launch, upgrade, export, backup, and
   removal tests on named supported versions. macOS/Linux packaging may follow V2.2 Windows GA as a

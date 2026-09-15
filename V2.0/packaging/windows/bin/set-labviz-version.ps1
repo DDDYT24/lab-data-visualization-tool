@@ -15,5 +15,5 @@ $versionRoot = Join-Path $installRoot "versions\$Version"
 if (-not (Test-Path -LiteralPath (Join-Path $versionRoot "bin\start-labviz-portable.ps1") -PathType Leaf)) {
     throw "The requested LabViz version is not installed: $Version"
 }
-Set-Content -LiteralPath (Join-Path $installRoot "current-version.txt") -Value $Version -Encoding ascii
-Write-Host "LabViz will use version $Version on the next launch. Local data was not changed." -ForegroundColor Green
+Set-Content -LiteralPath (Join-Path $installRoot "pending-version.txt") -Value $Version -Encoding ascii
+Write-Host "LabViz will validate version $Version at next launch. Downgrades require a matching backup." -ForegroundColor Green

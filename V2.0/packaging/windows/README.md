@@ -33,10 +33,14 @@ cloud deployment and is intentionally separate from the future offline installer
 ## Upgrade, rollback, and uninstall rules
 
 An upgrade must leave `%LOCALAPPDATA%\LabViz\data` in place and keep the previous program version
-until the new API and web health check passes. A rollback changes only the program directory. The
+until the new API and web health check passes. Activation snapshots SQLite and local files; a
+rollback requires the corresponding pre-upgrade data snapshot and retains displaced data. The
 uninstaller must present an explicit “keep local data” or “delete local data” choice and default to
 keeping it. The package must support paths with spaces and non-ASCII characters and must not require
-administrator privileges when installed per-user.
+administrator privileges when installed per-user. An import copies guest-owned projects and local
+objects without changing the source; it clears old browser sessions and transient authentication
+state, so a user may need to sign in again. An explicit data deletion also removes retained and
+failed-transaction data copies.
 
 ## Verification status
 
@@ -79,8 +83,10 @@ $sitePackages = 'C:\path\to\staging\LabViz-api-site-packages'
 ```
 
 The staging script validates Python 3.12/3.13 and Node.js 22.22.2-or-newer, but it is not a native
-installer builder. A release candidate still needs a selected installer technology, bundled-runtime
-review, signing decision, and clean-machine lifecycle tests.
+installer builder. Inno Setup is the selected test installer technology. The current development
+candidate uses Python 3.12.14; final packaging still targets Python 3.13 and must use
+-RequirePython313 with an independently verified runtime/dependency bundle. Signing and
+clean-machine lifecycle tests remain open.
 
 After the bundled runtime exists, add `-RequireBundledRuntimes`. The portable launcher performs
 both web and API loopback health checks before opening the browser; automated smoke tests may add
@@ -91,7 +97,9 @@ both web and API loopback health checks before opening the browser; automated sm
 
 `LabViz.iss` installs each candidate under a versioned directory below
 `%LOCALAPPDATA%\Programs\LabViz\versions\<version>`. The stable launcher records the active
-version and `set-labviz-version.ps1` can select an already-installed version for rollback. The
+version. Installation writes a pending marker; the launcher snapshots data and checks both
+services before activating it. `set-labviz-version.ps1` requests validation of an installed version.
+Downgrade requires the matching snapshot; rollback retains the newer data tree separately. The
 application data remains under `%LOCALAPPDATA%\LabViz`; uninstall asks whether to keep it and
 defaults to keeping it.
 
@@ -110,15 +118,49 @@ The lifecycle harness accepts a second setup executable when testing an upgrade:
 .\test-installer.ps1 `
   -SetupExe 'C:\path\to\LabViz-Setup-2.2.0.exe' `
   -UpgradeSetupExe 'C:\path\to\LabViz-Setup-2.2.1.exe' `
+  -DeleteDataSetupExe 'C:\path\to\LabViz-Setup-delete-test.exe' `
   -TestRoot 'C:\path with spaces\labviz-installer-test'
 ```
 
 It checks installation and loopback health, coexistence of two versions, rollback,
 repair/reinstall, and silent uninstall with local data retained by default. The harness
-does not replace clean-machine, disconnected, signing, antivirus, or real V2.1.1 upgrade
-evidence.
+also accepts a test-only installer compiled with `/DTestDeleteData=1` to exercise explicit
+data deletion, including retained/failed transaction copies. The harness does not replace
+clean-machine, disconnected, signing, antivirus, or real V2.1.1 upgrade evidence.
 
 P5-1 (architecture and lifecycle contract) and the installer source are implemented here. P5-2
 remains open until the compiled package passes clean-install, offline, upgrade, rollback, repair,
 path, uninstall, signing, and clean-machine tests. macOS/Linux packages are not advertised by
 this contract.
+
+## Current Windows launch experience
+
+The default shortcuts use Windows PowerShell 5.1, with UTF-8 BOM for Chinese script messages.
+Preferred ports are 3000/8000; occupied ports fall back to available loopback ports, and sharing
+URLs/origin configuration follow the selected web port. A per-user mutex prevents duplicate writers.
+The launcher prints readiness progress and uses a 90-second startup health deadline. Missing files,
+timeouts and child failures are reported with the local log location. An OS job object closes the
+API/Web process group if the launcher is forcibly terminated.
+
+Start-menu entries provide **Stop LabViz**, **LabViz logs**, **Import old data** and **Rollback**.
+Import prompts for the stopped old application's data directory and only accepts an empty target.
+For V2.1.1 source installations, select V2.0/api/.labviz. Custom database/object locations and
+browser guest-session recovery is not a promise: guest project ownership is retained, while
+browser sessions are reset and sign-in may be required again. Do not remove the old checkout
+until the imported project and exports have been checked.
+
+The Chinese installer language covers the principal installation pages; untranslated Inno Setup
+system error messages use the English defaults. Installer language visual review remains required.
+
+A reproducible developer-machine launch and migration test (not a clean-machine installer test):
+
+~~~powershell
+.\test-launcher.ps1 -CandidateRoot 'C:\path\to\candidate' -TestRoot 'C:\new test folder' -ExperienceOnly
+~~~
+
+This creates disposable version wrappers and read-only-use runtime directory junctions to the
+candidate. It verifies occupied ports, single-instance behavior, stop, forced termination cleanup
+and recovery using Windows PowerShell 5.1. Keep the test directory under ignored outputs.
+The full mode additionally checks a synthetic V2.1.1-style source with a guest project, an old
+browser session, and an object file: the source remains unchanged, the guest project is present
+after import, the old session is absent, and the imported database can be reopened by the API.

@@ -1,10 +1,11 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateRange(1, 65535)]
     [int]$WebPort = 3000,
     [ValidateRange(1, 65535)]
     [int]$ApiPort = 8000,
-    [switch]$SkipOpenBrowser
+    [switch]$SkipOpenBrowser,
+    [switch]$HealthCheckOnly
 )
 
 Set-StrictMode -Version Latest
@@ -25,41 +26,77 @@ foreach ($path in @($python, $node, $webServer)) {
 }
 New-Item -ItemType Directory -Force -Path $dataRoot, $logRoot | Out-Null
 
+# Only one LabViz process group may write this user's packaged data.
+$mutex = New-Object Threading.Mutex($false, ("Local\LabViz-" + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value))
+$ownsMutex = $false
+try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
+if (-not $ownsMutex) {
+    $mutex.Dispose()
+    throw "LabViz is already running / LabViz 已在运行。"
+}
+function Get-AvailablePort([int]$Preferred) {
+    $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $Preferred)
+    try { $listener.Start(); return $listener.LocalEndpoint.Port }
+    catch {
+        $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
+        $listener.Start()
+        return $listener.LocalEndpoint.Port
+    } finally { $listener.Stop() }
+}
+$stopFile = Join-Path $logRoot "stop.request"
+$readyFile = Join-Path $logRoot "running.json"
+
 $previousDatabasePath = $env:LABVIZ_DATABASE_PATH
 $previousObjectRoot = $env:LABVIZ_OBJECT_STORAGE_ROOT
 $previousProxyTarget = $env:LABVIZ_API_PROXY_TARGET
 $previousPort = $env:PORT
 $previousHostname = $env:HOSTNAME
+$previousOrigins = $env:LABVIZ_ALLOWED_ORIGINS
+$previousPublicUrl = $env:LABVIZ_PUBLIC_WEB_URL
 $apiProcess = $null
 $webProcess = $null
+$processJob = $null
 try {
+    . (Join-Path $PSScriptRoot 'process-job.ps1')
+    $processJob = New-Object LabViz.ProcessJob
+    $WebPort = Get-AvailablePort $WebPort
+    $ApiPort = Get-AvailablePort $ApiPort
+    while ($ApiPort -eq $WebPort) { $ApiPort = Get-AvailablePort 0 }
+    if (Test-Path -LiteralPath $stopFile) { Remove-Item -LiteralPath $stopFile }
+    if (Test-Path -LiteralPath $readyFile) { Remove-Item -LiteralPath $readyFile }
+    Write-Host "Starting LabViz / 正在启动 LabViz..."
     $env:LABVIZ_DATABASE_PATH = Join-Path $dataRoot "labviz-v2.db"
     $env:LABVIZ_OBJECT_STORAGE_ROOT = Join-Path $dataRoot "objects"
     $env:LABVIZ_API_PROXY_TARGET = "http://127.0.0.1:$ApiPort"
     $env:PORT = "$WebPort"
     $env:HOSTNAME = "127.0.0.1"
+    $env:LABVIZ_ALLOWED_ORIGINS = "http://127.0.0.1:$WebPort"
+    $env:LABVIZ_PUBLIC_WEB_URL = "http://127.0.0.1:$WebPort"
     $apiProcess = Start-Process -FilePath $python -ArgumentList @(
         "-m", "uvicorn", "labviz_api.main:app", "--host", "127.0.0.1", "--port", "$ApiPort"
     ) -WorkingDirectory $apiRoot -RedirectStandardOutput (Join-Path $logRoot "api.log") `
-        -RedirectStandardError (Join-Path $logRoot "api.error.log") -NoNewWindow -PassThru
+        -RedirectStandardError (Join-Path $logRoot "api.error.log") -WindowStyle Hidden -PassThru
+    $processJob.Add($apiProcess)
     $quotedWebServer = '"{0}"' -f $webServer
     $webProcess = Start-Process -FilePath $node -ArgumentList @($quotedWebServer) -WorkingDirectory $packageRoot `
         -RedirectStandardOutput (Join-Path $logRoot "web.log") `
-        -RedirectStandardError (Join-Path $logRoot "web.error.log") -NoNewWindow -PassThru
+        -RedirectStandardError (Join-Path $logRoot "web.error.log") -WindowStyle Hidden -PassThru
+    $processJob.Add($webProcess)
     $webReady = $false
     $apiReady = $false
-    $deadline = (Get-Date).AddSeconds(30)
+    $deadline = (Get-Date).AddSeconds(90)
+    $progressAt = Get-Date
     do {
         try {
             $webHealth = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$WebPort/" -TimeoutSec 2
-            $webReady = $webHealth.StatusCode -ge 200 -and $webHealth.StatusCode -lt 500
+            $webReady = $webHealth.StatusCode -eq 200
         }
         catch {
             $webReady = $false
         }
         try {
             $apiHealth = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ApiPort/health" -TimeoutSec 2
-            $apiReady = $apiHealth.StatusCode -ge 200 -and $apiHealth.StatusCode -lt 500
+            $apiReady = $apiHealth.StatusCode -eq 200
         }
         catch {
             $apiReady = $false
@@ -68,13 +105,23 @@ try {
         $webProcess.Refresh()
         if ($apiProcess.HasExited) { throw "LabViz API stopped with exit code $($apiProcess.ExitCode)." }
         if ($webProcess.HasExited) { throw "LabViz web server stopped with exit code $($webProcess.ExitCode)." }
+        if ((Get-Date) -ge $progressAt -and -not ($webReady -and $apiReady)) {
+            Write-Host "Waiting for local services / 正在等待本地服务 (Web=$webReady, API=$apiReady)..."
+            $progressAt = (Get-Date).AddSeconds(5)
+        }
         if (-not ($webReady -and $apiReady)) { Start-Sleep -Seconds 1 }
     } while (-not ($webReady -and $apiReady) -and (Get-Date) -lt $deadline)
-    if ((Get-Date) -ge $deadline) { throw "LabViz web server health check timed out." }
+    if (-not ($webReady -and $apiReady)) {
+        throw "LabViz startup health check timed out (Web=$webReady, API=$apiReady). See logs / 启动超时，请查看日志: $logRoot"
+    }
+    if ($HealthCheckOnly) { return }
+    @{ webUrl = "http://127.0.0.1:$WebPort"; apiPort = $ApiPort; launcherPid = $PID } |
+        ConvertTo-Json | Set-Content -LiteralPath $readyFile -Encoding UTF8
+    Write-Host "LabViz ready / 已启动。Close this window to stop / 关闭此窗口以退出。"
     if (-not $SkipOpenBrowser) {
         Start-Process "http://127.0.0.1:$WebPort"
     }
-    while ($true) {
+    while (-not (Test-Path -LiteralPath $stopFile)) {
         Start-Sleep -Seconds 1
         $apiProcess.Refresh()
         $webProcess.Refresh()
@@ -83,12 +130,20 @@ try {
     }
 }
 finally {
+    if ($processJob) { $processJob.Dispose() }
     foreach ($process in @($apiProcess, $webProcess)) {
-        if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id }
+        if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -ErrorAction SilentlyContinue }
     }
+    foreach ($stateFile in @($readyFile, $stopFile)) {
+        if (Test-Path -LiteralPath $stateFile) { Remove-Item -LiteralPath $stateFile }
+    }
+    $mutex.ReleaseMutex()
+    $mutex.Dispose()
     $env:LABVIZ_DATABASE_PATH = $previousDatabasePath
     $env:LABVIZ_OBJECT_STORAGE_ROOT = $previousObjectRoot
     $env:LABVIZ_API_PROXY_TARGET = $previousProxyTarget
     $env:PORT = $previousPort
     $env:HOSTNAME = $previousHostname
+    $env:LABVIZ_ALLOWED_ORIGINS = $previousOrigins
+    $env:LABVIZ_PUBLIC_WEB_URL = $previousPublicUrl
 }

@@ -4,7 +4,8 @@ param(
     [string]$SetupExe,
     [Parameter(Mandatory = $true)]
     [string]$TestRoot,
-    [string]$UpgradeSetupExe
+    [string]$UpgradeSetupExe,
+    [string]$DeleteDataSetupExe
 )
 
 Set-StrictMode -Version Latest
@@ -33,7 +34,7 @@ if ($installer.ExitCode -ne 0) {
 }
 
 $required = @(
-    "current-version.txt",
+    "pending-version.txt",
     "unins000.exe",
     "bin\start-labviz-installed.cmd",
     "bin\set-labviz-version.ps1",
@@ -46,12 +47,12 @@ foreach ($relativePath in $required) {
         throw "Installed package is missing: $relativePath"
     }
 }
-if ((Get-Content -LiteralPath (Join-Path $installRoot "current-version.txt") -Raw).Trim() -ne "2.2.0") {
+if ((Get-Content -LiteralPath (Join-Path $installRoot "pending-version.txt") -Raw).Trim() -ne "2.2.0") {
     throw "The installed version marker is incorrect."
 }
 
 $oldLocalAppData = $env:LOCALAPPDATA
-$localAppData = Join-Path $testRootAbsolute "LocalAppData"
+$localAppData = Join-Path $testRootAbsolute "本地数据 space"
 New-Item -ItemType Directory -Force -Path $localAppData | Out-Null
 $env:LOCALAPPDATA = $localAppData
 
@@ -105,16 +106,37 @@ function Assert-InstalledHealth {
         if (-not ($webReady -and $apiReady)) {
             throw "$Label health checks timed out."
         }
+        # During the first launch an installed version is health-probed once
+        # before activation. Wait for the normal run's ready state, otherwise a
+        # stop request can be consumed by that probe and the real run continues.
+        $readyFile = Join-Path $env:LOCALAPPDATA "LabViz\logs\running.json"
+        $readyDeadline = (Get-Date).AddSeconds(30)
+        $normalReady = $false
+        do {
+            if ($launcherProcess.HasExited) {
+                throw "$Label exited before its normal ready state."
+            }
+            if (Test-Path -LiteralPath $readyFile) {
+                $ready = Get-Content -LiteralPath $readyFile -Raw | ConvertFrom-Json
+                if ([int]$ready.launcherPid -eq $launcherProcess.Id) {
+                    $normalReady = $true
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 250
+        } while ((Get-Date) -lt $readyDeadline)
+        if (-not $normalReady) {
+            throw "$Label did not publish a normal ready state."
+        }
         Write-Host "$Label passed: Web $($web.StatusCode), API $($api.StatusCode)" -ForegroundColor Green
     } finally {
         if ($launcherProcess -and -not $launcherProcess.HasExited) {
-            Stop-Process -Id $launcherProcess.Id -Force -ErrorAction SilentlyContinue
-        }
-        foreach ($port in @($WebPort, $ApiPort)) {
-            $owners = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue |
-                Select-Object -ExpandProperty OwningProcess -Unique)
-            foreach ($owner in $owners) {
-                Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
+            $stopFile = Join-Path $env:LOCALAPPDATA "LabViz\logs\stop.request"
+            [IO.File]::WriteAllText($stopFile, "stop")
+            if (-not $launcherProcess.WaitForExit(60000)) {
+                # Only this harness-owned parent is stopped. The job object owns its children.
+                Stop-Process -Id $launcherProcess.Id -Force -ErrorAction SilentlyContinue
+                throw "$Label did not stop gracefully."
             }
         }
     }
@@ -150,14 +172,15 @@ if ($UpgradeSetupExe) {
             throw "Upgrade did not retain both versioned program trees: $relativePath"
         }
     }
-    if ((Get-Content -LiteralPath (Join-Path $installRoot "current-version.txt") -Raw).Trim() -ne "2.2.1") {
+    if ((Get-Content -LiteralPath (Join-Path $installRoot "pending-version.txt") -Raw).Trim() -ne "2.2.1") {
         throw "Upgrade did not select version 2.2.1."
     }
 
+    Assert-InstalledHealth -WebPort 3342 -ApiPort 8342 -Label "Upgraded launcher"
     $selector = Join-Path $installRoot "bin\set-labviz-version.ps1"
     & (Join-Path $PSHOME "pwsh.exe") -NoProfile -ExecutionPolicy Bypass `
         -File $selector -Version "2.2.0"
-    if ((Get-Content -LiteralPath (Join-Path $installRoot "current-version.txt") -Raw).Trim() -ne "2.2.0") {
+    if ((Get-Content -LiteralPath (Join-Path $installRoot "pending-version.txt") -Raw).Trim() -ne "2.2.0") {
         throw "Rollback selector did not select version 2.2.0."
     }
     Assert-InstalledHealth -WebPort 3341 -ApiPort 8341 -Label "Rollback launcher"
@@ -168,12 +191,13 @@ if ($UpgradeSetupExe) {
     if ($repair.ExitCode -ne 0) {
         throw "Repair/reinstall returned exit code $($repair.ExitCode)."
     }
-    if ((Get-Content -LiteralPath (Join-Path $installRoot "current-version.txt") -Raw).Trim() -ne "2.2.1") {
+    if ((Get-Content -LiteralPath (Join-Path $installRoot "pending-version.txt") -Raw).Trim() -ne "2.2.1") {
         throw "Repair/reinstall did not restore version 2.2.1."
     }
     if (-not (Test-Path -LiteralPath (Join-Path $localAppData "LabViz\data\keep-me.txt") -PathType Leaf)) {
         throw "Upgrade or repair changed local data."
     }
+    Assert-InstalledHealth -WebPort 3343 -ApiPort 8343 -Label "Repaired launcher"
     Write-Host "Upgrade, rollback, repair/reinstall passed." -ForegroundColor Green
 }
 
@@ -192,6 +216,32 @@ try {
         throw "Uninstaller left the program directory behind."
     }
     Write-Host "Uninstall passed: local data was retained by default." -ForegroundColor Green
+
+    if ($DeleteDataSetupExe) {
+        $deleteSetupPath = (Resolve-Path -LiteralPath $DeleteDataSetupExe).Path
+        $deleteInstaller = Start-Process -FilePath $deleteSetupPath -ArgumentList $installArguments -Wait -PassThru
+        if ($deleteInstaller.ExitCode -ne 0) {
+            throw "Delete-data test installer returned exit code $($deleteInstaller.ExitCode)."
+        }
+        $deleteDataRoot = Join-Path $localAppData "LabViz\data"
+        New-Item -ItemType Directory -Force -Path $deleteDataRoot | Out-Null
+        Set-Content -LiteralPath (Join-Path $deleteDataRoot "delete-me.txt") -Value "delete test" -Encoding utf8
+        $deleteUninstaller = Start-Process -FilePath (Join-Path $installRoot "unins000.exe") -ArgumentList @(
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
+        ) -Wait -PassThru
+        if ($deleteUninstaller.ExitCode -ne 0) {
+            throw "Delete-data test uninstaller returned exit code $($deleteUninstaller.ExitCode)."
+        }
+        if (Test-Path -LiteralPath $deleteDataRoot) {
+            throw "Explicit delete-data uninstall left the local data directory behind."
+        }
+        $remainingDataCopies = @(Get-ChildItem -LiteralPath (Join-Path $localAppData "LabViz") -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "data.retained-*" -or $_.Name -like "data.failed-*" })
+        if ($remainingDataCopies.Count -gt 0) {
+            throw "Explicit delete-data uninstall left retained data copies behind."
+        }
+        Write-Host "Uninstall delete choice passed: local data was removed." -ForegroundColor Green
+    }
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
 }

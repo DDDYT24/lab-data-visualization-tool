@@ -212,6 +212,9 @@ Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -Relat
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "V2.0\assets\fonts"
 Copy-RelativeEntry -SourceRoot $packagingRoot -DestinationRoot $outputAbsolute -RelativePath "bin\start-labviz-portable.cmd"
 Copy-RelativeEntry -SourceRoot $packagingRoot -DestinationRoot $outputAbsolute -RelativePath "bin\start-labviz-portable.ps1"
+foreach ($entry in @("bin\process-job.ps1", "bin\local-data.py", "bin\maintain-labviz.ps1", "bin\start-labviz-installed.cmd", "bin\start-labviz-installed.ps1", "bin\set-labviz-version.ps1")) {
+    Copy-RelativeEntry -SourceRoot $packagingRoot -DestinationRoot $outputAbsolute -RelativePath $entry
+}
 
 Copy-PythonRuntime -Source $pythonRoot -Destination (Join-Path $outputAbsolute "runtime\python")
 Copy-DirectoryContents -Source $pythonSitePackages -Destination (Join-Path $outputAbsolute "runtime\python\Lib\site-packages")
