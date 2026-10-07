@@ -7,7 +7,6 @@ import csv
 import ctypes
 import io
 import json
-import os
 import platform
 import sys
 import time
@@ -146,7 +145,7 @@ def _surface_baseline(side: int) -> dict[str, Any]:
 
 def _process_peak_memory_bytes() -> int | None:
     """Return the process peak working set without adding a runtime dependency."""
-    if os.name == "nt":
+    if sys.platform == "win32":
 
         class ProcessMemoryCounters(ctypes.Structure):
             _fields_ = [
@@ -165,8 +164,9 @@ def _process_peak_memory_bytes() -> int | None:
         counters = ProcessMemoryCounters()
         counters.cb = ctypes.sizeof(counters)
         try:
-            get_current_process = ctypes.windll.kernel32.GetCurrentProcess
-            get_process_memory_info = ctypes.windll.psapi.GetProcessMemoryInfo
+            windows_libraries = ctypes.windll
+            get_current_process = windows_libraries.kernel32.GetCurrentProcess
+            get_process_memory_info = windows_libraries.psapi.GetProcessMemoryInfo
             get_process_memory_info.argtypes = [
                 wintypes.HANDLE,
                 ctypes.POINTER(ProcessMemoryCounters),
