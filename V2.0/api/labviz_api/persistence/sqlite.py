@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
-import sqlite3
 from typing import Any
 from uuid import UUID, uuid4
 
 import pandas as pd
+from PIL import Image
 
 from labviz_api.persistence.exceptions import (
     IdempotencyConflict,
@@ -32,12 +34,14 @@ class SqliteProjectStore:
         repository: SqliteReferenceRepository,
         share_tokens: ShareTokenCodec | None = None,
         export_ttl_seconds: int = 7_200,
+        local_profile: bool = False,
     ) -> None:
         self.repository = repository
         self.share_tokens = share_tokens or ShareTokenCodec.from_strings(
             ((1, "labviz-development-share-token-key-v1"),), 1
         )
         self.export_ttl_seconds = export_ttl_seconds
+        self.local_profile = local_profile
 
     def ping(self) -> bool:
         return self.repository.ping()
@@ -194,6 +198,9 @@ class SqliteProjectStore:
         del guest_token_digest
         return self.repository.save_project(project_id, owner_user_id)
 
+    def save_local_project(self, project_id: str, owner_user_id: str) -> str:
+        return self.repository.save_local_project(project_id, owner_user_id)
+
     def update_project_description(
         self,
         *,
@@ -282,6 +289,8 @@ class SqliteProjectStore:
             job_id=job_id,
             owner_user_id=owner_user_id,
         )
+        if owner_user_id == "local-profile":
+            self.repository.save_local_project(project_id, owner_user_id)
         return project_id
 
     def delete_project(
@@ -436,6 +445,16 @@ class SqliteProjectStore:
         format_name = str(chart["export"]["format"])
         expires_at = expires_in(self.export_ttl_seconds)
         self.repository.save_chart(project_id, chart)
+        figure_snapshot = None
+        if self.local_profile:
+            thumbnail_png = self._make_figure_thumbnail(payload) if format_name == "png" else None
+            figure_snapshot = {
+                "id": uuid4().hex,
+                "title": str(chart.get("title") or "Untitled figure"),
+                "chart_json": json.dumps(chart, ensure_ascii=False, separators=(",", ":")),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "thumbnail_png": thumbnail_png,
+            }
         self.repository.save_export(
             export_id=export_id,
             project_id=project_id,
@@ -444,6 +463,7 @@ class SqliteProjectStore:
             expires_at=expires_at,
             message="Your publication-ready figure is ready to download.",
             experiment=self.repository.get_experiment_context(project_id),
+            figure_snapshot=figure_snapshot,
         )
         return {
             "id": export_id,
@@ -453,6 +473,22 @@ class SqliteProjectStore:
             "expires_at": expires_at,
             "message": "Your publication-ready figure is ready to download.",
         }
+
+    @staticmethod
+    def _make_figure_thumbnail(payload: bytes) -> bytes | None:
+        """Create a compact PNG preview without changing the archived export bytes."""
+        try:
+            with Image.open(io.BytesIO(payload)) as image:
+                if image.width * image.height > 16_000_000:
+                    return None
+                image.thumbnail((640, 400), Image.Resampling.LANCZOS)
+                preview = image.convert("RGBA")
+                output = io.BytesIO()
+                preview.save(output, format="PNG", compress_level=4)
+                thumbnail = output.getvalue()
+                return thumbnail if len(thumbnail) <= 1_000_000 else None
+        except (Image.DecompressionBombError, OSError, ValueError):
+            return None
 
     def get_export(self, export_id: str) -> dict[str, Any] | None:
         export = self.repository.get_export(export_id)
@@ -464,8 +500,7 @@ class SqliteProjectStore:
 
     def get_export_metadata(self, export_id: str) -> dict[str, Any] | None:
         self.repository.cleanup_expired()
-        with sqlite3.connect(self.repository.database_path, timeout=30) as connection:
-            connection.row_factory = sqlite3.Row
+        with self.repository._connect() as connection:
             row = connection.execute(
                 "SELECT id, project_id, format, experiment_json FROM exports WHERE id = ?",
                 (export_id,),

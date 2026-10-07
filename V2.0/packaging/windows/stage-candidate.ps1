@@ -8,6 +8,7 @@ param(
     [string]$PythonSitePackagesRoot,
     [Parameter(Mandatory = $true)]
     [string]$NodeExecutable,
+    [string]$WebBuildRoot,
     [switch]$BuildWeb,
     [switch]$RequirePython313
 )
@@ -54,7 +55,7 @@ function Copy-PythonRuntime {
 
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     Get-ChildItem -LiteralPath $Source -Force |
-        Where-Object { $_.Name -ine "Lib" } |
+        Where-Object { $_.Name -notin @("Lib", "Doc", "include") } |
         ForEach-Object {
             Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
         }
@@ -63,7 +64,7 @@ function Copy-PythonRuntime {
     $destinationLib = Join-Path $Destination "Lib"
     New-Item -ItemType Directory -Force -Path $destinationLib | Out-Null
     Get-ChildItem -LiteralPath $sourceLib -Force |
-        Where-Object { $_.Name -ine "site-packages" } |
+        Where-Object { $_.Name -notin @("site-packages", "test") } |
         ForEach-Object {
             Copy-Item -LiteralPath $_.FullName -Destination $destinationLib -Recurse -Force
         }
@@ -88,6 +89,10 @@ function Copy-RelativeEntry {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
         Copy-Item -LiteralPath $sourceItem.FullName -Destination $destination -Force
     }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($WebBuildRoot)) {
+    $webRoot = Resolve-ExistingDirectory -Path $WebBuildRoot -Label "Web build root"
 }
 
 $pythonRoot = Resolve-ExistingDirectory -Path $PythonRuntimeRoot -Label "Python runtime root"
@@ -181,16 +186,46 @@ if ($BuildWeb) {
 
 $standaloneWebRoot = Join-Path $webRoot ".next\standalone\web"
 $webStaticRoot = Join-Path $webRoot ".next\static"
+$webPublicRoot = Join-Path $webRoot "public"
+$aboutPublicRoot = Join-Path $webPublicRoot "about"
+$webBuildIdPath = Join-Path $standaloneWebRoot ".next\BUILD_ID"
 if (-not (Test-Path -LiteralPath (Join-Path $standaloneWebRoot "server.js") -PathType Leaf)) {
     throw "Next.js standalone output is missing. Run 'npm run build' in V2.0/web first."
 }
 if (-not (Test-Path -LiteralPath $webStaticRoot -PathType Container)) {
     throw "Next.js static output is missing: $webStaticRoot"
 }
+if (-not (Test-Path -LiteralPath $webBuildIdPath -PathType Leaf)) {
+    throw "Next.js standalone build ID is missing: $webBuildIdPath"
+}
+$aboutFiles = @("about.en.md", "about.zh.md", "response-2d.svg", "surface-3d.svg")
+if (-not (Test-Path -LiteralPath $aboutPublicRoot -PathType Container)) {
+    throw "About page public assets are missing: $aboutPublicRoot"
+}
+$missingAboutFiles = @(
+    $aboutFiles | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $aboutPublicRoot $_) -PathType Leaf)
+    }
+)
+if ($missingAboutFiles.Count -gt 0) {
+    throw "About page public assets are incomplete: $($missingAboutFiles -join ', ')"
+}
+$webBuildId = (Get-Content -LiteralPath $webBuildIdPath -Raw).Trim()
+if ([string]::IsNullOrWhiteSpace($webBuildId)) {
+    throw "Next.js standalone build ID is empty: $webBuildIdPath"
+}
+$standaloneNodeModules = Get-Item -LiteralPath (Join-Path $standaloneWebRoot "node_modules") -Force -ErrorAction SilentlyContinue
+if (-not $standaloneNodeModules -or -not $standaloneNodeModules.PSIsContainer) {
+    throw "Next.js standalone production dependencies are missing: $(Join-Path $standaloneWebRoot 'node_modules')"
+}
+if (($standaloneNodeModules.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw "Next.js standalone node_modules is a junction/symlink, not a self-contained production tree. Rebuild from a web tree with a real node_modules directory before staging."
+}
 
 Copy-Item -LiteralPath (Join-Path $packagingRoot "package-manifest.json") -Destination (Join-Path $outputAbsolute "package-manifest.json") -Force
 Copy-DirectoryContents -Source $standaloneWebRoot -Destination (Join-Path $outputAbsolute "V2.0\web")
 Copy-DirectoryContents -Source $webStaticRoot -Destination (Join-Path $outputAbsolute "V2.0\web\.next\static")
+Copy-DirectoryContents -Source $webPublicRoot -Destination (Join-Path $outputAbsolute "V2.0\web\public")
 
 $apiEntries = @(
     "labviz_api",
@@ -207,6 +242,10 @@ foreach ($entry in $apiEntries) {
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "README.md"
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "README.zh-CN.md"
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "LICENSE"
+Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "THIRD_PARTY_NOTICES.md"
+Copy-RelativeEntry -SourceRoot $packagingRoot -DestinationRoot $outputAbsolute -RelativePath "licenses\NODE-LICENSE.txt"
+& $nodePath (Join-Path $packagingRoot "collect-web-licenses.mjs") $webRoot (Join-Path $outputAbsolute "licenses\WEB-THIRD-PARTY-LICENSES.txt")
+if ($LASTEXITCODE -ne 0) { throw "Production web license collection failed." }
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "V2.0\assets\labviz-logo.ico"
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "V2.0\assets\labviz-logo.svg"
 Copy-RelativeEntry -SourceRoot $repoRoot -DestinationRoot $outputAbsolute -RelativePath "V2.0\assets\fonts"
@@ -224,6 +263,7 @@ Copy-Item -LiteralPath $nodePath -Destination (Join-Path $outputAbsolute "runtim
 $metadata = [ordered]@{
     contractVersion = "v1"
     stagedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+    webBuildId = $webBuildId
     pythonVersion = $pythonVersion
     nodeVersion = $nodeVersionText
     nextStandalone = $true

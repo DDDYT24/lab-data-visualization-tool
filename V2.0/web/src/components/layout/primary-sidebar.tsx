@@ -1,6 +1,7 @@
 "use client";
 
 import AddchartOutlinedIcon from "@mui/icons-material/AddchartOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
@@ -12,10 +13,11 @@ import { useTranslations } from "next-intl";
 
 const navigationItems = [
   { href: "/", labelKey: "home", icon: HomeOutlinedIcon },
-  { href: "/workspace/new", labelKey: "newAnalysis", icon: AddchartOutlinedIcon },
+  { href: "/#import", labelKey: "newAnalysis", icon: AddchartOutlinedIcon },
   { href: "/history", labelKey: "history", icon: HistoryRoundedIcon },
   { href: "/settings", labelKey: "settings", icon: SettingsOutlinedIcon },
   { href: "/help", labelKey: "help", icon: HelpOutlineRoundedIcon },
+  { href: "/about", labelKey: "navAbout", icon: InfoOutlinedIcon },
 ] as const;
 
 export function PrimarySidebar() {
@@ -38,7 +40,11 @@ export function PrimarySidebar() {
     >
       {navigationItems.map((item, index) => {
         const active =
-          item.href !== "/" ? pathname.startsWith(item.href) : pathname === "/";
+          item.href === "/#import"
+            ? false
+            : item.href !== "/"
+              ? pathname.startsWith(item.href)
+              : pathname === "/";
         const Icon = item.icon;
 
         return (
@@ -46,6 +52,7 @@ export function PrimarySidebar() {
             key={`${item.labelKey}-${index}`}
             component={Link}
             href={item.href}
+            prefetch={false}
             sx={{
               borderRadius: 1.5,
               color: active ? "primary.main" : "text.secondary",

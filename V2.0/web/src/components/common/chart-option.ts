@@ -7,12 +7,12 @@ import type {
 } from "@/domain/api-contract";
 import {
   chartLineType,
+  chartRenderContract,
   chartSeriesColor,
   confidenceBandOpacity,
   gridColor,
 } from "@/domain/chart-render-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
-import { darkChartPalette } from "@/theme/theme";
 
 type SeriesOptionRecord = Record<string, unknown>;
 
@@ -37,21 +37,6 @@ function numericValues(preview: DataPreview, field: string) {
   return preview.rows
     .map((row) => row[field])
     .filter((value): value is number => typeof value === "number");
-}
-
-function histogram(values: number[]) {
-  if (values.length === 0) return [];
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  if (minimum === maximum) return [[minimum, values.length]];
-  const count = Math.min(16, Math.max(5, Math.ceil(Math.sqrt(values.length))));
-  const width = (maximum - minimum) / count;
-  const bins = Array.from({ length: count }, () => 0);
-  for (const value of values) {
-    const index = Math.min(Math.floor((value - minimum) / width), count - 1);
-    bins[index] += 1;
-  }
-  return bins.map((value, index) => [minimum + width * (index + 0.5), value]);
 }
 
 function quantile(sorted: number[], fraction: number) {
@@ -103,38 +88,17 @@ function panelGrids(panelCount: number) {
 
 type ChartColorMode = "light" | "dark";
 
-function previewSeriesColor({
-  colorMode,
-  configuredColor,
-  grayscale,
-  grouped,
-  index,
-}: {
-  colorMode: ChartColorMode;
-  configuredColor: string;
-  grayscale: boolean;
-  grouped: boolean;
-  index: number;
-}) {
-  if (colorMode === "dark" && !grayscale) {
-    return darkChartPalette[index % darkChartPalette.length];
-  }
-  return chartSeriesColor({ configuredColor, grayscale, grouped, index });
-}
-
 function analysisSeries(
   analysis: ChartAnalysis | undefined,
   spec: ChartSpec,
   panelAxisIndexes: Array<{ primary: number; secondary: number | null }>,
-  colorMode: ChartColorMode,
 ) {
   if (!analysis) return [];
   const derived: SeriesOptionRecord[] = [];
   for (const [resultIndex, result] of analysis.series.entries()) {
     const sourceSeries = spec.series.find((item) => item.field === result.field);
     if (!sourceSeries) continue;
-    const seriesColor = previewSeriesColor({
-      colorMode,
+    const seriesColor = chartSeriesColor({
       configuredColor: sourceSeries.color,
       grayscale: spec.export.grayscalePreview,
       grouped: Boolean(spec.groupField),
@@ -263,27 +227,26 @@ export function buildChartOption({
 }): EChartsOption {
   const rows = visibleRows(preview, findings, excludedFindingIds);
   const colors = spec.series.map((series, index) =>
-    previewSeriesColor({
-      colorMode,
+    chartSeriesColor({
       configuredColor: series.color,
       grayscale: spec.export.grayscalePreview,
       grouped: false,
       index,
     }),
   );
-  const chartAxisColor = colorMode === "dark" ? "#B6C2D5" : "#475467";
-  const chartGridColor = colorMode === "dark" ? "#475569" : gridColor;
+  const chartAxisColor = colorMode === "dark" ? "#B4B4B4" : "#475467";
+  const chartGridColor = colorMode === "dark" ? "#424242" : gridColor;
   const common = {
     animation: false,
     backgroundColor: spec.export.transparentBackground
       ? "transparent"
       : colorMode === "dark"
-        ? "#172033"
+        ? "#2F2F2F"
         : spec.export.backgroundColor,
     color: colors,
     legend: showLegend ? legendOption(spec.export.legendPosition) : { show: false },
     textStyle: {
-      color: colorMode === "dark" ? "#F4F7FB" : "#172033",
+      color: colorMode === "dark" ? "#ECECEC" : "#172033",
       fontFamily: spec.export.fontFamily,
       fontSize: spec.export.fontSize,
     },
@@ -297,22 +260,61 @@ export function buildChartOption({
   };
 
   if (spec.type === "histogram") {
+    // Draw the API's complete intervals: a value-axis bar only retains bin centers
+    // and invents a width/gap that does not match the publication renderer.
+    const histograms = spec.series.map((series, index) => ({
+      series,
+      color: colors[index],
+      bins: analysis?.preview.histograms.find((item) => item.field === series.field)?.bins ?? [],
+    }));
+    const panels = Array.from({ length: spec.panelCount }, (_, index) => {
+      const bins = histograms.filter((item) => item.series.panel === index + 1).flatMap((item) => item.bins);
+      const minimum = bins.length ? Math.min(...bins.map((bin) => bin.start)) : 0;
+      const maximum = bins.length ? Math.max(...bins.map((bin) => bin.end)) : 1;
+      const padding = (maximum - minimum) * chartRenderContract.histogramAxisPadding;
+      return {
+        minimum: minimum - padding,
+        maximum: maximum + padding,
+        frequencyMaximum: Math.max(1, ...bins.map((bin) => bin.count * (1 + chartRenderContract.histogramAxisPadding))),
+      };
+    });
     return {
       ...common,
-      grid: { left: 72, right: 38, top: 86, bottom: 62, containLabel: true },
-      xAxis: { name: axisName(spec.yAxis.title, spec.yAxis.unit), type: "value" },
-      yAxis: { name: "Frequency", type: "value" },
-      series: spec.series.map((series, index) => ({
-        barGap: "5%",
-        data:
-          analysis?.preview.histograms
-            .find((item) => item.field === series.field)
-            ?.bins.map((bin) => [(bin.start + bin.end) / 2, bin.count]) ??
-          histogram(numericValues({ ...preview, rows }, series.field)),
-        itemStyle: { color: colors[index], opacity: 0.82 },
-        name: series.label,
-        type: "bar",
+      tooltip: { trigger: "item", valueFormatter: (value) => String(value) },
+      grid: panelGrids(spec.panelCount),
+      xAxis: panels.map((panel, index) => ({
+        gridIndex: index, name: axisName(spec.yAxis.title, spec.yAxis.unit), type: "value",
+        min: panel.minimum, max: panel.maximum, scale: true, show: showAxes,
+        nameLocation: "middle", nameGap: 35,
+        axisLabel: { showMinLabel: false, showMaxLabel: false, formatter: (value: number) => Number(value.toPrecision(12)).toString() },
+        splitLine: { show: spec.export.gridVisible, lineStyle: { color: chartGridColor } },
       })),
+      yAxis: panels.map((panel, index) => ({
+        gridIndex: index, name: "Frequency", type: "value", min: 0, max: panel.frequencyMaximum,
+        nameLocation: "middle", nameGap: 45,
+        axisLabel: { showMaxLabel: false, formatter: (value: number) => Number(value.toPrecision(12)).toString() },
+        show: showAxes, splitLine: { show: spec.export.gridVisible, lineStyle: { color: chartGridColor } },
+      })),
+      series: histograms.map(({ series, bins, color }) => {
+        const renderItem: CustomSeriesRenderItem = (_params, api) => {
+          const start = api.coord([Number(api.value(0)), Number(api.value(2))]);
+          const end = api.coord([Number(api.value(1)), 0]);
+          if (!Array.isArray(start) || !Array.isArray(end)) return null;
+          return {
+            type: "rect",
+            shape: { x: start[0], y: start[1], width: end[0] - start[0], height: end[1] - start[1] },
+            style: { fill: color, opacity: chartRenderContract.histogramFillOpacity },
+          };
+        };
+        return {
+          clip: true, data: bins.map((bin) => [bin.start, bin.end, bin.count]),
+          dimensions: ["Interval start", "Interval end", "Frequency"],
+          encode: { x: [0, 1], y: 2, tooltip: [0, 1, 2] },
+          itemStyle: { color, opacity: chartRenderContract.histogramFillOpacity },
+          name: series.label, type: "custom", renderItem,
+          xAxisIndex: series.panel - 1, yAxisIndex: series.panel - 1,
+        };
+      }),
     };
   }
 
@@ -349,16 +351,18 @@ export function buildChartOption({
           matrixRow.map((value, xIndex) => [xIndex, yIndex, value]),
         )
       : [];
-    const numeric = values
-      .map((entry) => entry[2])
-      .filter((value): value is number => typeof value === "number");
     return {
       ...common,
       grid: { left: 90, right: 78, top: 86, bottom: 74, containLabel: true },
       visualMap: {
-        calculable: true,
-        max: numeric.length ? Math.max(...numeric) : 1,
-        min: numeric.length ? Math.min(...numeric) : 0,
+        show: showLegend,
+        calculable: false,
+        max: 1,
+        min: -1,
+        text: ["1", "-1"],
+        inRange: { color: spec.export.grayscalePreview
+          ? chartRenderContract.surfaceGrayscalePalette
+          : chartRenderContract.correlationPalette },
         orient: "vertical",
         right: 8,
       },
@@ -392,14 +396,30 @@ export function buildChartOption({
     const fullData = surfaceDiagnostic?.status === "valid" || !surfaceDiagnostic
       ? analysisData
       : [];
-    const step = surfacePointLimit && fullData.length > surfacePointLimit
-      ? Math.ceil(fullData.length / surfacePointLimit)
-      : 1;
-    const data = step > 1 ? fullData.filter((_point, index) => index % step === 0) : fullData;
-    const zValues = data.map((point) => point[2]);
+    const xs = [...new Set(fullData.map((point) => point[0]))].sort((a, b) => a - b);
+    const ys = [...new Set(fullData.map((point) => point[1]))].sort((a, b) => a - b);
+    const limit = Math.max(4, surfacePointLimit ?? fullData.length);
+    let stride = 1;
+    const selectAxis = (values: number[]) => values.filter(
+      (_value, index) => index % stride === 0 || index === values.length - 1,
+    );
+    while (selectAxis(xs).length * selectAxis(ys).length > limit) stride += 1;
+    const selectedX = new Set(selectAxis(xs));
+    const selectedY = new Set(selectAxis(ys));
+    const data = fullData.filter((point) => selectedX.has(point[0]) && selectedY.has(point[1]))
+      .sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    // Keep the full-data scale even when the preview uses a reduced grid.
+    const zValues = fullData.map((point) => point[2]);
+    const minZ = zValues.length ? Math.min(...zValues) : 0;
+    const maxZ = zValues.length ? Math.max(...zValues) : 1;
     return {
       ...common,
       grid3D: {
+        top: 45,
+        height: "70%",
+        axisLabel: { show: showAxes, color: chartAxisColor },
+        axisPointer: { show: showAxes },
+        splitLine: { show: spec.export.gridVisible, lineStyle: { color: chartGridColor } },
         axisLine: { show: showAxes, lineStyle: { color: chartAxisColor } },
         boxDepth: 80,
         boxHeight: 80,
@@ -408,7 +428,7 @@ export function buildChartOption({
           alpha: surfaceView?.alpha,
           autoRotate: false,
           beta: surfaceView?.beta,
-          distance: surfaceView?.distance,
+          distance: surfaceView?.distance ?? 200,
           panSensitivity: 1,
           projection: "perspective",
           rotateSensitivity: 1,
@@ -416,26 +436,34 @@ export function buildChartOption({
         },
       },
       visualMap: {
-        max: zValues.length ? Math.max(...zValues) : 1,
-        min: zValues.length ? Math.min(...zValues) : 0,
+        show: showLegend,
+        dimension: 2,
+        calculable: false,
+        orient: "horizontal",
+        left: "center",
+        bottom: 0,
+        inRange: { color: spec.export.grayscalePreview
+          ? chartRenderContract.surfaceGrayscalePalette
+          : chartRenderContract.surfacePalette },
+        max: maxZ,
+        min: minZ,
+        text: [String(Number(maxZ.toPrecision(5))), String(Number(minZ.toPrecision(5)))],
       },
       xAxis3D: {
         axisLine: { show: showAxes },
-        name: axisName(spec.xAxis.title, spec.xAxis.unit),
+        name: showAxes ? axisName(spec.xAxis.title, spec.xAxis.unit) : "",
         type: "value",
       },
-      yAxis3D: { axisLine: { show: showAxes }, name: spec.series[0]?.label ?? "Y", type: "value" },
+      yAxis3D: { axisLine: { show: showAxes }, name: showAxes ? spec.series[0]?.label ?? "Y" : "", type: "value" },
       zAxis3D: {
         axisLine: { show: showAxes },
-        name: spec.series[1]?.label ?? spec.yAxis.title,
+        name: showAxes ? spec.series[1]?.label ?? spec.yAxis.title : "",
         type: "value",
       },
       series: [{
         data,
-        dataShape: step === 1 && surfaceDiagnostic
-          ? [surfaceDiagnostic.yCount, surfaceDiagnostic.xCount]
-          : undefined,
-        shading: "lambert",
+        dataShape: [selectedY.size, selectedX.size],
+        shading: "color",
         type: "surface",
       }],
     } as EChartsOption;
@@ -530,8 +558,7 @@ export function buildChartOption({
               (typeof point[0] === "number" || typeof point[0] === "string") &&
               typeof point[1] === "number",
           );
-    const seriesColor = previewSeriesColor({
-      colorMode,
+    const seriesColor = chartSeriesColor({
       configuredColor: series.color,
       grayscale: spec.export.grayscalePreview,
       grouped: Boolean(spec.groupField),
@@ -569,7 +596,7 @@ export function buildChartOption({
     grid: grids,
     series: [
       ...sourceSeries,
-      ...analysisSeries(analysis, spec, panelAxisIndexes, colorMode),
+      ...analysisSeries(analysis, spec, panelAxisIndexes),
     ] as EChartsOption["series"],
     xAxis: xAxes,
     yAxis: yAxes,

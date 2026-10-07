@@ -24,6 +24,15 @@ if ($manifest.localFirst -ne $true) {
 
 $requiredFiles = @(
     "package-manifest.json",
+    "THIRD_PARTY_NOTICES.md",
+    "licenses\NODE-LICENSE.txt",
+    "licenses\WEB-THIRD-PARTY-LICENSES.txt",
+    "candidate-build.json",
+    "V2.0\web\.next\BUILD_ID",
+    "V2.0\web\public\about\about.en.md",
+    "V2.0\web\public\about\about.zh.md",
+    "V2.0\web\public\about\response-2d.svg",
+    "V2.0\web\public\about\surface-3d.svg",
     "V2.0\assets\fonts\NotoSansSC-VF.ttf",
     "V2.0\assets\fonts\OFL.txt",
     "bin\start-labviz-portable.cmd",
@@ -43,6 +52,11 @@ $missing = @(
 if ($missing.Count -gt 0) {
     throw "Candidate package is missing: $($missing -join ', ')"
 }
+$buildMetadata = Get-Content -LiteralPath (Join-Path $resolvedRoot "candidate-build.json") -Raw | ConvertFrom-Json
+$packagedWebBuildId = (Get-Content -LiteralPath (Join-Path $resolvedRoot "V2.0\web\.next\BUILD_ID") -Raw).Trim()
+if (-not $buildMetadata.nextStandalone -or $buildMetadata.webBuildId -ne $packagedWebBuildId) {
+    throw "Candidate build metadata does not match the packaged standalone Web build."
+}
 $requiredDirectories = @("V2.0\web\.next\static", "V2.0\web\node_modules")
 $missingDirectories = @(
     $requiredDirectories | Where-Object {
@@ -60,7 +74,10 @@ $forbiddenPatterns = @(
     "(^|[\\/])\.next[\\/]cache(?:[\\/]|$)",
     "(^|[\\/])outputs(?:[\\/]|$)",
     "(^|[\\/])playwright-report(?:[\\/]|$)",
-    "(^|[\\/])test-results(?:[\\/]|$)"
+    "(^|[\\/])test-results(?:[\\/]|$)",
+    "^runtime[\\/]python[\\/]Doc[\\/]",
+    "^runtime[\\/]python[\\/]include[\\/]",
+    "^runtime[\\/]python[\\/]Lib[\\/]test[\\/]"
 )
 $violations = @(
     Get-ChildItem -LiteralPath $resolvedRoot -Recurse -Force -File |

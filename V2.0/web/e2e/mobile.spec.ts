@@ -24,11 +24,11 @@ test("keeps the primary upload experience usable at a phone viewport", async ({
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Turn experiment data into a clear figure.",
+      name: "Make experiment data clear and insightful.",
     }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose a file" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Try sample data" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View examples" })).toBeVisible();
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
@@ -72,7 +72,7 @@ test("opens every bundled example without horizontal overflow on mobile", async 
 
   for (const slug of slugs) {
     await page.goto("/");
-    await page.getByRole("button", { name: "Try sample data" }).tap();
+    await page.getByRole("button", { name: "View examples" }).tap();
     const dialog = page.getByRole("dialog");
     const overflow = await dialog.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -114,7 +114,7 @@ test("keeps the regular surface controls usable on mobile", async ({ page }) => 
   );
   expect(targetSizes.every(({ height, width }) => height >= 44 && width >= 44)).toBe(true);
   await controls.getByRole("button", { name: "Rotate right" }).tap();
-  await expect(surface).toHaveAttribute("data-surface-view", "25:60:100");
+  await expect(surface).toHaveAttribute("data-surface-view", "25:60:200");
 
   const bounds = await surface.boundingBox();
   expect(bounds).not.toBeNull();

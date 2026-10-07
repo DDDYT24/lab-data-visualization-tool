@@ -26,6 +26,7 @@ import { useTheme } from "@mui/material/styles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { EmailCodeDialog } from "@/features/auth/email-code-dialog";
@@ -33,13 +34,14 @@ import {
   loadUserPreferences,
   saveUserPreferences,
 } from "@/features/settings/user-preferences";
-import { labvizApi } from "@/lib/api/labviz-api";
+import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
 import { LanguageSwitcher } from "./language-switcher";
 import { LabvizLogo } from "./labviz-logo";
 
-export function AppHeader() {
+export function AppHeader({ landing = false }: { landing?: boolean }) {
   const t = useTranslations("app");
+  const pathname = usePathname();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [signInOpen, setSignInOpen] = useState(false);
@@ -60,6 +62,10 @@ export function AppHeader() {
     },
   });
   const user = authQuery.data?.authenticated ? authQuery.data.user : null;
+  const localUser = user?.id === "local-profile" || (
+    authQuery.error instanceof LabVizApiError &&
+    authQuery.error.code === "local-session-required"
+  );
   const toggleTheme = () => {
     saveUserPreferences({
       ...loadUserPreferences(),
@@ -72,26 +78,27 @@ export function AppHeader() {
       <Box
         component="header"
         sx={{
-          bgcolor: "background.paper",
-          borderBottom: 1,
+          bgcolor: landing ? "background.default" : "background.paper",
+          borderBottom: landing ? 0 : 1,
           borderColor: "divider",
           position: "relative",
           zIndex: 10,
         }}
       >
-        <Container maxWidth={false} sx={{ px: { xs: 2, md: 3 } }}>
+        <Container maxWidth={landing ? "xl" : false} sx={{ px: { xs: 2, md: 3 } }}>
           <Stack
             direction="row"
             spacing={2}
             sx={{
               alignItems: "center",
               justifyContent: "space-between",
-              minHeight: 64,
+              minHeight: landing ? 72 : 64,
             }}
           >
             <Stack direction="row" spacing={2.5} sx={{ alignItems: "center" }}>
               <Stack
                 component={Link}
+                prefetch={false}
                 direction="row"
                 href="/"
                 spacing={1.25}
@@ -102,25 +109,71 @@ export function AppHeader() {
               <Stack
                 direction="row"
                 spacing={0.25}
-                sx={{ display: { xs: "none", md: "flex" } }}
+                sx={{ display: landing ? "none" : { xs: "none", md: "flex" } }}
               >
-                <Button component={Link} href="/history" size="small">
+                <Button component={Link} href="/history" prefetch={false} size="small">
                   {t("history")}
                 </Button>
-                <Button component={Link} href="/help" size="small">
+                <Button component={Link} href="/help" prefetch={false} size="small">
                   {t("help")}
+                </Button>
+                <Button component={Link} href="/about" prefetch={false} size="small">
+                  {t("navAbout")}
                 </Button>
               </Stack>
             </Stack>
 
+            {landing ? (
+              <Stack
+                component="nav"
+                aria-label={t("primaryNavigation")}
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: "center",
+                  display: { xs: "none", md: "flex" },
+                  left: "50%",
+                  position: "absolute",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                {[
+                  { href: "/", label: t("navWorkspace"), active: pathname === "/" },
+                  { href: "/history", label: t("navProjects"), active: pathname === "/history" },
+                  { href: "/help", label: t("navDocs"), active: pathname === "/help" },
+                  { href: "/about", label: t("navAbout"), active: pathname === "/about" },
+                ].map((item) => (
+                  <Button
+                    key={item.href}
+                    aria-current={item.active ? "page" : undefined}
+                    component={Link}
+                    href={item.href}
+                    prefetch={false}
+                    sx={{
+                      borderRadius: 2,
+                      color: item.active ? "primary.main" : "text.secondary",
+                      fontWeight: item.active ? 650 : 550,
+                      minWidth: "auto",
+                      px: 1.5,
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Stack>
+            ) : null}
+
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <Chip
-                color="secondary"
-                label={t("cloudPreview")}
-                size="small"
-                variant="outlined"
-                sx={{ display: { xs: "none", sm: "inline-flex" } }}
-              />
+              {!landing ? (
+                <Chip
+                  color="secondary"
+                  label={t("cloudPreview")}
+                  size="small"
+                  variant="outlined"
+                  sx={{ display: { xs: "none", sm: "inline-flex" } }}
+                />
+              ) : null}
               <Tooltip
                 title={
                   theme.palette.mode === "dark"
@@ -145,17 +198,33 @@ export function AppHeader() {
                 </IconButton>
               </Tooltip>
               <LanguageSwitcher />
-              <Button
-                onClick={(event) =>
-                  user
-                    ? setMenuAnchor(event.currentTarget)
-                    : setSignInOpen(true)
-                }
-                startIcon={user ? <AccountCircleOutlinedIcon /> : undefined}
-                sx={{ display: { xs: "none", sm: "inline-flex" } }}
-              >
-                {user?.email ?? t("signIn")}
-              </Button>
+              {authQuery.isPending || localUser ? null : landing ? (
+                <Tooltip title={user?.email ?? t("signIn")}>
+                  <IconButton
+                    aria-label={user?.email ?? t("signIn")}
+                    onClick={(event) =>
+                      user
+                        ? setMenuAnchor(event.currentTarget)
+                        : setSignInOpen(true)
+                    }
+                    sx={{ display: { xs: "none", sm: "inline-flex" } }}
+                  >
+                    <AccountCircleOutlinedIcon />
+                  </IconButton>
+                </Tooltip>
+              ) : (
+                <Button
+                  onClick={(event) =>
+                    user
+                      ? setMenuAnchor(event.currentTarget)
+                      : setSignInOpen(true)
+                  }
+                  startIcon={user ? <AccountCircleOutlinedIcon /> : undefined}
+                  sx={{ display: { xs: "none", sm: "inline-flex" } }}
+                >
+                  {user?.email ?? t("signIn")}
+                </Button>
+              )}
               <IconButton
                 aria-label={t("menu")}
                 onClick={(event) => setMenuAnchor(event.currentTarget)}
@@ -167,29 +236,31 @@ export function AppHeader() {
           </Stack>
         </Container>
       </Box>
-      <EmailCodeDialog
-        onClose={() => setSignInOpen(false)}
-        open={signInOpen}
-      />
+      {!localUser ? (
+        <EmailCodeDialog onClose={() => setSignInOpen(false)} open={signInOpen} />
+      ) : null}
       <Menu
         anchorEl={menuAnchor}
         onClose={() => setMenuAnchor(null)}
         open={Boolean(menuAnchor)}
       >
-        <MenuItem component={Link} href="/history" onClick={() => setMenuAnchor(null)}>
+        <MenuItem component={Link} href="/history" prefetch={false} onClick={() => setMenuAnchor(null)}>
           <ListItemIcon><HistoryRoundedIcon fontSize="small" /></ListItemIcon>
           {t("history")}
         </MenuItem>
-        <MenuItem component={Link} href="/help" onClick={() => setMenuAnchor(null)}>
+        <MenuItem component={Link} href="/help" prefetch={false} onClick={() => setMenuAnchor(null)}>
           <ListItemIcon><HelpOutlineRoundedIcon fontSize="small" /></ListItemIcon>
           {t("help")}
         </MenuItem>
-        <MenuItem component={Link} href="/settings" onClick={() => setMenuAnchor(null)}>
+        <MenuItem component={Link} href="/about" prefetch={false} onClick={() => setMenuAnchor(null)}>
+          {t("navAbout")}
+        </MenuItem>
+        <MenuItem component={Link} href="/settings" prefetch={false} onClick={() => setMenuAnchor(null)}>
           <ListItemIcon><SettingsOutlinedIcon fontSize="small" /></ListItemIcon>
           {t("settings")}
         </MenuItem>
-        <Divider />
-        {user ? (
+        {!localUser ? <Divider /> : null}
+        {localUser ? null : user ? (
           <MenuItem disabled={logoutMutation.isPending} onClick={() => logoutMutation.mutate()}>
             <ListItemIcon><LogoutRoundedIcon fontSize="small" /></ListItemIcon>
             {t("signOut")}

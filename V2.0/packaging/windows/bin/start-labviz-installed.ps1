@@ -26,7 +26,20 @@ if (-not $ownsMutex) {
     $running = Join-Path $logRoot "running.json"
     if ((Test-Path -LiteralPath $running) -and -not $SkipOpenBrowser) {
         $url = (Get-Content -LiteralPath $running -Raw | ConvertFrom-Json).webUrl
-        if ($url -match '^http://127\.0\.0\.1:[0-9]+$') { Start-Process $url }
+        if ($url -notmatch '^http://127\.0\.0\.1:[0-9]+$') {
+            throw "The running LabViz address is not a local loopback URL."
+        }
+        $tokenPath = Join-Path $dataRoot "local-access.dpapi"
+        if (-not (Test-Path -LiteralPath $tokenPath -PathType Leaf)) {
+            throw "Local launch credential is missing; stop and restart LabViz / 缺少本地启动凭据，请完全退出后重启 LabViz。"
+        }
+        Add-Type -AssemblyName System.Security
+        $protectedBytes = [IO.File]::ReadAllBytes($tokenPath)
+        $accessBytes = [Security.Cryptography.ProtectedData]::Unprotect(
+            $protectedBytes, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
+        )
+        $accessKey = [Convert]::ToBase64String($accessBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+        Start-Process "$url/#labviz-access=$accessKey"
     }
     Write-Host "LabViz is already running or starting / LabViz 已在运行或正在启动。"
     return
@@ -106,7 +119,7 @@ try {
     $versionRoot = Get-VersionRoot $version
     if ($ImportData) {
         Invoke-DataTool $versionRoot "import" $ImportData $dataRoot
-        Write-Host "Import completed; source retained / 迁移完成，原目录已保留。"
+        Write-Host "Data copied; old account/guest projects remain private and require re-import for account-free history / 数据已复制；旧账户和访客项目仍受原有访问限制，需重新导入才会进入免登录历史。"
         return
     }
     $arguments = @{ WebPort = $WebPort; ApiPort = $ApiPort; SkipOpenBrowser = $true; HealthCheckOnly = $true }

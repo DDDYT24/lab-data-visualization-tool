@@ -1,5 +1,8 @@
 {
   "schemaVersion": 1,
+  "surfacePalette": ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"],
+  "surfaceGrayscalePalette": ["#ffffff", "#000000"],
+  "correlationPalette": ["#3b4cc0", "#dddddd", "#b40426"],
   "contractVersion": "chart-render-v1",
   "grayscalePalette": [
     "#20252D",
@@ -22,6 +25,8 @@
     "#3F6212"
   ],
   "gridColor": "#D8DEE8",
+  "histogramFillOpacity": 0.55,
+  "histogramAxisPadding": 0.05,
   "confidenceBandOpacity": 0.15,
   "lineStyles": {
     "solid": {

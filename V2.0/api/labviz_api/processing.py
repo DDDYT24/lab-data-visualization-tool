@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 from fontTools import subset
 from matplotlib import font_manager
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
 from scipy.stats import f as fisher_f
 from scipy.stats import t as student_t
@@ -30,7 +31,12 @@ from scipy.stats import t as student_t
 from .models import ChartSpec, JsonScalar
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
+    CORRELATION_PALETTE,
     GRID_COLOR,
+    HISTOGRAM_AXIS_PADDING,
+    HISTOGRAM_FILL_OPACITY,
+    SURFACE_GRAYSCALE_PALETTE,
+    SURFACE_PALETTE,
     chart_series_color,
     matplotlib_line_style,
 )
@@ -922,6 +928,9 @@ def default_chart_spec(
         }
         else "line"
     )
+    if len(numeric_columns) == 1 and chart_type in {"line", "scatter", "bar"}:
+        # A single measured variable supports a distribution, not an X/Y relation.
+        chart_type = "histogram"
     if chart_type in {"histogram", "box"} and text_columns:
         x_field = text_columns[0]
     if chart_type == "surface3d" and len(numeric_columns) >= 3:
@@ -958,7 +967,11 @@ def default_chart_spec(
     return {
         "schemaVersion": 1,
         "type": chart_type,
-        "title": f"{y_label} over {x_label}",
+        "title": (
+            f"{y_label} distribution"
+            if chart_type in {"histogram", "box"}
+            else f"{y_label} over {x_label}"
+        ),
         "xAxis": {"field": x_field, "title": x_label, "unit": x_unit or ""},
         "yAxis": {"field": y_field, "title": y_label, "unit": y_unit or ""},
         "series": series,
@@ -2472,6 +2485,7 @@ def render_chart(
                     )
                 )
         elif chart.type == "histogram":
+            panel_bins: list[dict[str, Any]] = []
             for series_index, item in panel_series:
                 histogram = next(
                     value
@@ -2479,15 +2493,23 @@ def render_chart(
                     if value["field"] == item.field and value["label"] == item.label
                 )
                 bins = histogram["bins"]
+                panel_bins.extend(bins)
                 axis.stairs(
                     [value["count"] for value in bins],
                     [bins[0]["start"], *[value["end"] for value in bins]],
                     fill=True,
-                    alpha=0.55,
+                    alpha=HISTOGRAM_FILL_OPACITY,
                     label=item.label,
                     color=colors[series_index],
                     linewidth=export.line_width,
                 )
+            if panel_bins:
+                minimum = min(value["start"] for value in panel_bins)
+                maximum = max(value["end"] for value in panel_bins)
+                padding = (maximum - minimum) * HISTOGRAM_AXIS_PADDING
+                axis.set_xlim(minimum - padding, maximum + padding)
+                frequency_max = max(value["count"] for value in panel_bins)
+                axis.set_ylim(0, max(1, frequency_max * (1 + HISTOGRAM_AXIS_PADDING)))
             axis.set_xlabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
             axis.set_ylabel("Frequency")
         elif chart.type == "box":
@@ -2522,7 +2544,10 @@ def render_chart(
             )
             image = axis.imshow(
                 correlations,
-                cmap="Greys" if export.grayscale_preview else "coolwarm",
+                cmap=LinearSegmentedColormap.from_list(
+                    "labviz-correlation",
+                    SURFACE_GRAYSCALE_PALETTE if export.grayscale_preview else CORRELATION_PALETTE,
+                ),
                 vmin=-1,
                 vmax=1,
             )
@@ -2549,7 +2574,12 @@ def render_chart(
                     [point["x"] for point in surface_points],
                     [point["y"] for point in surface_points],
                     [point["z"] for point in surface_points],
-                    cmap="Greys" if export.grayscale_preview else "viridis",
+                    cmap=LinearSegmentedColormap.from_list(
+                        "labviz-surface",
+                        SURFACE_GRAYSCALE_PALETTE if export.grayscale_preview else SURFACE_PALETTE,
+                    ),
+                    vmin=min(point["z"] for point in surface_points),
+                    vmax=max(point["z"] for point in surface_points),
                 )
             except (RuntimeError, ValueError) as exc:
                 raise ProcessingError(

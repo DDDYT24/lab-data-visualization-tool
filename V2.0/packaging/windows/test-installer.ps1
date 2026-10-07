@@ -4,8 +4,10 @@ param(
     [string]$SetupExe,
     [Parameter(Mandatory = $true)]
     [string]$TestRoot,
+    [string]$SameVersionUpdateSetupExe,
     [string]$UpgradeSetupExe,
-    [string]$DeleteDataSetupExe
+    [string]$DeleteDataSetupExe,
+    [switch]$RepairSameVersion
 )
 
 Set-StrictMode -Version Latest
@@ -26,6 +28,7 @@ $installArguments = @(
     "/VERYSILENT",
     "/SUPPRESSMSGBOXES",
     "/NORESTART",
+    "/NOICONS",
     ('/DIR="{0}"' -f $installRoot)
 )
 $installer = Start-Process -FilePath $setupPath -ArgumentList $installArguments -Wait -PassThru
@@ -47,6 +50,9 @@ foreach ($relativePath in $required) {
         throw "Installed package is missing: $relativePath"
     }
 }
+if ($SameVersionUpdateSetupExe -and (Test-Path -LiteralPath (Join-Path $installRoot "versions\2.2.0\V2.0\web\public\about\about.zh.md"))) {
+    throw "The baseline installer already includes About assets; use the affected pre-fix installer to test this update."
+}
 if ((Get-Content -LiteralPath (Join-Path $installRoot "pending-version.txt") -Raw).Trim() -ne "2.2.0") {
     throw "The installed version marker is incorrect."
 }
@@ -60,7 +66,8 @@ function Assert-InstalledHealth {
     param(
         [int]$WebPort,
         [int]$ApiPort,
-        [string]$Label
+        [string]$Label,
+        [switch]$VerifyAboutAssets
     )
 
     $launcher = Join-Path $installRoot "bin\start-labviz-installed.ps1"
@@ -105,6 +112,18 @@ function Assert-InstalledHealth {
         } while (-not ($webReady -and $apiReady) -and (Get-Date) -lt $deadline)
         if (-not ($webReady -and $apiReady)) {
             throw "$Label health checks timed out."
+        }
+        if ($VerifyAboutAssets) {
+            $about = Invoke-WebRequest -UseBasicParsing `
+                -Uri "http://127.0.0.1:$WebPort/about/about.zh.md" -TimeoutSec 10
+            $figure = Invoke-WebRequest -UseBasicParsing `
+                -Uri "http://127.0.0.1:$WebPort/about/surface-3d.svg" -TimeoutSec 10
+            if ($about.StatusCode -ne 200 -or $about.Content -notmatch 'LabViz') {
+                throw "$Label did not serve the Chinese About content."
+            }
+            if ($figure.StatusCode -ne 200 -or $figure.Content -notmatch '<svg') {
+                throw "$Label did not serve the 3D About figure."
+            }
         }
         # During the first launch an installed version is health-probed once
         # before activation. Wait for the normal run's ready state, otherwise a
@@ -152,12 +171,56 @@ if (-not (Test-Path -LiteralPath $logRoot -PathType Container)) {
     throw "Installed launcher did not create the local log directory."
 }
 
+if ($RepairSameVersion) {
+    $repair = Start-Process -FilePath $setupPath -ArgumentList $installArguments -Wait -PassThru
+    if ($repair.ExitCode -ne 0) {
+        throw "Same-version repair/reinstall returned exit code $($repair.ExitCode)."
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $dataRoot "keep-me.txt") -PathType Leaf)) {
+        throw "Same-version repair/reinstall changed local data."
+    }
+    Assert-InstalledHealth -WebPort 3344 -ApiPort 8344 -Label "Same-version repaired launcher"
+    Write-Host "Same-version repair/reinstall preserved local data." -ForegroundColor Green
+}
+
+if ($SameVersionUpdateSetupExe) {
+    $sameVersionUpdatePath = (Resolve-Path -LiteralPath $SameVersionUpdateSetupExe).Path
+    $update = Start-Process -FilePath $sameVersionUpdatePath -ArgumentList $installArguments -Wait -PassThru
+    if ($update.ExitCode -ne 0) {
+        throw "Same-version update installer returned exit code $($update.ExitCode)."
+    }
+    if ((Get-Content -LiteralPath (Join-Path $installRoot "pending-version.txt") -Raw).Trim() -ne "2.2.0") {
+        throw "Same-version update changed the selected version unexpectedly."
+    }
+    foreach ($relativePath in @(
+        "versions\2.2.0\V2.0\web\public\about\about.zh.md",
+        "versions\2.2.0\V2.0\web\public\about\about.en.md",
+        "versions\2.2.0\V2.0\web\public\about\response-2d.svg",
+        "versions\2.2.0\V2.0\web\public\about\surface-3d.svg"
+    )) {
+        if (-not (Test-Path -LiteralPath (Join-Path $installRoot $relativePath) -PathType Leaf)) {
+            throw "Same-version update did not install required About asset: $relativePath"
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $dataRoot "keep-me.txt") -PathType Leaf)) {
+        throw "Same-version update changed local data."
+    }
+    $installedVersionDirectories = @(Get-ChildItem -LiteralPath (Join-Path $installRoot "versions") -Directory)
+    if ($installedVersionDirectories.Count -ne 1 -or $installedVersionDirectories[0].Name -ne "2.2.0") {
+        throw "Same-version update created an unexpected duplicate version directory."
+    }
+    Assert-InstalledHealth -WebPort 3345 -ApiPort 8345 `
+        -Label "Same-version updated launcher" -VerifyAboutAssets
+    Write-Host "Same-version update replaced the affected package in place, served About assets, and preserved local data." -ForegroundColor Green
+}
+
 if ($UpgradeSetupExe) {
     $upgradePath = (Resolve-Path -LiteralPath $UpgradeSetupExe).Path
     $upgradeArguments = @(
         "/VERYSILENT",
         "/SUPPRESSMSGBOXES",
         "/NORESTART",
+        "/NOICONS",
         ('/DIR="{0}"' -f $installRoot)
     )
     $upgrade = Start-Process -FilePath $upgradePath -ArgumentList $upgradeArguments -Wait -PassThru
@@ -226,6 +289,11 @@ try {
         $deleteDataRoot = Join-Path $localAppData "LabViz\data"
         New-Item -ItemType Directory -Force -Path $deleteDataRoot | Out-Null
         Set-Content -LiteralPath (Join-Path $deleteDataRoot "delete-me.txt") -Value "delete test" -Encoding utf8
+        foreach ($relative in @('data.retained-synthetic', 'data.failed-synthetic', 'backups')) {
+            $path = Join-Path $localAppData "LabViz\$relative"
+            New-Item -ItemType Directory -Force -Path $path | Out-Null
+            Set-Content -LiteralPath (Join-Path $path 'delete-me.txt') -Value 'delete test' -Encoding utf8
+        }
         $deleteUninstaller = Start-Process -FilePath (Join-Path $installRoot "unins000.exe") -ArgumentList @(
             "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
         ) -Wait -PassThru
@@ -234,6 +302,11 @@ try {
         }
         if (Test-Path -LiteralPath $deleteDataRoot) {
             throw "Explicit delete-data uninstall left the local data directory behind."
+        }
+        foreach ($relative in @('logs', 'backups')) {
+            if (Test-Path -LiteralPath (Join-Path $localAppData "LabViz\$relative")) {
+                throw "Explicit delete-data uninstall left $relative behind."
+            }
         }
         $remainingDataCopies = @(Get-ChildItem -LiteralPath (Join-Path $localAppData "LabViz") -Force -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -like "data.retained-*" -or $_.Name -like "data.failed-*" })

@@ -100,6 +100,12 @@ export function CloudProjectActions() {
     saveMutation.mutate();
   };
 
+  if (
+    authQuery.isPending ||
+    authQuery.data?.user?.id === "local-profile" ||
+    (authQuery.error instanceof LabVizApiError && authQuery.error.code === "local-session-required")
+  ) return null;
+
   return (
     <>
       <Stack spacing={1.25}>

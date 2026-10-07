@@ -1,5 +1,25 @@
 # LabViz V2.2 本地优先与离线运行指南
 
+## V2.2.0 Windows 安装版：当前方法
+
+从 [官方 Release](https://github.com/DDDYT24/lab-data-visualization-tool/releases/tag/v2.2.0)
+下载 `LabViz-Setup-2.2.0.exe` 和 `SHA256SUMS.txt`，或将两者复制到断网电脑。
+用 `Get-FileHash -LiteralPath '.\LabViz-Setup-2.2.0.exe' -Algorithm SHA256` 核对哈希。
+EXE 内置 Python 3.13.7、Node.js 24.17.0、锁定 API 依赖和 standalone 网页：
+安装和首次启动都不需要 pip/npm、Docker、数据库服务器、邮箱登录或网络。
+
+使用普通 Windows 账户、默认较短安装路径完成安装，然后点 LabViz 快捷方式，
+使用自动打开的页面。浏览器和服务之间使用本机回环；端口被占用时启动器选择空闲端口。
+真实导入成功后自动保存于 `%LOCALAPPDATA%\LabViz\data`；重启后再点快捷方式可打开历史。
+开始菜单的 **Stop LabViz / 退出** 用于停止服务，**LabViz logs / 日志** 用于排查启动问题。
+
+安装包未签名，请遵守机构的软件政策。本次仅支持单普通 Windows 用户；用户报告此前候选的
+断网/重启验收通过，最终哈希对应的自动化验证范围见 Release 附件，双账户隔离未验证。
+下文保留的是需要提前下载依赖的源码部署方法，不能与内置运行时的 EXE 混淆。
+
+## Historical source-checkout guidance
+
+
 本文面向最终用户和负责实验室电脑部署的管理员。LabViz 的运行路径是本地自托管：网站、API、
 SQLite 数据库和处理结果都在同一台电脑上。
 

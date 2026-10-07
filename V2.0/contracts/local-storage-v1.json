@@ -1,0 +1,24 @@
+{
+  "contractVersion": "local-storage-v1",
+  "scope": "The account-free local profile enabled by LABVIZ_LOCAL_ACCESS_KEY.",
+  "responses": {
+    "projectSession.storageMode": {
+      "temporary-local": "A temporary local project, including a bundled example or an import still processing.",
+      "saved-local": "A durable project owned by the current Windows user profile."
+    },
+    "projectSummary.storageMode": {
+      "saved-local": "A durable project listed in this local profile's history."
+    }
+  },
+  "legacyReadMapping": {
+    "temporary-cloud": "temporary-local",
+    "local": "saved-local",
+    "saved-cloud": "saved-local only when owner_user_id is local-profile; all other owners remain subject to the existing access denial."
+  },
+  "migrationPolicy": {
+    "databaseRows": "Existing SQLite rows are interpreted through this API mapping; storage rows and ownership are not rewritten by a read.",
+    "guestProjects": "Guest access tokens, expiry, and temporary retention remain unchanged.",
+    "accountProjects": "Account-owned rows are not re-owned, listed, or exposed to the local profile. The original account flow remains responsible for them.",
+    "recovery": "Back up the stopped application's complete SQLite database and object directory before any explicit migration or repair."
+  }
+}

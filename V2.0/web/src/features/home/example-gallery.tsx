@@ -50,7 +50,7 @@ export function ExampleGallery({
 
   return (
     <Dialog fullWidth maxWidth="md" onClose={onClose} open={open}>
-      <DialogTitle sx={{ pr: 7 }}>
+      <DialogTitle component="div" sx={{ pr: 7 }}>
         <Typography component="h2" sx={{ fontWeight: 750 }} variant="h3">
           {t("sampleChooserTitle")}
         </Typography>

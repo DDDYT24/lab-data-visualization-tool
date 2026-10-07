@@ -59,7 +59,6 @@ def snapshot(source: Path, destination: Path) -> None:
         raise ValueError("Select a LabViz data folder containing labviz-v2.db.")
     destination.parent.mkdir(parents=True, exist_ok=True)
     stage = destination.with_name(destination.name + ".partial-" + uuid4().hex)
-    stage.mkdir()
     # A write reservation rejects a running writer and keeps the SQLite view stable.
     # Operators must also stop the old app: this lock cannot protect external objects.
     with closing(
@@ -67,6 +66,7 @@ def snapshot(source: Path, destination: Path) -> None:
     ) as guard:
         guard.execute("BEGIN IMMEDIATE")
         try:
+            stage.mkdir()
             with closing(
                 sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
             ) as src:
@@ -96,6 +96,10 @@ def snapshot(source: Path, destination: Path) -> None:
                 encoding="utf-8",
             )
             rename_tree(stage, destination)
+        except Exception:
+            if stage.exists():
+                shutil.rmtree(stage)
+            raise
         finally:
             guard.rollback()
 
@@ -165,9 +169,9 @@ def import_data(source: Path, destination: Path) -> None:
     backup = destination.parent / "backups" / ("import-" + uuid4().hex)
     snapshot(source, backup)
     restore(backup, destination)
-    # A copied browser session is not a supported migration contract. Guest
-    # project ownership remains in projects.guest_token_digest; the next app
-    # launch can ask the user to sign in again without importing old sessions.
+    # A copied browser session is not a supported migration contract. Keep
+    # legacy guest and account ownership unchanged: the account-free profile
+    # must not silently claim these records. Users can re-import source data.
     sanitize_import(destination)
 
 

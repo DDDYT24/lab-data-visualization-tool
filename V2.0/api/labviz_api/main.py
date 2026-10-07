@@ -10,7 +10,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Final, Literal, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -48,6 +48,8 @@ from .models import (
     ExperimentContext,
     ExperimentInput,
     ExportJob,
+    FigureSnapshotList,
+    FigureSnapshotSummary,
     HealthResponse,
     ProcessingJob,
     ProjectDescriptionResponse,
@@ -78,6 +80,7 @@ from .persistence.exceptions import (
     PersistenceNotFound,
     PersistenceUnavailable,
 )
+from .persistence.sqlite import SqliteProjectStore
 from .processing import (
     ProcessingError,
     analyze_chart,
@@ -96,6 +99,9 @@ from .sample_catalog import SampleCatalogError, catalog_response, sample_payload
 LOGGER = logging.getLogger(__name__)
 SESSION_COOKIE = "labviz_session"
 GUEST_COOKIE = "labviz_guest"
+LOCAL_COOKIE = "labviz_local_session"
+LOCAL_USER_ID = "local-profile"
+LOCAL_STORAGE_CONTRACT_VERSION: Final[Literal["local-storage-v1"]] = "local-storage-v1"
 API_PREFIX = "/api/v1"
 
 
@@ -172,9 +178,19 @@ def _job_from_row(row: dict[str, Any]) -> ProcessingJob:
 
 def _project_session(repository: ProjectReader, project: dict[str, Any]) -> ProjectSession:
     job_row = repository.get_job_for_project(project["id"])
+    local_profile = bool(getattr(repository, "local_profile", False))
+    storage_mode = project["storage_mode"]
+    if local_profile:
+        if storage_mode == "temporary-cloud":
+            storage_mode = "temporary-local"
+        elif storage_mode == "local" or (
+            storage_mode == "saved-cloud" and project.get("owner_user_id") == LOCAL_USER_ID
+        ):
+            storage_mode = "saved-local"
     return ProjectSession(
         project_id=project["id"],
-        storage_mode=project["storage_mode"],
+        storage_mode=storage_mode,
+        storage_contract_version=(LOCAL_STORAGE_CONTRACT_VERSION if local_profile else None),
         description=project.get("description", ""),
         current_revision_id=project.get("current_revision_id"),
         source=SourceFile.model_validate_json(project["source_json"]),
@@ -254,6 +270,10 @@ def _require_project_access(
         if ready
         else _require_project(repository, project_id)
     )
+    if project["storage_mode"] == "local":
+        if user is None or user["id"] != project["owner_user_id"]:
+            raise ApiProblem(403, "project-access-denied", "This local project is unavailable.")
+        return project
     if project["storage_mode"] != "saved-cloud":
         stored_digest = project.get("guest_token_digest")
         if (
@@ -338,6 +358,7 @@ def _process_project(
     requested_sheet_name: str | None = None,
     header_row: int = 1,
     preferred_chart_type: str | None = None,
+    save_local: bool = False,
 ) -> None:
     try:
         repository.update_job(
@@ -384,6 +405,10 @@ def _process_project(
             quality=quality,
             chart=chart,
         )
+        if save_local:
+            if not isinstance(repository, SqliteProjectStore):
+                raise RuntimeError("Local projects require SQLite persistence.")
+            repository.save_local_project(project_id, LOCAL_USER_ID)
         repository.update_job(
             job_id,
             stage="ready",
@@ -479,6 +504,23 @@ def create_app(
     async def request_context(request: Request, call_next: Any) -> Response:
         request_id = request.headers.get("X-Request-ID", uuid4().hex)
         started = time.perf_counter()
+        if resolved_settings.local_access_key and request.url.path.startswith(API_PREFIX):
+            public_paths = {
+                f"{API_PREFIX}/health",
+                f"{API_PREFIX}/ready",
+                f"{API_PREFIX}/local/session",
+            }
+            if request.url.path not in public_paths:
+                token = request.cookies.get(LOCAL_COOKIE, "")
+                if not secrets.compare_digest(token, resolved_settings.local_access_key):
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "code": "local-session-required",
+                            "message": "Open LabViz from the launcher for this Windows account.",
+                        },
+                        headers={"Cache-Control": "no-store"},
+                    )
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -560,8 +602,15 @@ def create_app(
 
     def optional_user(
         session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+        local_token: str | None = Cookie(default=None, alias=LOCAL_COOKIE),
         auth: AuthService = Depends(get_auth),
     ) -> dict[str, str] | None:
+        if resolved_settings.local_access_key:
+            if local_token and secrets.compare_digest(
+                local_token, resolved_settings.local_access_key
+            ):
+                return {"id": LOCAL_USER_ID, "email": "labviz-local@example.com"}
+            return None
         return auth.get_user(session_token)
 
     def required_user(
@@ -588,6 +637,25 @@ def create_app(
                 "The object storage provider is not ready.",
             )
         return HealthResponse()
+
+    @app.post(f"{API_PREFIX}/local/session")
+    def start_local_session(
+        response: Response,
+        local_key: str | None = Header(default=None, alias="X-LabViz-Local-Key"),
+    ) -> dict[str, bool]:
+        key = resolved_settings.local_access_key
+        if not key or not local_key or not secrets.compare_digest(local_key, key):
+            raise ApiProblem(403, "local-access-denied", "The local launch credential is invalid.")
+        response.set_cookie(
+            key=LOCAL_COOKIE,
+            value=key,
+            max_age=resolved_settings.session_ttl_seconds,
+            httponly=True,
+            secure=resolved_settings.cookie_secure,
+            samesite="strict",
+            path="/",
+        )
+        return {"ready": True}
 
     @app.post(
         f"{API_PREFIX}/projects",
@@ -677,6 +745,8 @@ def create_app(
                 media_type,
                 sheet_name,
                 header_row,
+                None,
+                bool(current_settings.local_access_key),
             )
         project = _require_project(repository, creation.project_id)
         return _project_session(repository, project)
@@ -1101,8 +1171,22 @@ def create_app(
                     source_name=source.name,
                     chart_type=chart.type,
                     updated_at=row["updated_at"],
-                    storage_mode=row["storage_mode"],
-                    thumbnail_url=None,
+                    storage_mode=(
+                        "saved-local"
+                        if getattr(repository, "local_profile", False)
+                        and row["storage_mode"] in {"saved-cloud", "local"}
+                        else row["storage_mode"]
+                    ),
+                    thumbnail_url=(
+                        f"{resolved_settings.public_web_url.rstrip('/')}{API_PREFIX}"
+                        f"/projects/{quote(row['id'], safe='')}/figures/"
+                        f"{quote(row['thumbnail_snapshot_id'], safe='')}/preview?thumbnail=true"
+                        if getattr(repository, "local_profile", False)
+                        and row.get("thumbnail_snapshot_id")
+                        else None
+                    ),
+                    figure_snapshot_count=int(row.get("figure_snapshot_count") or 0),
+                    figure_storage_bytes=int(row.get("figure_storage_bytes") or 0),
                     experiment=(
                         ExperimentContext.model_validate(row["experiment"])
                         if row.get("experiment")
@@ -1110,7 +1194,152 @@ def create_app(
                     ),
                 )
             )
-        return ProjectList(projects=projects)
+        return ProjectList(
+            projects=projects,
+            storage_contract_version=(
+                LOCAL_STORAGE_CONTRACT_VERSION
+                if getattr(repository, "local_profile", False)
+                else None
+            ),
+        )
+
+    def require_local_gallery(
+        repository: ProjectStore,
+    ) -> tuple[SqliteProjectStore, ProjectRepository]:
+        if not isinstance(repository, SqliteProjectStore) or not repository.local_profile:
+            raise ApiProblem(
+                404,
+                "local-gallery-unavailable",
+                "Local figure history is unavailable.",
+            )
+        return repository, repository.repository
+
+    @app.get(
+        f"{API_PREFIX}/projects/{{project_id}}/figures",
+        response_model=FigureSnapshotList,
+    )
+    def list_local_figures(
+        project_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> FigureSnapshotList:
+        _, local_repository = require_local_gallery(repository)
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        rows = local_repository.list_figure_snapshots(project_id)
+        root = (
+            f"{resolved_settings.public_web_url.rstrip('/')}{API_PREFIX}"
+            f"/projects/{quote(project_id, safe='')}/figures"
+        )
+        snapshots = [
+            FigureSnapshotSummary(
+                id=row["id"],
+                project_id=project_id,
+                title=row["title"],
+                format=row["format"],
+                sha256=row["sha256"],
+                byte_size=row["byte_size"],
+                created_at=row["created_at"],
+                thumbnail_url=(
+                    f"{root}/{quote(row['id'], safe='')}/preview?thumbnail=true"
+                    if row["format"] == "png" and row["has_thumbnail"]
+                    else None
+                ),
+                preview_url=(
+                    f"{root}/{quote(row['id'], safe='')}/preview"
+                    if row["format"] in {"png", "svg"}
+                    else None
+                ),
+                download_url=f"{root}/{quote(row['id'], safe='')}/download",
+            )
+            for row in rows
+        ]
+        return FigureSnapshotList(
+            project_id=project_id,
+            snapshots=snapshots,
+            total_bytes=sum(snapshot.byte_size for snapshot in snapshots),
+        )
+
+    @app.get(f"{API_PREFIX}/projects/{{project_id}}/figures/{{snapshot_id}}/preview")
+    def preview_local_figure(
+        project_id: str,
+        snapshot_id: str,
+        thumbnail: bool = False,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> Response:
+        _, local_repository = require_local_gallery(repository)
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        snapshot = local_repository.get_figure_snapshot(project_id, snapshot_id)
+        if snapshot is None:
+            raise ApiProblem(404, "figure-not-found", "This saved figure does not exist.")
+        if snapshot["format"] == "pdf":
+            raise ApiProblem(
+                415,
+                "figure-preview-unavailable",
+                "PDF figures are available to download.",
+            )
+        payload = snapshot["payload"]
+        if thumbnail and snapshot["thumbnail_png"]:
+            payload = snapshot["thumbnail_png"]
+        media_type = "image/png" if thumbnail or snapshot["format"] == "png" else "image/svg+xml"
+        return Response(
+            content=bytes(payload),
+            media_type=media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @app.get(f"{API_PREFIX}/projects/{{project_id}}/figures/{{snapshot_id}}/download")
+    def download_local_figure(
+        project_id: str,
+        snapshot_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> Response:
+        _, local_repository = require_local_gallery(repository)
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        snapshot = local_repository.get_figure_snapshot(project_id, snapshot_id)
+        if snapshot is None:
+            raise ApiProblem(404, "figure-not-found", "This saved figure does not exist.")
+        media_type = {
+            "png": "image/png",
+            "svg": "image/svg+xml",
+            "pdf": "application/pdf",
+        }[snapshot["format"]]
+        return Response(
+            content=bytes(snapshot["payload"]),
+            media_type=media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": _download_content_disposition(
+                    f"{snapshot['title']}.{snapshot['format']}"
+                ),
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @app.delete(
+        f"{API_PREFIX}/projects/{{project_id}}/figures/{{snapshot_id}}",
+        status_code=204,
+    )
+    def delete_local_figure(
+        project_id: str,
+        snapshot_id: str,
+        user: dict[str, str] | None = Depends(optional_user),
+        guest_token: str | None = Cookie(default=None, alias=GUEST_COOKIE),
+        repository: ProjectStore = Depends(get_project_store),
+    ) -> Response:
+        _, local_repository = require_local_gallery(repository)
+        _require_project_access(repository, project_id, user, guest_token, ready=True)
+        if not local_repository.delete_figure_snapshot(project_id, snapshot_id):
+            raise ApiProblem(404, "figure-not-found", "This saved figure does not exist.")
+        return Response(status_code=204)
 
     @app.get(f"{API_PREFIX}/recovery/projects", response_model=ProjectList)
     def list_deleted_projects(

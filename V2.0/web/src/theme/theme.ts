@@ -12,18 +12,17 @@ export const chartPalette = [
   "#137C8B",
 ] as const;
 
-export const darkChartPalette = [
-  "#8DB7FF",
-  "#69D2C7",
-  "#FF9BAA",
-  "#C7A5FF",
-  "#F4C56F",
-  "#67DCE8",
-] as const;
+export const chatGptDarkPalette = {
+  background: "#212121",
+  border: "#424242",
+  surface: "#2F2F2F",
+  text: "#ECECEC",
+  textSecondary: "#B4B4B4",
+} as const;
 
 export function createLabvizTheme(mode: PaletteMode) {
   const dark = mode === "dark";
-  const actionContrastText = dark ? "#0F172A" : "#FFFFFF";
+  const actionContrastText = dark ? "#0D0D0D" : "#FFFFFF";
   return createTheme({
   cssVariables: {
     cssVarPrefix: "labviz",
@@ -31,40 +30,40 @@ export function createLabvizTheme(mode: PaletteMode) {
   palette: {
     mode,
     primary: {
-      main: dark ? "#8DB7FF" : "#2563EB",
-      dark: dark ? "#B7D0FF" : "#1D4ED8",
-      light: dark ? "#203A6C" : "#EAF1FF",
+      main: dark ? chatGptDarkPalette.text : "#2563EB",
+      dark: dark ? "#D1D1D1" : "#1D4ED8",
+      light: dark ? chatGptDarkPalette.border : "#EAF1FF",
       contrastText: actionContrastText,
     },
     secondary: {
-      main: dark ? "#69D2C7" : "#0F766E",
-      dark: dark ? "#9AE5DD" : "#0B5F59",
-      light: dark ? "#164B49" : "#E8F5F2",
+      main: dark ? chatGptDarkPalette.textSecondary : "#0F766E",
+      dark: dark ? "#D1D1D1" : "#0B5F59",
+      light: dark ? chatGptDarkPalette.surface : "#E8F5F2",
       contrastText: actionContrastText,
     },
     background: {
-      default: dark ? "#0F172A" : "#F6F8FB",
-      paper: dark ? "#172033" : "#FFFFFF",
+      default: dark ? chatGptDarkPalette.background : "#F6F8FB",
+      paper: dark ? chatGptDarkPalette.surface : "#FFFFFF",
     },
     text: {
-      primary: dark ? "#F4F7FB" : "#172033",
-      secondary: dark ? "#B6C2D5" : "#667085",
+      primary: dark ? chatGptDarkPalette.text : "#172033",
+      secondary: dark ? chatGptDarkPalette.textSecondary : "#667085",
     },
-    divider: dark ? "#334155" : "#D8DEE8",
+    divider: dark ? chatGptDarkPalette.border : "#D8DEE8",
     success: {
-      main: dark ? "#75D6A2" : "#1B6848",
-      dark: dark ? "#A2E7BF" : "#145038",
-      light: dark ? "#183C31" : "#E9F6EF",
+      main: dark ? "#19C37D" : "#1B6848",
+      dark: dark ? "#4DD8A0" : "#145038",
+      light: dark ? "#18392E" : "#E9F6EF",
       contrastText: actionContrastText,
     },
     warning: {
-      main: dark ? "#F4C56F" : "#B7791F",
-      light: dark ? "#4A3820" : "#FFF6E5",
-      contrastText: dark ? "#0F172A" : "#FFFFFF",
+      main: dark ? "#F4AC36" : "#B7791F",
+      light: dark ? "#43351F" : "#FFF6E5",
+      contrastText: dark ? "#0D0D0D" : "#FFFFFF",
     },
     error: {
-      main: dark ? "#FF9BAA" : "#C43D4B",
-      light: dark ? "#4C2530" : "#FFF0F2",
+      main: dark ? "#FF8583" : "#C43D4B",
+      light: dark ? "#472928" : "#FFF0F2",
       contrastText: actionContrastText,
     },
   },
@@ -106,7 +105,7 @@ export function createLabvizTheme(mode: PaletteMode) {
     MuiCssBaseline: {
       styleOverrides: {
         "::selection": {
-          backgroundColor: alpha("#2563EB", 0.18),
+          backgroundColor: alpha(dark ? "#FFFFFF" : "#2563EB", 0.18),
         },
         body: {
           minWidth: 320,

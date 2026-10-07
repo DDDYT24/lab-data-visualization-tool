@@ -1,6 +1,6 @@
 [project]
 name = "labviz-api"
-version = "2.2.0.dev0"
+version = "2.2.0"
 description = "FastAPI processing service for the LabViz V2.2 local-first web application"
 requires-python = ">=3.12,<3.14"
 

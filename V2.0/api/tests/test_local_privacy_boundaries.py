@@ -63,9 +63,15 @@ def test_web_client_defaults_to_relative_api_and_has_no_telemetry_hooks() -> Non
         encoding="utf-8"
     )
     next_config = (REPO_ROOT / "V2.0" / "web" / "next.config.ts").read_text(encoding="utf-8")
+    api_proxy = (
+        REPO_ROOT / "V2.0" / "web" / "src" / "lib" / "api" / "local-api-proxy.ts"
+    ).read_text(encoding="utf-8")
 
     assert 'process.env.NEXT_PUBLIC_LABVIZ_API_URL ?? "/api/v1"' in api_client
-    assert 'process.env.LABVIZ_API_PROXY_TARGET ?? "http://127.0.0.1:8000"' in next_config
+    assert 'process.env.LABVIZ_API_PROXY_TARGET ?? "http://127.0.0.1:8000"' in api_proxy
+    assert 'target.hostname !== "127.0.0.1"' in api_proxy
+    assert 'target.protocol !== "http:"' in api_proxy
+    assert "rewrites()" not in next_config
     for marker in ("sendbeacon", "sentry", "posthog", "google-analytics", "telemetry"):
         assert marker not in api_client.lower()
 
@@ -82,19 +88,17 @@ def test_public_markdown_has_no_internal_tool_or_model_references() -> None:
         "|".join((*forbidden_tokens[:4], r"\b" + forbidden_tokens[4] + r"\b")),
         re.IGNORECASE,
     )
-    public_files = [
-        path
-        for path in REPO_ROOT.rglob("*.md")
-        if ".git" not in path.parts
-        and "node_modules" not in path.parts
-        and ".venv" not in path.parts
-        and "outputs" not in path.parts
-    ]
-
-    matches = {
-        str(path.relative_to(REPO_ROOT)): forbidden.findall(path.read_text(encoding="utf-8"))
-        for path in public_files
-        if forbidden.search(path.read_text(encoding="utf-8"))
-    }
+    matches = {}
+    excluded = {".git", "node_modules", ".venv", "outputs"}
+    for root, directories, filenames in REPO_ROOT.walk():
+        # Prune before descending: staged runtimes can contain hundreds of thousands of files.
+        directories[:] = [name for name in directories if name not in excluded]
+        for name in filenames:
+            if not name.lower().endswith(".md"):
+                continue
+            path = root / name
+            found = forbidden.findall(path.read_text(encoding="utf-8"))
+            if found:
+                matches[str(path.relative_to(REPO_ROOT))] = found
 
     assert matches == {}

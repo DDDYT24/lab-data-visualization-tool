@@ -185,7 +185,7 @@ export function WorkspaceScreen({
               label={
                 storageMode === "saved-cloud"
                   ? t("storageSavedCloud")
-                  : storageMode === "local"
+                  : storageMode === "local" || storageMode === "saved-local"
                     ? t("storageLocal")
                     : t("storageTemporary")
               }

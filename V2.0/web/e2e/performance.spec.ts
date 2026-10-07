@@ -14,7 +14,7 @@ test("meets the local browser responsiveness budgets", async ({ page }) => {
   await page.goto("/");
 
   const importStarted = performance.now();
-  await page.getByRole("button", { name: "Try sample data" }).click();
+  await page.getByRole("button", { name: "View examples" }).click();
   await page
     .locator('[data-example-slug="time-series"]')
     .getByRole("button", { name: "Open this example" })

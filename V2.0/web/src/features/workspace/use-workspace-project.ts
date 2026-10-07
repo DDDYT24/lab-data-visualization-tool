@@ -32,6 +32,7 @@ export function useWorkspaceProject(initialProjectId?: string) {
   const loadError = useWorkspaceStore((state) => state.loadError);
   const openProject = useWorkspaceStore((state) => state.openProject);
   const setSession = useWorkspaceStore((state) => state.setSession);
+  const markProjectSaved = useWorkspaceStore((state) => state.markProjectSaved);
   const hydrateWorkspace = useWorkspaceStore((state) => state.hydrateWorkspace);
   const setJob = useWorkspaceStore((state) => state.setJob);
   const setWorkspaceData = useWorkspaceStore(
@@ -132,11 +133,12 @@ export function useWorkspaceProject(initialProjectId?: string) {
   const workspaceDataQuery = useQuery({
     queryKey: ["project-data", projectId],
     queryFn: async ({ signal }) => {
-      const [nextPreview, nextQuality] = await Promise.all([
+      const [nextPreview, nextQuality, nextSession] = await Promise.all([
         labvizApi.getPreview(projectId!, signal),
         labvizApi.getQuality(projectId!, signal),
+        labvizApi.getProject(projectId!, signal),
       ]);
-      return { preview: nextPreview, quality: nextQuality };
+      return { preview: nextPreview, quality: nextQuality, session: nextSession };
     },
     enabled: dataReady && !initialProjectId,
     retry: (failureCount, error) =>
@@ -148,12 +150,13 @@ export function useWorkspaceProject(initialProjectId?: string) {
 
   useEffect(() => {
     if (workspaceDataQuery.data) {
+      markProjectSaved(workspaceDataQuery.data.session);
       setWorkspaceData(
         workspaceDataQuery.data.preview,
         workspaceDataQuery.data.quality,
       );
     }
-  }, [setWorkspaceData, workspaceDataQuery.data]);
+  }, [markProjectSaved, setWorkspaceData, workspaceDataQuery.data]);
 
   useEffect(() => {
     const error =

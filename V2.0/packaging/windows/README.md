@@ -1,9 +1,26 @@
 # LabViz Windows packaging contract
 
-This directory defines the V2.2 local-first Windows packaging contract. It now includes an Inno
-Setup source for a per-user test installer, but it is not a released or signed installer. The
-repository still does not contain bundled Python or Node runtimes, and clean-machine installation
-evidence is not part of the repository.
+## V2.2.0 public release — current scope
+
+[Download the unsigned Windows x64 installer](https://github.com/DDDYT24/lab-data-visualization-tool/releases/tag/v2.2.0).
+The source/API/Web/installer version is 2.2.0. The supported scope is one ordinary Windows
+profile; real two-account isolation remains open and is not claimed. Owner-reported
+clean/offline/reboot acceptance of the preceding candidate is recorded separately from fresh
+final-build automation and its hash. Release assets contain source/build provenance, SHA-256,
+test results and local scan scope. No signing certificate or universal antivirus approval.
+
+User install/update/history/backup instructions are in the complete
+[English README](../../../README.md) / [中文 README](../../../README.zh-CN.md).
+The P5-2 prototype and development-candidate references below describe historical build
+checkpoints; they do not change this current release status. Keep the default short path.
+
+
+
+This directory contains the reproducible Inno Setup source and packaging/lifecycle scripts.
+The unsigned V2.2.0 installer and bundled runtimes are distributed as GitHub Release assets,
+not committed binaries. Owner acceptance and exact-artifact automation have separate scopes.
+
+## Historical prototype specification and reproducible build guidance
 
 ## Target architecture
 
@@ -20,7 +37,7 @@ The package will contain a pinned CPython 3.13.x API runtime, the locked Python 
 The packaged launch path must not run `git`, create a virtual environment, run `pip install`, or
 run `npm ci` on the user's first launch.
 
-The current developer launcher remains the supported V2.2.0-dev path until that bundle exists:
+The developer launcher remains available alongside the staged Windows test bundle:
 
 ```powershell
 Set-Location -LiteralPath 'C:\path\to\lab-data-visualization-tool'
@@ -46,8 +63,9 @@ failed-transaction data copies.
 
 `package-manifest.json` is the machine-readable contract. `stage-candidate.ps1` assembles a staged
 portable candidate from an already-built Next.js standalone tree and explicit runtime directories;
-`validate-package.ps1` then checks required launch metadata and prohibited user-data/runtime
-artifacts. The standalone web server includes its traced production dependency tree under
+it copies both `.next/static` and the app's `public` assets (including the bilingual About content
+and its 2D/3D SVG figures). `validate-package.ps1` then checks these required launch assets, metadata,
+and prohibited user-data/runtime artifacts. The standalone web server includes its traced production dependency tree under
 `V2.0\web\node_modules`; development checkout dependencies elsewhere remain prohibited. Pass
 `-RequireBundledRuntimes` only after the actual runtime bundle has been assembled. The icon source
 files are reusable: `V2.0/assets/labviz-logo.svg` is the vector source,
@@ -69,6 +87,10 @@ a Node.js 22.22.2-or-newer executable. Do not pass the development virtual envir
 it may contain pytest, build tools, or unrelated workspace dependencies. The output directory and
 dependency target are disposable and must not contain user data:
 
+When building Next.js in an isolated web copy to preserve a modified checkout, pass that copy's
+`V2.0\web` directory with `-WebBuildRoot`. The staged API, packaging scripts and README still come
+from this repository; the provided web directory must already contain the standalone `.next` build.
+
 ```powershell
 $py = 'C:\path\to\lab-data-visualization-tool\V2.0\api\.venv\Scripts\python.exe'
 $pythonRoot = & $py -c "import sys; print(sys.base_prefix)"
@@ -83,10 +105,11 @@ $sitePackages = 'C:\path\to\staging\LabViz-api-site-packages'
 ```
 
 The staging script validates Python 3.12/3.13 and Node.js 22.22.2-or-newer, but it is not a native
-installer builder. Inno Setup is the selected test installer technology. The current development
-candidate uses Python 3.12.14; final packaging still targets Python 3.13 and must use
--RequirePython313 with an independently verified runtime/dependency bundle. Signing and
-clean-machine lifecycle tests remain open.
+installer builder. Inno Setup is the selected test installer technology. The current Windows
+candidate bundles Python 3.13.7 and Node.js 24.17.0 and uses `-RequirePython313`. Staging omits
+the Python `Doc`, `include`, and standard-library `Lib/test` trees because the application does
+not need developer documentation, headers, or interpreter tests at runtime. The package
+validator rejects these trees if they reappear. Clean-machine lifecycle tests remain open.
 
 After the bundled runtime exists, add `-RequireBundledRuntimes`. The portable launcher performs
 both web and API loopback health checks before opening the browser; automated smoke tests may add
@@ -117,27 +140,51 @@ The lifecycle harness accepts a second setup executable when testing an upgrade:
 ```powershell
 .\test-installer.ps1 `
   -SetupExe 'C:\path\to\LabViz-Setup-2.2.0.exe' `
+  -RepairSameVersion `
   -UpgradeSetupExe 'C:\path\to\LabViz-Setup-2.2.1.exe' `
   -DeleteDataSetupExe 'C:\path\to\LabViz-Setup-delete-test.exe' `
   -TestRoot 'C:\path with spaces\labviz-installer-test'
 ```
 
+To verify a same-version replacement of an already-installed candidate (for example, a packaging
+fix that keeps version `2.2.0`), pass the affected old installer as `-SetupExe` and the repaired
+installer as `-SameVersionUpdateSetupExe`. **If LabViz is already installed for the current Windows
+user, compile both disposable test installers with the same dedicated test-only `/DAppId=...`;
+do not use the production AppId in this harness on that account.** `/NOICONS` prevents test
+shortcuts but does not isolate uninstall registration. Use a dedicated empty `TestRoot`. The
+harness checks the shared install path, About Markdown/SVG HTTP responses, absence of duplicate
+version folders, and preservation of local data:
+
+```powershell
+.\test-installer.ps1 `
+  -SetupExe 'C:\path\to\old\LabViz-Setup-2.2.0.exe' `
+  -SameVersionUpdateSetupExe 'C:\path\to\fixed\LabViz-Setup-2.2.0.exe' `
+  -TestRoot 'C:\path with spaces\labviz-same-version-update-test'
+```
+
 It checks installation and loopback health, coexistence of two versions, rollback,
-repair/reinstall, and silent uninstall with local data retained by default. The harness
+repair/reinstall (including an optional same-version repair), and silent uninstall with local
+data retained by default. The harness
 also accepts a test-only installer compiled with `/DTestDeleteData=1` to exercise explicit
 data deletion, including retained/failed transaction copies. The harness does not replace
 clean-machine, disconnected, signing, antivirus, or real V2.1.1 upgrade evidence.
 
-P5-1 (architecture and lifecycle contract) and the installer source are implemented here. P5-2
-remains open until the compiled package passes clean-install, offline, upgrade, rollback, repair,
-path, uninstall, signing, and clean-machine tests. macOS/Linux packages are not advertised by
-this contract.
+P5-1 (architecture and lifecycle contract) and the installer source are implemented here. An
+unsigned 2.2.0 test installer compiled with Inno Setup 6.7.3 and passed isolated current-host
+installation, Web/API health, same-version repair and default data-retaining uninstall. A
+test-only delete-data variant from the same candidate passed explicit deletion of data, logs,
+backups and retained/failed data copies. P5-2 remains open for clean/offline acceptance of the
+exact user-facing installer. The user
+waived authentic V2.1.1 upgrade/rollback for single-person use. Signing and antivirus review
+apply before public distribution. macOS/Linux packages are not advertised by this contract.
 
 ## Current Windows launch experience
 
 The default shortcuts use Windows PowerShell 5.1, with UTF-8 BOM for Chinese script messages.
 Preferred ports are 3000/8000; occupied ports fall back to available loopback ports, and sharing
-URLs/origin configuration follow the selected web port. A per-user mutex prevents duplicate writers.
+URLs/origin configuration follow the selected web port. The standalone web server resolves its API
+proxy from the launcher's selected API port at request time, rather than baking port 8000 into the
+build. The proxy accepts only HTTP loopback targets. A per-user mutex prevents duplicate writers.
 The launcher prints readiness progress and uses a 90-second startup health deadline. Missing files,
 timeouts and child failures are reported with the local log location. An OS job object closes the
 API/Web process group if the launcher is forcibly terminated.
@@ -145,12 +192,18 @@ API/Web process group if the launcher is forcibly terminated.
 Start-menu entries provide **Stop LabViz**, **LabViz logs**, **Import old data** and **Rollback**.
 Import prompts for the stopped old application's data directory and only accepts an empty target.
 For V2.1.1 source installations, select V2.0/api/.labviz. Custom database/object locations and
-browser guest-session recovery is not a promise: guest project ownership is retained, while
-browser sessions are reset and sign-in may be required again. Do not remove the old checkout
-until the imported project and exports have been checked.
+browser guest-session recovery are not supported. Guest and account-owned project rows are
+retained in the copied database, but remain inaccessible from the new account-free profile;
+they are **not** silently assigned to the Windows user. Re-import the original files to create
+new local projects. Keep the old checkout and source data until you have checked the new
+projects and exports. Import into an empty destination only; the source and an integrity-checked
+backup are retained. Stop both versions before importing, snapshotting, or restoring.
 
-The Chinese installer language covers the principal installation pages; untranslated Inno Setup
-system error messages use the English defaults. Installer language visual review remains required.
+`languages/ChineseSimplified.isl` is vendored from the Inno Setup source repository's
+[Simplified Chinese translation](https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl)
+(retrieved 2026-09-23, SHA-256 `E0B0B350E2245F3C5E65586DFE43D574F6E7F06F2261149ABA284954B3FC9A8D`).
+Its 281 message keys match the installed Inno Setup 6.7.3 `Default.isl`; LabViz-specific
+installer prompts remain in `LabViz.iss`. Installer language visual review remains required.
 
 A reproducible developer-machine launch and migration test (not a clean-machine installer test):
 
@@ -164,3 +217,13 @@ and recovery using Windows PowerShell 5.1. Keep the test directory under ignored
 The full mode additionally checks a synthetic V2.1.1-style source with a guest project, an old
 browser session, and an object file: the source remains unchanged, the guest project is present
 after import, the old session is absent, and the imported database can be reopened by the API.
+
+To run the packaged Chromium real-API examples and local-history flows against a disposable
+per-user data directory, with the checkout's installed Playwright browsers:
+
+~~~powershell
+.\test-live-candidate.ps1 -CandidateRoot 'C:\path\to\candidate' -TestRoot 'C:\new empty test folder'
+~~~
+
+The harness uses the same per-user DPAPI local-access bootstrap as the launcher and removes its
+owned processes on exit. It does not send data off the machine or validate a clean Windows host.

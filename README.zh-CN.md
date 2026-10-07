@@ -1,206 +1,220 @@
 <div align="center">
 
-# 🧪 LabViz 实验数据可视化工具
+# LabViz — 科研数据可视化工具
 
-**把实验表格转换为清晰、可导出的科研图表，全程在本地运行。**
+**导入实验表格、检查数据质量、生成图表，在本机保留项目和导出结果。**
 
 [![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-V2.2.0--dev%20local--first-0f766e)
+[![Release](https://img.shields.io/badge/release-v2.2.0-0f766e)](https://github.com/DDDYT24/lab-data-visualization-tool/releases/tag/v2.2.0)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563eb.svg)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [版本基准](VERSION_BASELINE.md) · [未来待办](V2.0/TODO.md) · [P7 测试检查点](V2.0/docs/V2.2_P7_TEST_REPORT.md) · [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) · [离线安装](V2.0/docs/OFFLINE_INSTALL.md) · [统计契约](V2.0/docs/STATISTICS_CONTRACT_V2.2.md) · [Windows 打包契约](V2.0/packaging/windows/README.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
+[English](README.md) · [简体中文](README.zh-CN.md) · [下载 V2.2](https://github.com/DDDYT24/lab-data-visualization-tool/releases/tag/v2.2.0) · [发布说明](V2.0/RELEASE_NOTES_V2.2.md) · [问题反馈](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
 
 </div>
 
-当前仓库正在 V2.1.1 本地发布版本之上开发 V2.2.0-dev。V2.2 增加了版本化的
-合成示例、浅色/暗色/跟随系统主题、可访问性改进、有限范围的高级统计，以及
-Windows 本地打包与生命周期契约；它仍然是 Next.js 网站和 FastAPI 科研处理服务组成的本地优先版本。
-它支持数据导入、质量检查、清洗、绘图、项目历史、本地验证码登录、只读分享，以及
-PNG、SVG、PDF 科研图像导出。
+LabViz 面向研究人员、写论文的学生和教学实验室。V2.2 Windows 安装包内置网页界面、
+Python 科研处理服务和运行环境：你在浏览器中操作，计算和保存都在自己的电脑上完成。
+**无需 LabViz 登录或邮箱验证码**，普通使用者无需另装 Python、Node.js、Docker、
+PostgreSQL 或 S3，也不需要 AWS 账户、域名或在线网站。
 
-本项目不提供官方在线网站。普通使用者不需要购买域名，也不需要 AWS、DNS、
-Docker、PostgreSQL、MinIO 或付费邮件服务。
+## 安装与启动：Windows 用户
 
-## V2.2 候选版本交付状态
+1. 从官方发布页面下载 [LabViz-Setup-2.2.0.exe](https://github.com/DDDYT24/lab-data-visualization-tool/releases/download/v2.2.0/LabViz-Setup-2.2.0.exe)。支持范围为 **Windows x64**。
+2. 可用 PowerShell 计算哈希，与同页 [SHA256SUMS.txt](https://github.com/DDDYT24/lab-data-visualization-tool/releases/download/v2.2.0/SHA256SUMS.txt) 核对：
 
-当前已发布版本仍是 V2.1.1。V2.2 开发候选版本已通过本机 263 项 API 测试、合成数据矩阵、
-浏览器流程和当前 Windows 机器上的安装包生命周期检查。标记为 2.2.0/2.2.1 的测试安装包
-用于验证升级流程，均未签名，也不是正式发布版本。验证范围与安装包 SHA-256 校验值见
-[P7 报告](V2.0/docs/V2.2_P7_TEST_REPORT.md)，剩余发布门槛统一见
-[TODO](V2.0/TODO.md)。macOS/Linux 原生安装包属于后续工作。
+   ```powershell
+   Get-FileHash -LiteralPath '.\LabViz-Setup-2.2.0.exe' -Algorithm SHA256
+   ```
 
-## 快速开始 V2.2.0-dev（本地代码仓库）
+3. 使用平时的 Windows 账户运行安装包，选择中文或英文，保留默认安装目录；无需管理员权限。
+4. 双击桌面或开始菜单的 **LabViz** 快捷方式，使用它自动打开的页面。**没有登录步骤**。
+   首次打开请用快捷方式，旧书签或手动输入地址可能没有本地授权。
+5. 导入自己的数据，或先试内置合成示例。EXE 下载或拷贝到电脑后，安装和正常使用可在断网时完成。
+6. 需要结束后台服务时，在开始菜单选择 **Stop LabViz / 退出**。
 
-下面的命令运行的是开发版代码仓库，不是已经发布的原生安装包。第一次启动会在本机创建
-`V2.0/api/.venv`，并可能下载 Python/API 和网站依赖；这些下载只发生在当前电脑的本地
-开发环境中，不代表 AWS 或公网部署。仓库现在提供可在本机复现的未签名 Inno Setup 测试安装包源码和
-候选包生命周期脚本，但没有签名或面向公众发布的 Windows 安装包。
+当前公开安装包**未签名**，Windows 可能出现发布者/SmartScreen 提示。请核对官方来源和
+SHA-256，并遵守学校或单位的软件安装规定。我们没有宣称已获得代码签名或所有杀毒服务的认证；
+本机实际扫描结果见发布附件中的验证报告。不要绕过机构的软件安装策略。
 
-V2.2 继续使用 `V2.0/` 作为代码目录。先点击下面的官方下载链接安装三个工具：
+### 已安装旧版：如何更新、历史是否还在
 
-- [Git for Windows](https://git-scm.com/download/win)；macOS/Linux 使用 [Git downloads](https://git-scm.com/downloads)
-- [Python 3.12 或 3.13](https://www.python.org/downloads/)
-- [Node.js 22.22.2 或更新版本](https://nodejs.org/en/download)
+先退出 LabViz，再用**同一 Windows 账户、相同默认程序目录**运行新 EXE，完成后点原有快捷方式。
+**不需要先删除旧版本**。数据保存在程序目录之外，更新或同版本修复默认保留历史，不主动清空数据。
+更新后进入“历史”检查，重要数据请先离线备份。卸载时会询问保留还是永久删除数据；
+打算重装并继续使用历史时请选择“保留”。真实 V2.1.1 安装器升级/回滚验收已按用户决定豁免，
+因此不能保证每一个历史构建都经过同样的升级验证。
 
-### Windows
+## 科研使用流程
 
-请在准备存放项目的目录中打开 PowerShell，然后按顺序运行：
+```text
+CSV / TSV / TXT / JSON / XLSX
+            ↓
+解析与校验 → 检查数据质量 → 确认清洗
+            ↓
+选择图表、字段、统计方法、标签和样式
+            ↓
+预览 → 导出 PNG / SVG / PDF
+            ↘ 本地历史、处理后数据和已保存图表
+```
+
+| 功能 | 能做什么 |
+| --- | --- |
+| 导入 | 支持 CSV、TSV、分隔符 TXT、JSON、XLSX；按适用格式选择工作表和表头行 |
+| 质量检查 | 查看缺失值、非数值、重复和网格问题；在应用清洗前确认处理选择 |
+| 图表 | 折线图、散点图、柱状图、直方图、箱线图、热图、规则网格 3D 曲面 |
+| 科研控件 | X/响应/分组字段、拟合、不确定性区间、坐标范围/单位、标题、字体、配色和图例 |
+| 统计 | 普通/加权拟合、残差诊断、预测区间、Working–Hotelling 同时均值带、线性 Huber 稳健拟合 |
+| 导出 | PNG/SVG/PDF，配置尺寸和分辨率；下载清洗后的 CSV |
+| 本地历史 | 真实导入自动保存，可重新打开和编辑、预览处理数据、查看/下载已保存图表、确认删除 |
+| 界面 | 中英文、浅色/暗色/跟随系统主题、图表数据表、键盘/可访问性检查、移动端 3D 控制 |
+| 示例与帮助 | 7 个版本化合成教学示例，以及中英文帮助和关于页面 |
+
+真实文件成功处理后自动保存；内置示例默认是临时项目，示例结果不能作为真实实验依据。
+分组比较支持类别作为 X；单测量字段可使用直方图/箱线图。浏览器预览与 Python 导出共享
+直方图区间边界和数值坐标范围，并核验实际导出图内容。两种渲染器的字体和样式不保证逐像素相同。
+
+### 对写论文的人有什么帮助？与 Excel 比较如何？
+
+LabViz 把导入、质量检查、分析、绘图、历史和导出连接起来，减少重复配置；支持规则 3D 网格，
+明确统计方法的假设和限制，并方便重新打开项目调整论文图。Excel 仍适合电子表格计算和手工编辑。
+LabViz 不代替实验设计审查，也不是覆盖所有统计方法的完整统计软件。
+
+**导出的 PNG、SVG、PDF 满足目标期刊要求时可以用于论文。** 提交前请检查最终尺寸/DPI、
+期刊接受的矢量格式、字体、标签和单位、颜色可读性、统计假设、数据排除规则及图注，
+并直接检查下载的文件。软件不会自动证明科学结论有效，也不保证满足所有出版社的规范。
+具体模型和限制见 [统计契约](V2.0/docs/STATISTICS_CONTRACT_V2.2.md)；Huber 当前仅支持线性拟合，
+不提供置信带。
+
+## 架构与技术栈
+
+```text
+浏览器：Next.js / React / TypeScript / MUI / ECharts
+    → 本机 Next.js API 代理 → FastAPI / Python
+    → 解析、质量检查、清洗、数值分析、Matplotlib 导出
+    → SQLite 元数据 + 本地文件（处理对象与图表）
+```
+
+| 层次 | V2.2 Local 使用的技术 |
+| --- | --- |
+| 前端 | Next.js 16.3.6、React 19、TypeScript、MUI、TanStack Query、Zustand、ECharts/ECharts GL |
+| 后端与科研处理 | FastAPI、pandas、NumPy、SciPy、Matplotlib、PyArrow、工作簿读取库 |
+| 数据保存 | SQLite 保存项目/处理元数据；本地文件系统保存对象和图表 |
+| 安装包运行时 | 内置 CPython 3.13.7、Node.js 24.17.0 |
+| Windows 分发 | Inno Setup、按用户安装、PowerShell 启动器、本地授权、生命周期/恢复脚本 |
+| 验证 | pytest、Ruff、MyPy、Vitest、ESLint、TypeScript、Playwright |
+| 可选集成路线 | PostgreSQL、S3 兼容/MinIO 适配器、Worker、容器与基础设施源码 |
+
+**FastAPI 没有去掉**，仍负责后端处理。本地版用 SQLite 避免用户部署数据库服务器，
+本地文件目录承担对象存储的作用。PostgreSQL 和 S3 适配器仍在仓库中，用于集成测试和未来共享部署。
+**Cloud 云协作、托管同步、团队账户和公开云服务仍延期**；保留这些源码不等于已经上线云协作版。
+
+## 数据、隐私、备份与旧数据迁移
+
+| 安装版 Windows 路径 | 用途 |
+| --- | --- |
+| `%LOCALAPPDATA%\Programs\LabViz` | 程序和版本目录 |
+| `%LOCALAPPDATA%\LabViz\data` | SQLite、对象文件和本地访问凭据 |
+| `%LOCALAPPDATA%\LabViz\logs` | 启动与维护日志 |
+| `%LOCALAPPDATA%\LabViz\backups` | 维护/升级产生的备份 |
+
+Windows **源码启动版**使用 `V2.0/api/.labviz`，安装 EXE 不会自动导入源码历史。
+两边都停止后，可通过开始菜单 **Import old data / 迁移旧数据** 将兼容目录导入空的安装版数据目录；
+保留源目录和通过完整性校验的备份。旧 guest/邮箱账户项目不会自动改归新的本地身份；
+若在本地历史看不到，需要重新导入原文件。
+
+备份时先停止 LabViz，再复制**整个 data 目录**，不能只复制 SQLite：数据库记录需要配套对象文件。
+原始实验文件请单独保存，项目存储不等于完整原文件档案。删除本地项目是永久操作，
+要恢复必须有删除前的备份。详细步骤见 [备份与恢复](V2.0/docs/BACKUP_RESTORE.md)。
+
+普通使用的服务只绑定 `127.0.0.1`，处理在本机完成，无自动云同步；打开 GitHub、外部帮助或
+邮件链接由你主动触发。本次发布支持**一个普通 Windows 用户配置**。
+两个真实 Windows 账户的文件权限和同时运行的 loopback 隔离**未验证**，不能宣称这一隐私保证，
+也不要把它当作多人共享服务或暴露端口到公网。见 [隐私边界](V2.0/docs/PRIVACY_DATA_BOUNDARY.md)
+与 [安全说明](SECURITY.md)。
+
+## 测试、验收与发布范围
+
+2026-10-07 全量源码/候选包审查通过：**271 项 API、60 项 Vitest、65 项浏览器回归**，
+十个不同的打包后真实 API 工作流、**39 个 fixture、100/100 chaos 数据案例**以及三轮强制性能检查。
+PostgreSQL/MinIO 是独立的真实集成测试服务，普通用户无需部署。安装器/启动器生命周期使用
+临时数据与 test AppId，没有覆盖本机个人生产安装。
+
+用户报告已完成此前候选包的干净/断网/重启验收，并授权按单用户范围发布。
+用户报告与代理实际观察的自动化结果分开记录，未提供对最终 EXE 的独立哈希验收证明。
+正式构建只调整版本/发布元数据和文档；精确 commit、构建 ID、EXE 哈希、重新执行的打包后验证
+随 Release 附件提供。历史失败及修复保留在 [P7 报告](V2.0/docs/V2.2_P7_TEST_REPORT.md)。
+
+生产依赖风险已修补/审查；还有 7 个开发工具依赖问题记录在案。
+Arrow 排除项只适用于已审查的 Python/Parquet 路径，不代表所有依赖都没有漏洞。
+见 [依赖安全审查](V2.0/docs/DEPENDENCY_SECURITY_REVIEW.md)。
+
+## 从源码开发
+
+为保持旧路径兼容，V2.2 的代码仍放在 `V2.0/`。源码方式需要 Git、**Python 3.12/3.13**、
+**Node.js 22.22.2+**（验证使用 24），暂不支持 Python 3.14。
+首次会下载依赖；这与无需另装运行时的 Windows EXE 不同。
 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
 Set-Location -LiteralPath .\lab-data-visualization-tool
 .\start-labviz.cmd
-```
-
-如果已经在 `lab-data-visualization-tool` 仓库目录内，跳过前两行即可。第一次启动会自动创建
-`V2.0/api/.venv`，安装 API 和网站依赖，然后启动两个本地服务。打开
-`http://127.0.0.1:3000` 即可使用。
-
-### macOS / Linux
-
-```bash
-git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
-cd lab-data-visualization-tool
-chmod +x start-labviz.sh
-./start-labviz.sh
-```
-
-启动完成后打开：
-
-- LabViz 网站：`http://127.0.0.1:3000`
-- API 文档：`http://127.0.0.1:8000/docs`
-
-保持终端窗口开启；六位本地登录验证码会显示在 API 输出中，不会发送真实邮件。按
-`Ctrl+C` 可停止网站和 API。
-
-依赖文件更新后可强制刷新：
-
-```powershell
+# 依赖文件更新后：
 .\start-labviz.cmd -RefreshDependencies
 ```
 
-```bash
-./start-labviz.sh --refresh-dependencies
-```
-
-## 使用流程
-
-```text
-导入数据 → 检查质量 → 确认清洗方式 → 创建图表 → 导出结果
-```
-
-打开网站后可点击“使用示例数据”并选择不同教学数据，也可以上传 CSV、TSV、分隔符 TXT、
-JSON 或 XLSX 文件。网页端单文件上限为 50 MB。V2.2 的高级统计包括有明确假设和限制的
-预测区间、Working–Hotelling 同时均值带，以及仅适用于线性模型的 Huber 稳健拟合；详见
-[`V2.2 统计契约`](V2.0/docs/STATISTICS_CONTRACT_V2.2.md)。
-
-主要功能包括：
-
-- 缺失值、重复行、字段类型、唯一值和内存占用检查；
-- 删除重复行，以及保留、删除、前向填充、后向填充、均值填充或中位数填充；
-- 折线图、散点图、柱状图、直方图、箱线图、相关性热力图和 3D 曲面图；
-- 多种合成示例选择器、暗色主题、移动端 3D 旋转/缩放/重置，以及图表数据表替代方式；
-- 完整清洗数据 CSV，以及 PNG、SVG、PDF 图像导出；
-- 本地项目历史、描述修订、本地登录和只读分享链接。
-
-## 本地数据保存在哪里
-
-| 组件 | 默认行为 |
-| --- | --- |
-| SQLite | 自动创建于 `V2.0/api/.labviz/labviz-v2.db`，保存项目元数据、会话、历史和修订 |
-| 本地对象目录 | 自动创建于 `V2.0/api/.labviz/`，保存本地处理结果 |
-| 原始上传文件 | 不作为原文件长期保存；解析后的数据快照会留在本地以支持历史、清洗和导出 |
-| 登录验证码 | 显示在本地 API 终端，不发送邮件 |
-
-`.labviz` 运行数据已被 Git 忽略，不会随正常提交上传到 GitHub。公开分享仓库前，
-仍请确认没有手动添加实验数据、密钥、个人路径或本机生成的 `outputs/` 文件。
-
-## 哪些组件不是本地运行必需的
-
-| 组件 | 普通本地使用 | 适用情况 |
-| --- | --- | --- |
-| PostgreSQL | 不需要 | 多 API/Worker 进程或多人共享服务 |
-| MinIO / S3 | 不需要 | 共享或远程对象存储 |
-| Docker | 不需要 | 贡献者完整集成测试或容器部署 |
-| AWS、DNS、TLS、SES | 不需要 | 维护者主动建设公网服务时 |
-
-请保持默认服务绑定在 `127.0.0.1`。如果没有配置 HTTPS、安全 Cookie、生产邮件、
-备份、监控和多用户存储，不要把端口 `3000` 或 `8000` 暴露到公网。
-
-版本更新总览见 [`VERSION_BASELINE.md`](VERSION_BASELINE.md)，未来功能和完成状态只看
-[`V2.0/TODO.md`](V2.0/TODO.md)。更多说明：[`隐私边界`](V2.0/docs/PRIVACY_DATA_BOUNDARY.md) ·
-[`离线安装`](V2.0/docs/OFFLINE_INSTALL.md) · [`备份与恢复`](V2.0/docs/BACKUP_RESTORE.md)。
-
-贡献代码请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题请阅读
-[`SECURITY.md`](SECURITY.md)，版本变化见 [`CHANGELOG.md`](CHANGELOG.md)，维护者发布前可参阅
-[`公开发布清单`](V2.0/docs/PUBLIC_RELEASE_CHECKLIST.md)。
-
-## 手动启动
-
-如果需要分别查看两个服务的输出，可使用两个终端。
-
-终端一（API）：
+macOS/Linux 可用 `chmod +x start-labviz.sh && ./start-labviz.sh` 运行源码；Unix 启动器仍沿用
+原会话方式，与 Windows 免登录启动器完全对齐及 macOS/Linux 原生安装包不在本次发布范围内。
+分开启动 API/网站及完整集成测试命令见 [API 开发说明](V2.0/api/README.md)。
 
 ```powershell
-# 以下命令假设当前 PowerShell 已在仓库根目录：lab-data-visualization-tool
-Set-Location -LiteralPath '.\V2.0\api'
-# 推荐 Python 3.12；如果未安装 3.12，请将下一行的 py -3.12 改为 py -3.13。
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m uvicorn labviz_api.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-终端二（网站）：
-
-```powershell
-Set-Location -LiteralPath '.\V2.0\web'
-$env:NEXT_TELEMETRY_DISABLED = "1"
-npm ci
-npm run dev -- --hostname 127.0.0.1 --port 3000
-```
-
-## 常见问题
-
-- **`Set-Location` 找不到路径：** 该命令假设当前目录是克隆目标的父目录。如果提示符已经显示在
-  `lab-data-visualization-tool` 内，请跳过它；否则使用实际路径，例如
-  `Set-Location -LiteralPath 'C:\Users\你的用户名\lab-data-visualization-tool'`，再用
-  `Test-Path .\start-labviz.cmd` 确认返回 `True`。
-- **出现 `No suitable Python runtime found`：** 启动器支持 Python 3.12 或 3.13，暂不支持
-  Python 3.14。运行 `py -0p` 和 `py -3.13 --version` 检查版本；如果 3.13 可以运行但旧启动器
-  仍失败，请更新到最新仓库版本。
-
-- **找不到 Python 3.12/3.13：** 安装支持的 Python 后重新打开终端；Windows 可用
-  `py -0p` 查看已安装版本。
-- **Node.js 版本过低：** 运行 `node --version`；升级到 22.22.2 或更新版本。
-- **端口已占用：** 关闭正在使用 `3000` 或 `8000` 的程序，再重新启动 LabViz。
-- **修改依赖后运行异常：** 使用上文的刷新依赖命令。
-- **预览提示 API 不可用：** 检查启动窗口中 API 是否成功监听
-  `http://127.0.0.1:8000`，然后点击“重试预览”。
-
-## 开发与验证
-
-网站验证：
-
-```powershell
-Set-Location -LiteralPath '.\V2.0\web'
-$env:NEXT_TELEMETRY_DISABLED = "1"
+Set-Location -LiteralPath .\V2.0\web
+$env:NEXT_TELEMETRY_DISABLED = '1'
 npm ci
 npm run verify
+npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
-API 的完整验证需要 PostgreSQL 和 MinIO 测试容器，详细命令见
-[`V2.0/api/README.md`](V2.0/api/README.md)。普通本地使用不需要这些容器。
+默认浏览器回归包含模拟 API 检查，真实服务测试需要显式启用。
+[`test-live-candidate.ps1`](V2.0/packaging/windows/test-live-candidate.ps1) 可以对临时配置执行打包后真实 API 测试；
+重建方式见 [Windows 打包说明](V2.0/packaging/windows/README.md)。完整 API 测试需独立 PostgreSQL/MinIO
+与锁定开发依赖，不需要真实实验数据。
 
-## V1.1 旧版
+## 常见问题
 
-[`V1.1/`](V1.1/) 中保留了只需 Python 的 Streamlit 旧版，适合只需要基础绘图和
-命令行流程的使用者；新功能和主要维护以 V2.0 为准。
+- **项目数据不可用 / local access denied：** 退出后重新点 LabViz 快捷方式，使用自动打开的页面。
+  启动器内部授权用于读取本地历史；仍失败时查看 `%LOCALAPPDATA%\LabViz\logs`，不要公开凭据或原始日志。
+- **端口被占用：** 安装版自动选择可用的回环端口，请使用启动器打开的页面。
+- **休眠或重启后打不开旧页面：** 重新点快捷方式，旧标签页可能仍指向已停止的服务。
+- **04/05 字段不对：** 分组比较选择类别 X 和数值响应；单测量值选择推荐的直方图/箱线图。
+  若旧版仍把折线图 X/响应都设成 measurement，请更新到 V2.2。
+- **导出与预览有差异：** 检查下载文件的字段、分箱、坐标范围、单位，使用合成数据报告复现步骤。
+  浏览器与 Python 使用不同渲染器，字体样式不保证逐像素相同。
+- **路径或安装失败：** 使用默认较短安装路径；任意超长自定义路径及所有休眠策略未验证。
+- **更新后历史为空：** 核对 Windows 账户和数据位置；源码与安装版目录独立，先查迁移指南，不要删除旧数据。
+- **源码环境问题：** 检查 `py -0p`、`node --version`，安装工具后重开终端；依赖变化后执行刷新命令。
 
-## MIT 许可证
+## 仓库结构与完整文档
 
-LabViz 使用 [MIT 许可证](LICENSE)发布。任何人都可以使用、复制、修改、分发、
-再许可或销售本软件，包括商业用途；条件是保留版权和许可证声明。本软件不提供
-任何担保。
+| 路径 | 内容 |
+| --- | --- |
+| `V2.0/web/` | 前端、本地 API 代理、单元/浏览器测试 |
+| `V2.0/api/` | 科研处理/渲染、持久化/存储适配器、API 测试 |
+| `V2.0/contracts/` | 渲染与本地存储契约 |
+| `V2.0/api/samples/v22/` | 公开合成示例和边界案例 |
+| `V2.0/packaging/windows/` | 安装器源码、构建、校验和生命周期测试 |
+| `V2.0/docs/` | 隐私、离线、备份、统计、安全与验收证据 |
+| `V1.1/` | 旧版 Python/Streamlit 应用 |
+
+[版本基准](VERSION_BASELINE.md) · [更新记录](CHANGELOG.md) · [待办与状态唯一来源](V2.0/TODO.md) ·
+[离线指南](V2.0/docs/OFFLINE_INSTALL.md) · [贡献指南](CONTRIBUTING.md) ·
+[公开发布清单](V2.0/docs/PUBLIC_RELEASE_CHECKLIST.md)
+
+## 反馈与许可
+
+通过 [GitHub Issues](https://github.com/DDDYT24/lab-data-visualization-tool/issues) 或应用反馈链接
+[liyutao982@gmail.com](mailto:liyutao982@gmail.com) 报告可复现问题。分享诊断前移除真实数据、
+本地凭据和个人路径。开发使用 AI 编程辅助，工程结论和发布证据按实际验证范围记录。
+
+源码使用 [MIT 许可证](LICENSE)，保留版权与许可声明即可使用、修改和分发；不提供任何担保。
+随包第三方组件遵守各自的许可，包括 [OFL 中文字体](V2.0/assets/fonts/OFL.txt)。

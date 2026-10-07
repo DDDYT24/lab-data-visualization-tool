@@ -30,11 +30,21 @@ test.skip(
 
 test("runs every bundled example through the real API and all exports", async ({ page }) => {
   test.setTimeout(600_000);
+  const localKey = process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY;
+  if (localKey) {
+    const unlocked = page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/local/session") &&
+      response.request().method() === "POST",
+    );
+    await page.goto(`/#labviz-access=${encodeURIComponent(localKey)}`);
+    expect((await unlocked).ok()).toBeTruthy();
+  }
   let lastWorkspaceUrl = "";
 
   for (const slug of sampleSlugs) {
-    await page.goto("/");
-    await page.getByRole("button", { name: "Try sample data" }).click();
+    if (lastWorkspaceUrl) await page.waitForLoadState("networkidle");
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "View examples" }).click();
     const card = page.locator(`[data-example-slug="${slug}"]`);
     await expect(card).toBeVisible();
     await card.getByRole("button", { name: "Open this example" }).focus();
@@ -93,6 +103,7 @@ test("runs every bundled example through the real API and all exports", async ({
       const downloadLink = page.getByRole("link", { name: `Download ${format}`, exact: true });
       await expect(downloadLink).toBeVisible({ timeout: 120_000 });
       await expect(downloadLink).toBeEnabled();
+      await downloadLink.scrollIntoViewIfNeeded();
       await expect(downloadLink).toBeInViewport();
       const downloadPromise = page.waitForEvent("download");
       // WebKit can keep a MUI anchor compositor-unstable while the long SVG response
@@ -111,6 +122,7 @@ test("runs every bundled example through the real API and all exports", async ({
     const cleanedLink = page.getByRole("link", { name: "Download complete cleaned data (CSV)" });
     await expect(cleanedLink).toBeVisible();
     await expect(cleanedLink).toBeEnabled();
+    await cleanedLink.scrollIntoViewIfNeeded();
     await expect(cleanedLink).toBeInViewport();
     await cleanedLink.click({ force: true });
     const cleaned = await cleanedPromise;
@@ -127,10 +139,10 @@ test("runs every bundled example through the real API and all exports", async ({
   await page.goto("/", { waitUntil: "networkidle" });
   await page.goBack({ waitUntil: "networkidle" });
   await expect(page).toHaveURL(lastWorkspaceUrl);
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "networkidle" });
   await page.getByLabel("Language").click();
   await page.getByRole("option", { name: "中文" }).click();
-  await page.getByRole("button", { name: "使用示例数据" }).click();
+  await page.getByRole("button", { name: "查看示例" }).click();
   for (const example of manifest.examples.filter((entry) => entry.visibility === "public")) {
     await expect(page.locator(`[data-example-slug="${example.slug}"]`)).toContainText(example.title!.zh);
   }

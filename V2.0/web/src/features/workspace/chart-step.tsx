@@ -63,6 +63,10 @@ export function ChartStep({
   const quality = useWorkspaceStore((state) => state.quality);
   const updateChart = useWorkspaceStore((state) => state.updateChart);
   const numericColumns = preview?.columns.filter((column) => column.kind === "number") ?? [];
+  const distributionChart = ["histogram", "box"].includes(chartSpec.type);
+  const customSeriesColorDisabled =
+    Boolean(chartSpec.groupField) || chartSpec.export.grayscalePreview ||
+    chartSpec.type === "surface3d" || chartSpec.type === "heatmap";
   const surfaceYField = chartSpec.series[0]?.field ?? "";
   const surfaceZField = chartSpec.series[1]?.field ?? "";
   const surfaceNeedsAnotherField =
@@ -600,13 +604,22 @@ export function ChartStep({
               value={chartSpec.type}
             >
               {chartTypes.map((type) => (
-                <MenuItem key={type} value={type}>
+                <MenuItem
+                  disabled={numericColumns.length < 2 && ["line", "scatter", "bar"].includes(type)}
+                  key={type}
+                  value={type}
+                >
                   {t(`types.${type}`)}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-          <FormControl fullWidth size="small">
+          {numericColumns.length === 1 ? (
+            <Alert severity="info">{t("singleValueHelp")}</Alert>
+          ) : null}
+          {distributionChart ? (
+            <Typography color="text.secondary" variant="body2">{t("distributionAxisHelp")}</Typography>
+          ) : <FormControl fullWidth size="small">
             <InputLabel id="chart-x-field-label">{t("xField")}</InputLabel>
             <Select
               label={t("xField")}
@@ -655,7 +668,7 @@ export function ChartStep({
                 </MenuItem>
               ))}
             </Select>
-          </FormControl>
+          </FormControl>}
           {chartSpec.type === "surface3d" ? (
             <Stack spacing={1.5}>
               <Typography color="text.secondary" variant="caption">
@@ -725,7 +738,7 @@ export function ChartStep({
                 value={chartSpec.series.map((series) => series.field)}
               >
                 {numericColumns
-                  .filter((column) => column.field !== chartSpec.xAxis.field)
+                  .filter((column) => distributionChart || column.field !== chartSpec.xAxis.field)
                   .map((column) => (
                     <MenuItem key={column.field} value={column.field}>
                       <Checkbox
@@ -827,6 +840,19 @@ export function ChartStep({
             <AccordionSummary>{t("seriesAppearance")}</AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
+                {chartSpec.type === "surface3d" || chartSpec.type === "heatmap" ? (
+                  <Typography color="text.secondary" variant="caption">
+                    {t("valueColorHelp")}
+                  </Typography>
+                ) : chartSpec.groupField ? (
+                  <Typography color="text.secondary" variant="caption">
+                    {t("groupColorHelp")}
+                  </Typography>
+                ) : chartSpec.export.grayscalePreview ? (
+                  <Typography color="text.secondary" variant="caption">
+                    {t("grayscaleColorHelp")}
+                  </Typography>
+                ) : null}
                 {chartSpec.series.map((series, index) => (
                   <Stack key={series.field} spacing={1}>
                     <TextField
@@ -856,6 +882,7 @@ export function ChartStep({
                           ),
                         })
                       }
+                      disabled={customSeriesColorDisabled}
                       size="small"
                       type="color"
                       value={series.color}

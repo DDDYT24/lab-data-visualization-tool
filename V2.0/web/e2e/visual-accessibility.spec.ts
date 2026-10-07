@@ -30,7 +30,7 @@ async function settleVisualPage(page: Page) {
 
 async function expectRouteReady(page: Page, route: string) {
   const heading = route === "/"
-    ? "Turn experiment data into a clear figure."
+    ? "Make experiment data clear and insightful."
     : route.includes("step=import")
       ? "Confirm your data"
       : route.includes("step=inspect")

@@ -26,6 +26,7 @@ def build_project_store(
             sqlite_repository,
             share_tokens,
             export_ttl_seconds=settings.export_ttl_seconds,
+            local_profile=settings.local_access_key is not None,
         )
     if settings.postgres_url is None:
         raise ValueError("PostgreSQL persistence requires LABVIZ_POSTGRES_URL.")
