@@ -1,4 +1,4 @@
 # Preserve upstream license text verbatim, including its indentation.
 V2.0/packaging/windows/licenses/NODE-LICENSE.txt -whitespace
 # Synthetic example SHA-256 values describe exact bytes on every platform.
-V2.0/api/samples/v22/** -text
+V2.0/api/samples/v22/** -text -whitespace

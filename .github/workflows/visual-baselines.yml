@@ -1,0 +1,33 @@
+name: Review Linux visual baselines
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    defaults:
+      run:
+        working-directory: V2.0/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: V2.0/web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Capture synthetic visual baselines and check accessibility
+        run: npx playwright test e2e/visual-accessibility.spec.ts --project=chromium --update-snapshots --retries=0
+      - name: Publish baselines for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-visual-baselines
+          path: V2.0/web/e2e/visual-accessibility.spec.ts-snapshots/*-linux.png
+          retention-days: 7
