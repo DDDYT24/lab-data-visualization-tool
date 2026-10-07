@@ -291,9 +291,8 @@ def _one(root: Path, case: dict[str, Any]) -> dict[str, Any]:
         analysis = analyze_chart(frame, chart)
         if case["kind"] == "surface3d":
             observed_status = analysis["preview"]["surfaceDiagnostics"][0]["status"]
-            assert (
-                observed_status == expected_status
-            ), f"surface status {observed_status} != {expected_status}"
+            status_message = f"surface status {observed_status} != {expected_status}"
+            assert observed_status == expected_status, status_message
         for export_fmt, signature in (("png", b"\x89PNG"), ("svg", b"<"), ("pdf", b"%PDF")):
             try:
                 blob = render_chart(frame, _chart(case, export_fmt))
