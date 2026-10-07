@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 64" role="img" aria-labelledby="title desc">
+  <title id="title">LabViz</title>
+  <desc id="desc">A light-blue laboratory flask with a small measured trend line beside the LabViz wordmark.</desc>
+  <defs>
+    <linearGradient id="flask" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#8DB7FF"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 8h20M24 8v15L13 48c-2 4 1 8 6 8h18c5 0 8-4 6-8L32 23V8" stroke="#2563EB" stroke-width="4"/>
+    <path d="M16 43c6-5 10 4 16-2 5-5 8 1 12-3" stroke="url(#flask)" stroke-width="4"/>
+    <path d="M15 42h27" stroke="#B7D0FF" stroke-width="2"/>
+    <path d="M55 45h13l6-12 8 17 9-25 10 20h11" stroke="#0F766E" stroke-width="3"/>
+  </g>
+  <text x="126" y="42" fill="#F1F5F9" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="29" font-weight="700" letter-spacing="-1">LabViz</text>
+</svg>
