@@ -1,6 +1,13 @@
 <div align="center">
 
-# LabViz — 科研数据可视化工具
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="V2.0/assets/labviz-logo-dark.svg">
+  <img src="V2.0/assets/labviz-logo.svg" alt="LabViz 图标" width="320">
+</picture>
+
+# LabViz
+
+**科研数据可视化工具**
 
 **导入实验表格、检查数据质量、生成图表，在本机保留项目和导出结果。**
 

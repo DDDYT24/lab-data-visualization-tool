@@ -1,6 +1,13 @@
 <div align="center">
 
-# LabViz — Scientific Data Visualization
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="V2.0/assets/labviz-logo-dark.svg">
+  <img src="V2.0/assets/labviz-logo.svg" alt="LabViz logo" width="320">
+</picture>
+
+# LabViz
+
+**Scientific Data Visualization**
 
 **Import experimental tables, inspect data quality, create figures, and keep your work locally.**
 
