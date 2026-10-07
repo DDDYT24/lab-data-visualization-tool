@@ -3,10 +3,16 @@ import type { ReactNode } from "react";
 
 import { AppHeader } from "./app-header";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  landing = false,
+}: {
+  children: ReactNode;
+  landing?: boolean;
+}) {
   return (
     <Box sx={{ minHeight: "100vh" }}>
-      <AppHeader />
+      <AppHeader landing={landing} />
       <Box component="main">{children}</Box>
     </Box>
   );

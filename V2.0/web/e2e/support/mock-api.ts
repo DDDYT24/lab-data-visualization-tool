@@ -342,6 +342,7 @@ export type MockApiObservations = {
   analysisModels: string[];
   cleaningActions: string[];
   deletedProjects: string[];
+  deletedFigureSnapshots: string[];
   descriptionUpdates: string[];
   duplicatedProjects: string[];
   exportRequests: number;
@@ -398,6 +399,7 @@ export async function installMockApi(
     analysisModels: [],
     cleaningActions: [],
     deletedProjects: [],
+    deletedFigureSnapshots: [],
     descriptionUpdates: [],
     duplicatedProjects: [],
     exportRequests: 0,
@@ -412,6 +414,32 @@ export async function installMockApi(
     verifiedCode: null,
   };
   let historyProjectVisible = options.history !== "empty";
+  let figureSnapshots = [
+    {
+      id: "figure-png-e2e",
+      projectId: PROJECT_ID,
+      title: "Thermal response figure",
+      format: "png" as const,
+      sha256: "a".repeat(64),
+      byteSize: 1_024,
+      createdAt: UPDATED_AT,
+      thumbnailUrl: "http://127.0.0.1:3000/api/v1/projects/project-e2e/figures/figure-png-e2e/preview?thumbnail=true",
+      previewUrl: "http://127.0.0.1:3000/api/v1/projects/project-e2e/figures/figure-png-e2e/preview",
+      downloadUrl: "http://127.0.0.1:3000/api/v1/projects/project-e2e/figures/figure-png-e2e/download",
+    },
+    {
+      id: "figure-pdf-e2e",
+      projectId: PROJECT_ID,
+      title: "Thermal response paper figure",
+      format: "pdf" as const,
+      sha256: "b".repeat(64),
+      byteSize: 2_048,
+      createdAt: UPDATED_AT,
+      thumbnailUrl: null,
+      previewUrl: null,
+      downloadUrl: "http://127.0.0.1:3000/api/v1/projects/project-e2e/figures/figure-pdf-e2e/download",
+    },
+  ];
   let projectDescription = "";
   let currentRevisionId = REVISION_1;
   if (options.lowPerformance) {
@@ -594,6 +622,56 @@ export async function installMockApi(
         await new Promise((resolve) => setTimeout(resolve, options.dataDelayMs));
       }
       return json(route, activePreview);
+    }
+
+    if (method === "GET" && path === `/projects/${PROJECT_ID}/exports/cleaned-data.csv`) {
+      return route.fulfill({
+        body: "time,response\n0,1.2\n1,2.1\n",
+        contentType: "text/csv; charset=utf-8",
+        headers: { "Content-Disposition": 'attachment; filename="cleaned-data.csv"' },
+      });
+    }
+
+    if (method === "GET" && path === `/projects/${PROJECT_ID}/figures`) {
+      return json(route, {
+        apiVersion: "v1",
+        projectId: PROJECT_ID,
+        snapshots: figureSnapshots,
+        totalBytes: figureSnapshots.reduce((total, snapshot) => total + snapshot.byteSize, 0),
+      });
+    }
+
+    const figureSegments = path.split("/");
+    if (
+      figureSegments[1] === "projects" &&
+      figureSegments[2] === PROJECT_ID &&
+      figureSegments[3] === "figures" &&
+      figureSegments[4]
+    ) {
+      const figureId = figureSegments[4];
+      const action = figureSegments[5];
+      if (method === "DELETE" && !action) {
+        observations.deletedFigureSnapshots.push(figureId);
+        figureSnapshots = figureSnapshots.filter((snapshot) => snapshot.id !== figureId);
+        return route.fulfill({ status: 204 });
+      }
+      if (method === "GET" && action === "preview") {
+        return route.fulfill({
+          body: Buffer.from(PNG_DATA_URL.split(",")[1], "base64"),
+          contentType: "image/png",
+          headers: { "Cache-Control": "private, no-store" },
+        });
+      }
+      if (method === "GET" && action === "download") {
+        const snapshot = figureSnapshots.find((item) => item.id === figureId);
+        return route.fulfill({
+          body: Buffer.from("deterministic-history-figure"),
+          contentType: snapshot?.format === "pdf" ? "application/pdf" : "image/png",
+          headers: {
+            "Content-Disposition": `attachment; filename="${snapshot?.format ?? "png"}-history-file.${snapshot?.format ?? "png"}"`,
+          },
+        });
+      }
     }
 
     if (method === "GET" && path === `/projects/${PROJECT_ID}/quality`) {
@@ -946,7 +1024,11 @@ export async function installMockApi(
                 chartType: "line",
                 updatedAt: UPDATED_AT,
                 storageMode: "saved-cloud",
+                // This fixture uses a 1×1 sentinel PNG for byte-level routes; do not stretch it
+                // into a misleading full-card chart thumbnail in visual regression captures.
                 thumbnailUrl: null,
+                figureSnapshotCount: figureSnapshots.length,
+                figureStorageBytes: figureSnapshots.reduce((total, snapshot) => total + snapshot.byteSize, 0),
                 experiment: {
                   experimentId: "experiment-e2e",
                   experimentRunId: "experiment-run-e2e",

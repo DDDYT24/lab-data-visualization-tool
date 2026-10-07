@@ -22,7 +22,7 @@ try {
             $dialog.Description = 'Select old LabViz data / 选择旧版 .labviz 数据目录'
             if ($dialog.ShowDialog() -ne 'OK') { return }
             & (Join-Path $PSScriptRoot 'start-labviz-installed.ps1') -ImportData $dialog.SelectedPath
-            [Windows.Forms.MessageBox]::Show('Import complete. Source and backup retained. / 迁移完成，原数据及备份已保留。', 'LabViz') | Out-Null
+            [Windows.Forms.MessageBox]::Show('Data copy complete. Old guest/account projects are retained but not automatically added to account-free history; re-import the original files to use them. Source and backup retained. / 数据复制完成。旧访客及账户项目仍保留，但不会自动出现在免登录历史中；如需使用请重新导入原文件。原目录及备份已保留。', 'LabViz') | Out-Null
         }
         'Rollback' {
             $receipt = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\last-upgrade.json') -Raw | ConvertFrom-Json

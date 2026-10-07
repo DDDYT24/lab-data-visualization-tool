@@ -16,7 +16,7 @@ test("shows the versioned example catalog and opens a selected example", async (
   const observations = await installMockApi(page);
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Try sample data" }).click();
+  await page.getByRole("button", { name: "View examples" }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(
@@ -40,7 +40,7 @@ test("keeps the example chooser bilingual", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Language").click();
   await page.getByRole("option", { name: "中文" }).click();
-  await page.getByRole("button", { name: "使用示例数据" }).click();
+  await page.getByRole("button", { name: "查看示例" }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(
@@ -57,7 +57,7 @@ for (const [slug, englishTitle] of examples) {
     const observations = await installMockApi(page);
 
     await page.goto("/");
-    await page.getByRole("button", { name: "Try sample data" }).click();
+    await page.getByRole("button", { name: "View examples" }).click();
     const card = page.locator(`[data-example-slug="${slug}"]`);
     await expect(card).toContainText(englishTitle);
     await expect(card.getByText(/Fields:/)).toBeVisible();

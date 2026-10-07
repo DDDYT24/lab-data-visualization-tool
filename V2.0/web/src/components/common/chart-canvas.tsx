@@ -28,7 +28,7 @@ type ChartCanvasProps = {
   findings?: QualityFinding[];
 };
 
-const DEFAULT_SURFACE_VIEW = { alpha: 25, beta: 40, distance: 100 } as const;
+const DEFAULT_SURFACE_VIEW = { alpha: 25, beta: 40, distance: 200 } as const;
 type SurfaceView = { alpha: number; beta: number; distance: number };
 
 export function ChartCanvas({

@@ -1,0 +1,2 @@
+# Preserve upstream license text verbatim, including its indentation.
+V2.0/packaging/windows/licenses/NODE-LICENSE.txt -whitespace

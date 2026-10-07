@@ -101,7 +101,14 @@ export const experimentContextSchema = z.object({
 export const projectSessionSchema = z.object({
   apiVersion: apiVersionSchema,
   projectId: z.string().min(1),
-  storageMode: z.enum(["temporary-cloud", "saved-cloud", "local"]),
+  storageMode: z.enum([
+    "temporary-cloud",
+    "saved-cloud",
+    "local",
+    "temporary-local",
+    "saved-local",
+  ]),
+  storageContractVersion: z.literal("local-storage-v1").nullable().optional(),
   description: projectDescriptionTextSchema,
   currentRevisionId: z.string().uuid().nullable(),
   source: sourceFileSchema,
@@ -213,14 +220,37 @@ export const projectSummarySchema = z.object({
   sourceName: z.string().min(1),
   chartType: chartSpecSchema.shape.type,
   updatedAt: z.string().datetime(),
-  storageMode: z.enum(["saved-cloud", "local"]),
+  storageMode: z.enum(["saved-cloud", "local", "saved-local"]),
   thumbnailUrl: z.string().url().nullable(),
+  figureSnapshotCount: z.number().int().nonnegative().default(0),
+  figureStorageBytes: z.number().int().nonnegative().default(0),
   experiment: experimentContextSchema.nullable().default(null),
 });
 
 export const projectListSchema = z.object({
   apiVersion: apiVersionSchema,
+  storageContractVersion: z.literal("local-storage-v1").nullable().optional(),
   projects: z.array(projectSummarySchema),
+});
+
+export const figureSnapshotSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  title: z.string().min(1),
+  format: z.enum(["png", "svg", "pdf"]),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  byteSize: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  thumbnailUrl: z.string().url().nullable(),
+  previewUrl: z.string().url().nullable(),
+  downloadUrl: z.string().url(),
+});
+
+export const figureSnapshotListSchema = z.object({
+  apiVersion: apiVersionSchema,
+  projectId: z.string().min(1),
+  snapshots: z.array(figureSnapshotSchema),
+  totalBytes: z.number().int().nonnegative(),
 });
 
 export const sharedChartSchema = z.object({
@@ -482,6 +512,8 @@ export type ProjectDescription = z.infer<typeof projectDescriptionResponseSchema
 export type ProjectSession = z.infer<typeof projectSessionSchema>;
 export type ProjectWorkspace = z.infer<typeof projectWorkspaceSchema>;
 export type ProjectSummary = z.infer<typeof projectSummarySchema>;
+export type FigureSnapshot = z.infer<typeof figureSnapshotSchema>;
+export type FigureSnapshotList = z.infer<typeof figureSnapshotListSchema>;
 export type QualityFinding = z.infer<typeof qualityFindingSchema>;
 export type QualityReport = z.infer<typeof qualityReportSchema>;
 export type SharedChart = z.infer<typeof sharedChartSchema>;

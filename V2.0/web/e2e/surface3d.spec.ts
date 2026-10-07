@@ -27,17 +27,18 @@ test("keeps the 21 x 21 surface contract aligned through preview and every expor
   );
   await expect(surface).toHaveAttribute("data-surface-point-count", "441");
   await expect(surface).toHaveAttribute("data-camera-controls", "true");
-  await expect(surface).toHaveAttribute("data-surface-view", "25:40:100");
+  await expect(surface).toHaveAttribute("data-surface-view", "25:40:200");
   const canvas = surface.locator("canvas[data-zr-dom-id]");
   await expect(canvas).toBeVisible();
+  await surface.screenshot({ path: "test-results/surface-audit.png" });
 
   const controls = page.getByLabel("3D surface controls");
   await controls.getByRole("button", { name: "Rotate right" }).click();
-  await expect(surface).toHaveAttribute("data-surface-view", "25:60:100");
+  await expect(surface).toHaveAttribute("data-surface-view", "25:60:200");
   await controls.getByRole("button", { name: "Zoom in" }).click();
-  await expect(surface).toHaveAttribute("data-surface-view", "25:60:85");
+  await expect(surface).toHaveAttribute("data-surface-view", "25:60:185");
   await controls.getByRole("button", { name: "Reset view" }).click();
-  await expect(surface).toHaveAttribute("data-surface-view", "25:40:100");
+  await expect(surface).toHaveAttribute("data-surface-view", "25:40:200");
 
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();

@@ -30,7 +30,7 @@ export const test = base.extend<RuntimeErrorGuard>({
       // listeners are still active. Otherwise a teardown-edge request can escape the mock route
       // and reach the Next.js proxy after the test has already been reported as passed.
       if (!page.isClosed()) {
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("networkidle", { timeout: 10_000 });
       }
 
       expect(pageErrors, "Unhandled browser page errors").toEqual([]);

@@ -1,8 +1,8 @@
 "use client";
 
 import AutoGraphOutlinedIcon from "@mui/icons-material/AutoGraphOutlined";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
-import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import {
@@ -18,13 +18,14 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import type { SampleExample } from "@/domain/api-contract";
 import { validateWebFile } from "@/features/import-data/file-policy";
 import { useWorkspaceStore } from "@/features/workspace/workspace-store";
-import type { SampleExample } from "@/domain/api-contract";
 
 import { ExampleGallery } from "./example-gallery";
 
@@ -37,9 +38,11 @@ type HomeError =
 
 export function HomeScreen() {
   const t = useTranslations("home");
+  const theme = useTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
+  const browseButtonRef = useRef<HTMLButtonElement>(null);
   const selectFile = useWorkspaceStore((state) => state.selectFile);
   const [error, setError] = useState<HomeError>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -50,6 +53,10 @@ export function HomeScreen() {
   const [exampleGalleryOpen, setExampleGalleryOpen] = useState(
     () => searchParams.get("examples") === "1",
   );
+
+  useEffect(() => {
+    if (window.location.hash === "#import") browseButtonRef.current?.focus();
+  }, []);
 
   const openWorkspace = (file: File) => {
     if (!experimentTitle.trim() && (runLabel.trim() || replicateId.trim() || batchId.trim())) {
@@ -109,28 +116,20 @@ export function HomeScreen() {
           ? t("readError")
           : error === "experiment-title-required"
             ? t("experimentTitleRequired")
-          : null;
+            : null;
 
-  const steps = [
+  const features = [
     {
-      icon: <UploadFileOutlinedIcon />,
-      title: t("stepImport"),
-      body: t("stepImportBody"),
+      icon: <AutoGraphOutlinedIcon />,
+      title: t("featureCharts"),
     },
     {
       icon: <FactCheckOutlinedIcon />,
-      title: t("stepInspect"),
-      body: t("stepInspectBody"),
+      title: t("featureReproducible"),
     },
     {
-      icon: <AutoGraphOutlinedIcon />,
-      title: t("stepChart"),
-      body: t("stepChartBody"),
-    },
-    {
-      icon: <FileDownloadOutlinedIcon />,
-      title: t("stepExport"),
-      body: t("stepExportBody"),
+      icon: <LockOutlinedIcon />,
+      title: t("featureLocal"),
     },
   ];
 
@@ -138,206 +137,307 @@ export function HomeScreen() {
     <>
       <Box
         sx={{
-          background:
-            "radial-gradient(circle at 76% 10%, rgba(37,99,235,0.09), transparent 30%), radial-gradient(circle at 18% 38%, rgba(15,118,110,0.06), transparent 26%)",
-          borderBottom: 1,
-          borderColor: "divider",
-          py: { xs: 7, md: 10 },
+          bgcolor: "background.default",
+          backgroundImage: `radial-gradient(ellipse at 50% 48%, ${alpha(
+            theme.palette.mode === "dark" ? theme.palette.common.white : theme.palette.primary.main,
+            theme.palette.mode === "dark" ? 0.025 : 0.045,
+          )} 0%, transparent 58%)`,
+          display: "flex",
+          minHeight: { md: "calc(100svh - 72px)" },
         }}
       >
-        <Container maxWidth="lg">
-          <Box
+        <Container
+          maxWidth="lg"
+          sx={{
+            display: "flex",
+            flex: 1,
+            flexDirection: "column",
+            py: { xs: 5, sm: 6, md: 3.5 },
+          }}
+        >
+          <Stack
+            spacing={{ xs: 1.5, md: 2 }}
             sx={{
               alignItems: "center",
-              display: "grid",
-              gap: { xs: 5, md: 8 },
-              gridTemplateColumns: { xs: "1fr", md: "minmax(0, 0.92fr) minmax(420px, 1.08fr)" },
+              mb: { xs: 4, md: 4.5 },
+              textAlign: "center",
             }}
           >
-            <Stack spacing={3}>
-              <Typography color="secondary.main" sx={{ fontWeight: 720 }} variant="overline">
-                {t("eyebrow")}
-              </Typography>
-              <Typography component="h1" variant="h1">
-                {t("title")}
-              </Typography>
-              <Typography
-                color="text.secondary"
-                sx={{ fontSize: { xs: 17, md: 19 }, maxWidth: 610 }}
-              >
-                {t("subtitle")}
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ alignItems: "center", color: "text.secondary" }}
-              >
-                <LockOutlinedIcon color="secondary" fontSize="small" />
-                <Typography variant="body2">{t("privacyTitle")}</Typography>
-              </Stack>
-            </Stack>
+            <Typography
+              component="h1"
+              variant="h1"
+              sx={{
+                color: "text.primary",
+                fontSize: { xs: "2.25rem", sm: "3rem", md: "3.75rem" },
+                maxWidth: 980,
+                textWrap: "balance",
+              }}
+            >
+              {t("title")}
+            </Typography>
+            <Typography
+              color="text.secondary"
+              sx={{ fontSize: { xs: 16, md: 19 }, maxWidth: 680 }}
+            >
+              {t("subtitle")}
+            </Typography>
+          </Stack>
 
-            <Stack spacing={2}>
-              <Paper
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  setDragActive(true);
-                }}
-                onDragLeave={() => setDragActive(false)}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDragActive(false);
-                  handleFiles(event.dataTransfer.files);
-                }}
+          <Paper
+            aria-labelledby="home-drop-title"
+            component="section"
+            data-testid="home-dropzone"
+            id="import"
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+                return;
+              }
+              setDragActive(false);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              handleFiles(event.dataTransfer.files);
+            }}
+            sx={{
+              alignSelf: "center",
+              bgcolor: "background.paper",
+              border: 1,
+              borderColor: dragActive ? "primary.main" : "divider",
+              borderRadius: 4,
+              boxShadow: `0 20px 52px ${alpha(
+                theme.palette.mode === "dark" ? theme.palette.common.black : theme.palette.primary.main,
+                theme.palette.mode === "dark" ? 0.28 : 0.07,
+              )}`,
+              maxWidth: 760,
+              p: { xs: 1.25, sm: 2 },
+              transition: "border-color 160ms ease, box-shadow 160ms ease",
+              width: "100%",
+            }}
+          >
+            <Stack
+              spacing={{ xs: 1.75, sm: 2 }}
+              sx={{
+                alignItems: "center",
+                bgcolor: dragActive ? "primary.light" : "transparent",
+                border: "1.5px dashed",
+                borderColor: dragActive ? "primary.main" : "divider",
+                borderRadius: 3,
+                px: { xs: 1.5, sm: 3 },
+                py: { xs: 3.5, sm: 4.5 },
+                textAlign: "center",
+                transition: "background-color 160ms ease, border-color 160ms ease",
+              }}
+            >
+              <Box
+                aria-hidden="true"
                 sx={{
-                  bgcolor: dragActive ? "primary.light" : "background.paper",
-                  border: "2px dashed",
-                  borderColor: dragActive ? "primary.main" : "divider",
-                  boxShadow: 2,
-                  p: { xs: 4, md: 6 },
-                  textAlign: "center",
-                  transition: "background-color 160ms ease, border-color 160ms ease",
+                  alignItems: "center",
+                  bgcolor: "primary.light",
+                  borderRadius: 3,
+                  color: "primary.main",
+                  display: "flex",
+                  height: 72,
+                  justifyContent: "center",
+                  width: 72,
                 }}
               >
-                <Stack spacing={2} sx={{ alignItems: "center" }}>
+                <UploadFileOutlinedIcon sx={{ fontSize: 38 }} />
+              </Box>
+              <Box>
+                <Typography component="h2" id="home-drop-title" variant="h3">
+                  {t("dropTitle")}
+                </Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.75 }} variant="body2">
+                  {t("dropBody")}
+                </Typography>
+              </Box>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                sx={{ alignItems: "center", pt: 0.5 }}
+              >
+                <Button
+                  ref={browseButtonRef}
+                  onClick={() => inputRef.current?.click()}
+                  size="large"
+                  sx={{ borderRadius: 2.5, minWidth: 184, py: 1.25 }}
+                  variant="contained"
+                >
+                  {t("browse")}
+                </Button>
+                <Button
+                  onClick={() => setExampleGalleryOpen(true)}
+                  size="large"
+                  sx={{ borderRadius: 2.5, px: 2 }}
+                  variant="text"
+                >
+                  {t("sample")}
+                </Button>
+              </Stack>
+              <input
+                ref={inputRef}
+                accept=".xlsx,.csv,.tsv,.txt,.json"
+                hidden
+                onChange={(event) => {
+                  handleFiles(event.currentTarget.files);
+                  event.currentTarget.value = "";
+                }}
+                type="file"
+              />
+              <Accordion
+                disableGutters
+                elevation={0}
+                sx={{
+                  "&::before": { display: "none" },
+                  bgcolor: "transparent",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  maxWidth: 500,
+                  textAlign: "left",
+                  width: "100%",
+                }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: "center", justifyContent: "space-between", width: "100%" }}
+                  >
+                    <Typography sx={{ fontWeight: 600 }} variant="body2">
+                      {t("experimentMetadata")}
+                    </Typography>
+                    <Typography color="text.secondary" variant="caption">
+                      {t("optional")}
+                    </Typography>
+                  </Stack>
+                </AccordionSummary>
+                <AccordionDetails>
                   <Box
                     sx={{
-                      alignItems: "center",
-                      bgcolor: "primary.light",
-                      borderRadius: "50%",
-                      color: "primary.main",
-                      display: "flex",
-                      height: 64,
-                      justifyContent: "center",
-                      width: 64,
+                      display: "grid",
+                      gap: 1.5,
+                      gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
                     }}
                   >
-                    <UploadFileOutlinedIcon fontSize="large" />
+                    <TextField
+                      label={t("experimentTitle")}
+                      onChange={(event) => setExperimentTitle(event.target.value)}
+                      size="small"
+                      value={experimentTitle}
+                    />
+                    <TextField
+                      helperText={t("runLabelHelp")}
+                      label={t("runLabel")}
+                      onChange={(event) => setRunLabel(event.target.value)}
+                      size="small"
+                      value={runLabel}
+                    />
+                    <TextField
+                      label={t("replicateId")}
+                      onChange={(event) => setReplicateId(event.target.value)}
+                      size="small"
+                      value={replicateId}
+                    />
+                    <TextField
+                      label={t("batchId")}
+                      onChange={(event) => setBatchId(event.target.value)}
+                      size="small"
+                      value={batchId}
+                    />
                   </Box>
-                  <Box>
-                    <Typography component="h2" variant="h3">
-                      {t("dropTitle")}
-                    </Typography>
-                    <Typography color="text.secondary" sx={{ mt: 0.75 }} variant="body2">
-                      {t("dropBody")}
-                    </Typography>
-                  </Box>
-                  <Accordion
-                    disableGutters
-                    elevation={0}
-                    sx={{ border: 1, borderColor: "divider", textAlign: "left", width: "100%" }}
+                </AccordionDetails>
+              </Accordion>
+            </Stack>
+          </Paper>
+
+          {errorMessage ? (
+            <Alert
+              severity="error"
+              sx={{ alignSelf: "center", mt: 2, width: "100%", maxWidth: 760 }}
+            >
+              {errorMessage}
+            </Alert>
+          ) : null}
+
+          <Box
+            id="about"
+            sx={{
+              mt: { xs: 5, md: "auto" },
+              pt: { xs: 4, md: 3 },
+            }}
+          >
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+                maxWidth: 960,
+                mx: "auto",
+              }}
+            >
+              {features.map((feature, index) => (
+                <Stack
+                  key={feature.title}
+                  direction="row"
+                  spacing={1.5}
+                  sx={{
+                    alignItems: "center",
+                    borderColor: "divider",
+                    borderRight: { sm: index < features.length - 1 ? 1 : 0 },
+                    justifyContent: "center",
+                    minHeight: { xs: 56, sm: 64 },
+                  }}
+                >
+                  <Box
+                    aria-hidden="true"
+                    sx={{
+                      alignItems: "center",
+                      bgcolor: index === 1 ? "secondary.light" : "primary.light",
+                      borderRadius: 2.5,
+                      color: index === 1 ? "secondary.main" : "primary.main",
+                      display: "flex",
+                      height: 44,
+                      justifyContent: "center",
+                      width: 44,
+                    }}
                   >
-                    <AccordionSummary>
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        sx={{ alignItems: "center", justifyContent: "space-between", width: "100%" }}
-                      >
-                        <Typography sx={{ fontWeight: 650 }} variant="body2">
-                          {t("experimentMetadata")}
-                        </Typography>
-                        <Typography color="text.secondary" variant="caption">
-                          {t("optional")}
-                        </Typography>
-                      </Stack>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Box
-                        sx={{
-                          display: "grid",
-                          gap: 1.5,
-                          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
-                        }}
-                      >
-                        <TextField
-                          label={t("experimentTitle")}
-                          onChange={(event) => setExperimentTitle(event.target.value)}
-                          size="small"
-                          value={experimentTitle}
-                        />
-                        <TextField
-                          helperText={t("runLabelHelp")}
-                          label={t("runLabel")}
-                          onChange={(event) => setRunLabel(event.target.value)}
-                          size="small"
-                          value={runLabel}
-                        />
-                        <TextField
-                          label={t("replicateId")}
-                          onChange={(event) => setReplicateId(event.target.value)}
-                          size="small"
-                          value={replicateId}
-                        />
-                        <TextField
-                          label={t("batchId")}
-                          onChange={(event) => setBatchId(event.target.value)}
-                          size="small"
-                          value={batchId}
-                        />
-                      </Box>
-                    </AccordionDetails>
-                  </Accordion>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                    <Button onClick={() => inputRef.current?.click()} variant="contained">
-                      {t("browse")}
-                    </Button>
-                    <Button onClick={() => setExampleGalleryOpen(true)} variant="outlined">
-                      {t("sample")}
-                    </Button>
-                  </Stack>
-                  <input
-                    ref={inputRef}
-                    accept=".xlsx,.csv,.tsv,.txt,.json"
-                    hidden
-                    onChange={(event) => handleFiles(event.target.files)}
-                    type="file"
-                  />
+                    {feature.icon}
+                  </Box>
+                  <Typography color="text.secondary" sx={{ fontWeight: 600 }} variant="body2">
+                    {feature.title}
+                  </Typography>
                 </Stack>
-              </Paper>
-              {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+              ))}
+            </Box>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={0.75}
+              sx={{
+                alignItems: "center",
+                color: "text.secondary",
+                justifyContent: "center",
+                mt: 1.5,
+                textAlign: "center",
+              }}
+            >
+              <LockOutlinedIcon fontSize="small" />
+              <Typography variant="caption">
+                {t("privacyTitle")} · {t("privacyBody")}
+              </Typography>
             </Stack>
           </Box>
         </Container>
       </Box>
-
-      <Container maxWidth="lg" sx={{ py: { xs: 7, md: 9 } }}>
-        <Typography component="h2" sx={{ textAlign: "center" }} variant="h2">
-          {t("workflowTitle")}
-        </Typography>
-        <Box
-          sx={{
-            display: "grid",
-            gap: 3,
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0, 1fr))",
-              lg: "repeat(4, minmax(0, 1fr))",
-            },
-            mt: 5,
-          }}
-        >
-          {steps.map((step) => (
-            <Paper key={step.title} sx={{ border: 1, borderColor: "divider", p: 3.5 }}>
-              <Stack spacing={2}>
-                <Box sx={{ color: "primary.main" }}>{step.icon}</Box>
-                <Typography component="h3" variant="h3">
-                  {step.title}
-                </Typography>
-                <Typography color="text.secondary" variant="body2">
-                  {step.body}
-                </Typography>
-              </Stack>
-            </Paper>
-          ))}
-        </Box>
-        <Alert icon={<LockOutlinedIcon />} severity="info" sx={{ mt: 4 }}>
-          <Typography sx={{ fontWeight: 650 }} variant="body2">
-            {t("privacyTitle")}
-          </Typography>
-          <Typography variant="body2">{t("privacyBody")}</Typography>
-        </Alert>
-      </Container>
       <ExampleGallery
         onClose={() => setExampleGalleryOpen(false)}
         onSelect={useSample}

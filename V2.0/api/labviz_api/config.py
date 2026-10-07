@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email.utils import parseaddr
 from ipaddress import ip_network
 from pathlib import Path
@@ -109,6 +109,7 @@ class Settings:
     s3_connect_timeout_seconds: int = 5
     s3_read_timeout_seconds: int = 60
     persistence_backend: str = "sqlite"
+    local_access_key: str | None = field(default=None, repr=False)
     share_token_key_version: int = 1
     share_token_keys: tuple[tuple[int, str], ...] = DEFAULT_SHARE_TOKEN_KEYS
     trusted_proxy_cidrs: tuple[str, ...] = ()
@@ -151,6 +152,11 @@ class Settings:
             raise ValueError("Production requires secure cookies.")
         if self.persistence_backend not in {"sqlite", "postgresql"}:
             raise ValueError("LABVIZ_PERSISTENCE_BACKEND must be 'sqlite' or 'postgresql'.")
+        if self.local_access_key is not None:
+            if len(self.local_access_key) < 40:
+                raise ValueError("LABVIZ_LOCAL_ACCESS_KEY must contain at least 40 characters.")
+            if self.persistence_backend != "sqlite" or self.environment == "production":
+                raise ValueError("Local access mode requires non-production SQLite persistence.")
         if self.persistence_backend == "postgresql" and not self.postgres_url:
             raise ValueError("LABVIZ_POSTGRES_URL is required for PostgreSQL persistence.")
         if self.object_storage_backend not in {"local", "s3"}:
@@ -339,6 +345,7 @@ class Settings:
             persistence_backend=os.environ.get("LABVIZ_PERSISTENCE_BACKEND", "sqlite")
             .strip()
             .lower(),
+            local_access_key=os.environ.get("LABVIZ_LOCAL_ACCESS_KEY") or None,
             share_token_key_version=int(os.environ.get("LABVIZ_SHARE_TOKEN_KEY_VERSION", "1")),
             share_token_keys=_share_token_keys(os.environ.get("LABVIZ_SHARE_TOKEN_KEYS")),
             trusted_proxy_cidrs=tuple(

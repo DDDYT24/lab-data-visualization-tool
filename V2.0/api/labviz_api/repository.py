@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -39,12 +40,17 @@ class ProjectRepository:
         database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.database_path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA journal_mode = WAL")
-        return connection
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA journal_mode = WAL")
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def _initialize(self) -> None:
         with self._connect() as connection:
@@ -135,6 +141,19 @@ class ProjectRepository:
                     experiment_json TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS figure_snapshots (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                    title TEXT NOT NULL,
+                    format TEXT NOT NULL CHECK (format IN ('png', 'svg', 'pdf')),
+                    chart_json TEXT NOT NULL,
+                    payload BLOB NOT NULL,
+                    thumbnail_png BLOB,
+                    sha256 TEXT NOT NULL,
+                    byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS auth_challenges (
                     id TEXT PRIMARY KEY,
                     email TEXT NOT NULL,
@@ -208,6 +227,9 @@ class ProjectRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_exports_project
                 ON exports(project_id, created_at DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_figure_snapshots_project
+                ON figure_snapshots(project_id, created_at DESC);
 
                 CREATE INDEX IF NOT EXISTS idx_auth_challenges_email
                 ON auth_challenges(email, created_at DESC);
@@ -829,13 +851,66 @@ class ProjectRepository:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT * FROM projects
-                WHERE owner_user_id = ? AND storage_mode = 'saved-cloud'
+                SELECT projects.*,
+                    (SELECT id FROM figure_snapshots
+                     WHERE project_id = projects.id AND format = 'png'
+                       AND thumbnail_png IS NOT NULL
+                     ORDER BY created_at DESC LIMIT 1) AS thumbnail_snapshot_id,
+                    (SELECT COUNT(*) FROM figure_snapshots
+                     WHERE project_id = projects.id) AS figure_snapshot_count,
+                    (SELECT COALESCE(SUM(byte_size), 0) FROM figure_snapshots
+                     WHERE project_id = projects.id) AS figure_storage_bytes
+                FROM projects
+                WHERE owner_user_id = ? AND storage_mode IN ('saved-cloud', 'local')
                 ORDER BY updated_at DESC
                 """,
                 (owner_user_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def save_local_project(self, project_id: str, owner_user_id: str) -> str:
+        """Durably retain a processed local import without preserving the original upload."""
+        updated_at = iso_now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT description, current_revision_id FROM projects WHERE id = ?",
+                (project_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("Project does not exist.")
+            revision_id = row["current_revision_id"]
+            if revision_id is None:
+                revision_id = uuid4().hex
+                connection.execute(
+                    """
+                    INSERT INTO project_description_revisions (
+                        id, project_id, revision_number, description, created_at
+                    ) VALUES (?, ?, 1, ?, ?)
+                    """,
+                    (revision_id, project_id, row["description"], updated_at),
+                )
+            connection.execute(
+                """
+                UPDATE projects SET storage_mode = 'local', owner_user_id = ?,
+                    guest_token_digest = NULL, expires_at = NULL, updated_at = ?,
+                    current_revision_id = ?
+                WHERE id = ?
+                """,
+                (owner_user_id, updated_at, revision_id, project_id),
+            )
+            connection.execute(
+                """
+                UPDATE experiments SET owner_user_id = ?, guest_token_digest = NULL,
+                    updated_at = ?
+                WHERE id = (
+                    SELECT r.experiment_id FROM projects p
+                    JOIN experiment_runs r ON r.id = p.experiment_run_id WHERE p.id = ?
+                )
+                """,
+                (owner_user_id, updated_at, project_id),
+            )
+        return updated_at
 
     def save_project(self, project_id: str, owner_user_id: str) -> str:
         updated_at = iso_now()
@@ -1060,6 +1135,7 @@ class ProjectRepository:
         expires_at: str,
         message: str,
         experiment: dict[str, Any] | None = None,
+        figure_snapshot: dict[str, Any] | None = None,
     ) -> None:
         with self._connect() as connection:
             self._touch(connection, project_id)
@@ -1081,6 +1157,57 @@ class ProjectRepository:
                     json.dumps(experiment, ensure_ascii=False) if experiment else None,
                 ),
             )
+            if figure_snapshot is not None:
+                connection.execute(
+                    """
+                    INSERT INTO figure_snapshots (
+                        id, project_id, title, format, chart_json, payload, thumbnail_png,
+                        sha256, byte_size, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        figure_snapshot["id"],
+                        project_id,
+                        figure_snapshot["title"],
+                        format_name,
+                        figure_snapshot["chart_json"],
+                        payload,
+                        figure_snapshot.get("thumbnail_png"),
+                        figure_snapshot["sha256"],
+                        len(payload),
+                        iso_now(),
+                    ),
+                )
+
+    def list_figure_snapshots(self, project_id: str) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, project_id, title, format, sha256, byte_size, created_at,
+                    thumbnail_png IS NOT NULL AS has_thumbnail
+                FROM figure_snapshots
+                WHERE project_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (project_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_figure_snapshot(self, project_id: str, snapshot_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM figure_snapshots WHERE project_id = ? AND id = ?",
+                (project_id, snapshot_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def delete_figure_snapshot(self, project_id: str, snapshot_id: str) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM figure_snapshots WHERE project_id = ? AND id = ?",
+                (project_id, snapshot_id),
+            )
+        return cursor.rowcount == 1
 
     def get_export(self, export_id: str) -> dict[str, Any] | None:
         self.cleanup_expired()

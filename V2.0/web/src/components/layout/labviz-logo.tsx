@@ -10,7 +10,9 @@ export function LabvizLogo({
   width?: number;
 }) {
   const theme = useTheme();
-  const wordmarkColor = theme.palette.mode === "dark" ? "#F4F7FB" : "#172033";
+  const dark = theme.palette.mode === "dark";
+  const darkLogoColor = "#ECECEC";
+  const wordmarkColor = dark ? darkLogoColor : "#172033";
 
   return (
     <svg
@@ -24,15 +26,15 @@ export function LabvizLogo({
     >
       <defs>
         <linearGradient id="labviz-flask" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0" stopColor="#8DB7FF" />
-          <stop offset="1" stopColor="#2563EB" />
+          <stop data-logo-part="flask-gradient-start" offset="0" stopColor={dark ? darkLogoColor : "#8DB7FF"} />
+          <stop data-logo-part="flask-gradient-end" offset="1" stopColor={dark ? darkLogoColor : "#2563EB"} />
         </linearGradient>
       </defs>
       <g strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 8h20M24 8v15L13 48c-2 4 1 8 6 8h18c5 0 8-4 6-8L32 23V8" stroke="#2563EB" strokeWidth="4" />
-        <path d="M16 43c6-5 10 4 16-2 5-5 8 1 12-3" stroke="url(#labviz-flask)" strokeWidth="4" />
-        <path d="M15 42h27" stroke="#B7D0FF" strokeWidth="2" />
-        <path d="M55 45h13l6-12 8 17 9-25 10 20h11" stroke="#0F766E" strokeWidth="3" />
+        <path data-logo-part="flask-outline" d="M18 8h20M24 8v15L13 48c-2 4 1 8 6 8h18c5 0 8-4 6-8L32 23V8" stroke={dark ? darkLogoColor : "#2563EB"} strokeWidth="4" />
+        <path data-logo-part="flask-fluid" d="M16 43c6-5 10 4 16-2 5-5 8 1 12-3" stroke="url(#labviz-flask)" strokeWidth="4" />
+        <path data-logo-part="flask-level" d="M15 42h27" stroke={dark ? darkLogoColor : "#B7D0FF"} strokeWidth="2" />
+        <path data-logo-part="waveform" d="M55 45h13l6-12 8 17 9-25 10 20h11" stroke={dark ? darkLogoColor : "#0F766E"} strokeWidth="3" />
       </g>
       <text
         fill={wordmarkColor}

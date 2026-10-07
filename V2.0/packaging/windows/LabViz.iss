@@ -1,6 +1,12 @@
-#define AppName "LabViz"
-#define AppPublisher "LabViz"
-#define AppId "{{A7C9E5A0-2B18-4CE7-9A80-3B6C7F5B3D22}"
+#ifndef AppName
+  #define AppName "LabViz"
+#endif
+#ifndef AppPublisher
+  #define AppPublisher "LabViz"
+#endif
+#ifndef AppId
+  #define AppId "{{A7C9E5A0-2B18-4CE7-9A80-3B6C7F5B3D22}"
+#endif
 
 #ifndef AppVersion
   #define AppVersion "2.2.0"

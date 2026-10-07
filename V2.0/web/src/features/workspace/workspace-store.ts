@@ -9,6 +9,7 @@ import type {
   ShareSummary,
 } from "@/domain/api-contract";
 import { defaultChartSpec, type ChartSpec } from "@/domain/chart-spec";
+import { repairSingleValueChart } from "@/domain/single-value-chart";
 import { chartWithUserPreferences } from "@/features/settings/user-preferences";
 
 export const workflowSteps = ["import", "inspect", "chart", "export"] as const;
@@ -196,7 +197,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       },
       preview: workspace.preview,
       quality: workspace.quality,
-      chartSpec: workspace.chart,
+      chartSpec: repairSingleValueChart(workspace.chart, workspace.preview.columns),
       issueActions: Object.fromEntries(
         workspace.decisions.map((decision) => [
           decision.findingId,
@@ -329,7 +330,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       return {
         preview,
         quality,
-        chartSpec,
+        chartSpec: repairSingleValueChart(chartSpec, preview.columns),
         loadStatus: "ready",
         loadError: null,
       };

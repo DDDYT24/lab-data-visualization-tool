@@ -6,10 +6,12 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
-import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -18,6 +20,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Divider,
   FormControl,
   IconButton,
   InputLabel,
@@ -37,7 +40,14 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { ApiStatePanel } from "@/components/common/api-state-panel";
+import { DataPreviewTable } from "@/components/common/data-preview-table";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 export function HistoryScreen() {
   const t = useTranslations("history");
@@ -49,6 +59,9 @@ export function HistoryScreen() {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
+  const [selectedHistoryProjectId, setSelectedHistoryProjectId] = useState<string | null>(null);
+  const [deleteFigureId, setDeleteFigureId] = useState<string | null>(null);
+  const [fullPreviewFigureId, setFullPreviewFigureId] = useState<string | null>(null);
   const [filterReferenceTime] = useState(() => Date.now());
   const projectsQuery = useQuery({
     queryKey: ["projects"],
@@ -106,6 +119,44 @@ export function HistoryScreen() {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
+  const selectedHistoryProject = allProjects.find(
+    (project) => project.id === selectedHistoryProjectId,
+  );
+  const historyPreviewQuery = useQuery({
+    queryKey: ["history-preview", selectedHistoryProjectId],
+    queryFn: ({ signal }) => labvizApi.getPreview(selectedHistoryProjectId!, signal),
+    enabled: Boolean(selectedHistoryProjectId),
+  });
+  const figuresQuery = useQuery({
+    queryKey: ["figure-snapshots", selectedHistoryProjectId],
+    queryFn: ({ signal }) => labvizApi.listFigureSnapshots(selectedHistoryProjectId!, signal),
+    enabled: Boolean(selectedHistoryProjectId),
+  });
+  const deleteFigureMutation = useMutation({
+    mutationFn: (snapshotId: string) =>
+      labvizApi.deleteFigureSnapshot(selectedHistoryProjectId!, snapshotId),
+    onSuccess: async () => {
+      setDeleteFigureId(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["figure-snapshots", selectedHistoryProjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+      ]);
+    },
+  });
+  const figureToDelete = figuresQuery.data?.snapshots.find(
+    (snapshot) => snapshot.id === deleteFigureId,
+  );
+  const figureToPreview = figuresQuery.data?.snapshots.find(
+    (snapshot) => snapshot.id === fullPreviewFigureId,
+  );
+  const totalSnapshots = allProjects.reduce(
+    (total, project) => total + project.figureSnapshotCount,
+    0,
+  );
+  const totalFigureBytes = allProjects.reduce(
+    (total, project) => total + project.figureStorageBytes,
+    0,
+  );
 
   return (
     <Stack spacing={3}>
@@ -121,10 +172,15 @@ export function HistoryScreen() {
           <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="body2">
             {t("description")}
           </Typography>
+          {totalSnapshots > 0 ? (
+            <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="caption">
+              {t("libraryStats", { count: totalSnapshots, size: formatBytes(totalFigureBytes) })}
+            </Typography>
+          ) : null}
         </Box>
         <Button
           component={Link}
-          href="/"
+          href="/#import"
           startIcon={<AddRoundedIcon />}
           variant="contained"
         >
@@ -196,6 +252,14 @@ export function HistoryScreen() {
         )}
       </Stack>
 
+      {duplicateMutation.error ? (
+        <Alert severity="error" onClose={() => duplicateMutation.reset()}>
+          {duplicateMutation.error instanceof LabVizApiError
+            ? duplicateMutation.error.message
+            : t("duplicateFailed")}
+        </Alert>
+      ) : null}
+
       {projectsQuery.isPending ? (
         <ApiStatePanel
           description={t("loadingDescription")}
@@ -223,7 +287,7 @@ export function HistoryScreen() {
           }
           kind="empty"
           secondaryAction={
-            <Button component={Link} href="/" variant="contained">
+            <Button component={Link} href="/#import" variant="contained">
               {t("startAnalysis")}
             </Button>
           }
@@ -253,7 +317,7 @@ export function HistoryScreen() {
               <Box
                 sx={{
                   alignItems: "center",
-                  bgcolor: "#FBFCFE",
+                  bgcolor: "background.default",
                   borderBottom: 1,
                   borderColor: "divider",
                   display: "flex",
@@ -264,7 +328,7 @@ export function HistoryScreen() {
               >
                 {project.thumbnailUrl ? (
                   <Box
-                    alt=""
+                    alt={t("thumbnailAlt", { title: project.title })}
                     component="img"
                     src={project.thumbnailUrl}
                     sx={{ height: "100%", objectFit: "cover", width: "100%" }}
@@ -345,6 +409,21 @@ export function HistoryScreen() {
                 >
                   {t("continueEditing")}
                 </Button>
+                <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography color="text.secondary" variant="caption">
+                    {t("figureStats", {
+                      count: project.figureSnapshotCount,
+                      size: formatBytes(project.figureStorageBytes),
+                    })}
+                  </Typography>
+                  <Button
+                    onClick={() => setSelectedHistoryProjectId(project.id)}
+                    size="small"
+                    startIcon={<VisibilityOutlinedIcon />}
+                  >
+                    {t("viewDataAndFigures")}
+                  </Button>
+                </Stack>
               </Stack>
             </Paper>
           ))}
@@ -372,19 +451,14 @@ export function HistoryScreen() {
             {t("openExport")}
           </MenuItem>
         ) : null}
-        {activeProject ? (
-          <MenuItem
-            component={Link}
-            href={`/workspace/${activeProject.id}?step=export`}
-            onClick={closeMenu}
-          >
-            <ShareOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
-            {t("openShare")}
-          </MenuItem>
-        ) : null}
         <MenuItem
           disabled={!activeProject || duplicateMutation.isPending}
-          onClick={() => activeProject && duplicateMutation.mutate(activeProject.id)}
+          onClick={() => {
+            if (!activeProject) return;
+            const projectId = activeProject.id;
+            closeMenu();
+            duplicateMutation.mutate(projectId);
+          }}
         >
           <ContentCopyRoundedIcon fontSize="small" sx={{ mr: 1 }} />
           {t("duplicate")}
@@ -401,6 +475,167 @@ export function HistoryScreen() {
           {t("delete")}
         </MenuItem>
       </Menu>
+
+      <Dialog
+        fullWidth
+        maxWidth="xl"
+        onClose={() => setSelectedHistoryProjectId(null)}
+        open={Boolean(selectedHistoryProject)}
+      >
+        <DialogTitle>{t("historyDetailTitle", { title: selectedHistoryProject?.title ?? "" })}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={3}>
+            <Box>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", mb: 1.5 }}>
+                <Box>
+                  <Typography component="h2" variant="h6">{t("processedData")}</Typography>
+                  {historyPreviewQuery.data ? (
+                    <Typography color="text.secondary" variant="caption">
+                      {t("previewRows", {
+                        shown: historyPreviewQuery.data.rows.length,
+                        total: historyPreviewQuery.data.totalRows,
+                      })}
+                    </Typography>
+                  ) : null}
+                </Box>
+                {selectedHistoryProject ? (
+                  <Button
+                    component="a"
+                    href={labvizApi.cleanedDataUrl(selectedHistoryProject.id)}
+                    startIcon={<FileDownloadOutlinedIcon />}
+                    variant="outlined"
+                  >
+                    {t("downloadCleanedData")}
+                  </Button>
+                ) : null}
+              </Stack>
+              {historyPreviewQuery.isPending ? (
+                <ApiStatePanel compact description={t("loadingDataDescription")} kind="loading" title={t("loadingData")} />
+              ) : historyPreviewQuery.error ? (
+                <Alert severity="error">
+                  {historyPreviewQuery.error instanceof LabVizApiError
+                    ? historyPreviewQuery.error.message
+                    : t("dataLoadFailed")}
+                </Alert>
+              ) : historyPreviewQuery.data ? (
+                <DataPreviewTable preview={historyPreviewQuery.data} />
+              ) : null}
+            </Box>
+            <Divider />
+            <Box>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", mb: 1.5 }}>
+                <Box>
+                  <Typography component="h2" variant="h6">{t("savedFigures")}</Typography>
+                  <Typography color="text.secondary" variant="caption">
+                    {figuresQuery.data
+                      ? t("figureStorage", {
+                          count: figuresQuery.data.snapshots.length,
+                          size: formatBytes(figuresQuery.data.totalBytes),
+                        })
+                      : t("figureRetention")}
+                  </Typography>
+                </Box>
+              </Stack>
+              {figuresQuery.isPending ? (
+                <ApiStatePanel compact description={t("loadingFiguresDescription")} kind="loading" title={t("loadingFigures")} />
+              ) : figuresQuery.error ? (
+                <Alert severity="error">
+                  {figuresQuery.error instanceof LabVizApiError
+                    ? figuresQuery.error.message
+                    : t("figuresLoadFailed")}
+                </Alert>
+              ) : figuresQuery.data?.snapshots.length ? (
+                <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" } }}>
+                  {figuresQuery.data.snapshots.map((snapshot) => (
+                    <Paper key={snapshot.id} variant="outlined" sx={{ minWidth: 0, overflow: "hidden" }}>
+                      <Box sx={{ alignItems: "center", bgcolor: "background.default", display: "flex", height: 190, justifyContent: "center", overflow: "hidden" }}>
+                        {snapshot.previewUrl ? (
+                          <Button
+                            aria-label={t("openFullFigure", { title: snapshot.title })}
+                            onClick={() => setFullPreviewFigureId(snapshot.id)}
+                            sx={{ height: "100%", p: 0, width: "100%" }}
+                          >
+                            <Box alt={snapshot.title} component="img" src={snapshot.thumbnailUrl ?? snapshot.previewUrl} sx={{ height: "100%", objectFit: "contain", width: "100%" }} />
+                          </Button>
+                        ) : (
+                          <Stack spacing={1} sx={{ alignItems: "center" }}>
+                            <ImageOutlinedIcon color="primary" sx={{ fontSize: 42 }} />
+                            <Typography color="text.secondary" variant="caption">{t("pdfPreviewUnavailable")}</Typography>
+                          </Stack>
+                        )}
+                      </Box>
+                      <Stack spacing={1} sx={{ p: 1.5 }}>
+                        <Typography noWrap sx={{ fontWeight: 650 }}>{snapshot.title}</Typography>
+                        <Typography color="text.secondary" variant="caption">
+                          {snapshot.format.toUpperCase()} · {formatBytes(snapshot.byteSize)} · {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(snapshot.createdAt))}
+                        </Typography>
+                        <Stack direction="row" spacing={1}>
+                          <Button component="a" href={snapshot.downloadUrl} size="small" startIcon={<FileDownloadOutlinedIcon />} variant="outlined">
+                            {t("downloadFigure")}
+                          </Button>
+                          <Button color="error" onClick={() => setDeleteFigureId(snapshot.id)} size="small">
+                            {t("deleteFigure")}
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </Paper>
+                  ))}
+                </Box>
+              ) : (
+                <ApiStatePanel compact kind="empty" title={t("noFiguresTitle")} description={t("noFiguresDescription")} />
+              )}
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedHistoryProjectId(null)}>{t("closeHistoryDetail")}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        fullWidth
+        maxWidth="lg"
+        onClose={() => setFullPreviewFigureId(null)}
+        open={Boolean(figureToPreview?.previewUrl)}
+      >
+        <DialogTitle>{figureToPreview?.title}</DialogTitle>
+        <DialogContent>
+          {figureToPreview?.previewUrl ? (
+            <Box alt={figureToPreview.title} component="img" src={figureToPreview.previewUrl} sx={{ display: "block", maxHeight: "75vh", maxWidth: "100%", mx: "auto", objectFit: "contain" }} />
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          {figureToPreview ? (
+            <Button component="a" href={figureToPreview.downloadUrl} startIcon={<FileDownloadOutlinedIcon />}>
+              {t("downloadFigure")}
+            </Button>
+          ) : null}
+          <Button onClick={() => setFullPreviewFigureId(null)}>{t("closeHistoryDetail")}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        onClose={() => !deleteFigureMutation.isPending && setDeleteFigureId(null)}
+        open={Boolean(figureToDelete)}
+      >
+        <DialogTitle>{t("deleteFigureTitle")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{t("deleteFigureDescription", { title: figureToDelete?.title ?? "" })}</DialogContentText>
+          {deleteFigureMutation.error ? (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {deleteFigureMutation.error instanceof LabVizApiError
+                ? deleteFigureMutation.error.message
+                : t("deleteFigureFailed")}
+            </Alert>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={deleteFigureMutation.isPending} onClick={() => setDeleteFigureId(null)}>{t("cancel")}</Button>
+          <Button color="error" disabled={!figureToDelete || deleteFigureMutation.isPending} onClick={() => figureToDelete && deleteFigureMutation.mutate(figureToDelete.id)} variant="contained">
+            {deleteFigureMutation.isPending ? t("deleting") : t("deleteConfirm")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         onClose={() => !deleteMutation.isPending && setDeleteProjectId(null)}

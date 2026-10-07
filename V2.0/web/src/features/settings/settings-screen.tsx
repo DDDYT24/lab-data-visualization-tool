@@ -1,8 +1,6 @@
 "use client";
 
-import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import ComputerOutlinedIcon from "@mui/icons-material/ComputerOutlined";
-import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import {
@@ -22,11 +20,12 @@ import {
 } from "@mui/material";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 import {
+  defaultUserPreferences,
   loadUserPreferences,
   saveUserPreferences,
   type UserPreferences,
@@ -64,15 +63,21 @@ function SettingsRow({ title, description, control }: SettingsRowProps) {
 
 export function SettingsScreen() {
   const t = useTranslations("settings");
-  const [preferences, setPreferences] = useState(() => loadUserPreferences());
+  // Keep server and first client render identical; localStorage is available after hydration.
+  const [preferences, setPreferences] = useState<UserPreferences>(defaultUserPreferences);
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPreferences(loadUserPreferences());
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const updatePreferences = (patch: Partial<UserPreferences>) => {
-    setPreferences((current) => {
-      const next = { ...current, ...patch };
-      saveUserPreferences(next);
-      return next;
-    });
+    const next = { ...preferences, ...patch };
+    setPreferences(next);
+    saveUserPreferences(next);
     setSaved(true);
   };
 
@@ -285,35 +290,6 @@ export function SettingsScreen() {
           }
           description={t("retentionDescription")}
           title={t("retentionTitle")}
-        />
-        <Divider />
-        <SettingsRow
-          control={
-            <Button
-              disabled
-              startIcon={<StorageOutlinedIcon />}
-              variant="outlined"
-            >
-              {t("manageCloud")}
-            </Button>
-          }
-          description={t("cloudDescription")}
-          title={t("cloudTitle")}
-        />
-        <Divider />
-        <SettingsRow
-          control={
-            <Button
-              color="error"
-              disabled
-              startIcon={<DeleteOutlineRoundedIcon />}
-              variant="outlined"
-            >
-              {t("clearLocal")}
-            </Button>
-          }
-          description={t("cleanupDescription")}
-          title={t("cleanupTitle")}
         />
       </Paper>
 

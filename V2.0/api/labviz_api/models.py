@@ -119,7 +119,14 @@ class ExperimentContext(ExperimentInput):
 
 class ProjectSession(VersionedModel):
     project_id: str
-    storage_mode: Literal["temporary-cloud", "saved-cloud", "local"]
+    storage_mode: Literal[
+        "temporary-cloud",
+        "saved-cloud",
+        "local",
+        "temporary-local",
+        "saved-local",
+    ]
+    storage_contract_version: Literal["local-storage-v1"] | None = None
     description: str
     current_revision_id: UUID | None
     source: SourceFile
@@ -367,13 +374,35 @@ class ProjectSummary(ContractModel):
     source_name: str
     chart_type: Literal["line", "scatter", "bar", "histogram", "box", "heatmap", "surface3d"]
     updated_at: str
-    storage_mode: Literal["saved-cloud", "local"]
+    storage_mode: Literal["saved-cloud", "local", "saved-local"]
     thumbnail_url: str | None = None
+    figure_snapshot_count: int = Field(default=0, ge=0)
+    figure_storage_bytes: int = Field(default=0, ge=0)
     experiment: ExperimentContext | None = None
 
 
 class ProjectList(VersionedModel):
     projects: list[ProjectSummary]
+    storage_contract_version: Literal["local-storage-v1"] | None = None
+
+
+class FigureSnapshotSummary(ContractModel):
+    id: str
+    project_id: str
+    title: str
+    format: Literal["png", "svg", "pdf"]
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    byte_size: int = Field(ge=0)
+    created_at: str
+    thumbnail_url: str | None = None
+    preview_url: str | None = None
+    download_url: str
+
+
+class FigureSnapshotList(VersionedModel):
+    project_id: str
+    snapshots: list[FigureSnapshotSummary]
+    total_bytes: int = Field(ge=0)
 
 
 class CreateShareRequest(ContractModel):

@@ -6,10 +6,15 @@ from pathlib import Path
 from labviz_api.render_contract import (
     CHART_RENDER_CONTRACT_VERSION,
     CONFIDENCE_BAND_OPACITY,
+    CORRELATION_PALETTE,
     GRAYSCALE_PALETTE,
     GRID_COLOR,
     GROUP_PALETTE,
+    HISTOGRAM_AXIS_PADDING,
+    HISTOGRAM_FILL_OPACITY,
     LINE_STYLES,
+    SURFACE_GRAYSCALE_PALETTE,
+    SURFACE_PALETTE,
     chart_series_color,
     matplotlib_line_style,
 )
@@ -23,7 +28,12 @@ def test_python_renderer_matches_shared_render_contract() -> None:
     assert contract["contractVersion"] == CHART_RENDER_CONTRACT_VERSION
     assert list(GRAYSCALE_PALETTE) == contract["grayscalePalette"]
     assert list(GROUP_PALETTE) == contract["groupPalette"]
+    assert list(SURFACE_PALETTE) == contract["surfacePalette"]
+    assert list(CORRELATION_PALETTE) == contract["correlationPalette"]
+    assert list(SURFACE_GRAYSCALE_PALETTE) == contract["surfaceGrayscalePalette"]
     assert contract["gridColor"] == GRID_COLOR
+    assert contract["histogramFillOpacity"] == HISTOGRAM_FILL_OPACITY
+    assert contract["histogramAxisPadding"] == HISTOGRAM_AXIS_PADDING
     assert contract["confidenceBandOpacity"] == CONFIDENCE_BAND_OPACITY
     assert {
         name: values["matplotlib"] for name, values in contract["lineStyles"].items()

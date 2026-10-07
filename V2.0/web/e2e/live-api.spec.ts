@@ -9,6 +9,17 @@ test.skip(
   "Set LABVIZ_E2E_LIVE=1 and run FastAPI on the configured proxy target.",
 );
 
+test.beforeEach(async ({ page }) => {
+  const localKey = process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY;
+  if (!localKey) return;
+  const unlocked = page.waitForResponse((response) =>
+    response.url().endsWith("/api/v1/local/session") &&
+    response.request().method() === "POST",
+  );
+  await page.goto(`/#labviz-access=${encodeURIComponent(localKey)}`);
+  expect((await unlocked).ok()).toBeTruthy();
+});
+
 test("processes and exports a generated 1.87 MB CSV through the live FastAPI service", async ({
   page,
 }) => {

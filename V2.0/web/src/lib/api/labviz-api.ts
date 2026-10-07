@@ -6,6 +6,7 @@ import {
   cleaningDecisionsResponseSchema,
   dataPreviewSchema,
   exportJobSchema,
+  figureSnapshotListSchema,
   processingJobSchema,
   projectListSchema,
   projectDescriptionResponseSchema,
@@ -32,6 +33,26 @@ const API_BASE = (
   process.env.NEXT_PUBLIC_LABVIZ_API_URL ?? "/api/v1"
 ).replace(/\/$/, "");
 const emptyResponseSchema = z.null();
+let localBootstrap: Promise<void> | null = null;
+
+function ensureLocalSession(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const prefix = "#labviz-access=";
+  if (window.location.hash.startsWith(prefix)) {
+    const key = decodeURIComponent(window.location.hash.slice(prefix.length));
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    localBootstrap = fetch(`${API_BASE}/local/session`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-LabViz-Local-Key": key },
+    }).then((response) => {
+      if (!response.ok) {
+        throw new LabVizApiError("The local launcher could not unlock this session.", response.status, "local-access-denied");
+      }
+    });
+  }
+  return localBootstrap ?? Promise.resolve();
+}
 
 export class LabVizApiError extends Error {
   constructor(
@@ -52,6 +73,7 @@ async function request<T>(
   let response: Response;
 
   try {
+    await ensureLocalSession();
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       credentials: "include",
@@ -60,7 +82,8 @@ async function request<T>(
         ...init?.headers,
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof LabVizApiError) throw error;
     throw new LabVizApiError(
       "The LabViz processing API could not be reached. Your source file was not changed.",
       0,
@@ -286,6 +309,22 @@ export const labvizApi = {
   deleteProject(projectId: string, signal?: AbortSignal) {
     return request(
       `/projects/${encodeURIComponent(projectId)}`,
+      emptyResponseSchema,
+      { method: "DELETE", signal },
+    );
+  },
+
+  listFigureSnapshots(projectId: string, signal?: AbortSignal) {
+    return request(
+      `/projects/${encodeURIComponent(projectId)}/figures`,
+      figureSnapshotListSchema,
+      { signal },
+    );
+  },
+
+  deleteFigureSnapshot(projectId: string, snapshotId: string, signal?: AbortSignal) {
+    return request(
+      `/projects/${encodeURIComponent(projectId)}/figures/${encodeURIComponent(snapshotId)}`,
       emptyResponseSchema,
       { method: "DELETE", signal },
     );

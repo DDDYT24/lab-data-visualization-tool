@@ -2,14 +2,18 @@
   "contractVersion": "v1",
   "product": "LabViz",
   "releaseLine": "V2.2",
-  "buildStatus": "test-installer-source",
+  "buildStatus": "release-source",
   "platform": "windows-x64",
   "localFirst": true,
   "installer": {
     "target": "per-user native installer",
-    "artifact": null,
+    "artifact": "LabViz-Setup-2.2.0.exe",
     "cleanMachineVerified": false,
-    "toolchain": "Inno Setup 6 source is included for reproducible local test builds; the compiler itself is not redistributed."
+    "toolchain": "Inno Setup 6 source is included for reproducible local test builds; the compiler itself is not redistributed.",
+    "acceptanceEvidence": "Owner-reported completion for preceding acceptance candidate; not independently observed or attested against final release hash.",
+    "signed": false,
+    "multiAccountIsolationVerified": false,
+    "supportedScope": "single ordinary Windows profile"
   },
   "runtime": {
     "releasePythonMinor": "3.13",
@@ -39,6 +43,7 @@
     "V2.0/assets/fonts",
     "V2.0/web/server.js",
     "V2.0/web/.next/static",
+    "V2.0/web/public/about",
     "V2.0/web/node_modules",
     "V2.0/api/samples/v22",
     "V2.0/assets/labviz-logo.ico",
@@ -70,5 +75,6 @@
     "test-results",
     "raw user CSV/XLSX/TSV/TXT/JSON data",
     "private keys and credentials"
-  ]
+  ],
+  "version": "2.2.0"
 }

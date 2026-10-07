@@ -49,8 +49,8 @@ jobs:
         run: npm ci
       - name: Verify frontend
         run: npm run verify
-      - name: Install Chromium for browser tests
-        run: npx playwright install --with-deps chromium
+      - name: Install browser test engines
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Verify browser flows
         run: npm run test:e2e
 

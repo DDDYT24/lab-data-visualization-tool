@@ -81,6 +81,32 @@ test("uploads a 1.87 MB CSV and completes inspect, chart, export, and download",
   expect(await download.failure()).toBeNull();
 });
 
+test("opens a dropped CSV from the centered home import area", async ({ page }) => {
+  await installMockApi(page);
+  await page.goto("/");
+
+  const dropArea = page.getByRole("region", { name: "Drop a CSV or Excel file here" });
+  await expect(dropArea).toBeVisible();
+  await dropArea.evaluate((element) => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(
+      new File(["Time,Response\n0,2\n1,3"], "dropped.csv", { type: "text/csv" }),
+    );
+    element.dispatchEvent(
+      new DragEvent("dragenter", { bubbles: true, cancelable: true, dataTransfer }),
+    );
+    element.dispatchEvent(
+      new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }),
+    );
+    element.dispatchEvent(
+      new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }),
+    );
+  });
+
+  await expect(page).toHaveURL(new RegExp("/workspace/project-e2e$"));
+  await expect(page.getByRole("heading", { name: "Confirm your data" })).toBeVisible();
+});
+
 test("explains console OTP delivery and completes the verification-code dialog", async ({
   page,
 }) => {
@@ -93,7 +119,7 @@ test("explains console OTP delivery and completes the verification-code dialog",
 
   await expect(page.getByLabel("Six-digit code")).toBeVisible();
   await expect(
-    page.getByText(/This local development server is in console mode/i),
+    page.getByRole("alert").filter({ hasText: /Local mode does not send email/i }),
   ).toBeVisible();
   await page.getByLabel("Six-digit code").fill("123456");
   await page.getByRole("button", { name: "Verify and sign in" }).click();
@@ -130,6 +156,13 @@ test("switches the principal interface to Simplified Chinese", async ({ page }) 
     page.getByRole("heading", { level: 1, name: "帮助与科研说明" }),
   ).toBeVisible();
   await expect(page.getByPlaceholder("搜索帮助")).toBeVisible();
+
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "让实验数据，清晰而有洞察" }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "拖放 CSV 或 Excel 文件到这里" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "选择文件" })).toBeVisible();
 });
 
 test("renders an unknown route without browser runtime errors", async ({

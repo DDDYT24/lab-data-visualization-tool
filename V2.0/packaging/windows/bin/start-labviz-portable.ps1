@@ -10,6 +10,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Security
 
 $packageRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $packageRoot "runtime\python\python.exe"
@@ -18,6 +19,7 @@ $apiRoot = Join-Path $packageRoot "V2.0\api"
 $webServer = Join-Path $packageRoot "V2.0\web\server.js"
 $dataRoot = Join-Path $env:LOCALAPPDATA "LabViz\data"
 $logRoot = Join-Path $env:LOCALAPPDATA "LabViz\logs"
+$tokenPath = Join-Path $dataRoot "local-access.dpapi"
 
 foreach ($path in @($python, $node, $webServer)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -32,6 +34,21 @@ $ownsMutex = $false
 try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
 if (-not $ownsMutex) {
     $mutex.Dispose()
+    $readyPath = Join-Path $logRoot "running.json"
+    if ((Test-Path -LiteralPath $readyPath) -and (Test-Path -LiteralPath $tokenPath)) {
+        $running = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
+        $webUri = [Uri]$running.webUrl
+        if ($webUri.Scheme -ne 'http' -or $webUri.Host -ne '127.0.0.1' -or $webUri.Port -lt 1) {
+            throw 'The running LabViz address is not a local loopback URL.'
+        }
+        $protectedBytes = [IO.File]::ReadAllBytes($tokenPath)
+        $accessBytes = [Security.Cryptography.ProtectedData]::Unprotect(
+            $protectedBytes, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
+        )
+        $accessKey = [Convert]::ToBase64String($accessBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+        Start-Process "$($webUri.GetLeftPart([UriPartial]::Authority))/#labviz-access=$accessKey"
+        return
+    }
     throw "LabViz is already running / LabViz 已在运行。"
 }
 function Get-AvailablePort([int]$Preferred) {
@@ -53,6 +70,7 @@ $previousPort = $env:PORT
 $previousHostname = $env:HOSTNAME
 $previousOrigins = $env:LABVIZ_ALLOWED_ORIGINS
 $previousPublicUrl = $env:LABVIZ_PUBLIC_WEB_URL
+$previousLocalAccessKey = $env:LABVIZ_LOCAL_ACCESS_KEY
 $apiProcess = $null
 $webProcess = $null
 $processJob = $null
@@ -65,6 +83,15 @@ try {
     if (Test-Path -LiteralPath $stopFile) { Remove-Item -LiteralPath $stopFile }
     if (Test-Path -LiteralPath $readyFile) { Remove-Item -LiteralPath $readyFile }
     Write-Host "Starting LabViz / 正在启动 LabViz..."
+    [byte[]]$accessBytes = New-Object byte[] 32
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($accessBytes) } finally { $rng.Dispose() }
+    $localAccessKey = [Convert]::ToBase64String($accessBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    $protectedBytes = [Security.Cryptography.ProtectedData]::Protect(
+        $accessBytes, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    [IO.File]::WriteAllBytes($tokenPath, $protectedBytes)
+    $env:LABVIZ_LOCAL_ACCESS_KEY = $localAccessKey
     $env:LABVIZ_DATABASE_PATH = Join-Path $dataRoot "labviz-v2.db"
     $env:LABVIZ_OBJECT_STORAGE_ROOT = Join-Path $dataRoot "objects"
     $env:LABVIZ_API_PROXY_TARGET = "http://127.0.0.1:$ApiPort"
@@ -119,7 +146,7 @@ try {
         ConvertTo-Json | Set-Content -LiteralPath $readyFile -Encoding UTF8
     Write-Host "LabViz ready / 已启动。Close this window to stop / 关闭此窗口以退出。"
     if (-not $SkipOpenBrowser) {
-        Start-Process "http://127.0.0.1:$WebPort"
+        Start-Process "http://127.0.0.1:$WebPort/#labviz-access=$localAccessKey"
     }
     while (-not (Test-Path -LiteralPath $stopFile)) {
         Start-Sleep -Seconds 1
@@ -146,4 +173,5 @@ finally {
     $env:HOSTNAME = $previousHostname
     $env:LABVIZ_ALLOWED_ORIGINS = $previousOrigins
     $env:LABVIZ_PUBLIC_WEB_URL = $previousPublicUrl
+    $env:LABVIZ_LOCAL_ACCESS_KEY = $previousLocalAccessKey
 }
