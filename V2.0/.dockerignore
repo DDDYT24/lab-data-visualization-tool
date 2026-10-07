@@ -6,5 +6,11 @@
 **/playwright-report
 **/test-results
 **/*.tsbuildinfo
-api
+**/.venv
+**/.labviz
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
 *.md

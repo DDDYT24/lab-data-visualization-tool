@@ -214,7 +214,7 @@ npm run test:e2e
 
 通过 [GitHub Issues](https://github.com/DDDYT24/lab-data-visualization-tool/issues) 或应用反馈链接
 [liyutao982@gmail.com](mailto:liyutao982@gmail.com) 报告可复现问题。分享诊断前移除真实数据、
-本地凭据和个人路径。开发使用 AI 编程辅助，工程结论和发布证据按实际验证范围记录。
+本地凭据和个人路径。工程结论和发布证据按实际验证范围记录。
 
 源码使用 [MIT 许可证](LICENSE)，保留版权与许可声明即可使用、修改和分发；不提供任何担保。
 随包第三方组件遵守各自的许可，包括 [OFL 中文字体](V2.0/assets/fonts/OFL.txt)。

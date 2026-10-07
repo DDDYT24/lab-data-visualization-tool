@@ -53,6 +53,13 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Verify browser flows
         run: npm run test:e2e
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-evidence
+          path: V2.0/web/test-results/
+          retention-days: 7
 
   v2-api:
     runs-on: ubuntu-latest
