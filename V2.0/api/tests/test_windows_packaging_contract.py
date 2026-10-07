@@ -80,6 +80,7 @@ def test_windows_packaging_scripts_protect_the_data_boundary() -> None:
     assert (PACKAGING_ROOT / "LabViz.iss").is_file()
     installer_source = (PACKAGING_ROOT / "LabViz.iss").read_text(encoding="utf-8")
     assert "PrivilegesRequired=lowest" in installer_source
+    assert 'Excludes: "*.pyc,*.pyo"' in installer_source
     assert "start-labviz-installed.ps1" in installer_source
     assert "GetEnv('LOCALAPPDATA')" in installer_source
     assert "data.retained-*" in installer_source

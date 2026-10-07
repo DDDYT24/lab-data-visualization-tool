@@ -49,7 +49,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "languages\ChineseSimplified.isl"
 
 [Files]
-Source: "{#CandidateRoot}\*"; DestDir: "{app}\versions\{#AppVersion}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#CandidateRoot}\*"; DestDir: "{app}\versions\{#AppVersion}"; Excludes: "*.pyc,*.pyo"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "bin\start-labviz-installed.ps1"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "bin\start-labviz-installed.cmd"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "bin\set-labviz-version.ps1"; DestDir: "{app}\bin"; Flags: ignoreversion
