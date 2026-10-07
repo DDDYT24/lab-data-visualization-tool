@@ -43,7 +43,7 @@ owner's preceding-package manual tests to a newly measured final EXE hash.
 Install with the default path and open the LabViz shortcut; no sign-in is required.
 Updates preserve `%LOCALAPPDATA%\LabViz\data` by default. Stop the application and back
 up the whole data directory first. Source checkout history uses a different directory.
-See [English README](../README.md) / [中文 README](../README.zh-CN.md).
+See the [English README](../README.md).
 
 ## Known limitations and distribution policy
 
