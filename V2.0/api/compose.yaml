@@ -19,7 +19,10 @@ services:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: labviz-minio-test:2025-04-22
+    build:
+      context: ./docker/minio-source
+      target: minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${LABVIZ_MINIO_ROOT_USER:-labviz-minio}
@@ -28,7 +31,7 @@ services:
       - "127.0.0.1:${LABVIZ_MINIO_PORT:-59000}:9000"
       - "127.0.0.1:${LABVIZ_MINIO_CONSOLE_PORT:-59001}:9001"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/live"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -36,7 +39,10 @@ services:
       - minio-data:/data
 
   minio-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: labviz-mc-test:2025-04-16
+    build:
+      context: ./docker/minio-source
+      target: mc
     depends_on:
       minio:
         condition: service_healthy

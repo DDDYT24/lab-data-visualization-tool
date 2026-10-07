@@ -241,8 +241,8 @@ development dependencies. Tests never need actual experimental data.
 
 Report reproducible issues through [GitHub Issues](https://github.com/DDDYT24/lab-data-visualization-tool/issues)
 or the app's feedback link to [liyutao982@gmail.com](mailto:liyutao982@gmail.com). Remove private
-data, local credentials and identifying paths before sharing diagnostics. Development uses AI
-coding assistance; claims and release evidence are documented by scope.
+data, local credentials and identifying paths before sharing diagnostics. Claims and release
+evidence are documented by scope.
 
 LabViz source is licensed under [MIT](LICENSE). Bundled third-party components retain their
 own notices/licenses, including the [OFL CJK font](V2.0/assets/fonts/OFL.txt).

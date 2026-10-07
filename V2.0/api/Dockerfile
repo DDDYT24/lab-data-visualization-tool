@@ -18,6 +18,7 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 COPY labviz_api ./labviz_api
 COPY scripts ./scripts
+COPY samples ./samples
 
 RUN mkdir -p /home/labviz/.cache/matplotlib /home/labviz/.labviz/objects \
     && chown -R labviz:labviz /home/labviz
