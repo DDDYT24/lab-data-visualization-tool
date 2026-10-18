@@ -48,9 +48,11 @@ const chartTypes: ChartSpec["type"][] = [
 ];
 
 export function ChartStep({
+  active = true,
   onBack,
   onContinue,
 }: {
+  active?: boolean;
   onBack: () => void;
   onContinue: () => void;
 }) {
@@ -103,7 +105,7 @@ export function ChartStep({
       if (!projectId) throw new Error("No project is open.");
       return labvizApi.analyzeChart(projectId, chartSpec, signal);
     },
-    enabled: Boolean(projectId) && !surfaceNeedsAnotherField,
+    enabled: active && Boolean(projectId) && !surfaceNeedsAnotherField,
     retry: 1,
     staleTime: 30_000,
   });
@@ -473,6 +475,7 @@ export function ChartStep({
           />
         ) : (
           <ChartCanvas
+            active={active}
             analysis={analysisQuery.data}
             excludedFindingIds={excludedFindingIds}
             findings={quality.findings}
@@ -490,6 +493,7 @@ export function ChartStep({
             {t("dataTableDescription")}
           </Typography>
           <DataPreviewTable
+        active={active}
             findings={quality.findings}
             emphasizeIssues
             preview={preview}

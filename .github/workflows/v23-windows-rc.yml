@@ -1,0 +1,51 @@
+name: V2.3 Windows RC
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "V2.0/api/**"
+      - "V2.0/web/**"
+      - "V2.0/contracts/**"
+      - "V2.0/assets/**"
+      - "V2.0/packaging/windows-v23/**"
+      - ".github/workflows/v23-windows-rc.yml"
+      - "THIRD_PARTY_NOTICES.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v23-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build and verify the exact Windows candidate
+        run: python -B -X utf8 V2.0/packaging/windows-v23/build_rc.py
+      - name: Preserve candidate assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: labviz-v23-rc
+          path: outputs/v23-release/rc1/release/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve phase status after a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: labviz-v23-phase-status
+          path: outputs/v23-release/rc1/pipeline.json
+          retention-days: 7

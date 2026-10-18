@@ -21,6 +21,7 @@ const ReactECharts = dynamic(() => import("echarts-for-react"), {
 });
 
 type ChartCanvasProps = {
+  active?: boolean;
   spec: ChartSpec;
   preview: DataPreview;
   analysis?: ChartAnalysis;
@@ -32,6 +33,7 @@ const DEFAULT_SURFACE_VIEW = { alpha: 25, beta: 40, distance: 200 } as const;
 type SurfaceView = { alpha: number; beta: number; distance: number };
 
 export function ChartCanvas({
+  active = true,
   analysis,
   spec,
   preview,
@@ -51,15 +53,15 @@ export function ChartCanvas({
   const height = spec.panelCount > 2 ? 560 : 440;
 
   useEffect(() => {
-    if (spec.type !== "surface3d" || surfaceSupport !== "idle") return;
+    if (!active || spec.type !== "surface3d" || surfaceSupport !== "idle") return;
     void import("echarts-gl").then(
       () => setSurfaceSupport("ready"),
       () => setSurfaceSupport("error"),
     );
-  }, [spec.type, surfaceSupport]);
+  }, [active, spec.type, surfaceSupport]);
 
   useEffect(() => {
-    if (spec.type !== "surface3d") return;
+    if (!active || spec.type !== "surface3d") return;
     const timer = window.setTimeout(() => {
       const device = navigator as Navigator & { deviceMemory?: number };
       setLowCostFallback(
@@ -67,10 +69,10 @@ export function ChartCanvas({
       );
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [spec.type]);
+  }, [active, spec.type]);
 
   const option = useMemo(
-    () =>
+    () => active ?
       buildChartOption({
         analysis,
         colorMode: theme.palette.mode,
@@ -82,8 +84,9 @@ export function ChartCanvas({
         showLegend,
         surfacePointLimit: lowCostFallback ? 800 : undefined,
         surfaceView: isSurface ? surfaceView : undefined,
-      }),
+      }) : {},
     [
+      active,
       analysis,
       excludedFindingIds,
       findings,
@@ -106,6 +109,8 @@ export function ChartCanvas({
     | undefined;
   const optionSeries = Array.isArray(optionRecord.series) ? optionRecord.series : [];
   const surfaceSeries = optionSeries[0] as { data?: unknown[] } | undefined;
+
+  if (!active) return null;
 
   if (preview.rows.length === 0) {
     return (

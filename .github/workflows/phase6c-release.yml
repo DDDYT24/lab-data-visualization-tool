@@ -93,7 +93,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker build --pull -f V2.0/api/Dockerfile -t "$API_REPOSITORY:$GITHUB_SHA" V2.0/api
+          docker build --pull -f V2.0/api/Dockerfile -t "$API_REPOSITORY:$GITHUB_SHA" V2.0
           docker build --pull -f V2.0/web/Dockerfile -t "$WEB_REPOSITORY:$GITHUB_SHA" V2.0
           docker build --pull -f V2.0/deploy/aws/backup/Dockerfile -t "$BACKUP_REPOSITORY:$GITHUB_SHA" V2.0
           docker push "$API_REPOSITORY:$GITHUB_SHA"

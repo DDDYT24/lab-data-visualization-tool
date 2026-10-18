@@ -31,7 +31,7 @@ import { StepLayout } from "./step-layout";
 import { CloudProjectActions } from "./cloud-project-actions";
 import { useWorkspaceStore } from "./workspace-store";
 
-export function ExportStep({ onBack }: { onBack: () => void }) {
+export function ExportStep({ onBack, active = true }: { onBack: () => void; active?: boolean }) {
   const t = useTranslations("export");
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
   const projectId = useWorkspaceStore((state) => state.projectId);
@@ -54,7 +54,7 @@ export function ExportStep({ onBack }: { onBack: () => void }) {
       if (!projectId) throw new Error("No project is open.");
       return labvizApi.analyzeChart(projectId, chartSpec, signal);
     },
-    enabled: Boolean(projectId),
+    enabled: active && Boolean(projectId),
     retry: 1,
     staleTime: 30_000,
   });
@@ -107,6 +107,7 @@ export function ExportStep({ onBack }: { onBack: () => void }) {
           />
         ) : (
           <ChartCanvas
+            active={active}
             analysis={analysisQuery.data}
             excludedFindingIds={excludedFindingIds}
             findings={quality.findings}

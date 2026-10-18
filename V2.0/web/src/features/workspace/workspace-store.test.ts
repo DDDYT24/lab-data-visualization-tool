@@ -98,4 +98,17 @@ describe("workspace store", () => {
     expect(state.chartSpec.xAxis.field).toBe("elapsed");
     expect(state.chartSpec.series[0].field).toBe("voltage");
   });
+  it("opens a single numeric research column as a valid histogram, not X against itself", () => {
+    useWorkspaceStore.getState().setWorkspaceData({
+      apiVersion: "v1", projectId: "one-column",
+      columns: [{ field: "value", label: "Value", kind: "number", unit: "mV", nullable: false }],
+      rows: [{ rowId: 1, value: 2 }], totalRows: 1, sampled: false, sampleStrategy: "none",
+    }, {
+      apiVersion: "v1", projectId: "one-column", totalRows: 1, validRows: 1,
+      missingValues: 0, duplicateRows: 0, suspiciousPoints: 0, findings: [],
+    });
+    expect(useWorkspaceStore.getState().chartSpec.type).toBe("histogram");
+    expect(useWorkspaceStore.getState().chartSpec.series[0].field).toBe("value");
+  });
+
 });

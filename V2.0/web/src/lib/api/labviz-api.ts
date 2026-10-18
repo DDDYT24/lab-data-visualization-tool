@@ -45,7 +45,9 @@ function ensureLocalSession(): Promise<void> {
       method: "POST",
       credentials: "include",
       headers: { "X-LabViz-Local-Key": key },
-    }).then((response) => {
+    }).then(async (response) => {
+      // Drain the response so the bootstrap request releases its network resources.
+      await response.arrayBuffer();
       if (!response.ok) {
         throw new LabVizApiError("The local launcher could not unlock this session.", response.status, "local-access-denied");
       }
@@ -65,7 +67,7 @@ export class LabVizApiError extends Error {
   }
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   schema: ZodType<T>,
   init?: RequestInit,
