@@ -1,3 +1,3 @@
-"""LabViz V2.2 local-first processing API."""
+"""LabViz V2.3 local-first processing API."""
 
-__version__ = "2.2.0"
+__version__ = "2.3.0-rc.1"

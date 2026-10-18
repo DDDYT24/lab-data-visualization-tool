@@ -95,7 +95,7 @@ export function useWorkspaceProject(initialProjectId?: string) {
       window.history.replaceState(
         window.history.state,
         "",
-        `/workspace/${encodeURIComponent(session.projectId)}`,
+        `/workspace/${encodeURIComponent(session.projectId)}${window.location.search}`,
       );
     },
     onError: (error) => setLoadError(errorMessage(error)),
@@ -207,7 +207,7 @@ export function useWorkspaceProject(initialProjectId?: string) {
       window.history.replaceState(
         window.history.state,
         "",
-        `/workspace/${encodeURIComponent(session.projectId)}`,
+        `/workspace/${encodeURIComponent(session.projectId)}${window.location.search}`,
       );
     },
     onError: (error) => setLoadError(errorMessage(error)),

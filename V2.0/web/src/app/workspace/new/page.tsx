@@ -7,10 +7,11 @@ export const metadata: Metadata = {
   title: "Workspace",
 };
 
-export default function NewWorkspacePage() {
+export default async function NewWorkspacePage({ searchParams }: { searchParams: Promise<{ workspace?: string }> }) {
+  const { workspace } = await searchParams;
   return (
     <AppShell>
-      <WorkspaceScreen />
+      <WorkspaceScreen initialResearchMode={workspace === "research"} />
     </AppShell>
   );
 }

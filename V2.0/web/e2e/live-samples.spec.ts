@@ -28,7 +28,7 @@ test.skip(
   "Set LABVIZ_E2E_LIVE=1, start FastAPI, and run the real sample workflow.",
 );
 
-test("runs every bundled example through the real API and all exports", async ({ page }) => {
+test("runs every bundled example through the real API and all exports", async ({ page, browserName }) => {
   test.setTimeout(600_000);
   const localKey = process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY;
   if (localKey) {
@@ -39,10 +39,21 @@ test("runs every bundled example through the real API and all exports", async ({
     await page.goto(`/#labviz-access=${encodeURIComponent(localKey)}`);
     expect((await unlocked).ok()).toBeTruthy();
   }
+  const pending = new Set<unknown>();
+  let activity = Date.now();
+  page.on("request", (request) => { if (request.url().includes("/api/v1/")) { pending.add(request); activity = Date.now(); } });
+  const settled = (request: unknown) => { if (pending.delete(request)) activity = Date.now(); };
+  page.on("requestfinished", settled); page.on("requestfailed", settled);
+  const settleBeforeNavigation = async () => {
+    const started = Date.now();
+    if (browserName === "webkit") await expect.poll(() => pending.size === 0 && Date.now() - Math.max(activity, started) >= 1500, { timeout: 15_000 }).toBe(true);
+  };
   let lastWorkspaceUrl = "";
 
   for (const slug of sampleSlugs) {
-    if (lastWorkspaceUrl) await page.waitForLoadState("networkidle");
+    // Settle launcher bootstrap prefetch too, before the first hard navigation.
+    if (lastWorkspaceUrl || localKey) await page.waitForLoadState("networkidle");
+    await settleBeforeNavigation();
     await page.goto("/", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "View examples" }).click();
     const card = page.locator(`[data-example-slug="${slug}"]`);
@@ -134,12 +145,17 @@ test("runs every bundled example through the real API and all exports", async ({
     for (const field of example.fields!) expect(csv.split(/\r?\n/)[0]).toContain(field.name);
     lastWorkspaceUrl = page.url();
   }
+  await settleBeforeNavigation();
   await page.reload({ waitUntil: "networkidle" });
   await expect(page).toHaveURL(lastWorkspaceUrl);
+  await settleBeforeNavigation();
   await page.goto("/", { waitUntil: "networkidle" });
+  await settleBeforeNavigation();
   await page.goBack({ waitUntil: "networkidle" });
   await expect(page).toHaveURL(lastWorkspaceUrl);
+  await settleBeforeNavigation();
   await page.goto("/", { waitUntil: "networkidle" });
+  await settleBeforeNavigation();
   await page.getByLabel("Language").click();
   await page.getByRole("option", { name: "中文" }).click();
   await page.getByRole("button", { name: "查看示例" }).click();

@@ -1,0 +1,161 @@
+{
+  "contractVersion": "v23-workflow-v1",
+  "scope": "Phase 0 design contract, not implemented product limits",
+  "referenceMachine": {
+    "name": "local-i9-13900H-20260927",
+    "cpu": "13th Gen Intel Core i9-13900H",
+    "logicalProcessors": 20,
+    "physicalMemoryBytes": 33960341504,
+    "storage": "current worktree volume; no disk throughput claim",
+    "os": "Windows; exact build captured in baseline report"
+  },
+  "limits": {
+    "singleFileBytes": 52428800,
+    "filesPerImport": 5,
+    "aggregateBytes": 104857600,
+    "aggregateRows": 100000,
+    "columnsPerFile": 128,
+    "activeImportOrAnalysisJobs": 1,
+    "pendingJobs": 1,
+    "panels": [
+      1,
+      2,
+      4
+    ],
+    "inputTypes": "existing supported formats; multi-file initially same-schema CSV/TSV",
+    "limitFailure": "reject before apply with measured limit and actionable reason; no silent truncation"
+  },
+  "versions": {
+    "projectSpec": 1,
+    "researchSidecar": 1,
+    "figure": 1,
+    "workflow": 1,
+    "policy": "Keep ProjectSpec v1 and storage adapters unchanged in Phase 0. Sidecars are prospective and not yet persisted. Any incompatible sidecar revision increments schemaVersion before feature integration."
+  },
+  "fixtures": {
+    "research": "fixtures/v23/manifest.json",
+    "existingPublicAndEdge": "../api/samples/v22/manifest.json",
+    "historical": "Preserve existing 23-case historical and 100-case synthetic packs; Phase 0 does not recreate or claim a fresh pass for them.",
+    "performance": [
+      "legacy-linear-10000",
+      "legacy-linear-100000"
+    ],
+    "answerKeys": "primary per-group n=6, technical readings=18; means 3.5/13.5/23.5; paired mean delta=2; observed zero remains zero"
+  },
+  "tasks": [
+    {
+      "task": "V23-C1",
+      "input": "research.valid.json",
+      "expected": "6 units and 18 observations per group",
+      "failure": "unknown unit stays null; no inferred n",
+      "owner": "Phase 1 / research data"
+    },
+    {
+      "task": "V23-C2",
+      "input": "batch-1.csv + batch-2.csv",
+      "expected": "74 rows with reversible source-row lineage",
+      "failure": "duplicate pair/time, missing partner, incompatible units, over-limit import rejected",
+      "owner": "Phase 1 / preparation"
+    },
+    {
+      "task": "V23-C3",
+      "input": "qc0..qc7",
+      "expected": "zero retained; 7 non-observed states separately counted",
+      "failure": "qualified readings cannot enter ordinary summaries",
+      "owner": "Phase 1 / QC"
+    },
+    {
+      "task": "V23-C4",
+      "input": "research.valid.json / figure",
+      "expected": "4 independent 2D panels A-D share only compatible axes",
+      "failure": "3 panels, stale revisions and mixed units rejected",
+      "owner": "Phase 3 / figure workspace"
+    },
+    {
+      "task": "V23-C5",
+      "input": "primary and explicit pair1..pair6",
+      "expected": "raw points reflect 18 units; paired deltas all 2; density shares recorded method result",
+      "failure": "no implicit pairing, no censored-value substitution; degenerate violin withheld",
+      "owner": "Phase 2 / scientific charts"
+    },
+    {
+      "task": "V23-C6",
+      "input": "observation o011 and its lineage",
+      "expected": "highlight finds exact source cell; n unchanged",
+      "failure": "highlight must not become filter/exclusion",
+      "owner": "Phase 3 / linked selection"
+    },
+    {
+      "task": "V23-C7",
+      "input": "recorded bounded steps and replacement same-schema files",
+      "expected": "validate roles/units before preview and apply",
+      "failure": "missing fields and incompatible units fail before changing project",
+      "owner": "Phase 4 / templates"
+    },
+    {
+      "task": "V23-C8",
+      "input": "frozen figure-revision1 and selected inputs",
+      "expected": "figure plus per-panel source data and method/revision manifest agree",
+      "failure": "revision mismatch aborts output; no half-success package",
+      "owner": "Phase 4 / outputs"
+    }
+  ],
+  "performance": {
+    "repetitions": 3,
+    "statistic": "max of three measured runs, including first run; not a p95 claim",
+    "datasets": {
+      "legacy-linear-10000": {
+        "rows": 10000,
+        "generator": "scripts.measure_v22_performance._csv_payload",
+        "role": "ordinary workload"
+      },
+      "legacy-linear-100000": {
+        "rows": 100000,
+        "generator": "scripts.measure_v22_performance._csv_payload",
+        "role": "upper proposed row boundary"
+      }
+    },
+    "targetsMs": {
+      "importToReady": 15000,
+      "firstUsablePreview": 15000,
+      "highlightResponse": 200,
+      "recompute": 3000,
+      "save": 2000,
+      "reopen": 3000,
+      "fourPanelPng300dpi": 8000,
+      "fourPanelSvg": 8000,
+      "fourPanelPdf": 8000
+    },
+    "memory": {
+      "backendPeakMiB": 1024,
+      "browserPeakMiB": 512
+    },
+    "measurementBoundary": "Backend TestClient import/reopen and renderer timings are proxies, not browser end-to-end timings. Linked selection, mixed-panel composition and browser memory have no implemented baseline yet; measure in owning feature phases. Targets are frozen before feature work, not achieved claims."
+  },
+  "cache": {
+    "keyFields": [
+      "contractVersion",
+      "sourceHashes",
+      "dataRevision",
+      "orderedProcessingSteps",
+      "includedObservationIds",
+      "exclusionsWithReasons",
+      "analysisUnit",
+      "method",
+      "methodVersion",
+      "parameters",
+      "seed",
+      "panelMappings",
+      "figureStyle",
+      "exportSettings"
+    ],
+    "highlight": "excluded from scientific result key; highlighting cannot change results",
+    "sampling": "preview only; disclose original/displayed counts and algorithm; preserve extrema and group/time structure; statistics and exports use all selected valid observations"
+  },
+  "migration": {
+    "phase0": "No production migration and no PostgreSQL schema change.",
+    "policy": "Stop writers; back up SQLite with backup API plus complete object directory and hashes; verify backup opens before migration. Use transactional additive migration. Preserve ownership and IDs. Failed transaction rolls back; restore backup into a separate directory and compare data, owners and snapshot hashes before switching. Do not overwrite an open database.",
+    "legacy": "No sample identity inferred from row number, position, group or filename. Unknown remains null. Legacy ProjectSpec v1 and standalone 3D stay supported.",
+    "postgres": "Same contracts across persistence adapters; any future persistent schema change requires both SQLite and PostgreSQL adapter/migration tests. No PostgreSQL server required for local Phase 0."
+  }
+}

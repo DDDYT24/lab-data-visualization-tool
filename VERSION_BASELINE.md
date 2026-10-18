@@ -4,6 +4,12 @@
 - **Current release:** V2.2.0 Windows local release (single Windows profile; unsigned)
 - **Future backlog and completion status:** [`V2.0/TODO.md`](V2.0/TODO.md)
 
+This branch also contains the V2.3.0-rc.1 source candidate. Its research workspace,
+optional overview interface, and separate Windows RC pipeline are implemented;
+end-to-end candidate acceptance and publication remain in progress. V2.2.0 stays
+the stable release. See the [V2.3 RC notes](V2.0/RELEASE_NOTES_V2.3.md) for scope
+and pending observations.
+
 This file is a short version history, not a second backlog. It records what each
 major version actually delivered and the boundary that version did not claim.
 For future work, open `V2.0/TODO.md` first.

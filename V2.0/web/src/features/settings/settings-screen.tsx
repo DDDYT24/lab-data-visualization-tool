@@ -19,10 +19,11 @@ import {
   Typography,
 } from "@mui/material";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { InterfaceModeSelect, useInterfaceMode } from "@/components/layout/interface-mode";
 
 import {
   defaultUserPreferences,
@@ -63,6 +64,8 @@ function SettingsRow({ title, description, control }: SettingsRowProps) {
 
 export function SettingsScreen() {
   const t = useTranslations("settings");
+  const zh = useLocale().startsWith("zh");
+  const { persistent: interfacePersistent } = useInterfaceMode();
   // Keep server and first client render identical; localStorage is available after hydration.
   const [preferences, setPreferences] = useState<UserPreferences>(defaultUserPreferences);
   const [saved, setSaved] = useState(false);
@@ -93,6 +96,10 @@ export function SettingsScreen() {
       </Box>
 
       <Paper sx={{ border: 1, borderColor: "divider", px: 3, py: 1 }}>
+        <SettingsRow control={<InterfaceModeSelect />} title={zh ? "界面模式" : "Interface mode"}
+          description={zh ? "概览 A 使用概览首页与项目内容栏。切换界面保留当前草稿和科研设置。" : "Overview A adds recent projects and a project contents panel. Switching interfaces keeps current drafts and research settings."} />
+        {!interfacePersistent && <Alert severity="warning">{zh ? "浏览器未能保存界面偏好，本次切换仅在当前页面生效。" : "The browser could not save this preference. The selected interface is active for this page."}</Alert>}
+        <Divider />
         <Typography component="h2" sx={{ fontWeight: 750, pt: 2 }}>
           {t("languageSection")}
         </Typography>

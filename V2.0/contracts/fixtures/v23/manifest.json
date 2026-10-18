@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "synthetic": true,
+  "generator": "generate_v23_fixtures.py",
+  "sources": [
+    {
+      "id": "source1",
+      "name": "batch-1.csv",
+      "sha256": "903c0bdcf64fad442c0f5190001e56f095d6fbd8df3a02db1dda1b6a3816b068"
+    },
+    {
+      "id": "source2",
+      "name": "batch-2.csv",
+      "sha256": "9d67a065df4a893e1d77891c88d8171924d89bfdadfe5a0a455a118ed9a9269b"
+    }
+  ],
+  "primary": {
+    "independentUnits": 18,
+    "samples": 18,
+    "technicalReadingsPerSample": 3,
+    "observations": 54,
+    "batches": 2,
+    "perGroupUnits": 6,
+    "perGroupObservations": 18,
+    "groupMeans": [
+      3.5,
+      13.5,
+      23.5
+    ],
+    "overallMean": 13.5
+  },
+  "paired": {
+    "independentUnits": 6,
+    "observations": 12,
+    "timePoints": [
+      "t0",
+      "t1"
+    ],
+    "everyDelta": 2.0,
+    "meanDelta": 2.0,
+    "failureCases": [
+      "duplicate pair/time key",
+      "missing partner",
+      "mixed units"
+    ]
+  },
+  "qc": {
+    "observations": 8,
+    "observedZero": 1,
+    "nonObserved": 7
+  },
+  "totalObservations": 74,
+  "jitterSeed": 23,
+  "legacyUnknown": {
+    "independentUnits": null,
+    "sampleCount": 0,
+    "observations": 54
+  }
+}

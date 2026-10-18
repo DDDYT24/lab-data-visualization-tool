@@ -1024,6 +1024,195 @@ class ProjectRepository:
                 (project_id, now, source_project_id),
             )
 
+            # Copy applied research history atomically with the project. Observation/source
+            # identities describe the same acquired data; only revision ownership changes.
+            research_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_revisions'"
+            ).fetchone()
+            if research_exists:
+                research = connection.execute(
+                    "SELECT * FROM research_revisions WHERE project_id=?", (source_project_id,)
+                ).fetchall()
+                revision_ids = {row["id"]: uuid4().hex for row in research}
+                for row in research:
+                    connection.execute(
+                        "INSERT INTO research_revisions VALUES (?,?,?,?,?,?)",
+                        (
+                            revision_ids[row["id"]],
+                            project_id,
+                            revision_ids[row["parent_id"]] if row["parent_id"] else None,
+                            row["raw_json"],
+                            row["prepared_json"],
+                            now,
+                        ),
+                    )
+                head = connection.execute(
+                    "SELECT * FROM research_heads WHERE project_id=?", (source_project_id,)
+                ).fetchone()
+                if head:
+                    connection.execute(
+                        "INSERT INTO research_heads VALUES (?,?,?)",
+                        (
+                            project_id,
+                            revision_ids[head["revision_id"]],
+                            json.dumps(
+                                [revision_ids[key] for key in json.loads(head["future_json"])]
+                            ),
+                        ),
+                    )
+
+                charts_exist = connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_charts'"
+                ).fetchone()
+                if charts_exist:
+                    chart_ids: dict[str, str] = {}
+                    for chart in connection.execute(
+                        "SELECT * FROM research_charts WHERE project_id=?", (source_project_id,)
+                    ).fetchall():
+                        chart_ids[chart["id"]] = uuid4().hex
+                        connection.execute(
+                            "INSERT INTO research_charts VALUES (?,?,?,?,?,?,?,?)",
+                            (
+                                chart_ids[chart["id"]],
+                                project_id,
+                                revision_ids[chart["revision_id"]],
+                                chart["result_json"],
+                                chart["svg"],
+                                chart["png"],
+                                chart["pdf"],
+                                now,
+                            ),
+                        )
+
+                    boards_exist = connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='research_figure_boards'"
+                    ).fetchone()
+                    if boards_exist:
+                        sources_exist = connection.execute(
+                            "SELECT 1 FROM sqlite_master WHERE name='research_figure_sources'"
+                        ).fetchone()
+                        if sources_exist:
+                            for source_panel in connection.execute(
+                                "SELECT * FROM research_figure_sources WHERE project_id=?",
+                                (source_project_id,),
+                            ).fetchall():
+                                chart_ids[source_panel["id"]] = uuid4().hex
+                                connection.execute(
+                                    "INSERT INTO research_figure_sources VALUES (?,?,?,?)",
+                                    (
+                                        chart_ids[source_panel["id"]],
+                                        project_id,
+                                        source_panel["result_json"],
+                                        now,
+                                    ),
+                                )
+                        headers_exist = connection.execute(
+                            "SELECT 1 FROM sqlite_master WHERE name='research_panel_headers'"
+                        ).fetchone()
+                        if headers_exist:
+                            for old_id, new_id in chart_ids.items():
+                                header = connection.execute(
+                                    "SELECT header_json FROM research_panel_headers WHERE id=?",
+                                    (old_id,),
+                                ).fetchone()
+                                if header:
+                                    data = json.loads(header["header_json"])
+                                    data["revisionId"] = revision_ids.get(
+                                        data["revisionId"], data["revisionId"]
+                                    )
+                                    connection.execute(
+                                        "INSERT INTO research_panel_headers VALUES (?,?,?)",
+                                        (new_id, project_id, json.dumps(data)),
+                                    )
+                        board_ids: dict[str, str] = {}
+                        for board in connection.execute(
+                            "SELECT * FROM research_figure_boards WHERE project_id=?",
+                            (source_project_id,),
+                        ).fetchall():
+                            board_spec = json.loads(board["spec_json"])
+                            board_spec["panelChartIds"] = [
+                                chart_ids[key] for key in board_spec["panelChartIds"]
+                            ]
+                            new_board_id = uuid4().hex
+                            board_ids[board["id"]] = new_board_id
+                            connection.execute(
+                                "INSERT INTO research_figure_boards VALUES (?,?,?,?)",
+                                (new_board_id, project_id, json.dumps(board_spec), now),
+                            )
+                            if sources_exist:
+                                connection.execute(
+                                    "INSERT INTO research_figure_artifacts "
+                                    "SELECT ?,svg,png,pdf,scene_json "
+                                    "FROM research_figure_artifacts WHERE board_id=?",
+                                    (new_board_id, board["id"]),
+                                )
+
+                            jobs_exist = connection.execute(
+                                "SELECT 1 FROM sqlite_master WHERE name='research_figure_jobs'"
+                            ).fetchone()
+                            job = (
+                                connection.execute(
+                                    "SELECT * FROM research_figure_jobs WHERE board_id=?",
+                                    (board["id"],),
+                                ).fetchone()
+                                if jobs_exist
+                                else None
+                            )
+                            if job:
+                                panels = json.loads(job["panels_json"])
+                                for panel in panels:
+                                    panel["chartId"] = chart_ids[panel["chartId"]]
+                                    panel["revisionId"] = revision_ids.get(
+                                        panel["revisionId"], panel["revisionId"]
+                                    )
+                                completed = job["state"] == "ready"
+                                connection.execute(
+                                    "INSERT INTO research_figure_jobs "
+                                    "(board_id,state,panels_json,error) "
+                                    "VALUES (?,?,?,?)",
+                                    (
+                                        new_board_id,
+                                        "ready" if completed else "failed",
+                                        json.dumps(panels),
+                                        None
+                                        if completed
+                                        else "Copied layout saved; retry generation.",
+                                    ),
+                                )
+
+                        reuse_exists = connection.execute(
+                            "SELECT 1 FROM sqlite_master WHERE type='table' "
+                            "AND name='research_templates'"
+                        ).fetchone()
+                        if reuse_exists:
+                            for template in connection.execute(
+                                "SELECT * FROM research_templates WHERE project_id=?",
+                                (source_project_id,),
+                            ).fetchall():
+                                connection.execute(
+                                    "INSERT INTO research_templates VALUES (?,?,?,?)",
+                                    (uuid4().hex, project_id, template["spec_json"], now),
+                                )
+                            for output in connection.execute(
+                                "SELECT * FROM research_outputs WHERE project_id=?",
+                                (source_project_id,),
+                            ).fetchall():
+                                # Keep the frozen archive and its original provenance byte-for-byte.
+                                connection.execute(
+                                    "INSERT INTO research_outputs VALUES (?,?,?,?,?,?,?,?)",
+                                    (
+                                        uuid4().hex,
+                                        project_id,
+                                        board_ids[output["board_id"]],
+                                        output["manifest_json"],
+                                        output["notes_json"],
+                                        output["zip_blob"],
+                                        output["sha256"],
+                                        now,
+                                    ),
+                                )
+
     def delete_project(self, project_id: str) -> bool:
         with self._connect() as connection:
             run = connection.execute(

@@ -1,0 +1,83 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "pointRendering": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "vector",
+        "raster"
+      ],
+      "title": "Pointrendering",
+      "type": "string"
+    },
+    "title": {
+      "default": "",
+      "maxLength": 160,
+      "title": "Title",
+      "type": "string"
+    },
+    "axisMode": {
+      "default": "independent",
+      "enum": [
+        "independent",
+        "shared_x",
+        "shared_y",
+        "shared_xy"
+      ],
+      "title": "Axismode",
+      "type": "string"
+    },
+    "palette": {
+      "default": "blue_teal",
+      "enum": [
+        "blue_teal",
+        "grayscale"
+      ],
+      "title": "Palette",
+      "type": "string"
+    },
+    "fontSize": {
+      "default": 10,
+      "maximum": 16,
+      "minimum": 8,
+      "title": "Fontsize",
+      "type": "integer"
+    },
+    "gridVisible": {
+      "default": true,
+      "title": "Gridvisible",
+      "type": "boolean"
+    },
+    "panelTitles": {
+      "items": {
+        "maxLength": 160,
+        "type": "string"
+      },
+      "maxItems": 4,
+      "title": "Paneltitles",
+      "type": "array"
+    },
+    "panelChartIds": {
+      "items": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Panelchartids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "panelChartIds"
+  ],
+  "title": "FigureBoardSpec",
+  "type": "object"
+}

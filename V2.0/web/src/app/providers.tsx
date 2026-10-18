@@ -4,7 +4,10 @@ import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+
+import { InterfaceModeContext } from "@/components/layout/interface-mode";
+import { interfaceModeEvent, interfaceModeKey, loadInterfaceMode, parseInterfaceMode, saveInterfaceMode, type InterfaceMode } from "@/features/settings/interface-mode";
 
 import { loadUserPreferences } from "@/features/settings/user-preferences";
 import { createLabvizTheme } from "@/theme/theme";
@@ -17,6 +20,20 @@ type AppProvidersProps = {
 
 export function AppProviders({ children, locale, messages }: AppProvidersProps) {
   const [resolvedMode, setResolvedMode] = useState<"light" | "dark">("light");
+  const [interfaceMode, setInterfaceMode] = useState<InterfaceMode>("classic");
+  const [interfaceReady, setInterfaceReady] = useState(false);
+  const [interfacePersistent, setInterfacePersistent] = useState(true);
+  const changeInterface = useCallback((next: InterfaceMode) => {
+    setInterfaceMode(next);
+    document.documentElement.dataset.labvizInterface = next;
+    setInterfacePersistent(saveInterfaceMode(next));
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("ui")) {
+      url.searchParams.set("ui", next);
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, []);
+  const interfaceContext = useMemo(() => ({ mode: interfaceMode, setMode: changeInterface, persistent: interfacePersistent, ready: interfaceReady }), [interfaceMode, changeInterface, interfacePersistent, interfaceReady]);
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -29,7 +46,30 @@ export function AppProviders({ children, locale, messages }: AppProvidersProps) 
         },
       }),
   );
-  const appTheme = useMemo(() => createLabvizTheme(resolvedMode), [resolvedMode]);
+  const appTheme = useMemo(() => createLabvizTheme(resolvedMode, interfaceMode), [resolvedMode, interfaceMode]);
+
+  useEffect(() => {
+    const apply = (next: InterfaceMode) => {
+      setInterfaceMode(next);
+      document.documentElement.dataset.labvizInterface = next;
+    };
+    const timer = window.setTimeout(() => {
+      const explicit = parseInterfaceMode(new URL(window.location.href).searchParams.get("ui"));
+      const next = explicit ?? loadInterfaceMode();
+      apply(next);
+      setInterfaceReady(true);
+      if (explicit) setInterfacePersistent(saveInterfaceMode(explicit));
+    }, 0);
+    const sync = () => apply(loadInterfaceMode());
+    const storage = (event: StorageEvent) => { if (event.key === interfaceModeKey) sync(); };
+    window.addEventListener(interfaceModeEvent, sync);
+    window.addEventListener("storage", storage);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(interfaceModeEvent, sync);
+      window.removeEventListener("storage", storage);
+    };
+  }, []);
 
   useEffect(() => {
     const syncAppearance = () => {
@@ -58,12 +98,14 @@ export function AppProviders({ children, locale, messages }: AppProvidersProps) 
   return (
     <AppRouterCacheProvider options={{ enableCssLayer: true }}>
       <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
+        <InterfaceModeContext.Provider value={interfaceContext}>
         <ThemeProvider theme={appTheme}>
           <CssBaseline />
           <QueryClientProvider client={queryClient}>
             {children}
           </QueryClientProvider>
         </ThemeProvider>
+        </InterfaceModeContext.Provider>
       </NextIntlClientProvider>
     </AppRouterCacheProvider>
   );

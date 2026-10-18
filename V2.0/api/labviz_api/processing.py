@@ -926,7 +926,7 @@ def default_chart_spec(
             "heatmap",
             "surface3d",
         }
-        else "line"
+        else ("histogram" if len(numeric_columns) == 1 else "line")
     )
     if len(numeric_columns) == 1 and chart_type in {"line", "scatter", "bar"}:
         # A single measured variable supports a distribution, not an X/Y relation.
@@ -2288,6 +2288,10 @@ def render_chart(
     chart: ChartSpec,
     *,
     provenance: dict[str, Any] | None = None,
+    _target_figure: Any = None,
+    _target_axes: Any = None,
+    _frozen_analysis: dict[str, Any] | None = None,
+    _series_colors: dict[str, str] | None = None,
 ) -> bytes:
     if frame.empty:
         raise ProcessingError("There are no rows available to export.", "empty-chart-data")
@@ -2321,10 +2325,10 @@ def render_chart(
             "figure-too-large",
         )
 
-    figure = Figure(figsize=figure_size, dpi=export.dpi)
+    figure = _target_figure or Figure(figsize=figure_size, dpi=export.dpi)
     column_count = 1 if chart.panel_count == 1 else 2
     row_count = math.ceil(chart.panel_count / column_count)
-    axes = [
+    axes = _target_axes or [
         figure.add_subplot(
             row_count,
             column_count,
@@ -2343,7 +2347,7 @@ def render_chart(
         for index, item in enumerate(chart.series)
     ]
     x_field = chart.x_axis.field
-    derived = analyze_chart(frame, chart)
+    derived = _frozen_analysis or analyze_chart(frame, chart)
     analyses = derived["series"]
     preview = derived["preview"]
     if chart.type == "surface3d":
@@ -2398,6 +2402,7 @@ def render_chart(
                     grouped=bool(chart.group_field),
                     index=analysis_index,
                 )
+                color = (_series_colors or {}).get(analysis["label"], color)
                 label = analysis["label"]
                 style = matplotlib_line_style(item.line_style)
                 x_values = [point["x"] for point in points]
@@ -2595,15 +2600,16 @@ def render_chart(
         else:
             axis.set_title(f"Panel {panel_index}")
         if chart.type not in {"box", "heatmap", "surface3d"}:
-            axis.grid(
-                export.grid_visible,
-                color=GRID_COLOR,
-                linewidth=0.7,
-                alpha=0.8,
-            )
+            if export.grid_visible:
+                axis.grid(True, color=GRID_COLOR, linewidth=0.7, alpha=0.8)
+            else:
+                axis.grid(False)
         _configure_legend(axis, export.legend_position)
         if secondary_axis is not None:
             _configure_legend(secondary_axis, export.legend_position)
+
+    if _target_axes is not None:
+        return b""
 
     if chart.panel_count > 1:
         figure.suptitle(

@@ -1,0 +1,460 @@
+{
+  "$defs": {
+    "ConvertStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "convert_unit",
+          "title": "Kind",
+          "type": "string"
+        },
+        "valueField": {
+          "title": "Valuefield",
+          "type": "string"
+        },
+        "unitField": {
+          "title": "Unitfield",
+          "type": "string"
+        },
+        "toUnit": {
+          "title": "Tounit",
+          "type": "string"
+        },
+        "limitField": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limitfield"
+        }
+      },
+      "required": [
+        "kind",
+        "valueField",
+        "unitField",
+        "toUnit"
+      ],
+      "title": "ConvertStep",
+      "type": "object"
+    },
+    "ExclusionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "observationId": {
+          "title": "Observationid",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observationId",
+        "reason"
+      ],
+      "title": "ExclusionDecision",
+      "type": "object"
+    },
+    "FilterStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "filter",
+          "title": "Kind",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1000,
+          "minItems": 1,
+          "title": "Values",
+          "type": "array"
+        },
+        "keep": {
+          "default": true,
+          "title": "Keep",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "field",
+        "values"
+      ],
+      "title": "FilterStep",
+      "type": "object"
+    },
+    "LongStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "long_to_wide",
+          "title": "Kind",
+          "type": "string"
+        },
+        "indexFields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Indexfields",
+          "type": "array"
+        },
+        "nameField": {
+          "title": "Namefield",
+          "type": "string"
+        },
+        "valueField": {
+          "title": "Valuefield",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "indexFields",
+        "nameField",
+        "valueField"
+      ],
+      "title": "LongStep",
+      "type": "object"
+    },
+    "RoleMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "experimentalUnit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experimentalunit"
+        },
+        "parentSample": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parentsample"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time"
+        },
+        "batch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch"
+        },
+        "technicalRepeat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Technicalrepeat"
+        },
+        "pair": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pair"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "defaultUnit": {
+          "default": "unspecified",
+          "title": "Defaultunit",
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit"
+        },
+        "reported": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reported"
+        },
+        "measurementType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measurementtype"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "recordLink": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recordlink"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "RoleMapping",
+      "type": "object"
+    },
+    "WideStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "wide_to_long",
+          "title": "Kind",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Fields",
+          "type": "array"
+        },
+        "nameField": {
+          "title": "Namefield",
+          "type": "string"
+        },
+        "valueField": {
+          "title": "Valuefield",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "fields",
+        "nameField",
+        "valueField"
+      ],
+      "title": "WideStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "mapping": {
+      "$ref": "#/$defs/RoleMapping"
+    },
+    "steps": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "convert_unit": "#/$defs/ConvertStep",
+            "filter": "#/$defs/FilterStep",
+            "long_to_wide": "#/$defs/LongStep",
+            "wide_to_long": "#/$defs/WideStep"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/FilterStep"
+          },
+          {
+            "$ref": "#/$defs/ConvertStep"
+          },
+          {
+            "$ref": "#/$defs/WideStep"
+          },
+          {
+            "$ref": "#/$defs/LongStep"
+          }
+        ]
+      },
+      "maxItems": 30,
+      "title": "Steps",
+      "type": "array"
+    },
+    "exclusions": {
+      "items": {
+        "$ref": "#/$defs/ExclusionDecision"
+      },
+      "title": "Exclusions",
+      "type": "array"
+    },
+    "analysisUnit": {
+      "default": "observation",
+      "enum": [
+        "experimental_unit",
+        "sample",
+        "observation"
+      ],
+      "title": "Analysisunit",
+      "type": "string"
+    },
+    "validatePairs": {
+      "default": false,
+      "title": "Validatepairs",
+      "type": "boolean"
+    },
+    "pairTimes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 2,
+      "title": "Pairtimes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "mapping"
+  ],
+  "title": "PreparationPlan",
+  "type": "object"
+}
