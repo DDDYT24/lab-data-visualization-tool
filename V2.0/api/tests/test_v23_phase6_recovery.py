@@ -36,13 +36,16 @@ def invoke_cli(action: str, **paths: Path) -> subprocess.CompletedProcess[str]:
     ]
     for name, value in paths.items():
         command.extend(["-" + name, str(value)])
+    flags = 0
+    if sys.platform == "win32":
+        flags = subprocess.CREATE_NO_WINDOW
     return subprocess.run(
         command,
         capture_output=True,
         encoding="utf-8",
         errors="replace",
         timeout=120,
-        creationflags=subprocess.CREATE_NO_WINDOW,
+        creationflags=flags,
     )
 
 

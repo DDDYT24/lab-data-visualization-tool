@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import sqlite3
+import sys
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
@@ -30,7 +31,7 @@ def readonly_source_guard(root: Path) -> Iterator[None]:
     files = safe_files(root)
     handles: list[Any] = []
     library: Any = None
-    if os.name == "nt":
+    if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
 
