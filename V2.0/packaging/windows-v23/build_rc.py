@@ -86,6 +86,7 @@ def main():
     for name in ("PYTHONPATH", "PYTHONHOME", "NODE_PATH"):
         env.pop(name, None)
     tools = output / "tools"
+    env["PLAYWRIGHT_BROWSERS_PATH"] = str(tools / "browsers")
     runtimes = read(SOURCE / "runtimes.json")
     node = (
         tools / "node" / ("node-" + runtimes["node"]["version"] + "-win-x64/node.exe")
