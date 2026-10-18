@@ -8,6 +8,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -56,7 +57,9 @@ args = parser.parse_args()
 assert re.fullmatch(r"-[a-zA-Z0-9-]+", args.suffix), "Suffix must be a safe filename fragment"
 node = shutil.which("node")
 assert node
-flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+flags = 0
+if sys.platform == "win32":
+    flags = subprocess.CREATE_NO_WINDOW
 for port in [3305, 8305]:
     with socket.socket() as probe:
         assert probe.connect_ex(("127.0.0.1", port)) != 0, f"Port {port} already used"

@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
-import os
+import sys
 import time
 from ctypes import wintypes
 from pathlib import Path
@@ -17,7 +17,7 @@ from typing import Any
 
 
 def sample(root: int, stop_file: Path, interval: float = 0.25) -> dict[str, Any]:
-    if os.name != "nt":
+    if sys.platform != "win32":
         return {"available": False, "reason": "Windows native process sampler unavailable"}
 
     class ProcessEntry(ctypes.Structure):
