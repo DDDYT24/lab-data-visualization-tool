@@ -1,0 +1,33 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "legendEn": {
+      "maxLength": 20000,
+      "title": "Legenden",
+      "type": "string"
+    },
+    "legendZh": {
+      "maxLength": 20000,
+      "title": "Legendzh",
+      "type": "string"
+    },
+    "methodsEn": {
+      "maxLength": 20000,
+      "title": "Methodsen",
+      "type": "string"
+    },
+    "methodsZh": {
+      "maxLength": 20000,
+      "title": "Methodszh",
+      "type": "string"
+    }
+  },
+  "required": [
+    "legendEn",
+    "legendZh",
+    "methodsEn",
+    "methodsZh"
+  ],
+  "title": "OutputNotes",
+  "type": "object"
+}

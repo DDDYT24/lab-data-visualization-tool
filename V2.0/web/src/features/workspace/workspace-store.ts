@@ -244,7 +244,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       const textColumns = preview.columns.filter((column) => column.kind === "text");
       const xColumn = numericColumns[0];
       const yColumn = numericColumns[1] ?? numericColumns[0];
-      const sampleType = state.selectedFile?.recommendedChart;
+      const sampleType = state.selectedFile?.recommendedChart
+        ?? (numericColumns.length === 1 ? "histogram" : undefined);
       const sampleValueColumn =
         sampleType && ["histogram", "box"].includes(sampleType)
           ? numericColumns[0]

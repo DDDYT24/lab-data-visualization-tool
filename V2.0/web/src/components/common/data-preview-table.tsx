@@ -1,10 +1,13 @@
 "use client";
 
 import { Box } from "@mui/material";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   DataGrid,
   type GridCellParams,
+  type GridSortModel,
+  type GridFilterModel,
   type GridColDef,
 } from "@mui/x-data-grid";
 
@@ -15,17 +18,22 @@ import type {
 } from "@/domain/api-contract";
 
 type DataPreviewTableProps = {
+  active?: boolean;
   preview: DataPreview;
   findings?: QualityFinding[];
   emphasizeIssues?: boolean;
 };
 
 export function DataPreviewTable({
+  active = true,
   preview,
   findings = [],
   emphasizeIssues = false,
 }: DataPreviewTableProps) {
   const t = useTranslations("common");
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 25 });
+  const [sortModel, setSortModel] = useState<GridSortModel>([]);
+  const [filterModel, setFilterModel] = useState<GridFilterModel>({ items: [] });
   const columns: GridColDef<PreviewRow>[] = [
     { field: "rowId", headerName: t("row"), width: 72 },
     ...preview.columns.map<GridColDef<PreviewRow>>((column) => ({
@@ -51,6 +59,8 @@ export function DataPreviewTable({
     return "";
   };
 
+  if (!active) return null;
+
   return (
     <Box sx={{ height: 440, width: "100%" }}>
       <DataGrid
@@ -59,9 +69,12 @@ export function DataPreviewTable({
         disableRowSelectionOnClick
         getCellClassName={cellClassName}
         getRowId={(row) => row.rowId}
-        initialState={{
-          pagination: { paginationModel: { page: 0, pageSize: 25 } },
-        }}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        sortModel={sortModel}
+        onSortModelChange={setSortModel}
+        filterModel={filterModel}
+        onFilterModelChange={setFilterModel}
         pageSizeOptions={[25, 50]}
         rows={preview.rows}
         sx={{

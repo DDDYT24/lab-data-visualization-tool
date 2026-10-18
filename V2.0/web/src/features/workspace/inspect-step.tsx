@@ -41,7 +41,7 @@ import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 import { StepLayout } from "./step-layout";
 import { useWorkspaceStore, type IssueAction } from "./workspace-store";
 
-export function InspectStep({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }) {
+export function InspectStep({ onBack, onContinue, active = true }: { onBack: () => void; onContinue: () => void; active?: boolean }) {
   const t = useTranslations("inspect");
   const projectId = useWorkspaceStore((state) => state.projectId);
   const preview = useWorkspaceStore((state) => state.preview);
@@ -237,6 +237,7 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
         </Alert>
       </Stack>
       <DataPreviewTable
+        active={active}
         emphasizeIssues
         findings={quality.findings}
         preview={preview}

@@ -1,0 +1,14 @@
+{
+  "format": "labviz-installed-v1",
+  "appId": "55B46BB7-101E-46DC-951A-3DE7E402EDD0",
+  "name": "LabViz V2.3",
+  "programDirectory": "LabVizV23",
+  "profileDirectory": "LabVizV23",
+  "restoredProfilesDirectory": "LabVizV23Profiles",
+  "webPort": 3301,
+  "apiPort": 8301,
+  "bindAddress": "127.0.0.1",
+  "dataEpoch": 1,
+  "applicationMutex": "Local\\LabVizV23-App",
+  "cookieNamespace": "_v23_installed_<profile UUID>"
+}

@@ -115,7 +115,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build production API image
-        run: docker build -f api/Dockerfile -t labviz-api:ci api
+        run: docker build -f api/Dockerfile -t labviz-api:ci .
+      - name: Check bundled API resources
+        run: >-
+          docker run --rm --entrypoint python labviz-api:ci -c
+          "from labviz_api.research_preparation import LIMITS;
+          from labviz_api.sample_catalog import public_samples, sample_payload;
+          from labviz_api.main import app;
+          assert LIMITS;
+          assert all(sample_payload(s.slug)[1] for s in public_samples());
+          print('API, scientific contracts, and synthetic samples loaded')"
       - name: Build production Web image
         run: docker build -f web/Dockerfile -t labviz-web:ci .
       - name: Build logical-backup image

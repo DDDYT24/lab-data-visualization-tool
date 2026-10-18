@@ -31,7 +31,9 @@ import { useWorkspaceStore } from "./workspace-store";
 export function ImportStep({
   onContinue,
   onReimport,
+  active = true,
 }: {
+  active?: boolean;
   onContinue: () => void;
   onReimport: (sheetName: string | null, headerRow: number) => void;
 }) {
@@ -82,7 +84,7 @@ export function ImportStep({
           variant="outlined"
         />
       </Stack>
-      <DataPreviewTable preview={preview} />
+      <DataPreviewTable active={active} preview={preview} />
     </Paper>
   );
 
