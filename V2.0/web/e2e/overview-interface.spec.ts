@@ -3,6 +3,18 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { installMockApi } from "./support/mock-api";
 
+async function visitSettled(page: Page, url: string) {
+  await page.waitForLoadState("networkidle");
+  await page.goto(url);
+  await page.waitForLoadState("networkidle");
+}
+
+async function reloadSettled(page: Page) {
+  await page.waitForLoadState("networkidle");
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+}
+
 async function expectFitsPage(page: Page, width: number) {
   const overflow = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
     elements: [...document.querySelectorAll("body *")].filter((el) => el.getBoundingClientRect().right > innerWidth + 1).slice(0, 12)
@@ -13,7 +25,7 @@ async function expectFitsPage(page: Page, width: number) {
 test("overview uses actual project summaries, survives mode changes and handles empty/error states", async ({ page, browserName, expectConsoleError }, testInfo) => {
   page.setDefaultTimeout(10_000);
   await installMockApi(page, { authenticated: true });
-  await page.goto("/?ui=overview");
+  await visitSettled(page, "/?ui=overview");
   await expect(page.getByRole("heading", { name: "From experimental data to clear insight" })).toBeVisible();
   const recent = page.getByTestId("overview-projects");
   await expect(recent.getByTestId("overview-project-card")).toHaveCount(1);
@@ -22,10 +34,10 @@ test("overview uses actual project summaries, survives mode changes and handles 
   await expect(recent.getByRole("img")).toHaveCount(0);
   await page.getByRole("button", { name: "Switch to classic interface", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Make experiment data clear and insightful." })).toBeVisible();
-  await page.reload();
+  await reloadSettled(page);
   await expect(page.locator("html")).toHaveAttribute("data-labviz-interface", "classic");
   await page.getByRole("button", { name: "Switch to overview A interface", exact: true }).click();
-  await page.reload();
+  await reloadSettled(page);
   await expect(recent).toBeVisible();
   for (const width of [1440, 1280, 1024, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -36,15 +48,16 @@ test("overview uses actual project summaries, survives mode changes and handles 
   await expect(page.getByRole("menuitem", { name: "Research workspace", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menuitem", { name: "Research workspace", exact: true })).not.toBeVisible();
+  await expect(page.getByRole("menu", { includeHidden: true })).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 1000 });
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(axe.violations).toEqual([]);
   await page.route("**/api/v1/projects", (route) => route.fulfill({ json: { apiVersion: "v1", projects: [] } }));
-  await page.reload();
+  await reloadSettled(page);
   await expect(recent).toContainText("Import your first file");
   await page.route("**/api/v1/projects", (route) => route.fulfill({ status: 503, json: { error: { code: "unavailable", message: "Test unavailable" } } }));
   if (browserName !== "firefox") expectConsoleError(/503/);
-  await page.reload();
+  await reloadSettled(page);
   await expect(recent.getByRole("alert")).toContainText("Saved projects are unavailable");
   await page.route("**/api/v1/projects", (route) => route.fulfill({ json: { apiVersion: "v1", projects: [] } }));
   await recent.getByRole("button", { name: "Retry", exact: true }).click();
@@ -53,7 +66,7 @@ test("overview uses actual project summaries, survives mode changes and handles 
   await page.locator('input[type="file"]').setInputFiles({ name: "workbook.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("unsupported research input") });
   await expect(page.locator("main").getByRole("alert")).toContainText("Research preparation accepts CSV/TSV");
   await expect(page).toHaveURL(/workspace=research/);
-  await page.goto("/settings");
+  await visitSettled(page, "/settings");
   await page.getByRole("combobox", { name: "Interface mode", exact: true }).click();
   await page.getByRole("option", { name: "Classic", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-labviz-interface", "classic");
@@ -62,17 +75,17 @@ test("overview uses actual project summaries, survives mode changes and handles 
   await expect(page.locator("html")).toHaveAttribute("data-labviz-interface", "overview");
   await page.screenshot({ path: testInfo.outputPath("overview-settings.png"), fullPage: true });
   await page.unroute("**/api/v1/projects");
-  await page.goto("/history");
+  await visitSettled(page, "/history");
   await expect(page.getByText("Thermal response", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Grid view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Grid view", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "List view", exact: true }).click();
   await expect(page.getByRole("link", { name: "Open research workspace", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("overview-project-list.png"), fullPage: true });
-  await page.goto("/help");
+  await visitSettled(page, "/help");
   await expect(page.locator("main").getByRole("heading", { level: 1 })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("overview-help.png"), fullPage: true });
-  await page.goto("/about");
+  await visitSettled(page, "/about");
   await expect(page.locator("main").getByRole("heading", { level: 1 })).toBeVisible();
 });
 
