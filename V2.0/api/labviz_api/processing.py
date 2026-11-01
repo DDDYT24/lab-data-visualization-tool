@@ -2,6 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import matplotlib
+    import numpy as np
+    import pandas as pd
+else:
+    matplotlib = scientific_module("matplotlib")
+    np = scientific_module("numpy")
+    pd = scientific_module("pandas")
+
 import base64
 import csv
 import io
@@ -18,16 +31,6 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 from zipfile import BadZipFile, ZipFile
 
-import matplotlib
-import numpy as np
-import pandas as pd
-from fontTools import subset
-from matplotlib import font_manager
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.figure import Figure
-from scipy.stats import f as fisher_f
-from scipy.stats import t as student_t
-
 from .models import ChartSpec, JsonScalar
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
@@ -41,7 +44,10 @@ from .render_contract import (
     matplotlib_line_style,
 )
 
-matplotlib.use("Agg")
+if os.environ.get("LABVIZ_DESKTOP_MODE") == "1":
+    os.environ["MPLBACKEND"] = "Agg"
+else:
+    matplotlib.use("Agg")
 
 SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".txt", ".json", ".xlsx"}
 MAX_PREVIEW_ROWS = 200
@@ -102,6 +108,8 @@ def _cjk_font_candidates() -> list[Path]:
 @lru_cache(maxsize=1)
 def _cjk_font_info() -> tuple[str, str] | None:
     """Return a registered CJK family and its source path, if one is available."""
+    from matplotlib import font_manager
+
     seen: set[Path] = set()
     for candidate in _cjk_font_candidates():
         resolved = candidate.resolve() if candidate.exists() else candidate
@@ -1520,6 +1528,8 @@ def _fit_analysis(
                 covariance = residual_variance * np.linalg.pinv(weighted_design.T @ weighted_design)
             variance = np.einsum("ij,jk,ik->i", grid_design, covariance, grid_design)
             if interval_kind == "simultaneous":
+                from scipy.stats import f as fisher_f
+
                 fisher_quantile = float(
                     fisher_f.ppf(
                         fitting.confidence_level / 100,
@@ -1529,6 +1539,8 @@ def _fit_analysis(
                 )
                 critical = math.sqrt(parameter_count * fisher_quantile)
             else:
+                from scipy.stats import t as student_t
+
                 critical = float(
                     student_t.ppf((1 + fitting.confidence_level / 100) / 2, degrees_of_freedom)
                 )
@@ -1774,6 +1786,8 @@ def _uncertainty_analysis(
                 errors = standard_error
             else:
                 probability = (1 + uncertainty.confidence_level / 100) / 2
+                from scipy.stats import t as student_t
+
                 critical = student_t.ppf(probability, grouped["count"] - 1)
                 errors = standard_error * critical
         positions = _sample_positions(len(grouped))
@@ -2293,6 +2307,10 @@ def render_chart(
     _frozen_analysis: dict[str, Any] | None = None,
     _series_colors: dict[str, str] | None = None,
 ) -> bytes:
+    from matplotlib import font_manager
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.figure import Figure
+
     if frame.empty:
         raise ProcessingError("There are no rows available to export.", "empty-chart-data")
     export = chart.export_settings
@@ -2667,6 +2685,8 @@ def render_chart(
             figure.savefig(output, **save_kwargs)
         if resolved_font_properties is not None:
             # Embed only used glyphs; SVG text remains selectable without OS fonts.
+            from fontTools import subset
+
             font = subset.load_font(str(resolved_font_properties.get_file()), subset.Options())
             subsetter = subset.Subsetter()
             subsetter.populate(

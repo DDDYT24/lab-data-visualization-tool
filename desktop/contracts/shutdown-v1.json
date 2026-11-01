@@ -1,0 +1,16 @@
+{
+  "format": "labviz-desktop-shutdown-contract-v1",
+  "serviceReceipt": "backendProfile/logs/desktop-service-exit.json",
+  "receiptIdentity": ["format", "profileId", "sessionId"],
+  "normalStop": ["matching-stop-request", "authenticated-owned-api-shutdown-acknowledgement", "api-exits-zero-within-45-seconds", "terminate-disposable-next-listener-after-api-exit", "wait-for-owned-children", "remove-matching-running-record", "controller-verifies-matching-runner-receipt"],
+  "nextStopPolicy": "Next has no authenticated shutdown endpoint. Its listener is terminated after API work has drained and the API has exited normally; this planned action is recorded separately from emergency job termination.",
+  "failurePolicy": "Timeout, nonzero API/runner exit, missing or mismatched receipt, or retained running record cannot emit suspended. Retain durable checkpoint and sources, report failure, stop owned processes and require recovery on reopen. Maintenance never executes after an abnormal shutdown.",
+  "maintenancePolicy": "Final suspension admission and maintenance submissions share a lock. A late accepted maintenance request cancels ordinary suspension; after commit new maintenance submissions are rejected until reopen.",
+  "windowsPolicy": {
+    "sessionLock": "Do not infer application idleness or stop accepted work from a Windows session lock.",
+    "systemSleep": "Do not change the system power plan or block Windows sleep. Process execution can pause; task completion during system sleep is not promised.",
+    "resumeOrSchedulerGap": "A loop gap longer than five seconds or a backwards clock resets the quiet interval and cancels an uncommitted checkpoint. A fresh activity/generation check is still required. A committed page destruction completes its single stop/restart path.",
+    "logoffOrShutdown": "No durability promise for uncheckpointed edits or unfinished in-memory tasks when Windows terminates processes. Recover durable backend/checkpoint state on the next launch.",
+    "acceptance": "Clock-gap and controller behavior can be simulated without desktop control. Actual Windows lock, sleep, logoff and shutdown acceptance remains separate."
+  }
+}

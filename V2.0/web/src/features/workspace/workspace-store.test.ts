@@ -1,10 +1,38 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { ProjectSession, DataPreview, QualityReport } from "@/domain/api-contract";
 
 import { useWorkspaceStore } from "./workspace-store";
 
 describe("workspace store", () => {
   afterEach(() => {
     useWorkspaceStore.getState().reset();
+  });
+
+  it("ignores a previous project's late session response after opening another project", () => {
+    useWorkspaceStore.setState({projectId:"next-project",currentRevisionId:"next-revision",description:"Current description"});
+    const previous = {projectId:"previous-project",currentRevisionId:"previous-revision",description:"Late old description",storageMode:"local",job:null} as ProjectSession;
+    useWorkspaceStore.getState().markProjectSaved(previous);
+    expect(useWorkspaceStore.getState().projectId).toBe("next-project");
+    expect(useWorkspaceStore.getState().currentRevisionId).toBe("next-revision");
+    expect(useWorkspaceStore.getState().description).toBe("Current description");
+  });
+
+  it("keeps the next project loading when a previous preview and quality response arrives", () => {
+    useWorkspaceStore.getState().openProject("next-project");
+    const preview = {apiVersion:"v1",projectId:"previous-project",columns:[],rows:[],totalRows:0,sampled:false,sampleStrategy:"none"} as DataPreview;
+    const quality = {apiVersion:"v1",projectId:"previous-project",totalRows:0,validRows:0,missingValues:0,duplicateRows:0,suspiciousPoints:0,findings:[]} as QualityReport;
+    useWorkspaceStore.getState().setWorkspaceData(preview, quality);
+    expect(useWorkspaceStore.getState().preview).toBeNull();
+    expect(useWorkspaceStore.getState().quality).toBeNull();
+    expect(useWorkspaceStore.getState().loadStatus).toBe("processing");
+  });
+
+  it("still accepts a session update belonging to the currently selected project", () => {
+    useWorkspaceStore.getState().openProject("current-project");
+    const session = {projectId:"current-project",currentRevisionId:"updated-revision",description:"Saved description",storageMode:"local",job:null} as ProjectSession;
+    useWorkspaceStore.getState().markProjectSaved(session);
+    expect(useWorkspaceStore.getState().currentRevisionId).toBe("updated-revision");
+    expect(useWorkspaceStore.getState().description).toBe("Saved description");
   });
 
   it("starts a new file at the import step", () => {

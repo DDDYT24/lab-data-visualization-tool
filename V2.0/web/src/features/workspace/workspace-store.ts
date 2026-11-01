@@ -213,13 +213,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       exportReady: false,
     }),
   markProjectSaved: (session) =>
-    set({
+    set((state) => state.projectId !== session.projectId ? state : ({
       storageMode: session.storageMode,
       description: session.description,
       currentRevisionId: session.currentRevisionId,
       job: session.job,
       loadError: null,
-    }),
+    })),
   applyProjectDescription: (description, currentRevisionId) =>
     set({ description, currentRevisionId }),
   addShare: (share) =>
@@ -238,6 +238,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     }),
   setWorkspaceData: (preview, quality) =>
     set((state) => {
+      if (preview.projectId !== quality.projectId || (state.projectId && state.projectId !== preview.projectId)) return state;
       const numericColumns = preview.columns.filter(
         (column) => column.kind === "number",
       );

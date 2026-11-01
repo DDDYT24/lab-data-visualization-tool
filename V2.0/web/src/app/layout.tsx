@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang={locale}>
       <body>
-        <AppProviders locale={locale} messages={messages}>
+        <AppProviders locale={locale} messages={messages} localRuntime={process.env.LABVIZ_DESKTOP_MODE === '1'}>
           {children}
         </AppProviders>
       </body>

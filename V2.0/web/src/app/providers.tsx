@@ -11,14 +11,16 @@ import { interfaceModeEvent, interfaceModeKey, loadInterfaceMode, parseInterface
 
 import { loadUserPreferences } from "@/features/settings/user-preferences";
 import { createLabvizTheme } from "@/theme/theme";
+import { DesktopSession } from "@/features/workspace/desktop-session";
 
 type AppProvidersProps = {
   children: ReactNode;
   locale: string;
   messages: Record<string, unknown>;
+  localRuntime?: boolean;
 };
 
-export function AppProviders({ children, locale, messages }: AppProvidersProps) {
+export function AppProviders({ children, locale, messages, localRuntime = false }: AppProvidersProps) {
   const [resolvedMode, setResolvedMode] = useState<"light" | "dark">("light");
   const [interfaceMode, setInterfaceMode] = useState<InterfaceMode>("classic");
   const [interfaceReady, setInterfaceReady] = useState(false);
@@ -102,7 +104,7 @@ export function AppProviders({ children, locale, messages }: AppProvidersProps) 
         <ThemeProvider theme={appTheme}>
           <CssBaseline />
           <QueryClientProvider client={queryClient}>
-            {children}
+            <DesktopSession localRuntime={localRuntime}>{children}</DesktopSession>
           </QueryClientProvider>
         </ThemeProvider>
         </InterfaceModeContext.Provider>

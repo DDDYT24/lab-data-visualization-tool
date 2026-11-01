@@ -14,12 +14,13 @@ from email.utils import make_msgid
 from typing import Any, Literal, Protocol, cast
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
-import boto3
 from botocore.config import Config
 
 from .config import Settings
 from .repository import iso_at
+from .scientific_imports import desktop_module
 
+boto3 = desktop_module("boto3")
 LOGGER = logging.getLogger(__name__)
 
 

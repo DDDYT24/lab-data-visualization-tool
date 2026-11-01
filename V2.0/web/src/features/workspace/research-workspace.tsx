@@ -18,6 +18,7 @@ import type { FigureWorkspaceState } from "./figure-workspace-state";
 import { OverviewProjectContents } from "./overview-project-contents";
 import { useInterfaceMode } from "@/components/layout/interface-mode";
 import { useWorkspaceStore } from "./workspace-store";
+import { useDesktopDraft } from "./desktop-session";
 
 const SourceDataTools = dynamic(() => import("./source-data-tools").then((module) => module.SourceDataTools));
 
@@ -88,6 +89,32 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
   const [selected, setSelected] = useState("");
   const [reason, setReason] = useState("");
   const [pages, setPages] = useState<Partial<Record<"samples" | "observations", ResearchPage & { key: string }>>>({});
+  const [pageOffsets, setPageOffsets] = useState<Partial<Record<"samples" | "observations", number>>>({});
+  useDesktopDraft(`research:${projectId}`, projectId, { research: view?.revisionId ?? null }, {
+    task, expandedSections, openedTasks: [...openedTasks], rawValues, rowSearch, plan, files, columns, sourceRows,
+    dirty, kind, field, values, nameField, valueField, targetUnit, selected, reason, detailsOpen, projectsOpen, projectsCollapsed, pageOffsets,
+  }, draft => {
+    // Recreate the active editor first. Other drafts remain in DesktopSession
+    // and hydrate when their tab is opened, without replaying hidden queries.
+    setTask(draft.task); setOpenedTasks(new Set([draft.task])); setExpandedSections(draft.expandedSections);
+    setRawValues(draft.rawValues); setRowSearch(draft.rowSearch); setPlan(draft.plan); setFiles(draft.files);
+    setColumns(draft.columns); setSourceRows(draft.sourceRows); setDirty(draft.dirty); setKind(draft.kind);
+    setField(draft.field); setValues(draft.values); setNameField(draft.nameField); setValueField(draft.valueField);
+    setTargetUnit(draft.targetUnit); setSelected(draft.selected); setReason(draft.reason); setDetailsOpen(draft.detailsOpen);
+    setProjectsOpen(draft.projectsOpen); setProjectsCollapsed(draft.projectsCollapsed);
+    setPreview(null); setPages({}); // Old preview capabilities are never restored.
+    const offsets = draft.pageOffsets ?? {};
+    setPageOffsets(offsets);
+    const revision = view?.revisionId;
+    const kinds = (["samples", "observations"] as const).filter(kind => Number.isInteger(offsets[kind]) && offsets[kind]! > 0 && offsets[kind]! < 100000);
+    if (revision && kinds.length) {
+      setBusy(true);
+      void Promise.all(kinds.map(async kind => [kind, { ...await researchApi.page(projectId, kind, offsets[kind]!, revision), key: revision }] as const))
+        .then(entries => setPages(Object.fromEntries(entries)))
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Saved table page could not be loaded"))
+        .finally(() => setBusy(false));
+    }
+  }, !busy, busy || previewRunning);
 
 
   useEffect(() => {
@@ -136,6 +163,7 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
   function accept(next: ResearchView) {
     setCancelled(false);
     setView(next); setPreview(null); setFiles([]); setDirty(false); setSelected("");
+    setPages({}); setPageOffsets({});
     if (next.data) {
       setPlan(next.data.plan as PreparationPlan);
       setColumns(next.data.columns);
@@ -155,6 +183,7 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
     const move = (next: number) => void run(async () => {
       const result = await researchApi.page(projectId, kind, next, view?.revisionId ?? null, preview?.token);
       setPages((previous) => ({ ...previous, [kind]: { ...result, key: pageKey } }));
+      if (!preview) setPageOffsets(previous => ({ ...previous, [kind]: next }));
       setSelected("");
     });
     return <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>

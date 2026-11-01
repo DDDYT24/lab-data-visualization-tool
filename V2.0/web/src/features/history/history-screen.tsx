@@ -1,5 +1,7 @@
 "use client";
 
+import { forgetDesktopProject } from "../workspace/desktop-session";
+
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
@@ -118,7 +120,8 @@ export function HistoryScreen() {
   });
   const deleteMutation = useMutation({
     mutationFn: (projectId: string) => labvizApi.deleteProject(projectId),
-    onSuccess: async () => {
+    onSuccess: async (_result, projectId) => {
+      forgetDesktopProject(projectId);
       setDeleteProjectId(null);
       setSearch("");
       setChartType("all");
