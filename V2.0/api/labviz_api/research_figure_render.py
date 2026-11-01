@@ -2,31 +2,41 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import numpy as np
+    import pandas as pd
+else:
+    np = scientific_module("numpy")
+    pd = scientific_module("pandas")
+
 import io
 import json
 from time import perf_counter
 from typing import Any, cast
-
-import numpy as np
-import pandas as pd
-from matplotlib import font_manager
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.collections import PathCollection
-from matplotlib.figure import Figure
-from matplotlib.lines import Line2D
-from matplotlib.text import Text
 
 from .models import ChartSpec
 from .processing import _cjk_font_info, _contains_cjk
 from .processing import render_chart as legacy_render
 from .research_chart_render import _RENDER_LOCK, COLORS, rasterize_points, render_chart
 from .research_preparation import PreparationError
-from .research_raster import freeze_raster_layers
 
 
 def render_board(
     sources: list[dict[str, Any]], spec: Any, *, timings: dict[str, float] | None = None
 ) -> tuple[dict[str, bytes], dict[str, Any]]:
+    from matplotlib import font_manager
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.collections import PathCollection
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+    from matplotlib.text import Text
+
+    from .research_raster import freeze_raster_layers
+
     with _RENDER_LOCK:
         started = perf_counter()
         count = len(sources)

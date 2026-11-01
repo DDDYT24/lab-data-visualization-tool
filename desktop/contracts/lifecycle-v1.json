@@ -1,0 +1,45 @@
+{
+  "format": "labviz-desktop-lifecycle-v1",
+  "baselineCommit": "b587db848ba5f1930657d5a316e0160c71864ead",
+  "previewIdentity": "org.labviz.desktop.prototype",
+  "platform": "windows-x64",
+  "normalWorkflow": "offline-after-first-install",
+  "scope": ["D0", "D1"],
+  "prototypeClose": "hide-and-keep-all-owned-services",
+  "prototypeAutomaticSuspension": false,
+  "finalStates": ["starting", "visible", "tray-busy", "tray-idle", "checkpointing", "draining", "suspended", "resuming", "exiting", "recoverable-error"],
+  "rules": [
+    {"id": "close", "trigger": "window-close", "result": "hide-to-tray", "guard": "never-stop-a-task"},
+    {"id": "show", "trigger": "tray-open", "result": "restore-existing-window", "guard": "same-profile"},
+    {"id": "repeat-launch", "trigger": "second-launch", "result": "wake-existing-instance", "implementationStage": "D2"},
+    {"id": "explicit-exit", "trigger": "tray-exit", "result": "normal-stop-of-owned-services", "guard": "D1-exit-only-after-the-test-runner-confirms-idle"},
+    {"id": "future-suspend", "trigger": "idle-timeout", "result": "release-resources", "requires": ["D3-durable-draft-ack", "D3-global-drain-ack", "D4-cancellable-transition"]},
+    {"id": "save-failed", "trigger": "checkpoint-failure", "result": "keep-window-state-and-services"},
+    {"id": "reopen-during-suspend", "trigger": "show-request", "result": "cancel-or-complete-and-resume-once", "implementationStage": "D4"},
+    {"id": "revision-conflict", "trigger": "draft-base-revision-differs", "result": "retain-draft-and-request-resolution", "implementationStage": "D3"}
+  ],
+  "draftBoundary": {
+    "checkpointIsScientificRevision": false,
+    "autoApplyPreparation": false,
+    "autoFreezeResults": false,
+    "requiredFields": ["profileId", "projectId", "baseRevision", "route", "workspaceStep", "preparationDraft", "chartDraft", "figureDraft", "undoRedo", "replacementMapping", "notes", "stagedFileReferences", "taskReferences"],
+    "fileObjectPolicy": "persist-to-owned-staging-and-ack-or-block-suspension",
+    "previewTokenPolicy": "revalidate-after-restart"
+  },
+  "activityBoundary": ["upload", "background-import", "research-request", "figure-queued", "figure-running", "save", "artifact-write", "download"],
+  "isolation": {
+    "sourceMutation": "desktop-worktree-only-except-append-only-authoritative-status",
+    "data": "fresh-synthetic-profile-under-owned-trial-root",
+    "defaultUserProfiles": "never-adopt-or-stop",
+    "processStop": "verified-owned-processes-only",
+    "windowStateDestruction": "disabled-before-D3-and-D4"
+  },
+  "failureResults": {
+    "startupTimeout": "keep-private-logs-and-show-startup-failure",
+    "foreignPort": "choose-another-loopback-port-before-sending-credentials",
+    "profileBusy": "refuse-to-adopt-profile",
+    "invalidServiceIdentity": "do-not-send-credentials-or-load-window",
+    "diskFull": "retain-draft-and-disable-suspension",
+    "corruptCheckpoint": "retain-original-and-recover-saved-revision-with-explicit-warning"
+  }
+}

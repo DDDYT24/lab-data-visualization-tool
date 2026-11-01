@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import pandas as pd
+else:
+    pd = scientific_module("pandas")
+
 import copy
 import hashlib
 import json
@@ -9,7 +18,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import uuid4
 
-import pandas as pd
 from pydantic import Field, model_validator
 
 from .models import ChartSpec
@@ -111,7 +119,7 @@ def save_template(store: ResearchStore, project_id: str, spec: WorkflowTemplate)
     identifier = uuid4().hex
     with store.connect() as c:
         c.execute(
-            "INSERT INTO research_templates VALUES (?,?,?,?)",
+            "INSERT INTO research_templates (id,project_id,spec_json,created_at) VALUES (?,?,?,?)",
             (identifier, project_id, spec.model_dump_json(), now()),
         )
     return {"id": identifier, "spec": spec.model_dump()}
@@ -394,7 +402,9 @@ def preview_template(
         store.check_head(c, project_id, expected)
         c.execute(
             (
-                "INSERT INTO research_workflow_drafts VALUES (?,?,?,?,?) ON "
+                "INSERT INTO research_workflow_drafts "
+                "(project_id,token,expected_revision,payload_json,created_at) "
+                "VALUES (?,?,?,?,?) ON "
                 "CONFLICT(project_id) DO UPDATE SET token=excluded.token,expected_revision=ex"
                 "cluded.expected_revision,payload_json=excluded.payload_json,created_at=exclu"
                 "ded.created_at"
@@ -492,13 +502,27 @@ def apply_template(
             raise PreparationError(
                 "preview-expired", "Preview has already been consumed or replaced."
             )
-        c.executemany("INSERT INTO research_revisions VALUES (?,?,?,?,?,?)", revisions)
-        c.executemany("INSERT INTO research_charts VALUES (?,?,?,?,?,?,?,?)", charts)
-        c.executemany("INSERT INTO research_figure_sources VALUES (?,?,?,?)", legacy_panels)
+        c.executemany(
+            "INSERT INTO research_revisions "
+            "(id,project_id,parent_id,raw_json,prepared_json,created_at) VALUES (?,?,?,?,?,?)",
+            revisions,
+        )
+        c.executemany(
+            "INSERT INTO research_charts "
+            "(id,project_id,revision_id,result_json,svg,png,pdf,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            charts,
+        )
+        c.executemany(
+            "INSERT INTO research_figure_sources (id,project_id,result_json,created_at) "
+            "VALUES (?,?,?,?)",
+            legacy_panels,
+        )
         if revisions:
             c.execute(
                 (
-                    "INSERT INTO research_heads VALUES (?,?,'[]') ON CONFLICT(project_id) DO "
+                    "INSERT INTO research_heads (project_id,revision_id,future_json) "
+                    "VALUES (?,?,'[]') ON CONFLICT(project_id) DO "
                     "UPDATE SET revision_id=excluded.revision_id,future_json='[]'"
                 ),
                 (project_id, parent),
@@ -506,11 +530,13 @@ def apply_template(
             c.execute("DELETE FROM research_drafts WHERE project_id=?", (project_id,))
         if board_id and artifacts is not None:
             c.execute(
-                "INSERT INTO research_figure_boards VALUES (?,?,?,?)",
+                "INSERT INTO research_figure_boards (id,project_id,spec_json,created_at) "
+                "VALUES (?,?,?,?)",
                 (board_id, project_id, spec.figure.model_dump_json(), timestamp),
             )
             c.execute(
-                "INSERT INTO research_figure_artifacts VALUES (?,?,?,?,?)",
+                "INSERT INTO research_figure_artifacts (board_id,svg,png,pdf,scene_json) "
+                "VALUES (?,?,?,?,?)",
                 (
                     board_id,
                     artifacts["svg"],

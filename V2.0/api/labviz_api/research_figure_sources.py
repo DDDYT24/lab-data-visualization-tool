@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import numpy as np
+    import pandas as pd
+else:
+    np = scientific_module("numpy")
+    pd = scientific_module("pandas")
+
 import hashlib
 import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-import numpy as np
-import pandas as pd
 from pydantic_core import from_json, to_json
 
 from .models import ChartSpec
@@ -277,7 +286,8 @@ def save_legacy(store: Any, project_id: str, result: dict[str, Any]) -> str:
     identifier = uuid4().hex
     with store.connect() as connection:
         connection.execute(
-            "INSERT INTO research_figure_sources VALUES (?,?,?,?)",
+            "INSERT INTO research_figure_sources (id,project_id,result_json,created_at) "
+            "VALUES (?,?,?,?)",
             (
                 identifier,
                 project_id,

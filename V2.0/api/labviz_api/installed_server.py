@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import secrets
 
 import uvicorn
@@ -21,6 +22,12 @@ def main() -> None:
     from .main import app
 
     key = app.state.settings.local_access_key
+    if os.environ.get("LABVIZ_DESKTOP_MODE") == "1":
+        if not key:
+            raise ValueError("A desktop launch key is required.")
+        from .desktop_lifecycle import install
+
+        install(app, profile, key)
     server = uvicorn.Server(
         uvicorn.Config(
             app,

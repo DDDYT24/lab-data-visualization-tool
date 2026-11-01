@@ -1,0 +1,210 @@
+{
+  "format": "labviz-desktop-release-record-v1",
+  "packageId": null,
+  "setupSha256": null,
+  "machine": {
+    "id": null,
+    "operator": null
+  },
+  "metrics": {
+    "nativeHostPrivateCommitMiB": null,
+    "completeSuspendedPrivateCommitMiB": null,
+    "smallEditableRestoreSamplesMs": []
+  },
+  "reports": {
+    "installation": {
+      "path": null,
+      "sha256": null
+    },
+    "coldStart": {
+      "path": null,
+      "sha256": null
+    },
+    "largeWorkspaceRestore": {
+      "path": null,
+      "sha256": null
+    },
+    "foregroundAndPeak": {
+      "path": null,
+      "sha256": null
+    },
+    "busyTray": {
+      "path": null,
+      "sha256": null
+    },
+    "repeatedRestore": {
+      "path": null,
+      "sha256": null
+    }
+  },
+  "gates": [
+    {
+      "id": "window-tray-exit",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "native-files",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "draft-reconstruction",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "native-suspension",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "native-resource-budgets",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "mandatory-measurements",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "busy-tray-interruption",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "data-tools-pdf-clipboard-links",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "windows-session-power",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "clean-windows-components",
+      "scope": "clean-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "physical-offline",
+      "scope": "physical-offline",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "current-version-native-coexistence",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "accessibility-researcher-trial",
+      "scope": "native-windows",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    },
+    {
+      "id": "signed-distribution",
+      "scope": "release-review",
+      "outcome": "not-run",
+      "machineId": null,
+      "operator": null,
+      "utcTime": null,
+      "actions": [],
+      "expected": null,
+      "actual": null,
+      "evidenceSha256": {}
+    }
+  ]
+}

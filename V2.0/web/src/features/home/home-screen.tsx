@@ -30,6 +30,7 @@ import { useWorkspaceStore } from "@/features/workspace/workspace-store";
 
 import { ExampleGallery } from "./example-gallery";
 import { OverviewProjects } from "./overview-projects";
+import { useDesktopDraft } from "@/features/workspace/desktop-session";
 
 type HomeError =
   | "invalid-type"
@@ -65,6 +66,9 @@ export function HomeScreen() {
   const [runLabel, setRunLabel] = useState("");
   const [replicateId, setReplicateId] = useState("");
   const [batchId, setBatchId] = useState("");
+  useDesktopDraft("home", null, {}, { experimentTitle, runLabel, replicateId, batchId }, draft => {
+    setExperimentTitle(draft.experimentTitle); setRunLabel(draft.runLabel); setReplicateId(draft.replicateId); setBatchId(draft.batchId);
+  });
   const [exampleGalleryOpen, setExampleGalleryOpen] = useState(
     () => searchParams.get("examples") === "1",
   );

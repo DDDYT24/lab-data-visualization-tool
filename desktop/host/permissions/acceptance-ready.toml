@@ -1,0 +1,11 @@
+# Fixed declarations for the guarded acceptance timing command.
+
+[[permission]]
+identifier = "allow-acceptance-editor-ready"
+description = "Allows only the guarded native readiness timing command."
+commands.allow = ["acceptance_editor_ready"]
+
+[[permission]]
+identifier = "deny-acceptance-editor-ready"
+description = "Denies the native readiness timing command."
+commands.deny = ["acceptance_editor_ready"]

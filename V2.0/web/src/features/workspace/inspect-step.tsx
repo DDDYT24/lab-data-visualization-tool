@@ -1,4 +1,5 @@
 "use client";
+import { useDesktopDraft } from "./desktop-session";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -64,6 +65,11 @@ export function InspectStep({ onBack, onContinue, active = true }: { onBack: () 
   const [rangeField, setRangeField] = useState("");
   const [rangeMinimum, setRangeMinimum] = useState("");
   const [rangeMaximum, setRangeMaximum] = useState("");
+  const desktopRevision = useWorkspaceStore((state) => state.currentRevisionId);
+  useDesktopDraft(`inspect:${projectId ?? "new"}`, projectId, { project: desktopRevision }, { selectedIndex, statusFilter, kindFilter, rangeField, rangeMinimum, rangeMaximum }, draft => {
+    setSelectedIndex(draft.selectedIndex); setStatusFilter(draft.statusFilter); setKindFilter(draft.kindFilter);
+    setRangeField(draft.rangeField); setRangeMinimum(draft.rangeMinimum); setRangeMaximum(draft.rangeMaximum);
+  }, !!preview && !!quality);
   const issueKinds = Array.from(
     new Set(quality?.findings.map((finding) => finding.kind) ?? []),
   );

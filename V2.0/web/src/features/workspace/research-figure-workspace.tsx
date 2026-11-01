@@ -13,6 +13,7 @@ import type { FigureBoard, FigureBoardHistory, FigureBoardSpec, FigureSources } 
 import { researchChartApi } from "@/lib/api/research-chart-api";
 import { researchFigureApi } from "@/lib/api/research-figure-api";
 import { useInterfaceMode } from "@/components/layout/interface-mode";
+import { useDesktopDraft, desktopDraftBase } from "./desktop-session";
 
 type LayoutDraft = { title: string; axisMode: FigureBoardSpec["axisMode"]; palette: "blue_teal" | "grayscale"; fontSize: number; grid: boolean; pointRendering: "auto" | "vector" | "raster"; count: number; panelTitles: string[]; slots: string[] };
 
@@ -54,6 +55,16 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const [operation, setOperation] = useState<"load" | "save" | "capture" | "retry">("load");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useDesktopDraft(`figure:${projectId}`, projectId, { research: currentRevision, figure: saved?.id ?? null }, {
+    title, axisMode, palette, fontSize, grid, pointRendering, captureSample, capturePanel, count, slots, panelTitles,
+    selectedPanel, inspectorSource, previewPanel, inspectorOpen, showPanelPreviews, inspectorTab,
+    undoDrafts, redoDrafts, dirty, editOpen,
+  }, draft => {
+    restore(draft); setCaptureSample(draft.captureSample); setCapturePanel(draft.capturePanel);
+    setSelectedPanel(draft.selectedPanel); setInspectorSource(draft.inspectorSource); setPreviewPanel(draft.previewPanel);
+    setInspectorOpen(draft.inspectorOpen); setShowPanelPreviews(draft.showPanelPreviews); setInspectorTab(draft.inspectorTab);
+    setUndoDrafts(draft.undoDrafts); setRedoDrafts(draft.redoDrafts); setDirty(draft.dirty); setEditOpen(draft.editOpen);
+  }, !loading, busy || loading);
   useEffect(() => {
     let active = true;
     researchFigureApi.sources(projectId).then((result) => {
@@ -66,7 +77,8 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   useEffect(() => {
     let active = true;
     researchFigureApi.list(projectId).then(async (result) => {
-      const board = result.boards[0] ? await researchFigureApi.get(projectId, result.boards[0].id) : null;
+      const selected = desktopDraftBase(`figure:${projectId}`)?.figure ?? result.boards[0]?.id;
+      const board = selected ? await researchFigureApi.get(projectId, selected) : null;
       if (!active) return;
       setHistory(result);
       if (board) {
