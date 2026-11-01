@@ -6,15 +6,8 @@ import io
 import threading
 from typing import Any
 
-from matplotlib import font_manager
-from matplotlib.collections import LineCollection
-from matplotlib.figure import Figure
-from matplotlib.lines import Line2D
-from matplotlib.text import Text
-
 from .processing import _cjk_font_info, _contains_cjk
 from .research_preparation import PreparationError
-from .research_raster import freeze_raster_layers
 from .research_styles import COLORS as COLORS
 
 _RENDER_LOCK = threading.RLock()
@@ -34,6 +27,14 @@ def render_chart(
     grayscale: bool = False,
     point_rendering: str | None = None,
 ) -> dict[str, bytes]:
+    from matplotlib import font_manager
+    from matplotlib.collections import LineCollection
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+    from matplotlib.text import Text
+
+    from .research_raster import freeze_raster_layers
+
     with _RENDER_LOCK:
         spec = result["spec"]
         zh = spec["locale"] == "zh"

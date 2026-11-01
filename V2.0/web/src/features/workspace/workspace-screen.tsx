@@ -26,6 +26,7 @@ import { rememberResearchNavigation, workspaceModeEvent, type ResearchTask } fro
 import { useWorkspaceProject } from "./use-workspace-project";
 import { getWorkspaceLoadingCopy } from "./workspace-loading-state";
 import { type WorkflowStep, useWorkspaceStore } from "./workspace-store";
+import { useDesktopDraft } from "./desktop-session";
 
 const ImportStep = dynamic(() => import("./import-step").then((module) => module.ImportStep));
 const InspectStep = dynamic(() => import("./inspect-step").then((module) => module.InspectStep));
@@ -60,6 +61,21 @@ export function WorkspaceScreen({
   const { job, loadError, loadStatus, preview, quality, reimport, retry, uploading } =
     useWorkspaceProject(initialProjectId);
   const loadingCopy = getWorkspaceLoadingCopy(uploading, job);
+  const desktopStore = useWorkspaceStore();
+  useDesktopDraft(`workspace:${projectId ?? "new"}`, projectId, { project: desktopStore.currentRevisionId }, {
+    selectedFile: desktopStore.selectedFile, currentStep, chartSpec: desktopStore.chartSpec,
+    issueActions: desktopStore.issueActions, issueActionPast: desktopStore.issueActionPast,
+    issueActionFuture: desktopStore.issueActionFuture,
+    taskReferences: desktopStore.job ? [{kind:'import',id:desktopStore.job.id,stage:desktopStore.job.stage}] : [],
+  }, draft => useWorkspaceStore.setState({selectedFile:draft.selectedFile,currentStep:draft.currentStep,chartSpec:draft.chartSpec,issueActions:draft.issueActions,issueActionPast:draft.issueActionPast,issueActionFuture:draft.issueActionFuture}), loadStatus === "ready", uploading || loadStatus === "processing");
+  useDesktopDraft(`navigation:${projectId ?? "new"}`, projectId, {}, {
+    researchTask, researchMode, researchOpened, quickPlotOpened,
+  }, draft => {
+    setResearchTask(draft.researchTask); setResearchMode(draft.researchMode);
+    // Mount the selected mode first. DesktopSession retains the other mode's
+    // drafts until it is opened, including across another idle checkpoint.
+    setResearchOpened(draft.researchMode); setQuickPlotOpened(!draft.researchMode);
+  }, loadStatus === "ready");
   const initialStepApplied = useRef(false);
   const switchWorkspace = useCallback((next: boolean) => {
     if (next) setResearchOpened(true);
@@ -164,6 +180,7 @@ export function WorkspaceScreen({
       </Stack>
     ) : currentStep === "import" ? (
       <ImportStep
+        key={projectId ?? "new"}
         active={!researchMode}
         onContinue={() => goToStep("inspect")}
         onReimport={reimport}

@@ -1,0 +1,21 @@
+{
+  "format": "labviz-desktop-resource-policy-v1",
+  "effectiveDate": "2026-10-23",
+  "policyScope": "Prospective clarification after the D0-D7 audit; does not retroactively accept any historical candidate",
+  "numericGates": {
+    "nativeHostPrivateCommitMiB": 32,
+    "completeSuspendedPrivateCommitMiB": 100,
+    "smallWorkspaceEditableRestoreMs": 5000
+  },
+  "requiredReports": [
+    {"metric": "installation", "criterion": "Report application installer, complete new installation, retained-version overhead and missing-component download separately", "numericThreshold": null},
+    {"metric": "coldStart", "criterion": "Measure final native launch to editable home and target project; exclude test-driver attachment delays", "numericThreshold": null},
+    {"metric": "largeWorkspaceRestore", "criterion": "Measure separately with the unchanged 100000-row representative workload", "numericThreshold": null},
+    {"metric": "foregroundAndPeak", "criterion": "Report full owned process tree, Working Set and Private Commit separately, including Node", "numericThreshold": null},
+    {"metric": "busyTray", "criterion": "Tasks finish with unchanged results; record CPU and memory without cancelling work to lower usage", "numericThreshold": null},
+    {"metric": "repeatedRestore", "criterion": "At least ten consecutive cycles, retained processes and steady memory; keep slow samples and investigate trends", "numericThreshold": null}
+  ],
+  "reportingPolicy": "Metrics with no numeric threshold are mandatory measurement/completeness requirements, not implicit pass gates. Set any future new numeric target prospectively before comparing a changed candidate.",
+  "acceptancePolicy": "All numeric gates need the exact native candidate and all mandatory reports. Headless/controller-only samples cannot close native gates. Keep Next topology conditional until those gates pass.",
+  "recoveryPolicy": "A recoverable draft, successful drain and verified shutdown are prerequisites; faster time cannot compensate for lost work."
+}

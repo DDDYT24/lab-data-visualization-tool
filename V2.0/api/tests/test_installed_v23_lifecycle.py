@@ -255,6 +255,7 @@ print('installed API identity, cookie isolation, tools, and lock release passed'
     }
     result = subprocess.run(
         [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[1],
         env=env,
         capture_output=True,
         text=True,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Checkbox, FormControlLabel,
@@ -9,6 +9,8 @@ import {
 } from "@mui/material";
 import type { ChartHistory, ScientificChart, ScientificChartSpec } from "@/domain/research-charts";
 import { researchChartApi } from "@/lib/api/research-chart-api";
+import { useDesktopDraft, desktopDraftValue } from "./desktop-session";
+import { DesktopPdfPreview } from "./desktop-pdf-preview";
 
 export function ResearchChartWorkspace({ projectId, revisionId, active = true, pending, onSaved, refreshKey = 0, mapping }: {
   mapping?: Record<string, string | null>;
@@ -31,13 +33,26 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
   const [chart, setChart] = useState<ScientificChart | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recoveredDraft] = useState(() => desktopDraftValue(`chart:${projectId}`) as { selectedChartId?: string | null; selectedChartOffset?: number } | undefined);
+  const recoveredSelection = recoveredDraft?.selectedChartId;
+  const initialOffset = useRef(recoveredDraft?.selectedChartOffset ?? 0);
+  useEffect(() => { if (chart) initialOffset.current = chart.offset; }, [chart]);
+  const initialSelection = useRef(recoveredSelection);
+  useDesktopDraft(`chart:${projectId}`, projectId, { research: revisionId }, {
+    pointRendering, kind, title, seed, summary, summaryUnit, first, second, bandwidth, scale, points, selectedChartId: chart?.id ?? recoveredSelection ?? null, selectedChartOffset: chart?.offset ?? recoveredDraft?.selectedChartOffset ?? 0,
+  }, draft => {
+    setPointRendering(draft.pointRendering); setKind(draft.kind); setTitle(draft.title); setSeed(draft.seed);
+    setSummary(draft.summary); setSummaryUnit(draft.summaryUnit); setFirst(draft.first); setSecond(draft.second);
+    setBandwidth(draft.bandwidth); setScale(draft.scale); setPoints(draft.points);
+  }, !active || !busy, active && busy);
   useEffect(() => {
     if (!active) return;
     let mounted = true;
     researchChartApi.list(projectId).then(async (list) => {
       if (!mounted) return;
-      const saved = list.charts[0] ? await researchChartApi.get(projectId, list.charts[0].id) : null;
-      if (mounted) { setHistory(list); setChart(saved); }
+      const selected = initialSelection.current ?? list.charts[0]?.id;
+      const saved = selected ? await researchChartApi.get(projectId, selected, initialOffset.current) : null;
+      if (mounted) { initialSelection.current = saved?.id; setHistory(list); setChart(saved); }
     }).catch((cause: unknown) => {
       if (mounted) setError(cause instanceof Error ? cause.message : "Chart load failed");
     }).finally(() => { if (mounted) setBusy(false); });
@@ -137,7 +152,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
                 bandwidth: kind === "violin" && bandwidth !== "" ? Number(bandwidth) : null,
                 densityScale: scale, pointRendering,
               });
-              setChart(created); onSaved?.(); setHistory(await researchChartApi.list(projectId));
+              initialSelection.current = created.id; setChart(created); onSaved?.(); setHistory(await researchChartApi.list(projectId));
             })}>{busy ? t("Working…", "处理中…") : t("Generate and save chart", "生成并保存图表")}</Button>
         </Stack>
       </Box>
@@ -153,7 +168,10 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
       </Accordion>
       <TextField select label={t("Saved charts", "已保存图表")} value={chart?.id ?? ""}
         disabled={busy || !history.charts.length}
-        onChange={(e) => void run(async () => setChart(await researchChartApi.get(projectId, e.target.value)))}>
+        onChange={(e) => void run(async () => {
+          const selected = await researchChartApi.get(projectId, e.target.value);
+          initialSelection.current = selected.id; setChart(selected);
+        })}>
         {!history.charts.length && <MenuItem value="">{t("No saved charts", "暂无图表")}</MenuItem>}
         {history.charts.map((item) => {
           const spec = item.spec as ScientificChartSpec;
@@ -172,6 +190,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
         {active && <Box component="img" src={researchChartApi.artifact(projectId, chart.id, "png", false, true)}
           alt={savedSpec.title || names[savedSpec.kind]} sx={{ width: "100%", height: "auto", bgcolor: "white" }} />}
         <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1 }}>
+          <DesktopPdfPreview href={researchChartApi.artifact(projectId, chart.id, "pdf", false)} />
           {(["png", "svg", "pdf", "json"] as const).map((format) => <Button component="a" key={format}
             href={researchChartApi.artifact(projectId, chart.id, format, true)} download>
             {t("Download", "下载")} {format.toUpperCase()}</Button>)}

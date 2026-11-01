@@ -498,8 +498,15 @@ def create_app(
         async def maintain_temporary_data() -> None:
             while True:
                 await asyncio.sleep(60)
-                await asyncio.to_thread(resolved_project_store.cleanup_expired)
-                await asyncio.to_thread(resolved_project_store.recover_stale_jobs)
+                activity = getattr(_app.state, "desktop_activity", None)
+                if activity is None:
+                    await asyncio.to_thread(resolved_project_store.cleanup_expired)
+                    await asyncio.to_thread(resolved_project_store.recover_stale_jobs)
+                else:
+                    with activity.operation() as admitted:
+                        if admitted:
+                            await asyncio.to_thread(resolved_project_store.cleanup_expired)
+                            await asyncio.to_thread(resolved_project_store.recover_stale_jobs)
 
         maintenance = asyncio.create_task(maintain_temporary_data())
         try:

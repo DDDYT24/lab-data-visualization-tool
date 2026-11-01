@@ -52,6 +52,9 @@ coverage/
 *.tsbuildinfo
 playwright-report/
 test-results/
+desktop/prototypes/tauri/target/
+desktop/host/target/
+desktop/prototypes/pywebview/*.spec
 
 # Editors and operating systems
 .streamlit/
@@ -61,6 +64,8 @@ test-results/
 Thumbs.db
 
 # Terraform runtime artifacts (provider lock files remain tracked)
+desktop/host/gen/
+desktop/prototypes/tauri/gen/
 **/.terraform/*
 *.tfstate
 *.tfstate.*

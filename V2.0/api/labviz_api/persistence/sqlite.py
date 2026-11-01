@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import pandas as pd
+else:
+    pd = scientific_module("pandas")
+
 import hashlib
 import io
 import json
 from typing import Any
 from uuid import UUID, uuid4
 
-import pandas as pd
 from PIL import Image
 
 from labviz_api.persistence.exceptions import (

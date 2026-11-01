@@ -7,6 +7,8 @@ import { useInterfaceMode } from "@/components/layout/interface-mode";
 import { figureMarkAt } from "@/domain/figure-point-hit";
 import type { FigureInteraction } from "@/domain/research-figure-board";
 import { researchFigureApi } from "@/lib/api/research-figure-api";
+import { useDesktopDraft } from "./desktop-session";
+import { DesktopPdfPreview } from "./desktop-pdf-preview";
 
 const SourceRows = memo(function SourceRows({ rows, selected, choose }: {
   rows: FigureInteraction["rows"]; selected: boolean; choose: (next: { row?: string; mark?: string }) => void;
@@ -35,6 +37,10 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  useDesktopDraft(`inspector:${projectId}:${boardId}`, projectId, {}, {detailsOpen,enlarged,selection,queryInput,query,descending,offset}, draft => {
+    setDetailsOpen(draft.detailsOpen);setEnlarged(draft.enlarged);setSelection(draft.selection);
+    setQueryInput(draft.queryInput);setQuery(draft.query);setDescending(draft.descending);setOffset(draft.offset);setLoading(true);
+  }, !visible || !loading, visible && loading);
   useEffect(() => {
     if (!visible) return;
     let active = true;
@@ -91,6 +97,7 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
     </Box>
     </Box>
     <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+      {downloadsEnabled && <DesktopPdfPreview href={researchFigureApi.artifact(projectId, boardId, "pdf", false)} />}
       {downloadsEnabled && ["svg", "png", "pdf"].map((format) => <Button key={format} component="a" href={researchFigureApi.artifact(projectId, boardId, format, true)}>{t("Download figure", "下载组合图")} {format.toUpperCase()}</Button>)}
       <Button onClick={() => choose({})}>{t("Clear highlight", "清除高亮")}</Button>
     </Stack>

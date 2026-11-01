@@ -6,6 +6,7 @@ import { Alert, Box, Button, Checkbox, FormControlLabel, MenuItem, Paper, Stack,
 import type { FigureBoardHistory, FigureBoardSpec } from "@/domain/research-figure-board";
 import { researchApi } from "@/lib/api/research-api";
 import { researchFigureApi } from "@/lib/api/research-figure-api";
+import { useDesktopDraft } from "./desktop-session";
 import { researchReuseApi as api, type TemplateRecord, type ReplacementPreview, type OutputPreview, type OutputNotes, type SavedOutput } from "@/lib/api/research-reuse-api";
 
 export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKey, onApplied }: {
@@ -29,6 +30,13 @@ export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKe
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  useDesktopDraft(`reuse:${projectId}`, projectId, { research: revision }, {
+    board, template, name, file, columns, mapping, notes,
+  }, draft => {
+    setBoard(draft.board); setTemplate(draft.template); setName(draft.name); setFile(draft.file);
+    setColumns(draft.columns); setMapping(draft.mapping); setNotes(draft.notes);
+    setCheck(null); setOutputCheck(null); setReviewed(false);
+  }, !busy, busy);
   useEffect(() => {
     let active = true;
     Promise.all([researchFigureApi.list(projectId), api.templates(projectId), api.outputs(projectId)]).then(([b, tp, o]) => {
@@ -101,7 +109,7 @@ export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKe
     </Stack>}
     <Typography component="h3" variant="h6">{t("Freeze research output", "冻结研究输出")}</Typography>
     <Button disabled={busy || !board} onClick={() => void run(async () => {
-      setOutputCheck(null); setReviewed(false); const result = await api.previewOutput(projectId, board); setOutputCheck(result); setNotes(result.notes);
+      setOutputCheck(null); setReviewed(false); const result = await api.previewOutput(projectId, board); setOutputCheck(result); setNotes(previous => previous ?? result.notes);
     })}>{t("Preview included output files", "预览输出内容")}</Button>
     {outputCheck && notes && <Stack spacing={2} data-testid="output-preview">
       <Alert severity="info">{t("This ZIP is a research output, not a restorable project backup. It includes identifiers, sample labels, groups, source references, exclusion reasons and your notes. Original uploads are not included.", "ZIP 是研究输出，不是可恢复项目的备份。包含标识符、样本标签、分组、来源引用、排除理由及你的说明，不包含原始上传文件。")}</Alert>

@@ -2,9 +2,11 @@
 
 import { Alert, Button, Divider, Stack, TextField, Typography } from "@mui/material";
 import { useLocale } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { request } from "@/lib/api/labviz-api";
+import { useDesktopDraft } from "./desktop-session";
+import { DesktopDataTools } from "./desktop-data-tools";
 
 const schema = z.discriminatedUnion("available", [
   z.object({ available: z.literal(false), reason: z.string() }),
@@ -23,6 +25,8 @@ export function SourceDataTools() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const desktop = useSyncExternalStore(() => () => {}, () => !!window.labvizDesktopTransport, () => false);
+  useDesktopDraft("source-tools", null, {}, { backup, selectedCommand }, draft => { setBackup(draft.backup); setSelectedCommand(draft.selectedCommand); });
   const installed = info?.available && info.mode === "installed";
   const profileArgument = info?.available && info.profileRoot ? ` -ProfileRoot ${quote(info.profileRoot)}` : "";
   useEffect(() => {
@@ -36,6 +40,7 @@ export function SourceDataTools() {
     try { await navigator.clipboard.writeText(command); setMessage(text("Command copied", "命令已复制")); }
     catch { setMessage(text("Clipboard unavailable. Select and copy the command below.", "无法访问剪贴板，请选中下方命令复制。")); }
   }
+  if (desktop) return <DesktopDataTools />;
   return <Stack spacing={2} data-testid="source-data-tools" sx={{ "& .MuiInputLabel-root:not(.Mui-focused)": { color: "text.primary" } }}>
     <Divider />
     <Typography component="h3" variant="subtitle1">{installed ? text("Installed application data", "安装版应用数据") : text("Source workspace data", "源码工作区数据")}</Typography>

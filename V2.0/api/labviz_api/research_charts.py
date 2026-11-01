@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import numpy as np
+else:
+    np = scientific_module("numpy")
+
 import hashlib
 import math
 from collections import defaultdict
 from statistics import mean, median, stdev
 from typing import Any, Literal
 
-import numpy as np
 from pydantic import Field, model_validator
 from pydantic_core import to_json
 
