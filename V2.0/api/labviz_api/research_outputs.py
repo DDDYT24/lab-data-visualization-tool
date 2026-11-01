@@ -296,7 +296,9 @@ def preview_output(store: ResearchStore, project_id: str, board_id: str) -> dict
     with store.connect() as c:
         c.execute(
             (
-                "INSERT INTO research_output_drafts VALUES (?,?,?,?) ON CONFLICT(project_id) "
+                "INSERT INTO research_output_drafts "
+                "(project_id,token,board_id,created_at) "
+                "VALUES (?,?,?,?) ON CONFLICT(project_id) "
                 "DO UPDATE SET token=excluded.token,board_id=excluded.board_id,created_at=exc"
                 "luded.created_at"
             ),
@@ -363,7 +365,9 @@ def freeze_output(
                 "preview-expired", "This output preview was already consumed or replaced."
             )
         c.execute(
-            "INSERT INTO research_outputs VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO research_outputs "
+            "(id,project_id,board_id,manifest_json,notes_json,zip_blob,sha256,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (
                 identifier,
                 project_id,

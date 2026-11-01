@@ -100,7 +100,9 @@ class ResearchStore:
                 connection.execute("DELETE FROM research_public_views WHERE id=?", (old["token"],))
             connection.execute(
                 """
-                INSERT INTO research_drafts VALUES (?,?,?,?,?)
+                INSERT INTO research_drafts
+                (project_id,token,expected_revision,raw_json,prepared_json)
+                VALUES (?,?,?,?,?)
                 ON CONFLICT(project_id) DO UPDATE SET token=excluded.token,
                 expected_revision=excluded.expected_revision,raw_json=excluded.raw_json,
                 prepared_json=excluded.prepared_json
@@ -114,7 +116,7 @@ class ResearchStore:
                 ),
             )
             connection.execute(
-                "INSERT INTO research_public_views VALUES (?,?,?)",
+                "INSERT INTO research_public_views (id,project_id,data_json) VALUES (?,?,?)",
                 (token, project_id, json.dumps(present(prepared), allow_nan=False)),
             )
         return token
@@ -134,6 +136,7 @@ class ResearchStore:
                 )
             connection.execute(
                 "INSERT INTO research_revisions "
+                "(id,project_id,parent_id,raw_json,prepared_json,created_at) "
                 "SELECT ?,?,?,raw_json,prepared_json,? FROM research_drafts "
                 "WHERE project_id=? AND token=?",
                 (
@@ -147,14 +150,16 @@ class ResearchStore:
             )
             connection.execute(
                 """
-                INSERT INTO research_heads VALUES (?,?,'[]')
+                INSERT INTO research_heads (project_id,revision_id,future_json)
+                VALUES (?,?,'[]')
                 ON CONFLICT(project_id) DO UPDATE
                 SET revision_id=excluded.revision_id,future_json='[]'
             """,
                 (project_id, revision),
             )
             connection.execute(
-                "INSERT INTO research_public_views SELECT ?,project_id,data_json "
+                "INSERT INTO research_public_views (id,project_id,data_json) "
+                "SELECT ?,project_id,data_json "
                 "FROM research_public_views WHERE id=? AND project_id=?",
                 (revision, token, project_id),
             )

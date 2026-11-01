@@ -1036,7 +1036,9 @@ class ProjectRepository:
                 revision_ids = {row["id"]: uuid4().hex for row in research}
                 for row in research:
                     connection.execute(
-                        "INSERT INTO research_revisions VALUES (?,?,?,?,?,?)",
+                        "INSERT INTO research_revisions "
+                        "(id,project_id,parent_id,raw_json,prepared_json,created_at) "
+                        "VALUES (?,?,?,?,?,?)",
                         (
                             revision_ids[row["id"]],
                             project_id,
@@ -1051,7 +1053,8 @@ class ProjectRepository:
                 ).fetchone()
                 if head:
                     connection.execute(
-                        "INSERT INTO research_heads VALUES (?,?,?)",
+                        "INSERT INTO research_heads (project_id,revision_id,future_json) "
+                        "VALUES (?,?,?)",
                         (
                             project_id,
                             revision_ids[head["revision_id"]],
@@ -1071,7 +1074,9 @@ class ProjectRepository:
                     ).fetchall():
                         chart_ids[chart["id"]] = uuid4().hex
                         connection.execute(
-                            "INSERT INTO research_charts VALUES (?,?,?,?,?,?,?,?)",
+                            "INSERT INTO research_charts "
+                            "(id,project_id,revision_id,result_json,svg,png,pdf,created_at) "
+                            "VALUES (?,?,?,?,?,?,?,?)",
                             (
                                 chart_ids[chart["id"]],
                                 project_id,
@@ -1099,7 +1104,9 @@ class ProjectRepository:
                             ).fetchall():
                                 chart_ids[source_panel["id"]] = uuid4().hex
                                 connection.execute(
-                                    "INSERT INTO research_figure_sources VALUES (?,?,?,?)",
+                                    "INSERT INTO research_figure_sources "
+                                    "(id,project_id,result_json,created_at) "
+                                    "VALUES (?,?,?,?)",
                                     (
                                         chart_ids[source_panel["id"]],
                                         project_id,
@@ -1122,7 +1129,8 @@ class ProjectRepository:
                                         data["revisionId"], data["revisionId"]
                                     )
                                     connection.execute(
-                                        "INSERT INTO research_panel_headers VALUES (?,?,?)",
+                                        "INSERT INTO research_panel_headers "
+                                        "(id,project_id,header_json) VALUES (?,?,?)",
                                         (new_id, project_id, json.dumps(data)),
                                     )
                         board_ids: dict[str, str] = {}
@@ -1137,12 +1145,14 @@ class ProjectRepository:
                             new_board_id = uuid4().hex
                             board_ids[board["id"]] = new_board_id
                             connection.execute(
-                                "INSERT INTO research_figure_boards VALUES (?,?,?,?)",
+                                "INSERT INTO research_figure_boards "
+                                "(id,project_id,spec_json,created_at) VALUES (?,?,?,?)",
                                 (new_board_id, project_id, json.dumps(board_spec), now),
                             )
                             if sources_exist:
                                 connection.execute(
                                     "INSERT INTO research_figure_artifacts "
+                                    "(board_id,svg,png,pdf,scene_json) "
                                     "SELECT ?,svg,png,pdf,scene_json "
                                     "FROM research_figure_artifacts WHERE board_id=?",
                                     (new_board_id, board["id"]),
@@ -1191,7 +1201,9 @@ class ProjectRepository:
                                 (source_project_id,),
                             ).fetchall():
                                 connection.execute(
-                                    "INSERT INTO research_templates VALUES (?,?,?,?)",
+                                    "INSERT INTO research_templates "
+                                    "(id,project_id,spec_json,created_at) "
+                                    "VALUES (?,?,?,?)",
                                     (uuid4().hex, project_id, template["spec_json"], now),
                                 )
                             for output in connection.execute(
@@ -1200,7 +1212,10 @@ class ProjectRepository:
                             ).fetchall():
                                 # Keep the frozen archive and its original provenance byte-for-byte.
                                 connection.execute(
-                                    "INSERT INTO research_outputs VALUES (?,?,?,?,?,?,?,?)",
+                                    "INSERT INTO research_outputs "
+                                    "(id,project_id,board_id,manifest_json,notes_json,"
+                                    "zip_blob,sha256,created_at) "
+                                    "VALUES (?,?,?,?,?,?,?,?)",
                                     (
                                         uuid4().hex,
                                         project_id,

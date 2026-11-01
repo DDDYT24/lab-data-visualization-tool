@@ -155,7 +155,8 @@ class FigureJobs:
                 ):
                     raise PreparationError("research-busy", "The figure queue is full.")
                 connection.execute(
-                    "INSERT INTO research_figure_boards VALUES (?,?,?,?)",
+                    "INSERT INTO research_figure_boards (id,project_id,spec_json,created_at) "
+                    "VALUES (?,?,?,?)",
                     (identifier, project_id, spec.model_dump_json(), datetime.now(UTC).isoformat()),
                 )
                 connection.execute(
@@ -314,7 +315,8 @@ class FigureJobs:
             if current is None or current["attempt"] != attempt or current["state"] != "running":
                 return
             connection.execute(
-                "INSERT INTO research_figure_artifacts VALUES (?,?,?,?,?)",
+                "INSERT INTO research_figure_artifacts (board_id,svg,png,pdf,scene_json) "
+                "VALUES (?,?,?,?,?)",
                 (identifier, artifacts["svg"], artifacts["png"], artifacts["pdf"], scene_json),
             )
             timings = {
