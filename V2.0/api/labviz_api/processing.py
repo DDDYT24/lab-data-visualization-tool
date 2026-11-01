@@ -1178,6 +1178,35 @@ def _sample_positions(length: int, limit: int = MAX_ANALYSIS_POINTS) -> np.ndarr
     return np.linspace(0, length - 1, num=limit, dtype=int)
 
 
+def _envelope_positions(
+    values: np.ndarray[Any, Any], limit: int = MAX_ANALYSIS_POINTS
+) -> np.ndarray[Any, Any]:
+    """Keep every bucket's extremes so a decimated preview still shows real peaks.
+
+    Evenly spaced positions drop narrow peaks and troughs that the full-data
+    export still draws, which reads as an export defect rather than a preview
+    limit. Selecting each bucket's minimum and maximum preserves the visible
+    envelope. It never changes the analysed data or the reported sample size.
+    """
+    length = len(values)
+    if length <= limit:
+        return np.arange(length)
+    buckets = max(1, (limit - 2) // 2)
+    edges = np.linspace(0, length, num=buckets + 1, dtype=int)
+    keep = {0, length - 1}
+    for start, end in zip(edges[:-1], edges[1:], strict=True):
+        window = np.asarray(values[start:end], dtype=float)
+        if window.size == 0:
+            continue
+        if not np.isfinite(window).any():
+            keep.add(int(start))
+            continue
+        masked = np.where(np.isfinite(window), window, np.nan)
+        keep.add(int(start) + int(np.nanargmin(masked)))
+        keep.add(int(start) + int(np.nanargmax(masked)))
+    return np.array(sorted(keep), dtype=int)
+
+
 def _fit_equation(model: str, coefficients: np.ndarray[Any, Any]) -> str:
     if model == "exponential":
         return f"y = {math.exp(float(coefficients[1])):.5g}·e^({coefficients[0]:.5g}x)"
@@ -2025,7 +2054,7 @@ def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> l
         return []
     if x_field == y_field:
         numeric = pd.to_numeric(frame[y_field], errors="coerce").dropna()
-        numeric = numeric.iloc[_sample_positions(len(numeric))]
+        numeric = numeric.iloc[_envelope_positions(numeric.to_numpy(dtype=float))]
         return [
             {"x": _json_value(value), "y": float(value)}
             for value in numeric
@@ -2035,7 +2064,7 @@ def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> l
     numeric_y = pd.to_numeric(complete[y_field], errors="coerce")
     complete = complete[numeric_y.notna()].copy()
     complete[y_field] = numeric_y[numeric_y.notna()]
-    complete = complete.iloc[_sample_positions(len(complete))]
+    complete = complete.iloc[_envelope_positions(complete[y_field].to_numpy(dtype=float))]
     return [
         {"x": _json_value(row[x_field]), "y": float(row[y_field])}
         for _, row in complete.iterrows()
