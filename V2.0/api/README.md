@@ -80,9 +80,9 @@ Run the complete API gate (PostgreSQL and MinIO are required for the integration
 python -m pip install -r requirements-dev.lock.txt
 docker compose up -d --wait postgres minio
 docker compose run --rm minio-init
-ruff check labviz_api tests migrations scripts
-ruff format --check labviz_api tests migrations scripts
-mypy labviz_api tests migrations scripts
+ruff check labviz_api tests migrations migrations_local scripts
+ruff format --check labviz_api tests migrations migrations_local scripts
+mypy labviz_api tests migrations migrations_local scripts
 python -m pytest
 docker compose down -v --remove-orphans
 ```

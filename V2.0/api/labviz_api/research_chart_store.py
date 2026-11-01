@@ -49,7 +49,9 @@ def save_chart(
         connection.execute("BEGIN IMMEDIATE")
         store.check_head(connection, project_id, revision)
         connection.execute(
-            "INSERT INTO research_charts VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO research_charts "
+            "(id,project_id,revision_id,result_json,svg,png,pdf,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (
                 identifier,
                 project_id,
