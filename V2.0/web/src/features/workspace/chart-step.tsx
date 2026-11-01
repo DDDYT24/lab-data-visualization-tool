@@ -33,6 +33,7 @@ import type { ChartAnalysis } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
+import { analysisCacheKey } from "./analysis-cache-key";
 import { StepLayout } from "./step-layout";
 import { useWorkspaceStore } from "./workspace-store";
 
@@ -88,17 +89,7 @@ export function ChartStep({
   const excludedFindingIds = Object.entries(issueActions)
     .filter(([, action]) => ["exclude", "remove"].includes(action))
     .map(([findingId]) => findingId);
-  const analysisKey = JSON.stringify({
-    fitting: chartSpec.fitting,
-    groupField: chartSpec.groupField,
-    issueActions,
-    panelCount: chartSpec.panelCount,
-    secondaryYAxis: chartSpec.secondaryYAxis,
-    series: chartSpec.series,
-    type: chartSpec.type,
-    uncertainty: chartSpec.uncertainty,
-    xAxis: chartSpec.xAxis.field,
-  });
+  const analysisKey = analysisCacheKey(chartSpec, issueActions);
   const analysisQuery = useQuery({
     queryKey: ["chart-analysis", projectId, analysisKey],
     queryFn: ({ signal }) => {
