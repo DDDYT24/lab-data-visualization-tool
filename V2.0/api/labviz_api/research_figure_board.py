@@ -212,11 +212,13 @@ def save_board(
         if sum(panel["observations"] for panel in view["panels"]) > 20_000:
             gc.collect()
         connection.execute(
-            "INSERT INTO research_figure_boards VALUES (?,?,?,?)",
+            "INSERT INTO research_figure_boards (id,project_id,spec_json,created_at) "
+            "VALUES (?,?,?,?)",
             (row["id"], project_id, row["spec_json"], row["created_at"]),
         )
         connection.execute(
-            "INSERT INTO research_figure_artifacts VALUES (?,?,?,?,?)",
+            "INSERT INTO research_figure_artifacts (board_id,svg,png,pdf,scene_json) "
+            "VALUES (?,?,?,?,?)",
             (
                 row["id"],
                 artifacts["svg"],

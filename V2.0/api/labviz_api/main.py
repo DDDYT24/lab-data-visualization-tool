@@ -38,6 +38,7 @@ from .auth import AuthError, AuthRepository, AuthService, build_auth_service
 from .client_identity import ClientIdentityError, ClientIdentityResolver
 from .config import Settings
 from .installed_profile import DATA_EPOCH, cookie_suffix, environment_profile
+from .local_schema import prepare_local_database
 from .models import (
     AuthenticatedUser,
     AuthState,
@@ -469,6 +470,14 @@ def create_app(
     resolved_repository = repository or ProjectRepository(
         resolved_settings.database_path, resolved_settings.project_ttl_seconds
     )
+    if resolved_settings.persistence_backend == "sqlite":
+        # Install every baseline table in a defined order and let Alembic own the
+        # changes after it, instead of patching columns from whichever constructor
+        # happened to run first.
+        prepare_local_database(
+            resolved_repository.database_path,
+            project_ttl_seconds=resolved_settings.project_ttl_seconds,
+        )
     resolved_project_store = project_store or build_project_store(
         resolved_settings, resolved_repository
     )
