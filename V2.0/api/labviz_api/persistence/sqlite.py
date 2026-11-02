@@ -26,7 +26,7 @@ from labviz_api.persistence.exceptions import (
     ProjectRevisionConflict,
 )
 from labviz_api.persistence_types import ProjectCreation
-from labviz_api.processing import apply_chart_decisions
+from labviz_api.processing import EXCLUDING_ACTIONS, apply_chart_decisions, freeze_decision_rows
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 from labviz_api.repository import expires_in, iso_now
 from labviz_api.share_tokens import ShareTokenCodec
@@ -169,13 +169,38 @@ class SqliteProjectStore:
         return self.repository.replace_quality(project_id, quality)
 
     def save_decisions(self, project_id: str, decisions: list[dict[str, str]]) -> str:
-        return self.repository.save_decisions(project_id, decisions)
+        project = self.repository.get_project(project_id, touch=False)
+        version_id = project["dataset_version_id"] if project else None
+        if project is None or version_id is None or project["quality_json"] is None:
+            return self.repository.save_decisions(project_id, decisions)
+        # Rows are detected once, when a finding first removes rows from this version;
+        # later saves keep what was frozen then.
+        frozen = self.repository.frozen_findings(project_id, version_id)
+        pending = [
+            item["findingId"]
+            for item in decisions
+            if item["action"] in EXCLUDING_ACTIONS and item["findingId"] not in frozen
+        ]
+        row_sets = (
+            freeze_decision_rows(
+                self.load_quality_dataframe(project_id, touch=False),
+                json.loads(project["quality_json"]),
+                pending,
+            )
+            if pending
+            else {}
+        )
+        return self.repository.save_decisions(
+            project_id, decisions, dataset_version_id=version_id, row_sets=row_sets
+        )
 
     def get_decisions(self, project_id: str) -> list[dict[str, str]]:
         return self.repository.get_decisions(project_id)
 
-    def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame:
-        frame = self.load_quality_dataframe(project_id)
+    def _decided_dataframe(
+        self, project_id: str, *, touch: bool = True, actions: set[str] | None = None
+    ) -> pd.DataFrame:
+        frame = self.load_quality_dataframe(project_id, touch=touch)
         project = self.repository.get_project(project_id, touch=False)
         if project is None or project["quality_json"] is None:
             raise ValueError("Ready project quality report does not exist.")
@@ -183,19 +208,15 @@ class SqliteProjectStore:
             frame,
             json.loads(project["quality_json"]),
             self.get_decisions(project_id),
-            actions={"remove"},
+            actions=actions,
+            frozen=self.repository.decision_rows(project_id, project["dataset_version_id"]),
         )
 
+    def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame:
+        return self._decided_dataframe(project_id, actions={"remove"})
+
     def load_chart_dataframe(self, project_id: str) -> pd.DataFrame:
-        frame = self.load_quality_dataframe(project_id)
-        project = self.repository.get_project(project_id, touch=False)
-        if project is None or project["quality_json"] is None:
-            raise ValueError("Ready project quality report does not exist.")
-        return apply_chart_decisions(
-            frame,
-            json.loads(project["quality_json"]),
-            self.get_decisions(project_id),
-        )
+        return self._decided_dataframe(project_id)
 
     def save_project(
         self,
@@ -417,11 +438,7 @@ class SqliteProjectStore:
         if project is None:
             return None
         chart = json.loads(project["chart_json"])
-        frame = apply_chart_decisions(
-            self.load_quality_dataframe(project["id"], touch=False),
-            json.loads(project["quality_json"]),
-            self.repository.get_decisions(project["id"]),
-        )
+        frame = self._decided_dataframe(project["id"], touch=False)
         formats = self.repository.latest_exports(project["id"])
         return (
             {

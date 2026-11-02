@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from functools import cached_property
@@ -822,7 +822,20 @@ class ProjectRepository:
             connection.execute("DELETE FROM exports WHERE project_id = ?", (project_id,))
         return updated_at
 
-    def save_decisions(self, project_id: str, decisions: Iterable[dict[str, str]]) -> str:
+    def save_decisions(
+        self,
+        project_id: str,
+        decisions: Iterable[dict[str, str]],
+        *,
+        dataset_version_id: str | None = None,
+        row_sets: Mapping[str, Sequence[int]] | None = None,
+    ) -> str:
+        """Replace the project's decisions.
+
+        ``row_sets`` freezes the rows each named finding removes, as positions in
+        ``dataset_version_id``. A frozen set stays while its decision keeps removing rows,
+        and is dropped with the decision or when it is set to ``ignore``.
+        """
         now = iso_now()
         decision_rows = [(project_id, item["findingId"], item["action"], now) for item in decisions]
         with self._connect() as connection:
@@ -836,7 +849,12 @@ class ProjectRepository:
             ).fetchall()
             previous = [(row["finding_id"], row["action"]) for row in previous_rows]
             replacement = sorted((row[1], row[2]) for row in decision_rows)
-            connection.execute("DELETE FROM decisions WHERE project_id = ?", (project_id,))
+            kept = {row[1] for row in decision_rows}
+            # Deleting a decision cascades to its frozen rows, so only the dropped ones go.
+            connection.executemany(
+                "DELETE FROM decisions WHERE project_id = ? AND finding_id = ?",
+                [(project_id, finding) for finding, _ in previous if finding not in kept],
+            )
             connection.executemany(
                 """
                 INSERT INTO decisions (project_id, finding_id, action, updated_at)
@@ -846,9 +864,76 @@ class ProjectRepository:
                 """,
                 decision_rows,
             )
+            connection.executemany(
+                "DELETE FROM decision_row_sets WHERE project_id = ? AND finding_id = ?",
+                [(project_id, row[1]) for row in decision_rows if row[2] == "ignore"],
+            )
+            for finding, rows in (row_sets or {}).items():
+                if dataset_version_id is None or finding not in kept:
+                    continue
+                connection.execute(
+                    "DELETE FROM decision_row_sets WHERE project_id = ? AND finding_id = ?",
+                    (project_id, finding),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO decision_row_sets (
+                        project_id, finding_id, dataset_version_id, row_count, frozen_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (project_id, finding, dataset_version_id, len(rows), now),
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO decision_rows (project_id, finding_id, row_number)
+                    VALUES (?, ?, ?)
+                    """,
+                    [(project_id, finding, int(row)) for row in rows],
+                )
             if previous != replacement:
                 connection.execute("DELETE FROM exports WHERE project_id = ?", (project_id,))
         return now
+
+    def frozen_findings(self, project_id: str, dataset_version_id: str) -> set[str]:
+        """Return the findings whose rows are frozen against ``dataset_version_id``."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT finding_id FROM decision_row_sets
+                WHERE project_id = ? AND dataset_version_id = ?
+                """,
+                (project_id, dataset_version_id),
+            ).fetchall()
+        return {str(row[0]) for row in rows}
+
+    def decision_rows(self, project_id: str, dataset_version_id: str) -> dict[str, list[int]]:
+        """Return each finding's frozen row positions in ``dataset_version_id``.
+
+        A set frozen against another version of the project does not describe these rows,
+        so it is left out and its finding is detected again.
+        """
+        with self._connect() as connection:
+            sets = connection.execute(
+                """
+                SELECT finding_id FROM decision_row_sets
+                WHERE project_id = ? AND dataset_version_id = ?
+                """,
+                (project_id, dataset_version_id),
+            ).fetchall()
+            frozen: dict[str, list[int]] = {str(row[0]): [] for row in sets}
+            rows = connection.execute(
+                """
+                SELECT r.finding_id, r.row_number FROM decision_rows r
+                JOIN decision_row_sets s
+                    ON s.project_id = r.project_id AND s.finding_id = r.finding_id
+                WHERE r.project_id = ? AND s.dataset_version_id = ?
+                ORDER BY r.finding_id, r.row_number
+                """,
+                (project_id, dataset_version_id),
+            )
+            for finding, row_number in rows:
+                frozen[str(finding)].append(int(row_number))
+        return frozen
 
     def get_decisions(self, project_id: str) -> list[dict[str, str]]:
         with self._connect() as connection:
@@ -1109,6 +1194,31 @@ class ProjectRepository:
                 SELECT ?, finding_id, action, ? FROM decisions WHERE project_id = ?
                 """,
                 (project_id, now, source_project_id),
+            )
+            frozen_sets = connection.execute(
+                "SELECT * FROM decision_row_sets WHERE project_id = ?", (source_project_id,)
+            ).fetchall()
+            for frozen_set in frozen_sets:
+                connection.execute(
+                    """
+                    INSERT INTO decision_row_sets (
+                        project_id, finding_id, dataset_version_id, row_count, frozen_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project_id,
+                        frozen_set["finding_id"],
+                        version_ids[frozen_set["dataset_version_id"]],
+                        frozen_set["row_count"],
+                        frozen_set["frozen_at"],
+                    ),
+                )
+            connection.execute(
+                """
+                INSERT INTO decision_rows (project_id, finding_id, row_number)
+                SELECT ?, finding_id, row_number FROM decision_rows WHERE project_id = ?
+                """,
+                (project_id, source_project_id),
             )
 
             # Copy applied research history atomically with the project. Observation/source
