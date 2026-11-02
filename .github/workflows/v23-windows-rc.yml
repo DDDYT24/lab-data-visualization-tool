@@ -50,7 +50,23 @@ jobs:
           path: outputs/v23-release/rc1/pipeline.json
           retention-days: 7
       # The phase status names the failing command's log; without the log a lifecycle
-      # failure cannot be diagnosed. The acceptance fixture holds the service logs.
+      # failure cannot be diagnosed. The acceptance fixture holds the service logs, on
+      # another drive than the checkout, so they are copied beside the phase logs first.
+      - name: Collect acceptance service logs
+        if: failure()
+        run: |
+          $fixtures = Join-Path $HOME 'LabVizV23Acceptance'
+          $target = 'outputs/v23-release/rc1/acceptance-logs'
+          if (Test-Path -LiteralPath $fixtures) {
+            Get-ChildItem -LiteralPath $fixtures -Recurse -File -Filter *.log |
+              Where-Object { $_.Directory.Name -eq 'logs' } |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($fixtures.Length + 1)
+                $destination = Join-Path $target $relative
+                New-Item -ItemType Directory -Force (Split-Path $destination) | Out-Null
+                Copy-Item -LiteralPath $_.FullName -Destination $destination
+              }
+          }
       - name: Preserve failure logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -63,6 +79,6 @@ jobs:
             outputs/v23-release/rc1/portable-lifecycle/**/*.json
             outputs/v23-release/rc1/installed-lifecycle/**/*.log
             outputs/v23-release/rc1/installed-lifecycle/**/*.json
-            ~/LabVizV23Acceptance/**/logs/*.log
+            outputs/v23-release/rc1/acceptance-logs/**/*.log
           if-no-files-found: warn
           retention-days: 7
