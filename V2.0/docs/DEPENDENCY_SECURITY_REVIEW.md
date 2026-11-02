@@ -27,9 +27,14 @@ plugin chain. No compatible fix is published: ESLint 10.14.0 still depends on
 `minimatch ^10.2.6`, and the plugins use the 3.x API, so a forced override would break linting.
 The earlier `braces`, `micromatch` and `fast-glob` findings no longer appear.
 
-The pipeline's development-audit gate still allows only the packages reviewed for rc.1, so it
-fails until this `minimatch` chain is reviewed. That decision is open. V2.2.0 on `main` locks
-Next.js 16.3.6 and is in the affected range as well.
+Disposition, accepted by the owner: the `minimatch` chain runs only while linting, so the
+development-audit gate in `packaging/windows-v23/build_rc.py` now allows these 16 packages and
+drops the `braces` chain it no longer needs. The gate is narrower than the name list it replaces:
+a package passes only while every finding on it stays at moderate or below and traces to the
+`minimatch` advisory alone, so a new or more severe advisory on the same package still stops
+the build. Reassess when ESLint or its plugins move to minimatch 11.0.1 or later.
+
+V2.2.0 on `main` locks Next.js 16.3.6 and is in the affected range as well.
 
 # V2.2 production dependency review — 2026-10-07
 
