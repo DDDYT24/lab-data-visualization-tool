@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from preferences import Preferences
 from process_job import OwnedJob
 from session import Session
-from maintenance import Maintenance
+from maintenance import DATA_EPOCH, Maintenance
 
 APP_ID = "55B46BB7-101E-46DC-951A-3DE7E402EDD0"
 DESKTOP_ID = "org.labviz.desktop.preview"
@@ -307,7 +307,7 @@ def main() -> None:
     if (
         metadata.get("appId") != APP_ID
         or metadata.get("candidateId") != config["candidateId"]
-        or metadata.get("dataEpoch") != 1
+        or metadata.get("dataEpoch") != DATA_EPOCH
     ):
         raise ValueError("Desktop payload identity differs")
     program = unlinked(owner / "program")

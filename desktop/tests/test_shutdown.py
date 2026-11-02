@@ -50,7 +50,7 @@ class ShutdownTests(unittest.TestCase):
             with self.subTest(timeout=timeout), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder).resolve(); payload = root / 'payload'; program = root / 'program'
                 payload.mkdir(); program.mkdir(); backend = root / 'appdata/LabVizV23'
-                (payload / 'candidate-build.json').write_text(json.dumps({'appId': APP_ID, 'candidateId': 'c' * 64, 'dataEpoch': 1}))
+                (payload / 'candidate-build.json').write_text(json.dumps({'appId': APP_ID, 'candidateId': 'c' * 64, 'dataEpoch': 2}))
                 (program / 'installation.json').write_text(json.dumps({'appId': APP_ID, 'format': 'labviz-installed-v1'}))
                 with patch.dict(os.environ, {'LOCALAPPDATA': str(backend.parent)}):
                     profile = InstalledProfile.open(backend, create=True)
@@ -157,7 +157,7 @@ class ShutdownTests(unittest.TestCase):
             with self.subTest(forced=forced), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder).resolve(); owner = root / 'owner'; payload = root / 'payload'
                 payload.mkdir(); owner.mkdir()
-                (payload / 'candidate-build.json').write_text(json.dumps({'appId': controller.APP_ID, 'candidateId': 'c' * 64, 'dataEpoch': 1}))
+                (payload / 'candidate-build.json').write_text(json.dumps({'appId': controller.APP_ID, 'candidateId': 'c' * 64, 'dataEpoch': 2}))
                 (owner / 'desktop-profile.json').write_text(json.dumps({'format': 'labviz-desktop-profile-v1', 'appId': controller.DESKTOP_ID, 'root': str(owner)}))
                 logs = owner / 'appdata/LabVizV23/logs'; logs.mkdir(parents=True)
                 ready = {'launcher': {'pid': 12345}, 'candidateId': 'c' * 64, 'appId': controller.APP_ID,

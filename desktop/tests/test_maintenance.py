@@ -97,7 +97,7 @@ class MaintenanceTests(unittest.TestCase):
         self.assertTrue((cache/'fontlist.json').exists())
         schema=self.profile.root/'data-schema.json';original=schema.read_bytes()
         try:
-            m.atomic(schema,m.encoded({'profileId':self.profile.identifier,'dataEpoch':2}))
+            m.atomic(schema,m.encoded({'profileId':self.profile.identifier,'dataEpoch':3}))
             with self.assertRaisesRegex(ValueError,'compatible'):m.clear_cache(self.owner,self.payload)
             self.assertTrue((cache/'fontlist.json').exists())
         finally:schema.write_bytes(original)
@@ -130,7 +130,7 @@ class MaintenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'warning'):m.restore(directory,self.owner,self.payload)
 
     def test_unknown_format_and_future_epoch_fail_closed(self):
-        directory=self.make_backup();envelope=m.read(directory/'desktop-backup.json');envelope['manifest']['dataEpoch']=2
+        directory=self.make_backup();envelope=m.read(directory/'desktop-backup.json');envelope['manifest']['dataEpoch']=3
         envelope['sha256']=hashlib.sha256(m.encoded(envelope['manifest'])).hexdigest();m.atomic(directory/'desktop-backup.json',m.encoded(envelope))
         with self.assertRaisesRegex(ValueError,'epoch'):m.restore(directory,self.owner,self.payload)
 

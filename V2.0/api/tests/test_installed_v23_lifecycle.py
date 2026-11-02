@@ -157,9 +157,11 @@ def test_packaged_launchers_declare_the_runtime_data_epoch() -> None:
     identity = json.loads((packaging / "identity.json").read_text(encoding="utf-8"))
     common = (packaging / "bin/common.ps1").read_text(encoding="utf-8-sig")
     stage = (packaging / "stage_candidate.py").read_text(encoding="utf-8")
+    desktop = (packaging.parents[2] / "desktop/runtime/maintenance.py").read_text(encoding="utf-8")
     assert identity["dataEpoch"] == DATA_EPOCH
     assert re.findall(r"^\$V23DataEpoch = (\d+)$", common, re.M) == [str(DATA_EPOCH)]
     assert re.findall(r'"dataEpoch": (\d+),', stage) == [str(DATA_EPOCH)] * 2
+    assert re.findall(r"^DATA_EPOCH = (\d+)$", desktop, re.M) == [str(DATA_EPOCH)]
 
 
 def test_rollback_retains_newer_data_and_recovers_interrupted_rename(
