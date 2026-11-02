@@ -14,7 +14,7 @@ if ($WebPort -in $reserved -or $ApiPort -in $reserved) { throw 'A V2.2, source, 
 $InstallRoot = Get-V23ProgramRoot $InstallRoot
 $packageRoot = Assert-Unlinked (Join-Path $PSScriptRoot '..')
 $metadata = Get-Content -LiteralPath (Join-Path $packageRoot 'candidate-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-if ($metadata.appId -ne $V23AppId -or $metadata.dataEpoch -ne 1) { throw 'Invalid portable identity.' }
+if ($metadata.appId -ne $V23AppId -or $metadata.dataEpoch -ne $V23DataEpoch) { throw 'Invalid portable identity.' }
 $profile = Invoke-V23Data $packageRoot 'init' $ProfileRoot
 $ProfileRoot = $profile.root
 $profileMutex = Enter-V23Mutex (Get-V23MutexName $ProfileRoot)
