@@ -18,6 +18,7 @@ from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, 
 from labviz_api.research_rows import copy_rows
 
 if TYPE_CHECKING:
+    from labviz_api.cleaning_recipe import CleanedVersion
     from labviz_api.parquet import ParquetArtifact
 
 
@@ -723,8 +724,9 @@ class ProjectRepository:
             connection.execute(
                 """
                 UPDATE projects
-                SET source_json = ?, dataset_version_id = ?, preview_json = ?, quality_json = ?,
-                    chart_json = ?, updated_at = ?, expires_at = ?
+                SET source_json = ?, dataset_version_id = ?, cleaned_version_id = NULL,
+                    preview_json = ?, quality_json = ?, chart_json = ?, updated_at = ?,
+                    expires_at = ?
                 WHERE id = ?
                 """,
                 (
@@ -818,7 +820,8 @@ class ProjectRepository:
         with self._connect() as connection:
             self._touch(connection, project_id)
             connection.execute(
-                "UPDATE projects SET quality_json = ?, updated_at = ? WHERE id = ?",
+                "UPDATE projects SET quality_json = ?, cleaned_version_id = NULL, updated_at = ? "
+                "WHERE id = ?",
                 (json.dumps(quality, ensure_ascii=False), updated_at, project_id),
             )
             connection.execute("DELETE FROM decisions WHERE project_id = ?", (project_id,))
@@ -832,12 +835,14 @@ class ProjectRepository:
         *,
         dataset_version_id: str | None = None,
         row_sets: Mapping[str, Sequence[int]] | None = None,
+        cleaned: CleanedVersion | None = None,
     ) -> str:
         """Replace the project's decisions.
 
         ``row_sets`` freezes the rows each named finding removes, as positions in
         ``dataset_version_id``. A frozen set stays while its decision keeps removing rows,
-        and is dropped with the decision or when it is set to ``ignore``.
+        and is dropped with the decision or when it is set to ``ignore``. The project then
+        reads ``cleaned``, or its parsed version when no decision drops rows.
         """
         now = iso_now()
         decision_rows = [(project_id, item["findingId"], item["action"], now) for item in decisions]
@@ -893,21 +898,86 @@ class ProjectRepository:
                     """,
                     [(project_id, finding, int(row)) for row in rows],
                 )
+            cleaned_id = (
+                None
+                if cleaned is None or dataset_version_id is None
+                else self._cleaned_version(connection, project_id, dataset_version_id, cleaned)
+            )
+            connection.execute(
+                "UPDATE projects SET cleaned_version_id = ? WHERE id = ?", (cleaned_id, project_id)
+            )
             if previous != replacement:
                 connection.execute("DELETE FROM exports WHERE project_id = ?", (project_id,))
         return now
 
-    def frozen_findings(self, project_id: str, dataset_version_id: str) -> set[str]:
-        """Return the findings whose rows are frozen against ``dataset_version_id``."""
+    def _cleaned_version(
+        self,
+        connection: sqlite3.Connection,
+        project_id: str,
+        parent_id: str,
+        cleaned: CleanedVersion,
+    ) -> str:
+        """Return the project's version for this recipe, writing it the first time.
+
+        Undoing a decision returns to an earlier recipe, and so to the version it wrote.
+        """
+        existing = connection.execute(
+            "SELECT id FROM dataset_versions WHERE project_id = ? AND recipe_sha256 = ?",
+            (project_id, cleaned.sha256),
+        ).fetchone()
+        if existing:
+            return str(existing[0])
+        if cleaned.dataset is None:
+            parent = connection.execute(
+                "SELECT * FROM dataset_versions WHERE id = ?", (parent_id,)
+            ).fetchone()
+            digest = str(parent["content_sha256"])
+            schema_json = str(parent["schema_json"])
+            provenance = json.loads(parent["provenance_json"])
+            row_count = int(parent["row_count"])
+            column_count = int(parent["column_count"])
+        else:
+            dataset = cleaned.dataset
+            remember(connection, self.artifacts, dataset.payload, media_type=MEDIA_TYPES["parquet"])
+            digest = dataset.sha256
+            schema_json = json.dumps(dataset.schema_document, sort_keys=True)
+            provenance = dict(dataset.provenance)
+            row_count = dataset.row_count
+            column_count = dataset.column_count
+        version_id = uuid4().hex
+        connection.execute(
+            """
+            INSERT INTO dataset_versions (
+                id, project_id, parent_version_id, version_number, kind, content_sha256,
+                schema_json, provenance_json, row_count, column_count, created_at,
+                recipe_sha256
+            )
+            SELECT ?, ?, ?, COALESCE(MAX(version_number), 0) + 1, 'cleaned',
+                   ?, ?, ?, ?, ?, ?, ?
+            FROM dataset_versions WHERE project_id = ?
+            """,
+            (
+                version_id,
+                project_id,
+                parent_id,
+                digest,
+                schema_json,
+                json.dumps({**provenance, "recipe": cleaned.recipe}, sort_keys=True),
+                row_count,
+                column_count,
+                iso_now(),
+                cleaned.sha256,
+                project_id,
+            ),
+        )
+        return version_id
+
+    def dataset_version(self, version_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT finding_id FROM decision_row_sets
-                WHERE project_id = ? AND dataset_version_id = ?
-                """,
-                (project_id, dataset_version_id),
-            ).fetchall()
-        return {str(row[0]) for row in rows}
+            row = connection.execute(
+                "SELECT * FROM dataset_versions WHERE id = ?", (version_id,)
+            ).fetchone()
+        return dict(row) if row else None
 
     def decision_rows(self, project_id: str, dataset_version_id: str) -> dict[str, list[int]]:
         """Return each finding's frozen row positions in ``dataset_version_id``."""
@@ -1138,8 +1208,8 @@ class ProjectRepository:
                     INSERT INTO dataset_versions (
                         id, project_id, parent_version_id, version_number, kind,
                         content_sha256, schema_json, provenance_json, row_count, column_count,
-                        created_at, namespace
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        created_at, namespace, recipe_sha256
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         version_ids[row["id"]],
@@ -1154,6 +1224,7 @@ class ProjectRepository:
                         row["column_count"],
                         row["created_at"],
                         row["namespace"],
+                        row["recipe_sha256"],
                     ),
                 )
                 connection.execute(
@@ -1167,9 +1238,15 @@ class ProjectRepository:
                     (version_ids[row["id"]], row["id"]),
                 )
             if source["dataset_version_id"]:
+                cleaned_id = source["cleaned_version_id"]
                 connection.execute(
-                    "UPDATE projects SET dataset_version_id = ? WHERE id = ?",
-                    (version_ids[source["dataset_version_id"]], project_id),
+                    "UPDATE projects SET dataset_version_id = ?, cleaned_version_id = ? "
+                    "WHERE id = ?",
+                    (
+                        version_ids[source["dataset_version_id"]],
+                        version_ids[cleaned_id] if cleaned_id else None,
+                        project_id,
+                    ),
                 )
             connection.execute(
                 """

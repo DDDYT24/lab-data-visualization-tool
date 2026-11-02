@@ -23,7 +23,7 @@ from pathlib import Path
 BASELINE_REVISION = "0100_local_baseline"
 #: The chain head this build expects. ``test_local_schema_migrations`` keeps the two equal,
 #: so a new revision cannot be added without updating the fast path that skips Alembic.
-CURRENT_REVISION = "0106_freeze_legacy_decisions"
+CURRENT_REVISION = "0107_cleaned_dataset_versions"
 VERSION_TABLE = "alembic_version_local"
 #: Kept inside the package so that every route that ships ``labviz_api`` (the container
 #: image, the Windows installer and the desktop bundle) ships the migrations with it.
