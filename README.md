@@ -58,7 +58,7 @@ Source mode uses ports 3001 and 8001 and keeps data in `V2.0/api/.labviz/v23-dev
 
 - Acceptance on a clean machine, a fully disconnected workflow, real 200% zoom with a screen reader, and a physical iPhone.
 - Code signing. Windows may warn you; keep its protection on rather than working around it.
-- Five npm advisories remain in the development lint chain, none in production dependencies; see the [RC notes](V2.0/RELEASE_NOTES_V2.3.md).
+- My production dependencies have no known advisories. The lint tools I use in development still have 16 moderate ones through `minimatch`, waiting for an upstream fix; see the [dependency review](V2.0/docs/DEPENDENCY_SECURITY_REVIEW.md).
 
 Whether a figure of mine is ready for a journal depends on you checking its size, fonts, statistical assumptions and caption. I don't judge whether the experiment itself is sound.
 
