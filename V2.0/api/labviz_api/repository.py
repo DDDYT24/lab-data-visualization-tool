@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from functools import cached_property
@@ -18,7 +18,7 @@ from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, 
 from labviz_api.research_rows import copy_rows
 
 if TYPE_CHECKING:
-    from labviz_api.cleaning_recipe import CleanedVersion
+    from labviz_api.cleaning_recipe import CleanedVersion, FrozenRows
     from labviz_api.parquet import ParquetArtifact
 
 
@@ -834,7 +834,7 @@ class ProjectRepository:
         decisions: Iterable[dict[str, str]],
         *,
         dataset_version_id: str | None = None,
-        row_sets: Mapping[str, Sequence[int]] | None = None,
+        row_sets: Mapping[str, FrozenRows] | None = None,
         cleaned: CleanedVersion | None = None,
     ) -> str:
         """Replace the project's decisions.
@@ -886,17 +886,19 @@ class ProjectRepository:
                 connection.execute(
                     """
                     INSERT INTO decision_row_sets (
-                        project_id, finding_id, dataset_version_id, row_count, frozen_at
-                    ) VALUES (?, ?, ?, ?, ?)
+                        project_id, finding_id, dataset_version_id, row_count, frozen_at,
+                        rows_sha256, rows_packed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (project_id, finding, dataset_version_id, len(rows), now),
-                )
-                connection.executemany(
-                    """
-                    INSERT INTO decision_rows (project_id, finding_id, row_number)
-                    VALUES (?, ?, ?)
-                    """,
-                    [(project_id, finding, int(row)) for row in rows],
+                    (
+                        project_id,
+                        finding,
+                        dataset_version_id,
+                        rows.row_count,
+                        now,
+                        rows.sha256,
+                        rows.packed,
+                    ),
                 )
             cleaned_id = (
                 None
@@ -972,6 +974,14 @@ class ProjectRepository:
         )
         return version_id
 
+    def has_recipe(self, project_id: str, recipe_sha256: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM dataset_versions WHERE project_id = ? AND recipe_sha256 = ?",
+                (project_id, recipe_sha256),
+            ).fetchone()
+        return row is not None
+
     def dataset_version(self, version_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -979,30 +989,19 @@ class ProjectRepository:
             ).fetchone()
         return dict(row) if row else None
 
-    def decision_rows(self, project_id: str, dataset_version_id: str) -> dict[str, list[int]]:
-        """Return each finding's frozen row positions in ``dataset_version_id``."""
+    def frozen_rows(self, project_id: str, dataset_version_id: str) -> dict[str, FrozenRows]:
+        """Return the rows each finding froze in ``dataset_version_id``, still packed."""
+        from labviz_api.cleaning_recipe import FrozenRows
+
         with self._connect() as connection:
-            sets = connection.execute(
+            rows = connection.execute(
                 """
-                SELECT finding_id FROM decision_row_sets
+                SELECT finding_id, row_count, rows_sha256, rows_packed FROM decision_row_sets
                 WHERE project_id = ? AND dataset_version_id = ?
                 """,
                 (project_id, dataset_version_id),
             ).fetchall()
-            frozen: dict[str, list[int]] = {str(row[0]): [] for row in sets}
-            rows = connection.execute(
-                """
-                SELECT r.finding_id, r.row_number FROM decision_rows r
-                JOIN decision_row_sets s
-                    ON s.project_id = r.project_id AND s.finding_id = r.finding_id
-                WHERE r.project_id = ? AND s.dataset_version_id = ?
-                ORDER BY r.finding_id, r.row_number
-                """,
-                (project_id, dataset_version_id),
-            )
-            for finding, row_number in rows:
-                frozen[str(finding)].append(int(row_number))
-        return frozen
+        return {str(row[0]): FrozenRows(int(row[1]), str(row[2]), bytes(row[3])) for row in rows}
 
     def get_decisions(self, project_id: str) -> list[dict[str, str]]:
         with self._connect() as connection:
@@ -1279,8 +1278,8 @@ class ProjectRepository:
                     """
                     INSERT INTO decision_row_sets (
                         project_id, finding_id, dataset_version_id, row_count, frozen_at,
-                        migrated_from
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        migrated_from, rows_sha256, rows_packed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         project_id,
@@ -1289,15 +1288,10 @@ class ProjectRepository:
                         frozen_set["row_count"],
                         frozen_set["frozen_at"],
                         frozen_set["migrated_from"],
+                        frozen_set["rows_sha256"],
+                        frozen_set["rows_packed"],
                     ),
                 )
-            connection.execute(
-                """
-                INSERT INTO decision_rows (project_id, finding_id, row_number)
-                SELECT ?, finding_id, row_number FROM decision_rows WHERE project_id = ?
-                """,
-                (project_id, source_project_id),
-            )
 
             # Copy applied research history atomically with the project. Observation/source
             # identities describe the same acquired data; only revision ownership changes.

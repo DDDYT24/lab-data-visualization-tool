@@ -22,8 +22,8 @@ from PIL import Image
 from labviz_api.cleaning_recipe import (
     EXCLUDING_ACTIONS,
     CleanedVersion,
-    build_recipe,
-    decided_rows,
+    FrozenRows,
+    recipe_from_sets,
     recipe_sha256,
 )
 from labviz_api.persistence.exceptions import (
@@ -33,7 +33,12 @@ from labviz_api.persistence.exceptions import (
     ProjectRevisionConflict,
 )
 from labviz_api.persistence_types import ProjectCreation
-from labviz_api.processing import cleaned_frame, freeze_decision_rows, select_cleaned_rows
+from labviz_api.processing import (
+    cleaned_frame,
+    decided_mask,
+    freeze_decision_rows,
+    select_cleaned_rows,
+)
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 from labviz_api.repository import expires_in, iso_now
 from labviz_api.share_tokens import ShareTokenCodec
@@ -197,28 +202,35 @@ class SqliteProjectStore:
 
         # Rows are detected once, when a finding first removes rows from this version;
         # later saves keep what was frozen then, and readers never detect again.
-        frozen = self.repository.decision_rows(project_id, version_id)
+        frozen = self.repository.frozen_rows(project_id, version_id)
         pending = [
             item["findingId"]
             for item in decisions
             if item["action"] in EXCLUDING_ACTIONS and item["findingId"] not in frozen
         ]
         row_sets = (
-            freeze_decision_rows(parsed(), json.loads(project["quality_json"]), pending)
+            {
+                finding: FrozenRows.of(rows)
+                for finding, rows in freeze_decision_rows(
+                    parsed(), json.loads(project["quality_json"]), pending
+                ).items()
+            }
             if pending
             else {}
         )
         cleaned = None
         if any(item["action"] in EXCLUDING_ACTIONS for item in decisions):
             rows = {**frozen, **row_sets}
-            recipe = build_recipe(parent["content_sha256"], decisions, rows)
-            removed = decided_rows(decisions, rows, {"remove"})
+            recipe = recipe_from_sets(parent["content_sha256"], decisions, rows)
+            sha256 = recipe_sha256(recipe)
+            removed = decided_mask(decisions, rows, {"remove"}, parent["row_count"]).nonzero()[0]
             dataset = None
-            if removed:
+            # Undoing a decision returns to a version that already holds this table.
+            if len(removed) and not self.repository.has_recipe(project_id, sha256):
                 schema = json.loads(parent["schema_json"])
                 units = {str(column["name"]): column.get("unit") for column in schema["columns"]}
                 dataset = write_parquet(cleaned_frame(parsed(), removed), units=units)
-            cleaned = CleanedVersion(recipe, recipe_sha256(recipe), dataset)
+            cleaned = CleanedVersion(recipe, sha256, dataset)
         return self.repository.save_decisions(
             project_id,
             decisions,
@@ -248,20 +260,17 @@ class SqliteProjectStore:
         cleaned = self.repository.dataset_version(project["cleaned_version_id"])
         if parent is None or cleaned is None:
             raise ValueError("Ready project data does not exist.")
-        frozen = self.repository.decision_rows(project_id, parent["id"])
-        recipe = build_recipe(parent["content_sha256"], decisions, frozen)
+        frozen = self.repository.frozen_rows(project_id, parent["id"])
+        recipe = recipe_from_sets(parent["content_sha256"], decisions, frozen)
         if recipe_sha256(recipe) != cleaned["recipe_sha256"]:
             raise ValueError("The cleaned dataset version does not match the saved decisions.")
-        removed = decided_rows(decisions, frozen, {"remove"})
-        dropped = sorted(
-            set(decided_rows(decisions, frozen, actions or EXCLUDING_ACTIONS)) - set(removed)
-        )
         digest = cleaned["content_sha256"]
         return select_cleaned_rows(
             read_parquet(self.repository.artifacts.read(digest), expected_sha256=digest),
             parent["row_count"],
-            removed,
-            dropped,
+            decisions,
+            frozen,
+            actions or EXCLUDING_ACTIONS,
         )
 
     def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame:
