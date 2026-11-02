@@ -310,7 +310,9 @@ def main() -> None:
         files = dict(
             pool.map(lambda p: (p.relative_to(output).as_posix(), sha(p)), members)
         )
-    if max(len(name) for name in files) > 121:
+    # Keep in step with preflight-v23.ps1. Next 16.4 names server-action chunks after
+    # their route, so the longest packaged path is a 126-character SSR chunk.
+    if max(len(name) for name in files) > 140:
         raise ValueError("Payload exceeds the installer's verified Windows path bound.")
     identity = {
         "appId": APP_ID,
