@@ -13,6 +13,7 @@ from alembic.config import Config
 
 from labviz_api import processing
 from labviz_api.artifacts import MEDIA_TYPES, local_artifact_store, remember
+from labviz_api.cleaning_recipe import FrozenRows, rows_sha256
 from labviz_api.local_schema import (
     CURRENT_REVISION,
     MIGRATIONS_PATH,
@@ -113,8 +114,6 @@ def test_actions_share_one_frozen_set_until_the_decision_is_ignored(tmp_path: Pa
 
     projects.save_decisions("p", [{"findingId": "missing:Signal", "action": "remove"}])
     projects.save_decisions("p", [])
-    with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM decision_rows").fetchone() == (0,)
     assert frozen_sets(database) == []
 
 
@@ -353,11 +352,34 @@ def test_rows_that_no_longer_match_the_cleaned_version_are_refused(tmp_path: Pat
     database = tmp_path / "labviz.db"
     projects = uploaded(database)
     projects.save_decisions("p", [{"findingId": "missing:Signal", "action": "remove"}])
+    other = FrozenRows.of([3])
     with sqlite3.connect(database) as connection:
-        connection.execute("UPDATE decision_rows SET row_number = 3")
+        connection.execute(
+            "UPDATE decision_row_sets SET rows_sha256 = ?, rows_packed = ?",
+            (other.sha256, other.packed),
+        )
 
     with pytest.raises(ValueError, match="does not match the saved decisions"):
         projects.load_cleaned_dataframe("p")
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [[], [0], [5, 1, 1, 3], [0, 1, 2, 3], [2**32 - 1], list(range(0, 3_000_000, 7))],
+)
+def test_packed_rows_round_trip_and_hash_like_the_positions(rows: list[int]) -> None:
+    packed = FrozenRows.of(rows)
+
+    assert list(packed.positions()) == sorted(set(rows))
+    assert packed.row_count == len(set(rows))
+    assert packed.sha256 == rows_sha256(set(rows))
+
+
+def test_packed_rows_refuse_a_count_they_do_not_hold() -> None:
+    packed = FrozenRows.of([1, 2, 3])
+
+    with pytest.raises(ValueError, match="recorded count"):
+        FrozenRows(2, packed.sha256, packed.packed).positions()
 
 
 def test_a_saved_decision_is_not_marked_as_migrated(tmp_path: Path) -> None:
