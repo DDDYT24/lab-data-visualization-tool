@@ -33,6 +33,9 @@ function Undo-Transaction($Transaction, [string]$Helper) {
     if ($Transaction.appId -ne $V23AppId -or $Transaction.profileId -ne $profile.profileId) { throw 'Foreign upgrade transaction refused.' }
     if ($Transaction.backup) {
         $backup = Assert-OwnBackup $Transaction.backup
+        # The snapshot holds the previous candidate's data, which an older rollback target
+        # may not be able to read.
+        if ($Transaction.previous) { $Helper = Get-V23VersionRoot $installRoot $Transaction.previous }
         $null = Invoke-V23Data $Helper 'replace' $ProfileRoot $backup
     }
     if ($Transaction.previous) { Set-Candidate $currentFile $Transaction.previous }
@@ -86,7 +89,15 @@ try {
     }
     if ($pending) {
         $profile = Invoke-V23Data $versionRoot 'info' $ProfileRoot
-        if ($profile.dataEpoch -gt 1) { throw 'Automatic rollback to an incompatible data schema is refused. Use a compatible runtime; current data is unchanged.' }
+        $supported = Get-V23DataEpoch $versionRoot
+        if ($Rollback) {
+            # A rollback swaps in the snapshot taken before the upgrade, so the older candidate
+            # only has to read that snapshot; data the current candidate does not know is kept.
+            $known = Get-V23DataEpoch (Get-V23VersionRoot $installRoot $current)
+            $snapshot = (Invoke-V23Data $versionRoot 'verify' $ProfileRoot $receipt.backup).manifest.installed.dataEpoch
+            $compatible = $profile.dataEpoch -le $known -and $snapshot -le $supported
+        } else { $compatible = $profile.dataEpoch -le $supported }
+        if (-not $compatible) { throw 'Automatic rollback to an incompatible data schema is refused. Use a compatible runtime; current data is unchanged.' }
         $backup = ''
         if (Test-Path -LiteralPath (Join-Path $ProfileRoot 'data\labviz.db')) { $backup = (Invoke-V23Data $versionRoot 'backup' $ProfileRoot).backupDirectory }
         $transaction = @{ appId=$V23AppId; profileId=$profile.profileId; previous=$current; candidate=$pending; backup=$backup }

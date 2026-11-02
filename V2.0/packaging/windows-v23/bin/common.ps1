@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
 $OutputEncoding = [Console]::OutputEncoding
 $V23AppId = '55B46BB7-101E-46DC-951A-3DE7E402EDD0'
+# Keep in step with DATA_EPOCH in labviz_api/installed_profile.py.
+$V23DataEpoch = 2
 
 function Assert-Unlinked([string]$Path) {
     $absolute = [IO.Path]::GetFullPath($Path)
@@ -72,12 +74,17 @@ function Get-V23VersionRoot([string]$InstallRoot, [string]$CandidateId) {
     $directoryId = $CandidateId.Substring(0,24)
     $root = Assert-Unlinked (Join-Path $InstallRoot "versions\$directoryId")
     $metadata = Get-Content -LiteralPath (Join-Path $root 'candidate-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($metadata.appId -ne $V23AppId -or $metadata.candidateId -ne $CandidateId -or $metadata.dataEpoch -ne 1) { throw 'Candidate identity or supported data epoch differs.' }
+    if ($metadata.appId -ne $V23AppId -or $metadata.candidateId -ne $CandidateId -or $metadata.dataEpoch -lt 1 -or $metadata.dataEpoch -gt $V23DataEpoch) { throw 'Candidate identity or supported data epoch differs.' }
     foreach ($relative in @('runtime\python\python.exe','runtime\node\node.exe','bin\start-v23-portable.ps1','V2.0\web\server.js')) {
         $path = Assert-Unlinked (Join-Path $root $relative)
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Incomplete candidate: $relative" }
     }
     return $root
+}
+
+# Older candidates stay installed as rollback targets and may read an earlier epoch.
+function Get-V23DataEpoch([string]$VersionRoot) {
+    return [int](Get-Content -LiteralPath (Join-Path $VersionRoot 'candidate-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json).dataEpoch
 }
 
 function Invoke-V23Data([string]$VersionRoot, [string]$Action, [string]$ProfileRoot, [string]$Source = '', [string]$ConfirmId = '') {

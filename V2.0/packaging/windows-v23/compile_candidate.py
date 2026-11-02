@@ -23,6 +23,8 @@ REQUIRED_CHECKS = {
     "sameVersionGenerationUpgradePreservesData",
     "compatibleRollbackRetainsNewerData",
     "failedCandidateAutomaticallyRestoresPrevious",
+    "olderEpochCandidateRefusedForNewerData",
+    "rollbackToOlderEpochRestoresItsSnapshot",
     "futureEpochRollbackRefusedWithoutDataMutation",
     "exactProfileDeletionPreservesOtherProfile",
     "packagedScientificBrowserWorkflows",
