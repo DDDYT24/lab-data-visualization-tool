@@ -1008,27 +1008,36 @@ def apply_chart_decisions(
     quality: dict[str, Any],
     decisions: list[dict[str, str]],
     actions: set[str] | None = None,
-    frozen: Mapping[str, Sequence[int]] | None = None,
 ) -> pd.DataFrame:
-    """Drop the rows of each decided finding.
-
-    A finding in ``frozen`` drops the row positions recorded when its decision was saved;
-    any other finding is detected again on ``frame``.
-    """
     excluded_actions = actions or EXCLUDING_ACTIONS
     excluded_findings = {
         item["findingId"] for item in decisions if item["action"] in excluded_actions
     }
-    frozen = frozen or {}
     excluded_mask = np.zeros(len(frame), dtype=bool)
     for finding in quality["findings"]:
-        if finding["id"] not in excluded_findings:
-            continue
-        rows = frozen.get(finding["id"])
-        if rows is None:
+        if finding["id"] in excluded_findings:
             excluded_mask |= _quality_finding_mask(frame, finding)
-        else:
-            excluded_mask[list(rows)] = True
+    if not excluded_mask.any():
+        return frame
+    return frame.iloc[np.flatnonzero(~excluded_mask)]
+
+
+def apply_frozen_decisions(
+    frame: pd.DataFrame,
+    decisions: list[dict[str, str]],
+    frozen: Mapping[str, Sequence[int]],
+    actions: set[str] | None = None,
+) -> pd.DataFrame:
+    """Drop the row positions each decision froze when it was saved; nothing is detected."""
+    excluded_actions = actions or EXCLUDING_ACTIONS
+    excluded_mask = np.zeros(len(frame), dtype=bool)
+    for item in decisions:
+        if item["action"] not in excluded_actions:
+            continue
+        rows = frozen.get(item["findingId"])
+        if rows is None:
+            raise ValueError(f"Decision on {item['findingId']} has no frozen rows.")
+        excluded_mask[list(rows)] = True
     if not excluded_mask.any():
         return frame
     return frame.iloc[np.flatnonzero(~excluded_mask)]
@@ -1037,12 +1046,19 @@ def apply_chart_decisions(
 def freeze_decision_rows(
     frame: pd.DataFrame, quality: dict[str, Any], finding_ids: Iterable[str]
 ) -> dict[str, list[int]]:
-    """Return the row positions each finding covers in ``frame``."""
-    wanted = set(finding_ids)
+    """Return the row positions each finding covers in ``frame``.
+
+    A finding the report no longer has covers no rows, as it did when it was detected on
+    every read.
+    """
+    findings = {str(finding["id"]): finding for finding in quality["findings"]}
     return {
-        str(finding["id"]): np.flatnonzero(_quality_finding_mask(frame, finding)).tolist()
-        for finding in quality["findings"]
-        if finding["id"] in wanted
+        finding_id: (
+            np.flatnonzero(_quality_finding_mask(frame, findings[finding_id])).tolist()
+            if finding_id in findings
+            else []
+        )
+        for finding_id in finding_ids
     }
 
 
