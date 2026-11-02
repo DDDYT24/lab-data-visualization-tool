@@ -16,12 +16,15 @@ from uuid import uuid4
 from pydantic import Field, model_validator
 from pydantic_core import to_json
 
+from .artifacts import MEDIA_TYPES, remember
 from .research_contract import Identifier, ResearchModel
 from .research_figure_render import render_board
 from .research_figure_sources import source
 from .research_panel_headers import install_headers
 from .research_preparation import PreparationError
 from .research_store import ResearchStore
+
+ARTIFACT_KINDS = ("svg", "png", "pdf")
 
 
 class FigureBoardSpec(ResearchModel):
@@ -216,16 +219,12 @@ def save_board(
             "VALUES (?,?,?,?)",
             (row["id"], project_id, row["spec_json"], row["created_at"]),
         )
-        connection.execute(
-            "INSERT INTO research_figure_artifacts (board_id,svg,png,pdf,scene_json) "
-            "VALUES (?,?,?,?,?)",
-            (
-                row["id"],
-                artifacts["svg"],
-                artifacts["png"],
-                artifacts["pdf"],
-                to_json(scene, ensure_ascii=False, round_trip=True).decode("utf-8"),
-            ),
+        insert_artifacts(
+            connection,
+            store,
+            row["id"],
+            artifacts,
+            to_json(scene, ensure_ascii=False, round_trip=True).decode("utf-8"),
         )
         view["composed"] = True
         view["artifactState"] = "ready"
@@ -269,6 +268,25 @@ def list_boards(store: ResearchStore, project_id: str) -> dict[str, Any]:
     }
 
 
+def insert_artifacts(
+    connection: sqlite3.Connection,
+    store: ResearchStore,
+    board_id: str,
+    artifacts: dict[str, bytes],
+    scene_json: str,
+) -> None:
+    """Store a board's three exports and record their digests beside the scene."""
+    digests = [
+        remember(connection, store.artifacts, artifacts[kind], media_type=MEDIA_TYPES[kind])
+        for kind in ARTIFACT_KINDS
+    ]
+    connection.execute(
+        "INSERT INTO research_figure_artifacts "
+        "(board_id,svg_sha256,png_sha256,pdf_sha256,scene_json) VALUES (?,?,?,?,?)",
+        (board_id, *digests, scene_json),
+    )
+
+
 def artifact_row(
     store: ResearchStore,
     project_id: str,
@@ -278,7 +296,11 @@ def artifact_row(
     # Inspecting one row must not load every multi-megabyte export into memory.
     if field is not None and field not in {"svg", "png", "pdf", "scene_json"}:
         raise ValueError("Unknown figure artifact field")
-    columns = "a.*" if field is None else "a." + field
+    columns = (
+        "a.*"
+        if field is None
+        else ("a.scene_json" if field == "scene_json" else f"a.{field}_sha256 AS {field}")
+    )
     if field == "scene_json":
         # Read frozen UTF-8 directly for the JSON parser. Persistence remains TEXT;
         # avoid decoding a large Unicode string only to re-encode it in from_json.
@@ -301,7 +323,13 @@ def artifact_row(
         raise PreparationError(
             "figure-not-found", "Save a new layout revision to create composed artifacts."
         )
-    return dict(row)
+    artifact = dict(row)
+    if field is None:
+        for kind in ARTIFACT_KINDS:
+            artifact[kind] = store.artifacts.read(artifact.pop(f"{kind}_sha256"))
+    elif field != "scene_json":
+        artifact[field] = store.artifacts.read(artifact[field])
+    return artifact
 
 
 def scene_row_references(scene: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:

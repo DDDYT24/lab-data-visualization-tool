@@ -7,10 +7,12 @@ import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from functools import cached_property
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
+from labviz_api.artifacts import MEDIA_TYPES, ArtifactStore, local_artifact_store, remember, sweep
 from labviz_api.persistence_types import ProjectCreation
 from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, fixed_window
 
@@ -39,6 +41,10 @@ class ProjectRepository:
         self.project_ttl_seconds = project_ttl_seconds
         database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
+
+    @cached_property
+    def artifacts(self) -> ArtifactStore:
+        return local_artifact_store(self.database_path)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -356,6 +362,8 @@ class ProjectRepository:
                 "DELETE FROM auth_requests WHERE requested_at < ?", (request_cutoff,)
             )
             connection.execute("DELETE FROM auth_rate_limit_buckets WHERE expires_at <= ?", (now,))
+        # Expired exports and deleted projects leave their artifacts unreferenced.
+        sweep(self.database_path, self.artifacts)
 
     def create_project(
         self,
@@ -854,7 +862,7 @@ class ProjectRepository:
                 SELECT projects.*,
                     (SELECT id FROM figure_snapshots
                      WHERE project_id = projects.id AND format = 'png'
-                       AND thumbnail_png IS NOT NULL
+                       AND thumbnail_sha256 IS NOT NULL
                      ORDER BY created_at DESC LIMIT 1) AS thumbnail_snapshot_id,
                     (SELECT COUNT(*) FROM figure_snapshots
                      WHERE project_id = projects.id) AS figure_snapshot_count,
@@ -1075,16 +1083,17 @@ class ProjectRepository:
                         chart_ids[chart["id"]] = uuid4().hex
                         connection.execute(
                             "INSERT INTO research_charts "
-                            "(id,project_id,revision_id,result_json,svg,png,pdf,created_at) "
+                            "(id,project_id,revision_id,result_json,"
+                            "svg_sha256,png_sha256,pdf_sha256,created_at) "
                             "VALUES (?,?,?,?,?,?,?,?)",
                             (
                                 chart_ids[chart["id"]],
                                 project_id,
                                 revision_ids[chart["revision_id"]],
                                 chart["result_json"],
-                                chart["svg"],
-                                chart["png"],
-                                chart["pdf"],
+                                chart["svg_sha256"],
+                                chart["png_sha256"],
+                                chart["pdf_sha256"],
                                 now,
                             ),
                         )
@@ -1152,8 +1161,8 @@ class ProjectRepository:
                             if sources_exist:
                                 connection.execute(
                                     "INSERT INTO research_figure_artifacts "
-                                    "(board_id,svg,png,pdf,scene_json) "
-                                    "SELECT ?,svg,png,pdf,scene_json "
+                                    "(board_id,svg_sha256,png_sha256,pdf_sha256,scene_json) "
+                                    "SELECT ?,svg_sha256,png_sha256,pdf_sha256,scene_json "
                                     "FROM research_figure_artifacts WHERE board_id=?",
                                     (new_board_id, board["id"]),
                                 )
@@ -1214,15 +1223,14 @@ class ProjectRepository:
                                 connection.execute(
                                     "INSERT INTO research_outputs "
                                     "(id,project_id,board_id,manifest_json,notes_json,"
-                                    "zip_blob,sha256,created_at) "
-                                    "VALUES (?,?,?,?,?,?,?,?)",
+                                    "sha256,created_at) "
+                                    "VALUES (?,?,?,?,?,?,?)",
                                     (
                                         uuid4().hex,
                                         project_id,
                                         board_ids[output["board_id"]],
                                         output["manifest_json"],
                                         output["notes_json"],
-                                        output["zip_blob"],
                                         output["sha256"],
                                         now,
                                     ),
@@ -1343,18 +1351,21 @@ class ProjectRepository:
     ) -> None:
         with self._connect() as connection:
             self._touch(connection, project_id)
+            digest = remember(
+                connection, self.artifacts, payload, media_type=MEDIA_TYPES[format_name]
+            )
             connection.execute(
                 """
                 INSERT INTO exports (
-                    id, project_id, format, status, payload, expires_at, message, created_at,
-                    experiment_json
+                    id, project_id, format, status, payload_sha256, expires_at, message,
+                    created_at, experiment_json
                 ) VALUES (?, ?, ?, 'ready', ?, ?, ?, ?, ?)
                 """,
                 (
                     export_id,
                     project_id,
                     format_name,
-                    payload,
+                    digest,
                     expires_at,
                     message,
                     iso_now(),
@@ -1362,12 +1373,13 @@ class ProjectRepository:
                 ),
             )
             if figure_snapshot is not None:
+                thumbnail = figure_snapshot.get("thumbnail_png")
                 connection.execute(
                     """
                     INSERT INTO figure_snapshots (
-                        id, project_id, title, format, chart_json, payload, thumbnail_png,
+                        id, project_id, title, format, chart_json, thumbnail_sha256,
                         sha256, byte_size, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         figure_snapshot["id"],
@@ -1375,9 +1387,13 @@ class ProjectRepository:
                         figure_snapshot["title"],
                         format_name,
                         figure_snapshot["chart_json"],
-                        payload,
-                        figure_snapshot.get("thumbnail_png"),
-                        figure_snapshot["sha256"],
+                        (
+                            remember(connection, self.artifacts, thumbnail, media_type="image/png")
+                            if thumbnail
+                            else None
+                        ),
+                        # The snapshot shares the export's bytes; its digest is the reference.
+                        digest,
                         len(payload),
                         iso_now(),
                     ),
@@ -1388,7 +1404,7 @@ class ProjectRepository:
             rows = connection.execute(
                 """
                 SELECT id, project_id, title, format, sha256, byte_size, created_at,
-                    thumbnail_png IS NOT NULL AS has_thumbnail
+                    thumbnail_sha256 IS NOT NULL AS has_thumbnail
                 FROM figure_snapshots
                 WHERE project_id = ?
                 ORDER BY created_at DESC, id DESC
@@ -1403,7 +1419,13 @@ class ProjectRepository:
                 "SELECT * FROM figure_snapshots WHERE project_id = ? AND id = ?",
                 (project_id, snapshot_id),
             ).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        snapshot = dict(row)
+        snapshot["payload"] = self.artifacts.read(snapshot["sha256"])
+        thumbnail = snapshot.pop("thumbnail_sha256")
+        snapshot["thumbnail_png"] = self.artifacts.read(thumbnail) if thumbnail else None
+        return snapshot
 
     def delete_figure_snapshot(self, project_id: str, snapshot_id: str) -> bool:
         with self._connect() as connection:
@@ -1417,7 +1439,12 @@ class ProjectRepository:
         self.cleanup_expired()
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM exports WHERE id = ?", (export_id,)).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        export = dict(row)
+        digest = export.pop("payload_sha256")
+        export["payload"] = self.artifacts.read(digest) if digest else None
+        return export
 
     def latest_exports(self, project_id: str) -> dict[str, str]:
         self.cleanup_expired()

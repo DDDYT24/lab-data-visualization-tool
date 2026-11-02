@@ -23,7 +23,7 @@ from pathlib import Path
 BASELINE_REVISION = "0100_local_baseline"
 #: The chain head this build expects. ``test_local_schema_migrations`` keeps the two equal,
 #: so a new revision cannot be added without updating the fast path that skips Alembic.
-CURRENT_REVISION = "0100_local_baseline"
+CURRENT_REVISION = "0101_artifacts_out_of_sqlite"
 VERSION_TABLE = "alembic_version_local"
 #: Kept inside the package so that every route that ships ``labviz_api`` (the container
 #: image, the Windows installer and the desktop bundle) ships the migrations with it.
@@ -87,6 +87,12 @@ def _migrate(database_path: Path) -> None:
     if local_schema_revision(database_path) is None:
         command.stamp(config, BASELINE_REVISION)
     command.upgrade(config, "head")
+    # Migrations can drop large columns; SQLite keeps those pages until VACUUM, which
+    # cannot run inside the migration's own transaction. In WAL mode the file itself only
+    # shrinks once the rewritten pages are checkpointed back into it.
+    with closing(sqlite3.connect(database_path, timeout=30, isolation_level=None)) as connection:
+        connection.execute("VACUUM")
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
 
 def prepare_local_database(database_path: Path, *, project_ttl_seconds: int) -> str | None:
