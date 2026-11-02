@@ -438,8 +438,8 @@ def test_capture_sample_linkage_reads_only_revision_namespace(
         )
         with ResearchStore(config.database_path).connect() as connection:
             namespace = connection.execute(
-                "SELECT json_extract(raw_json, '$.namespace') FROM research_revisions "
-                "WHERE project_id=?",
+                "SELECT v.namespace FROM research_revisions r "
+                "JOIN dataset_versions v ON v.id=r.dataset_version_id WHERE r.project_id=?",
                 (identifier,),
             ).fetchone()[0]
 

@@ -261,8 +261,9 @@ def register_figure_routes(
                     # Sample linkage needs one scalar, not both complete revision snapshots.
                     with active.connect() as connection:
                         current = connection.execute(
-                            "SELECT json_extract(r.raw_json, '$.namespace') AS namespace "
-                            "FROM research_heads h JOIN research_revisions r ON r.id=h.revision_id "
+                            "SELECT v.namespace FROM research_heads h "
+                            "JOIN research_revisions r ON r.id=h.revision_id "
+                            "JOIN dataset_versions v ON v.id=r.dataset_version_id "
                             "WHERE h.project_id=?",
                             (project_id,),
                         ).fetchone()

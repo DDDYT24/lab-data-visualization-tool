@@ -26,6 +26,7 @@ from .processing import ProcessingError
 from .research_chart_render import COLORS, render_chart
 from .research_charts import ScientificChartSpec, compute_chart
 from .research_contract import ResearchModel
+from .research_dataset import encode_raw
 from .research_figure_board import FigureBoardSpec, insert_artifacts
 from .research_figure_render import render_board
 from .research_figure_sources import digest, legacy_snapshot, scientific_source, source
@@ -150,16 +151,9 @@ def template_from_board(
         recipes = []
         for panel in panels:
             if "scientific" in panel:
-                revision = c.execute(
-                    (
-                        "SELECT raw_json,prepared_json FROM research_revisions WHERE "
-                        "project_id=? AND id=?"
-                    ),
-                    (project_id, panel["revisionId"]),
-                ).fetchone()
-                prepared = json.loads(revision["prepared_json"])
-                raw = json.loads(revision["raw_json"])
-                plan = PreparationPlan.model_validate(prepared["plan"])
+                revision = store.revision(c, project_id, panel["revisionId"])
+                raw = store.raw(c, project_id, panel["revisionId"])
+                plan = PreparationPlan.model_validate_json(revision["plan_json"])
                 plan.exclusions = []
                 chart = ScientificChartSpec.model_validate(panel["scientific"]["spec"])
                 existing_styles = {item.group: item.model_dump() for item in chart.category_styles}
@@ -458,11 +452,8 @@ def apply_template(
             revisions.append(
                 (
                     revision,
-                    project_id,
                     parent,
-                    json.dumps(payload["raw"], allow_nan=False),
                     json.dumps(entry["prepared"], allow_nan=False),
-                    timestamp,
                 )
             )
             parent = revision
@@ -483,6 +474,7 @@ def apply_template(
         else:
             legacy_panels.append((key, project_id, json.dumps(result, allow_nan=False), timestamp))
             sources.append(result)
+    dataset = encode_raw(payload["raw"]) if revisions else None
     board_id = None
     artifacts = None
     scene = None
@@ -503,11 +495,18 @@ def apply_template(
             raise PreparationError(
                 "preview-expired", "Preview has already been consumed or replaced."
             )
-        c.executemany(
-            "INSERT INTO research_revisions "
-            "(id,project_id,parent_id,raw_json,prepared_json,created_at) VALUES (?,?,?,?,?,?)",
-            revisions,
-        )
+        if dataset is not None:
+            for revision_id, parent_id, prepared_json in revisions:
+                store.insert_revision(
+                    c,
+                    revision_id=revision_id,
+                    project_id=project_id,
+                    parent_id=parent_id,
+                    raw=payload["raw"],
+                    dataset=dataset,
+                    prepared_json=prepared_json,
+                    created_at=timestamp,
+                )
         c.executemany(
             "INSERT INTO research_charts "
             "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,created_at) "
