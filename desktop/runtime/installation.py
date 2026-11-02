@@ -14,7 +14,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from maintenance import DESKTOP_ID, backend, backup, checkpoint_schema, identity, read, verify, restored_copy
+from maintenance import DATA_EPOCH, DESKTOP_ID, backend, backup, checkpoint_schema, identity, read, verify, restored_copy
 from session import atomic, encoded, unlinked
 from service_runner import Mutex, sid, SimpleProcess, record as process_record
 from process_job import OwnedJob
@@ -64,7 +64,7 @@ def version(root, candidate, verify_files=False):
     folder = unlinked(root/'versions'/candidate[:24])
     envelope = read(folder/'desktop-package.json')
     record = envelope['manifest']
-    if record['format'] != 'labviz-desktop-package-v1' or envelope['packageId'] != candidate or hashlib.sha256(encoded(record)).hexdigest() != candidate or record['appId'] != DESKTOP_ID or record['dataEpoch'] != 1 or record['checkpointSchema'] != 1:
+    if record['format'] != 'labviz-desktop-package-v1' or envelope['packageId'] != candidate or hashlib.sha256(encoded(record)).hexdigest() != candidate or record['appId'] != DESKTOP_ID or type(record['dataEpoch']) is not int or not 1 <= record['dataEpoch'] <= DATA_EPOCH or record['checkpointSchema'] != 1:
         raise ValueError('Desktop package identity or format differs')
     if verify_files:
         from labviz_api.source_data import safe_files
@@ -148,7 +148,7 @@ def prepare(root, candidate, base, payload):
         held = Mutex(lock_name('LabVizDesktopPreview',owner))
         try:
             with backend(owner,payload) as profile:
-                if profile.epoch()>1: raise ValueError('A newer data schema requires a compatible application')
+                if profile.epoch()>DATA_EPOCH: raise ValueError('A newer data schema requires a compatible application')
                 checkpoint_schema(owner,strict=True)
             saved = backup(owner,payload)
         finally: held.close()

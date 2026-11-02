@@ -86,7 +86,7 @@ class ReleasePreflightTests(unittest.TestCase):
     def artifact(self,root):
         bundle=root/'bundle';bundle.mkdir();build=root/'build';build.mkdir()
         (bundle/'payload.txt').write_text('synthetic payload');setup=build/'private.exe';setup.write_bytes(b'synthetic setup; never executed')
-        manifest={'format':'labviz-desktop-package-v1','appId':'org.labviz.desktop.preview','dataEpoch':1,'checkpointSchema':1,'files':{'payload.txt':module.sha(bundle/'payload.txt')}}
+        manifest={'format':'labviz-desktop-package-v1','appId':'org.labviz.desktop.preview','dataEpoch':2,'checkpointSchema':1,'files':{'payload.txt':module.sha(bundle/'payload.txt')}}
         identifier=module.hashlib.sha256(module.canonical(manifest)).hexdigest()
         (bundle/'desktop-package.json').write_text(json.dumps({'packageId':identifier,'manifest':manifest}))
         (build/'build-verification.json').write_text(json.dumps({'packageId':identifier,'compilerExitCode':0,'installers':{'private.exe':{'sha256':module.sha(setup),'bytes':setup.stat().st_size}}}))

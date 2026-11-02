@@ -15,6 +15,7 @@ import sys
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'desktop/runtime'))
 from session import unlinked,io_path
+from maintenance import DATA_EPOCH
 
 GATES={
     'window-tray-exit':'native-windows','native-files':'native-windows',
@@ -45,7 +46,7 @@ def member(root,name):
 
 def verify_artifact(bundle,build):
     package=read(bundle/'desktop-package.json');manifest=package['manifest']
-    if manifest.get('format')!='labviz-desktop-package-v1' or manifest.get('appId')!='org.labviz.desktop.preview' or manifest.get('dataEpoch')!=1 or manifest.get('checkpointSchema')!=1:raise ValueError('Unsupported desktop package identity or schema')
+    if manifest.get('format')!='labviz-desktop-package-v1' or manifest.get('appId')!='org.labviz.desktop.preview' or manifest.get('dataEpoch')!=DATA_EPOCH or manifest.get('checkpointSchema')!=1:raise ValueError('Unsupported desktop package identity or schema')
     if hashlib.sha256(canonical(manifest)).hexdigest()!=package['packageId']:raise ValueError('Package identity differs')
     record=read(build/'build-verification.json')
     if record['packageId']!=package['packageId'] or record['compilerExitCode']!=0 or len(record['installers'])!=1:raise ValueError('Installer build differs')
