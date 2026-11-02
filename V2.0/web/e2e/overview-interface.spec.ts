@@ -301,7 +301,13 @@ test("overview preserves research drafts, real counts, saved figures and exports
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   for (const mode of ["light", "dark"]) {
-    if (mode === "dark") await page.getByRole("button", { name: "Switch to dark theme", exact: true }).click();
+    if (mode === "dark") {
+      await page.getByRole("button", { name: "Switch to dark theme", exact: true }).click();
+      // The pointer still rests on the toggle, so its tooltip fades in; axe would measure
+      // the half-transparent frame as a contrast failure.
+      await page.mouse.move(0, 0);
+      await expect(page.getByRole("tooltip")).toHaveCount(0);
+    }
     const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     expect(axe.violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`overview-figure-${mode}.png`), fullPage: true });
