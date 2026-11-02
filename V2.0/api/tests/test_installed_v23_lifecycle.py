@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -20,7 +21,7 @@ from labviz_api.installed_lifecycle import (
     restore_independent,
     verify_installed,
 )
-from labviz_api.installed_profile import InstalledProfile, cookie_suffix
+from labviz_api.installed_profile import DATA_EPOCH, InstalledProfile, cookie_suffix
 from labviz_api.source_data import file_sha
 
 
@@ -127,14 +128,38 @@ def test_newer_schema_backup_is_valid_but_not_restored_by_old_runtime(
     profile: InstalledProfile,
 ) -> None:
     data_at(profile)
+    newer = DATA_EPOCH + 1
     (profile.root / "data-schema.json").write_text(
-        json.dumps({"profileId": profile.identifier, "dataEpoch": 2}), encoding="utf-8"
+        json.dumps({"profileId": profile.identifier, "dataEpoch": newer}), encoding="utf-8"
     )
     backup = backup_profile(profile)
-    assert verify_installed(backup)["installed"]["dataEpoch"] == 2
+    assert verify_installed(backup)["installed"]["dataEpoch"] == newer
     with pytest.raises(ValueError, match="compatible runtime"):
         restore_independent(backup)
-    assert profile.epoch() == 2
+    assert profile.epoch() == newer
+
+
+def test_rollback_restores_an_epoch_one_snapshot_over_current_data(
+    profile: InstalledProfile,
+) -> None:
+    # The snapshot the installer takes before upgrading a V2.3.0-rc.1 profile.
+    data_at(profile)
+    snapshot = backup_profile(profile)
+    assert verify_installed(snapshot)["installed"]["dataEpoch"] == 1
+    profile.set_epoch(DATA_EPOCH)
+    replace_active(profile, snapshot)
+    assert profile.epoch() == 1
+    assert rows(profile.data) == [("stable-id", "unchanged-owner")]
+
+
+def test_packaged_launchers_declare_the_runtime_data_epoch() -> None:
+    packaging = Path(__file__).resolve().parents[2] / "packaging/windows-v23"
+    identity = json.loads((packaging / "identity.json").read_text(encoding="utf-8"))
+    common = (packaging / "bin/common.ps1").read_text(encoding="utf-8-sig")
+    stage = (packaging / "stage_candidate.py").read_text(encoding="utf-8")
+    assert identity["dataEpoch"] == DATA_EPOCH
+    assert re.findall(r"^\$V23DataEpoch = (\d+)$", common, re.M) == [str(DATA_EPOCH)]
+    assert re.findall(r'"dataEpoch": (\d+),', stage) == [str(DATA_EPOCH)] * 2
 
 
 def test_rollback_retains_newer_data_and_recovers_interrupted_rename(

@@ -317,7 +317,7 @@ def main() -> None:
     identity = {
         "appId": APP_ID,
         "version": "2.3.0-rc.1",
-        "dataEpoch": 1,
+        "dataEpoch": 2,
         "files": files,
     }
     candidate_id = hashlib.sha256(
@@ -331,7 +331,7 @@ def main() -> None:
         "appId": APP_ID,
         "candidateId": candidate_id,
         "version": "2.3.0-rc.1",
-        "dataEpoch": 1,
+        "dataEpoch": 2,
         "webBuildId": (output / "V2.0/web/.next-v23-package/BUILD_ID")
         .read_text()
         .strip(),

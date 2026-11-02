@@ -71,6 +71,8 @@ Use rollback only when a compatible previous candidate and matching snapshot exi
 
 Newer data is retained separately when a compatible snapshot is restored. Automatic rollback refuses a newer unsupported data schema. Retained data and backup copies still need disk space.
 
+Candidates after V2.3.0-rc.1 write data epoch 2, which V2.3.0-rc.1 refuses to open. Rolling back to V2.3.0-rc.1 restores the snapshot taken before the upgrade; work saved after the upgrade stays only in the retained data directory.
+
 Uninstalling removes the program and keeps profiles and backups. Reinstalling can reopen that retained data. To remove one profile deliberately, stop it, read its exact ID with `Info`, and supply both the profile path and that ID:
 
 ```powershell

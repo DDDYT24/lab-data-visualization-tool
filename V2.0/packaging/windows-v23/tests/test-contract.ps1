@@ -42,6 +42,9 @@ try {
         $path = Join-Path $slot $file; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null; [IO.File]::WriteAllText($path,'synthetic contract fixture')
     }
     if ((Get-V23VersionRoot $program $fullId) -ne $slot) { throw 'Short version directory did not retain full identity.' }; $checks.shortDirectoryUsesFullIdentity=$true
+    Write-V23Json (Join-Path $slot 'candidate-build.json') @{appId=$V23AppId;candidateId=$fullId;dataEpoch=$V23DataEpoch+1}
+    Must-Reject { Get-V23VersionRoot $program $fullId }; $checks.newerEpochCandidateRejected=$true
+    Write-V23Json (Join-Path $slot 'candidate-build.json') @{appId=$V23AppId;candidateId=$fullId;dataEpoch=1}
     $collision = ('a' * 24) + ('b' * 40)
     Must-Reject { Get-V23VersionRoot $program $collision }; $checks.hashPrefixCollisionRejected=$true
     foreach ($port in @(3000,8000,3001,8001,3305,8305)) {
