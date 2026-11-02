@@ -24,6 +24,7 @@ import os
 import re
 import zlib
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 from functools import lru_cache
 from itertools import combinations
@@ -53,6 +54,9 @@ SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".txt", ".json", ".xlsx"}
 MAX_PREVIEW_ROWS = 200
 MAX_PREVIEW_CELLS = 15_000
 MAX_FINDING_ROW_IDS = 100
+# Decision actions that drop a finding's rows from charts; "remove" also drops them from
+# the cleaned download.
+EXCLUDING_ACTIONS = frozenset({"exclude", "remove"})
 MAX_ANALYSIS_POINTS = 250
 BOOTSTRAP_RESAMPLES = 400
 MAX_XLSX_ENTRIES = 5_000
@@ -1004,18 +1008,42 @@ def apply_chart_decisions(
     quality: dict[str, Any],
     decisions: list[dict[str, str]],
     actions: set[str] | None = None,
+    frozen: Mapping[str, Sequence[int]] | None = None,
 ) -> pd.DataFrame:
-    excluded_actions = actions or {"exclude", "remove"}
+    """Drop the rows of each decided finding.
+
+    A finding in ``frozen`` drops the row positions recorded when its decision was saved;
+    any other finding is detected again on ``frame``.
+    """
+    excluded_actions = actions or EXCLUDING_ACTIONS
     excluded_findings = {
         item["findingId"] for item in decisions if item["action"] in excluded_actions
     }
+    frozen = frozen or {}
     excluded_mask = np.zeros(len(frame), dtype=bool)
     for finding in quality["findings"]:
-        if finding["id"] in excluded_findings:
+        if finding["id"] not in excluded_findings:
+            continue
+        rows = frozen.get(finding["id"])
+        if rows is None:
             excluded_mask |= _quality_finding_mask(frame, finding)
+        else:
+            excluded_mask[list(rows)] = True
     if not excluded_mask.any():
         return frame
     return frame.iloc[np.flatnonzero(~excluded_mask)]
+
+
+def freeze_decision_rows(
+    frame: pd.DataFrame, quality: dict[str, Any], finding_ids: Iterable[str]
+) -> dict[str, list[int]]:
+    """Return the row positions each finding covers in ``frame``."""
+    wanted = set(finding_ids)
+    return {
+        str(finding["id"]): np.flatnonzero(_quality_finding_mask(frame, finding)).tolist()
+        for finding in quality["findings"]
+        if finding["id"] in wanted
+    }
 
 
 def _quality_finding_mask(frame: pd.DataFrame, finding: dict[str, Any]) -> np.ndarray[Any, Any]:
