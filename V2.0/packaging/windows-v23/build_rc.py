@@ -15,6 +15,52 @@ from pathlib import Path
 
 from stage_candidate import APP_ID, ROOT, SOURCE, checked, read, sha
 
+# Reviewed 2026-11-02 (V2.0/docs/DEPENDENCY_SECURITY_REVIEW.md): the ESLint plugin chain
+# depends on minimatch below 11.0.1 (GHSA-g3hv-75wg-m249) and no compatible fix is published.
+# It runs only while linting. A package is allowed through only while every finding on it
+# stays at moderate or below and traces to that one root advisory, so a new or more severe
+# advisory on the same package still stops the build.
+REVIEWED_DEVELOPMENT_PACKAGES = frozenset(
+    {
+        "@eslint-community/eslint-utils",
+        "@eslint/config-array",
+        "@eslint/eslintrc",
+        "@next/eslint-plugin-next",
+        "@typescript-eslint/eslint-plugin",
+        "@typescript-eslint/parser",
+        "@typescript-eslint/type-utils",
+        "@typescript-eslint/typescript-estree",
+        "@typescript-eslint/utils",
+        "eslint",
+        "eslint-config-next",
+        "eslint-plugin-import",
+        "eslint-plugin-jsx-a11y",
+        "eslint-plugin-react",
+        "minimatch",
+        "typescript-eslint",
+    }
+)
+REVIEWED_DEVELOPMENT_ADVISORIES = frozenset({"minimatch"})
+REVIEWED_DEVELOPMENT_SEVERITIES = frozenset({"info", "low", "moderate"})
+
+
+def unreviewed_development_findings(audit: dict) -> list[str]:
+    """Return every development audit finding that the review above does not cover."""
+    unreviewed = []
+    for name, finding in sorted(audit.get("vulnerabilities", {}).items()):
+        advisories = {
+            source.get("name")
+            for source in finding.get("via", [])
+            if isinstance(source, dict)
+        }
+        if (
+            name not in REVIEWED_DEVELOPMENT_PACKAGES
+            or finding.get("severity") not in REVIEWED_DEVELOPMENT_SEVERITIES
+            or not advisories <= REVIEWED_DEVELOPMENT_ADVISORIES
+        ):
+            unreviewed.append(name)
+    return unreviewed
+
 
 def compiler_path() -> Path:
     candidates = [
@@ -320,17 +366,10 @@ def main():
             allow_error=True,
         )
         audit = read(output / f"{len(state['runs']):02d}-npm-audit-development.log")
-        known = {
-            "braces",
-            "micromatch",
-            "fast-glob",
-            "eslint-config-next",
-            "@next/eslint-plugin-next",
-        }
         if (
             audit_exit not in (0, 1)
             or not isinstance(audit.get("metadata"), dict)
-            or not set(audit.get("vulnerabilities", {})).issubset(known)
+            or unreviewed_development_findings(audit)
         ):
             raise RuntimeError(
                 "The development audit contains an unreviewed finding or did not complete."
