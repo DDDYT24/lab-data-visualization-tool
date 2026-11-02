@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from pydantic_core import to_json
 
-from .research_figure_board import FigureBoardSpec, SceneIndex, read_board
+from .research_figure_board import FigureBoardSpec, SceneIndex, insert_artifacts, read_board
 from .research_figure_render import render_board
 from .research_figure_sources import source
 from .research_panel_headers import remember_header, source_header
@@ -314,11 +314,7 @@ class FigureJobs:
             ).fetchone()
             if current is None or current["attempt"] != attempt or current["state"] != "running":
                 return
-            connection.execute(
-                "INSERT INTO research_figure_artifacts (board_id,svg,png,pdf,scene_json) "
-                "VALUES (?,?,?,?,?)",
-                (identifier, artifacts["svg"], artifacts["png"], artifacts["pdf"], scene_json),
-            )
+            insert_artifacts(connection, self.store, identifier, artifacts, scene_json)
             timings = {
                 **formats,
                 "load": (load_end - started) * 1000,

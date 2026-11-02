@@ -10,12 +10,14 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .artifacts import local_artifact_store
 from .research_preparation import PreparationError
 
 
 class ResearchStore:
     def __init__(self, database_path: Path) -> None:
         self.path = database_path
+        self.artifacts = local_artifact_store(database_path)
         with self.connect() as connection:
             connection.executescript("""
                 BEGIN IMMEDIATE;
