@@ -4,7 +4,7 @@ param([Parameter(Mandatory=$true)][string]$InstallRoot,[switch]$RequireIdentity,
 $root = Assert-V23Destination $InstallRoot -RequireIdentity:$RequireIdentity
 if ($CandidateId) {
     if ($CandidateId -notmatch '^[a-f0-9]{64}$') { throw 'Invalid full candidate identity.' }
-    if ($root.Length + 10 + 24 + 1 + 121 -ge 259) { throw 'Choose a shorter installation directory for Windows path compatibility.' }
+    if ($root.Length + 10 + 24 + 1 + 140 -ge 259) { throw 'Choose a shorter installation directory for Windows path compatibility.' }
     $slot = Join-Path $root ('versions\' + $CandidateId.Substring(0,24))
     if (Test-Path -LiteralPath $slot) {
         $existing = Get-Content -LiteralPath (Join-Path $slot 'candidate-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
