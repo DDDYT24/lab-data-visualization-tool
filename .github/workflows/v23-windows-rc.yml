@@ -49,3 +49,20 @@ jobs:
           name: labviz-v23-phase-status
           path: outputs/v23-release/rc1/pipeline.json
           retention-days: 7
+      # The phase status names the failing command's log; without the log a lifecycle
+      # failure cannot be diagnosed. The acceptance fixture holds the service logs.
+      - name: Preserve failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: labviz-v23-failure-logs
+          path: |
+            outputs/v23-release/rc1/*.log
+            outputs/v23-release/rc1/smoke/**/*.log
+            outputs/v23-release/rc1/portable-lifecycle/**/*.log
+            outputs/v23-release/rc1/portable-lifecycle/**/*.json
+            outputs/v23-release/rc1/installed-lifecycle/**/*.log
+            outputs/v23-release/rc1/installed-lifecycle/**/*.json
+            ~/LabVizV23Acceptance/**/logs/*.log
+          if-no-files-found: warn
+          retention-days: 7
