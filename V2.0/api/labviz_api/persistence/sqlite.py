@@ -26,11 +26,7 @@ from labviz_api.persistence.exceptions import (
     ProjectRevisionConflict,
 )
 from labviz_api.persistence_types import ProjectCreation
-from labviz_api.processing import (
-    apply_chart_decisions,
-    deserialize_dataframe,
-    serialize_dataframe,
-)
+from labviz_api.processing import apply_chart_decisions
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 from labviz_api.repository import expires_in, iso_now
 from labviz_api.share_tokens import ShareTokenCodec
@@ -128,10 +124,13 @@ class SqliteProjectStore:
         quality: dict[str, Any],
         chart: dict[str, Any],
     ) -> None:
+        from labviz_api.parquet import write_parquet
+
+        units = {str(item["field"]): item.get("unit") for item in preview["columns"]}
         self.repository.complete_project(
             project_id=project_id,
             source=source,
-            data_blob=serialize_dataframe(frame),
+            dataset=write_parquet(frame, units=units),
             preview=preview,
             quality=quality,
             chart=chart,
@@ -144,18 +143,20 @@ class SqliteProjectStore:
             project["ready"] = bool(
                 project.get("preview_json")
                 and project.get("quality_json")
-                and project.get("data_blob")
+                and project.get("dataset_version_id")
             )
         return project
 
     def save_chart(self, project_id: str, chart: dict[str, Any]) -> str:
         return self.repository.save_chart(project_id, chart)
 
-    def load_quality_dataframe(self, project_id: str) -> pd.DataFrame:
-        payload = self.repository.get_data_blob(project_id)
-        if payload is None:
+    def load_quality_dataframe(self, project_id: str, *, touch: bool = True) -> pd.DataFrame:
+        from labviz_api.parquet import read_parquet
+
+        digest = self.repository.dataset_digest(project_id, touch=touch)
+        if digest is None:
             raise ValueError("Ready project data does not exist.")
-        return deserialize_dataframe(payload)
+        return read_parquet(self.repository.artifacts.read(digest), expected_sha256=digest)
 
     def save_quality_report(
         self,
@@ -417,7 +418,7 @@ class SqliteProjectStore:
             return None
         chart = json.loads(project["chart_json"])
         frame = apply_chart_decisions(
-            deserialize_dataframe(bytes(project["data_blob"])),
+            self.load_quality_dataframe(project["id"], touch=False),
             json.loads(project["quality_json"]),
             self.repository.get_decisions(project["id"]),
         )

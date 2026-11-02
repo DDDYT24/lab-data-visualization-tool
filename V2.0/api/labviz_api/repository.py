@@ -9,12 +9,15 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 from labviz_api.artifacts import MEDIA_TYPES, ArtifactStore, local_artifact_store, remember, sweep
 from labviz_api.persistence_types import ProjectCreation
 from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, fixed_window
+
+if TYPE_CHECKING:
+    from labviz_api.parquet import ParquetArtifact
 
 
 def utc_now() -> datetime:
@@ -686,22 +689,46 @@ class ProjectRepository:
         *,
         project_id: str,
         source: dict[str, Any],
-        data_blob: bytes,
+        dataset: ParquetArtifact,
         preview: dict[str, Any],
         quality: dict[str, Any],
         chart: dict[str, Any],
     ) -> None:
+        version_id = uuid4().hex
         with self._connect() as connection:
+            remember(connection, self.artifacts, dataset.payload, media_type=MEDIA_TYPES["parquet"])
+            connection.execute(
+                """
+                INSERT INTO dataset_versions (
+                    id, project_id, parent_version_id, version_number, kind, content_sha256,
+                    schema_json, provenance_json, row_count, column_count, created_at
+                )
+                SELECT ?, ?, NULL, COALESCE(MAX(version_number), 0) + 1, 'parsed',
+                       ?, ?, ?, ?, ?, ?
+                FROM dataset_versions WHERE project_id = ?
+                """,
+                (
+                    version_id,
+                    project_id,
+                    dataset.sha256,
+                    json.dumps(dataset.schema_document, sort_keys=True),
+                    json.dumps(dataset.provenance, sort_keys=True),
+                    dataset.row_count,
+                    dataset.column_count,
+                    iso_now(),
+                    project_id,
+                ),
+            )
             connection.execute(
                 """
                 UPDATE projects
-                SET source_json = ?, data_blob = ?, preview_json = ?, quality_json = ?,
+                SET source_json = ?, dataset_version_id = ?, preview_json = ?, quality_json = ?,
                     chart_json = ?, updated_at = ?, expires_at = ?
                 WHERE id = ?
                 """,
                 (
                     json.dumps(source, ensure_ascii=False),
-                    data_blob,
+                    version_id,
                     json.dumps(preview, ensure_ascii=False),
                     json.dumps(quality, ensure_ascii=False),
                     json.dumps(chart, ensure_ascii=False),
@@ -770,11 +797,17 @@ class ProjectRepository:
             return None
         return cast(dict[str, Any], json.loads(project[column]))
 
-    def get_data_blob(self, project_id: str) -> bytes | None:
-        project = self.get_project(project_id)
-        if not project or project["data_blob"] is None:
+    def dataset_digest(self, project_id: str, *, touch: bool = True) -> str | None:
+        """Return the artifact digest of the project's current dataset version."""
+        project = self.get_project(project_id, touch=touch)
+        if not project or project["dataset_version_id"] is None:
             return None
-        return bytes(project["data_blob"])
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT content_sha256 FROM dataset_versions WHERE id = ?",
+                (project["dataset_version_id"],),
+            ).fetchone()
+        return str(row[0]) if row else None
 
     def replace_quality(self, project_id: str, quality: dict[str, Any]) -> str:
         updated_at = iso_now()
@@ -990,8 +1023,8 @@ class ProjectRepository:
                 INSERT INTO projects (
                     id, title, description, current_revision_id, source_json, storage_mode,
                     owner_user_id, expires_at, updated_at, chart_json, preview_json,
-                    quality_json, data_blob, experiment_run_id
-                ) VALUES (?, ?, ?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?, ?)
+                    quality_json, experiment_run_id
+                ) VALUES (?, ?, ?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -1004,10 +1037,44 @@ class ProjectRepository:
                     source["chart_json"],
                     source["preview_json"],
                     source["quality_json"],
-                    source["data_blob"],
                     source["experiment_run_id"],
                 ),
             )
+            # Versions are immutable, so the copy shares their bytes and only owns new rows.
+            versions = connection.execute(
+                "SELECT * FROM dataset_versions WHERE project_id = ? ORDER BY version_number",
+                (source_project_id,),
+            ).fetchall()
+            version_ids = {row["id"]: uuid4().hex for row in versions}
+            for row in versions:
+                parent = row["parent_version_id"]
+                connection.execute(
+                    """
+                    INSERT INTO dataset_versions (
+                        id, project_id, parent_version_id, version_number, kind,
+                        content_sha256, schema_json, provenance_json, row_count, column_count,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        version_ids[row["id"]],
+                        project_id,
+                        version_ids[parent] if parent else None,
+                        row["version_number"],
+                        row["kind"],
+                        row["content_sha256"],
+                        row["schema_json"],
+                        row["provenance_json"],
+                        row["row_count"],
+                        row["column_count"],
+                        row["created_at"],
+                    ),
+                )
+            if source["dataset_version_id"]:
+                connection.execute(
+                    "UPDATE projects SET dataset_version_id = ? WHERE id = ?",
+                    (version_ids[source["dataset_version_id"]], project_id),
+                )
             connection.execute(
                 """
                 INSERT INTO project_description_revisions (

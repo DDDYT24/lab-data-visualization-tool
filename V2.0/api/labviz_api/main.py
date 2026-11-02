@@ -261,7 +261,11 @@ def _require_ready_project(repository: ProjectReader, project_id: str) -> dict[s
         )
     ready = project.get("ready")
     if ready is None:
-        ready = bool(project["preview_json"] and project["quality_json"] and project["data_blob"])
+        ready = bool(
+            project["preview_json"]
+            and project["quality_json"]
+            and project.get("dataset_version_id")
+        )
     if not ready:
         raise ApiProblem(409, "processing-not-ready", "The uploaded file is still being processed.")
     return project

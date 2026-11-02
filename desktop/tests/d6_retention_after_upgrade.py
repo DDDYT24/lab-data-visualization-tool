@@ -63,7 +63,7 @@ def imported_fingerprints(identifiers):
             columns=[column[0] for column in cursor.description]
             row=cursor.fetchone();assert row is not None
             values=dict(zip(columns,row))
-            assert values['data_blob'] and values['current_revision_id']
+            assert values['dataset_version_id'] and values['current_revision_id']
             content={key:{'binarySha256':hashlib.sha256(value).hexdigest(),'bytes':len(value)} if isinstance(value,bytes) else value for key,value in values.items()}
             result[identifier]=hashlib.sha256(json.dumps(content,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     return result
