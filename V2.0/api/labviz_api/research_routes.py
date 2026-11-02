@@ -209,13 +209,17 @@ def register_research_routes(
                         inputs.append((file.filename or "data.csv", payload))
                     raw = parse_sources(project_id, inputs)
                 else:
-                    current = active_store.current(project_id)
-                    if current is None:
-                        raise PreparationError(
-                            "research-input-required",
-                            "Choose source files for the first research revision.",
-                        )
-                    raw = json.loads(current["raw_json"])
+                    with active_store.connect() as connection:
+                        head = connection.execute(
+                            "SELECT revision_id FROM research_heads WHERE project_id=?",
+                            (project_id,),
+                        ).fetchone()
+                        if head is None:
+                            raise PreparationError(
+                                "research-input-required",
+                                "Choose source files for the first research revision.",
+                            )
+                        raw = active_store.raw(connection, project_id, head["revision_id"])
                 prepared = prepare(raw, plan)
                 token = active_store.stage(project_id, expected_revision, raw, prepared)
                 return {
