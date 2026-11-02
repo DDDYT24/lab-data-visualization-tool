@@ -999,11 +999,6 @@ def serialize_dataframe(frame: pd.DataFrame) -> bytes:
     return zlib.compress(raw, level=6)
 
 
-def deserialize_dataframe(payload: bytes) -> pd.DataFrame:
-    parsed = json.loads(zlib.decompress(payload).decode("utf-8"))
-    return pd.DataFrame(data=parsed["data"], columns=parsed["columns"], index=parsed["index"])
-
-
 def apply_chart_decisions(
     frame: pd.DataFrame,
     quality: dict[str, Any],
