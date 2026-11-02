@@ -101,6 +101,7 @@ from .rate_limits import AuthRateLimitUnavailable
 from .repository import ProjectRepository
 from .research_routes import register_research_routes
 from .sample_catalog import SampleCatalogError, catalog_response, sample_payload
+from .scientific_imports import prefetch
 from .source_data_routes import register_source_data_routes
 
 LOGGER = logging.getLogger(__name__)
@@ -419,6 +420,7 @@ def _process_project(
             quality=quality,
             chart=chart,
         )
+        prefetch()
         if save_local:
             if not isinstance(repository, SqliteProjectStore):
                 raise RuntimeError("Local projects require SQLite persistence.")
@@ -1717,6 +1719,7 @@ def create_app(
         repository: ProjectStore = Depends(get_project_store),
     ) -> ChartAnalysis:
         _require_project_access(repository, project_id, user, guest_token, ready=True)
+        prefetch()
         try:
             frame = repository.load_chart_dataframe(project_id)
             analysis = analyze_chart(frame, body.chart)
