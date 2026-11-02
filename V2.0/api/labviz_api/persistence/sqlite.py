@@ -26,7 +26,11 @@ from labviz_api.persistence.exceptions import (
     ProjectRevisionConflict,
 )
 from labviz_api.persistence_types import ProjectCreation
-from labviz_api.processing import EXCLUDING_ACTIONS, apply_chart_decisions, freeze_decision_rows
+from labviz_api.processing import (
+    EXCLUDING_ACTIONS,
+    apply_frozen_decisions,
+    freeze_decision_rows,
+)
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 from labviz_api.repository import expires_in, iso_now
 from labviz_api.share_tokens import ShareTokenCodec
@@ -174,7 +178,7 @@ class SqliteProjectStore:
         if project is None or version_id is None or project["quality_json"] is None:
             return self.repository.save_decisions(project_id, decisions)
         # Rows are detected once, when a finding first removes rows from this version;
-        # later saves keep what was frozen then.
+        # later saves keep what was frozen then, and readers never detect again.
         frozen = self.repository.frozen_findings(project_id, version_id)
         pending = [
             item["findingId"]
@@ -204,12 +208,11 @@ class SqliteProjectStore:
         project = self.repository.get_project(project_id, touch=False)
         if project is None or project["quality_json"] is None:
             raise ValueError("Ready project quality report does not exist.")
-        return apply_chart_decisions(
+        return apply_frozen_decisions(
             frame,
-            json.loads(project["quality_json"]),
             self.get_decisions(project_id),
+            self.repository.decision_rows(project_id, project["dataset_version_id"]),
             actions=actions,
-            frozen=self.repository.decision_rows(project_id, project["dataset_version_id"]),
         )
 
     def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame:

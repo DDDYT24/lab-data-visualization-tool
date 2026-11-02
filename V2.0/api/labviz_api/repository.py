@@ -738,6 +738,9 @@ class ProjectRepository:
                     project_id,
                 ),
             )
+            # Decisions name findings of the replaced report and froze rows of the replaced
+            # version, so they go with both, as they do when the report is rebuilt.
+            connection.execute("DELETE FROM decisions WHERE project_id = ?", (project_id,))
 
     def _touch(self, connection: sqlite3.Connection, project_id: str) -> None:
         connection.execute(
@@ -907,11 +910,7 @@ class ProjectRepository:
         return {str(row[0]) for row in rows}
 
     def decision_rows(self, project_id: str, dataset_version_id: str) -> dict[str, list[int]]:
-        """Return each finding's frozen row positions in ``dataset_version_id``.
-
-        A set frozen against another version of the project does not describe these rows,
-        so it is left out and its finding is detected again.
-        """
+        """Return each finding's frozen row positions in ``dataset_version_id``."""
         with self._connect() as connection:
             sets = connection.execute(
                 """
@@ -1202,8 +1201,9 @@ class ProjectRepository:
                 connection.execute(
                     """
                     INSERT INTO decision_row_sets (
-                        project_id, finding_id, dataset_version_id, row_count, frozen_at
-                    ) VALUES (?, ?, ?, ?, ?)
+                        project_id, finding_id, dataset_version_id, row_count, frozen_at,
+                        migrated_from
+                    ) VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         project_id,
@@ -1211,6 +1211,7 @@ class ProjectRepository:
                         version_ids[frozen_set["dataset_version_id"]],
                         frozen_set["row_count"],
                         frozen_set["frozen_at"],
+                        frozen_set["migrated_from"],
                     ),
                 )
             connection.execute(
