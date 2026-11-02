@@ -251,7 +251,7 @@ def main():
     profile_root = Path(config["backendProfile"])
     program = Path(config["programRoot"])
     sys.path.insert(0, str(payload / "V2.0/api"))
-    from labviz_api.installed_profile import InstalledProfile, APP_ID, unlinked
+    from labviz_api.installed_profile import DATA_EPOCH, InstalledProfile, APP_ID, unlinked
     from labviz_api.installed_lifecycle import recover_profile
 
     unlinked(profile_root)
@@ -269,7 +269,7 @@ def main():
     if (
         metadata["appId"] != APP_ID
         or metadata["candidateId"] != config["candidateId"]
-        or metadata["dataEpoch"] != 1
+        or metadata["dataEpoch"] != DATA_EPOCH
     ):
         raise ValueError("Desktop payload identity differs")
     profile = InstalledProfile.open(profile_root, create=True)
