@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
+from .artifacts import MEDIA_TYPES, remember
 from .research_contract import ResearchModel
 from .research_figure_board import artifact_row, read_board
 from .research_figure_sources import source
@@ -366,16 +367,15 @@ def freeze_output(
             )
         c.execute(
             "INSERT INTO research_outputs "
-            "(id,project_id,board_id,manifest_json,notes_json,zip_blob,sha256,created_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(id,project_id,board_id,manifest_json,notes_json,sha256,created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
             (
                 identifier,
                 project_id,
                 draft["board_id"],
                 json.dumps(manifest, ensure_ascii=False),
                 notes.model_dump_json(),
-                payload,
-                sha(payload),
+                remember(c, store.artifacts, payload, media_type=MEDIA_TYPES["zip"]),
                 timestamp,
             ),
         )

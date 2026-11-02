@@ -201,9 +201,10 @@ def register_reuse_routes(
 
     @router.get("/outputs/{output_id}/download")
     def download(project_id: str, output_id: str) -> Response:
-        with available().connect() as c:
+        active = available()
+        with active.connect() as c:
             row = c.execute(
-                "SELECT id,zip_blob,sha256 FROM research_outputs WHERE project_id=? AND id=?",
+                "SELECT id,sha256 FROM research_outputs WHERE project_id=? AND id=?",
                 (project_id, output_id),
             ).fetchone()
         if row is None:
@@ -211,7 +212,7 @@ def register_reuse_routes(
                 "output-not-found", "This output is not available in the project."
             )
         return Response(
-            bytes(row["zip_blob"]),
+            active.artifacts.read(row["sha256"]),
             media_type="application/zip",
             headers={
                 "Cache-Control": "private, no-store",

@@ -20,12 +20,13 @@ from uuid import uuid4
 
 from pydantic import Field, model_validator
 
+from .artifacts import MEDIA_TYPES, remember
 from .models import ChartSpec
 from .processing import ProcessingError
 from .research_chart_render import COLORS, render_chart
 from .research_charts import ScientificChartSpec, compute_chart
 from .research_contract import ResearchModel
-from .research_figure_board import FigureBoardSpec
+from .research_figure_board import FigureBoardSpec, insert_artifacts
 from .research_figure_render import render_board
 from .research_figure_sources import digest, legacy_snapshot, scientific_source, source
 from .research_preparation import PreparationError, PreparationPlan, prepare
@@ -509,9 +510,19 @@ def apply_template(
         )
         c.executemany(
             "INSERT INTO research_charts "
-            "(id,project_id,revision_id,result_json,svg,png,pdf,created_at) "
+            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,created_at) "
             "VALUES (?,?,?,?,?,?,?,?)",
-            charts,
+            [
+                (
+                    *chart[:4],
+                    *(
+                        remember(c, store.artifacts, payload, media_type=MEDIA_TYPES[kind])
+                        for kind, payload in zip(("svg", "png", "pdf"), chart[4:7], strict=True)
+                    ),
+                    chart[7],
+                )
+                for chart in charts
+            ],
         )
         c.executemany(
             "INSERT INTO research_figure_sources (id,project_id,result_json,created_at) "
@@ -534,17 +545,7 @@ def apply_template(
                 "VALUES (?,?,?,?)",
                 (board_id, project_id, spec.figure.model_dump_json(), timestamp),
             )
-            c.execute(
-                "INSERT INTO research_figure_artifacts (board_id,svg,png,pdf,scene_json) "
-                "VALUES (?,?,?,?,?)",
-                (
-                    board_id,
-                    artifacts["svg"],
-                    artifacts["png"],
-                    artifacts["pdf"],
-                    json.dumps(scene, allow_nan=False),
-                ),
-            )
+            insert_artifacts(c, store, board_id, artifacts, json.dumps(scene, allow_nan=False))
         c.execute("DELETE FROM research_workflow_drafts WHERE project_id=?", (project_id,))
     return {
         "chartIds": ids,

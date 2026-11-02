@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from pydantic_core import to_json
 
+from .artifacts import MEDIA_TYPES, remember
 from .research_panel_headers import install_headers, remember_header, scientific_header
 from .research_preparation import PreparationError
 from .research_store import ResearchStore
@@ -48,18 +49,20 @@ def save_chart(
     with store.connect() as connection:
         connection.execute("BEGIN IMMEDIATE")
         store.check_head(connection, project_id, revision)
+        digests = [
+            remember(connection, store.artifacts, artifacts[kind], media_type=MEDIA_TYPES[kind])
+            for kind in ("svg", "png", "pdf")
+        ]
         connection.execute(
             "INSERT INTO research_charts "
-            "(id,project_id,revision_id,result_json,svg,png,pdf,created_at) "
+            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,created_at) "
             "VALUES (?,?,?,?,?,?,?,?)",
             (
                 identifier,
                 project_id,
                 revision,
                 to_json(result, ensure_ascii=False, round_trip=True).decode("utf-8"),
-                artifacts["svg"],
-                artifacts["png"],
-                artifacts["pdf"],
+                *digests,
                 created_at,
             ),
         )
@@ -89,8 +92,8 @@ def chart_row(
         "c.id, c.revision_id, c.created_at, c.result_json"
         if field in {None, "json"}
         else (
-            f"c.{field}, coalesce(json_extract(h.header_json, '$.resultSha256'), "
-            "json_extract(c.result_json, '$.resultSha256')) AS result_sha256"
+            f"c.{field}_sha256 AS {field}, coalesce(json_extract(h.header_json, "
+            "'$.resultSha256'), json_extract(c.result_json, '$.resultSha256')) AS result_sha256"
         )
     )
     if header_only:
@@ -103,7 +106,10 @@ def chart_row(
         ).fetchone()
     if row is None:
         raise PreparationError("chart-not-found", "This chart is not available in this project.")
-    return dict(row)
+    chart = dict(row)
+    if field in {"svg", "png", "pdf"} and not header_only:
+        chart[field] = store.artifacts.read(chart[field])
+    return chart
 
 
 def read_chart_page(
