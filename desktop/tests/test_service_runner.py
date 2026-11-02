@@ -24,7 +24,7 @@ class ServiceRunnerTests(unittest.TestCase):
     def test_foreign_installation_marker_is_refused_before_profile_creation(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);payload=root/'payload';payload.mkdir();program=root/'program';program.mkdir()
-            (payload/'candidate-build.json').write_text(json.dumps({'appId':'55B46BB7-101E-46DC-951A-3DE7E402EDD0','candidateId':'c'*64,'dataEpoch':1}))
+            (payload/'candidate-build.json').write_text(json.dumps({'appId':'55B46BB7-101E-46DC-951A-3DE7E402EDD0','candidateId':'c'*64,'dataEpoch':2}))
             (program/'installation.json').write_text(json.dumps({'appId':'unrelated','format':'labviz-installed-v1'}))
             (program/'keep.txt').write_bytes(b'foreign data')
             config=root/'runner.json';config.write_text(json.dumps({'payloadRoot':str(payload),'programRoot':str(program),'backendProfile':str(root/'backend'),'candidateId':'c'*64}))

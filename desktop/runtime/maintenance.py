@@ -15,6 +15,8 @@ import uuid
 from session import atomic, encoded, unlinked, io_path
 
 DESKTOP_ID = 'org.labviz.desktop.preview'
+# Keep in step with DATA_EPOCH in V2.0/api/labviz_api/installed_profile.py.
+DATA_EPOCH = 2
 HEX = re.compile(r'^[a-f0-9]{32}$')
 
 
@@ -125,7 +127,7 @@ def verify(directory, payload):
     record = envelope['manifest']
     if envelope['sha256'] != hashlib.sha256(encoded(record)).hexdigest() or record['format'] != 'labviz-desktop-backup-v1' or record['appId'] != DESKTOP_ID:
         raise ValueError('Desktop backup manifest differs')
-    if type(record['dataEpoch']) is not int or record['dataEpoch'] != 1:
+    if type(record['dataEpoch']) is not int or not 1 <= record['dataEpoch'] <= DATA_EPOCH:
         raise ValueError('A compatible application is required for this backup epoch')
     actual = {f.relative_to(directory).as_posix(): digest(f) for f in files(directory) if f.name != 'desktop-backup.json' or f.parent != directory}
     if record['files'] != actual:
@@ -184,7 +186,7 @@ def clear_cache(owner, payload):
     """Remove only the regenerable calculation cache, with the writer stopped."""
     owner = identity(owner)
     with backend(owner, payload) as profile, profile.lock():
-        if profile.epoch() != 1:
+        if profile.epoch() > DATA_EPOCH:
             raise ValueError('A compatible runtime is required before clearing this cache')
         target = unlinked(profile.root / 'cache/matplotlib')
         if not target.exists():
