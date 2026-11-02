@@ -24,7 +24,7 @@ import os
 import re
 import zlib
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from functools import lru_cache
 from itertools import combinations
@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 from zipfile import BadZipFile, ZipFile
 
+from .cleaning_recipe import EXCLUDING_ACTIONS
 from .models import ChartSpec, JsonScalar
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
@@ -54,9 +55,6 @@ SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".txt", ".json", ".xlsx"}
 MAX_PREVIEW_ROWS = 200
 MAX_PREVIEW_CELLS = 15_000
 MAX_FINDING_ROW_IDS = 100
-# Decision actions that drop a finding's rows from charts; "remove" also drops them from
-# the cleaned download.
-EXCLUDING_ACTIONS = frozenset({"exclude", "remove"})
 MAX_ANALYSIS_POINTS = 250
 BOOTSTRAP_RESAMPLES = 400
 MAX_XLSX_ENTRIES = 5_000
@@ -1022,25 +1020,33 @@ def apply_chart_decisions(
     return frame.iloc[np.flatnonzero(~excluded_mask)]
 
 
-def apply_frozen_decisions(
-    frame: pd.DataFrame,
-    decisions: list[dict[str, str]],
-    frozen: Mapping[str, Sequence[int]],
-    actions: set[str] | None = None,
+def cleaned_frame(parent: pd.DataFrame, removed: Sequence[int]) -> pd.DataFrame:
+    """Return the table a cleaned version stores: ``parent`` without the ``removed`` rows."""
+    kept = np.setdiff1d(np.arange(len(parent)), np.asarray(removed, dtype=np.int64))
+    return parent.iloc[kept].reset_index(drop=True)
+
+
+def select_cleaned_rows(
+    cleaned: pd.DataFrame,
+    parent_row_count: int,
+    removed: Sequence[int],
+    dropped: Sequence[int],
 ) -> pd.DataFrame:
-    """Drop the row positions each decision froze when it was saved; nothing is detected."""
-    excluded_actions = actions or EXCLUDING_ACTIONS
-    excluded_mask = np.zeros(len(frame), dtype=bool)
-    for item in decisions:
-        if item["action"] not in excluded_actions:
-            continue
-        rows = frozen.get(item["findingId"])
-        if rows is None:
-            raise ValueError(f"Decision on {item['findingId']} has no frozen rows.")
-        excluded_mask[list(rows)] = True
-    if not excluded_mask.any():
-        return frame
-    return frame.iloc[np.flatnonzero(~excluded_mask)]
+    """Label a cleaned version's rows by their positions in its parent, then drop ``dropped``.
+
+    Readers before cleaned versions sliced the parent table, so its rows kept those labels.
+    """
+    if removed:
+        kept = np.setdiff1d(np.arange(parent_row_count), np.asarray(removed, dtype=np.int64))
+        if len(kept) != len(cleaned):
+            raise ValueError("The cleaned dataset version does not match its parent.")
+        cleaned.index = pd.Index(kept)
+    elif len(cleaned) != parent_row_count:
+        raise ValueError("The cleaned dataset version does not match its parent.")
+    if not dropped:
+        return cleaned
+    kept_mask = ~np.isin(cleaned.index.to_numpy(), np.asarray(dropped, dtype=np.int64))
+    return cleaned.iloc[np.flatnonzero(kept_mask)]
 
 
 def freeze_decision_rows(
