@@ -24,7 +24,7 @@ import os
 import re
 import zlib
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 from functools import lru_cache
 from itertools import combinations
@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 from zipfile import BadZipFile, ZipFile
 
-from .cleaning_recipe import EXCLUDING_ACTIONS
+from .cleaning_recipe import EXCLUDING_ACTIONS, FrozenRows
 from .models import ChartSpec, JsonScalar
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
@@ -1020,33 +1020,52 @@ def apply_chart_decisions(
     return frame.iloc[np.flatnonzero(~excluded_mask)]
 
 
-def cleaned_frame(parent: pd.DataFrame, removed: Sequence[int]) -> pd.DataFrame:
+def cleaned_frame(
+    parent: pd.DataFrame, removed: Sequence[int] | np.ndarray[Any, Any]
+) -> pd.DataFrame:
     """Return the table a cleaned version stores: ``parent`` without the ``removed`` rows."""
     kept = np.setdiff1d(np.arange(len(parent)), np.asarray(removed, dtype=np.int64))
     return parent.iloc[kept].reset_index(drop=True)
 
 
+def decided_mask(
+    decisions: Iterable[Mapping[str, str]],
+    frozen: Mapping[str, FrozenRows],
+    actions: Iterable[str],
+    row_count: int,
+) -> np.ndarray[Any, Any]:
+    """Mark the parent rows frozen by the decisions with one of ``actions``."""
+    wanted = set(actions)
+    mask = np.zeros(row_count, dtype=bool)
+    for item in decisions:
+        if item["action"] in wanted:
+            gaps = np.frombuffer(frozen[item["findingId"]].gaps(), dtype="<u4")
+            mask[np.cumsum(gaps, dtype=np.int64)] = True
+    return mask
+
+
 def select_cleaned_rows(
     cleaned: pd.DataFrame,
     parent_row_count: int,
-    removed: Sequence[int],
-    dropped: Sequence[int],
+    decisions: list[dict[str, str]],
+    frozen: Mapping[str, FrozenRows],
+    actions: Iterable[str],
 ) -> pd.DataFrame:
-    """Label a cleaned version's rows by their positions in its parent, then drop ``dropped``.
+    """Label a cleaned version's rows by their positions in its parent, then drop the rows
+    of the decisions with one of ``actions`` that the version still holds.
 
     Readers before cleaned versions sliced the parent table, so its rows kept those labels.
     """
-    if removed:
-        kept = np.setdiff1d(np.arange(parent_row_count), np.asarray(removed, dtype=np.int64))
-        if len(kept) != len(cleaned):
-            raise ValueError("The cleaned dataset version does not match its parent.")
-        cleaned.index = pd.Index(kept)
-    elif len(cleaned) != parent_row_count:
+    removed = decided_mask(decisions, frozen, {"remove"}, parent_row_count)
+    kept = np.flatnonzero(~removed)
+    if len(kept) != len(cleaned):
         raise ValueError("The cleaned dataset version does not match its parent.")
-    if not dropped:
+    if len(kept) != parent_row_count:
+        cleaned.index = pd.Index(kept)
+    dropped = decided_mask(decisions, frozen, actions, parent_row_count)[kept]
+    if not dropped.any():
         return cleaned
-    kept_mask = ~np.isin(cleaned.index.to_numpy(), np.asarray(dropped, dtype=np.int64))
-    return cleaned.iloc[np.flatnonzero(kept_mask)]
+    return cleaned.iloc[np.flatnonzero(~dropped)]
 
 
 def freeze_decision_rows(
