@@ -198,8 +198,8 @@ def main():
                 "SELECT value FROM installed_acceptance WHERE id='stable-science-id'"
             ).fetchone()[0]
 
-    def variant(label, *, fail=False):
-        current = read(program / "current-candidate.json")["candidateId"]
+    def variant(label, *, fail=False, epoch=None, source=None):
+        current = source or read(program / "current-candidate.json")["candidateId"]
         original = program / "versions" / current[:24]
         temporary = fixture / ("stage-" + label)
         shutil.copytree(original, temporary)
@@ -214,6 +214,21 @@ def main():
         )
         manifest = read(temporary / "payload-manifest.json")
         manifest["files"]["V2.0/web/server.js"] = sha(server)
+        if epoch is not None:
+            # Stand in for an older release whose launcher and API stop at ``epoch``.
+            for relative, prefix in (
+                ("bin/common.ps1", b"$V23DataEpoch = "),
+                ("V2.0/api/labviz_api/installed_profile.py", b"DATA_EPOCH = "),
+            ):
+                path = temporary / relative
+                content = path.read_bytes()
+                declared = prefix + str(manifest["dataEpoch"]).encode()
+                assert content.count(declared) == 1
+                path.write_bytes(
+                    content.replace(declared, prefix + str(epoch).encode())
+                )
+                manifest["files"][relative] = sha(path)
+            manifest["dataEpoch"] = epoch
         identity = {k: manifest[k] for k in ("appId", "version", "dataEpoch", "files")}
         candidate = hashlib.sha256(
             json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
@@ -222,6 +237,7 @@ def main():
         write(temporary / "payload-manifest.json", manifest)
         metadata = read(temporary / "candidate-build.json")
         metadata["candidateId"] = candidate
+        metadata["dataEpoch"] = manifest["dataEpoch"]
         write(temporary / "candidate-build.json", metadata)
         destination = program / "versions" / candidate[:24]
         assert destination.parent == program / "versions" and not destination.exists()
@@ -528,8 +544,53 @@ def main():
             and (program / "failed-upgrade.json").exists()
         )
         record("failedCandidateAutomaticallyRestoresPrevious")
+        older = variant("older-epoch", epoch=1)
+        run(
+            "start-v23-installed.ps1",
+            ["-SkipOpenBrowser", "-HealthCheckOnly"],
+            "older-epoch-upgrade-refused",
+            expect=1,
+        )
+        assert (
+            read(program / "current-candidate.json")["candidateId"] == original
+            and read(profile / "data-schema.json")["dataEpoch"] == 2
+            and sentinel() == 1.25
+        )
+        (program / "pending-candidate.json").unlink()
+        record("olderEpochCandidateRefusedForNewerData")
+        # Treat the profile as one the older release wrote, then upgrade and roll back.
+        marker = read(program / "current-candidate.json")
+        write(program / "current-candidate.json", {**marker, "candidateId": older})
         schema = read(profile / "data-schema.json")
-        write(profile / "data-schema.json", {**schema, "dataEpoch": 2})
+        write(profile / "data-schema.json", {**schema, "dataEpoch": 1})
+        newer = variant("newer-epoch", source=original)
+        run(
+            "start-v23-installed.ps1",
+            ["-SkipOpenBrowser", "-HealthCheckOnly"],
+            "epoch-upgrade",
+        )
+        assert (
+            read(program / "current-candidate.json")["candidateId"] == newer
+            and read(profile / "data-schema.json")["dataEpoch"] == 2
+            and sentinel() == 1.25
+        )
+        seed(3.75)
+        run(
+            "start-v23-installed.ps1",
+            ["-Rollback", "-SkipOpenBrowser", "-HealthCheckOnly"],
+            "older-epoch-rollback",
+        )
+        assert (
+            read(program / "current-candidate.json")["candidateId"] == older
+            and read(profile / "data-schema.json")["dataEpoch"] == 1
+            and sentinel() == 1.25
+        )
+        assert any(
+            sentinel_directory_value(p) == 3.75 for p in profile.glob("data.retained-*")
+        )
+        record("rollbackToOlderEpochRestoresItsSnapshot")
+        schema = read(profile / "data-schema.json")
+        write(profile / "data-schema.json", {**schema, "dataEpoch": 3})
         before = sha(profile / "data/labviz.db")
         try:
             run(
@@ -540,7 +601,7 @@ def main():
             )
             assert (
                 sha(profile / "data/labviz.db") == before
-                and read(profile / "data-schema.json")["dataEpoch"] == 2
+                and read(profile / "data-schema.json")["dataEpoch"] == 3
             )
         finally:
             write(profile / "data-schema.json", schema)

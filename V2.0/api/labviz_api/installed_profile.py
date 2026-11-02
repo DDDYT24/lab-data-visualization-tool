@@ -12,7 +12,8 @@ from typing import IO, Any
 from uuid import uuid4
 
 APP_ID = "55B46BB7-101E-46DC-951A-3DE7E402EDD0"
-DATA_EPOCH = 1
+# Epoch 2 holds the local schema migrations 0101-0108, which epoch 1 runtimes cannot read.
+DATA_EPOCH = 2
 
 
 def unlinked(path: Path) -> Path:

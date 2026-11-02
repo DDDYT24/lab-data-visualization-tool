@@ -8,7 +8,7 @@
   "webPort": 3301,
   "apiPort": 8301,
   "bindAddress": "127.0.0.1",
-  "dataEpoch": 1,
+  "dataEpoch": 2,
   "applicationMutex": "Local\\LabVizV23-App",
   "cookieNamespace": "_v23_installed_<profile UUID>"
 }
