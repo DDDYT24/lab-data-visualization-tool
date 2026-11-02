@@ -160,3 +160,17 @@ def test_the_local_environment_uses_the_shared_guard_and_version_table() -> None
     assert "from labviz_api.local_schema import VERSION_TABLE, require_sqlite_url" in source
     assert source.count("require_sqlite_url(database_url())") == 2
     assert "version_table=VERSION_TABLE" in source
+
+
+def test_the_chain_ships_inside_the_package_every_installer_copies() -> None:
+    """The container, Windows and desktop builds copy ``labviz_api`` but not its siblings.
+
+    A chain beside the package left every packaged app unable to start: the first
+    ``create_app()`` raised because Alembic could not find the scripts directory.
+    """
+    import labviz_api
+
+    package = Path(labviz_api.__file__).resolve().parent
+    assert MIGRATIONS_PATH.is_relative_to(package)
+    assert (MIGRATIONS_PATH / "env.py").is_file()
+    assert (MIGRATIONS_PATH / "versions" / f"{BASELINE_REVISION}.py").is_file()

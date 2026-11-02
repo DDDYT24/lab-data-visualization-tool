@@ -708,7 +708,7 @@ def test_phase6d_drafts_are_prepared_without_bypassing_phase6c() -> None:
 def test_every_sqlite_insert_names_its_columns() -> None:
     """Positional inserts break silently when a local migration adds or drops a column.
 
-    The local schema is now owned by the ``migrations_local`` chain, so a statement that
+    The local schema is now owned by the ``labviz_api/local_migrations`` chain, so a statement that
     relies on ``CREATE TABLE`` order would start writing values into the wrong column
     instead of failing. Naming the columns makes a schema change a visible error.
     """
