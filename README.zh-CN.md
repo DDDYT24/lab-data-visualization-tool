@@ -58,7 +58,7 @@ git checkout v2.3.0-rc.1
 
 - 干净机器、完整物理断网、真实 200% 缩放与读屏、iPhone 实机的验收。
 - 代码签名。Windows 可能提示风险；请保留安全防护，不要绕过。
-- 开发用的 lint 依赖链还有 5 项 npm 告警，生产依赖没有，原因见 [RC 说明](V2.0/RELEASE_NOTES_V2.3.md)。
+- 我的生产依赖没有已知告警；开发用的 lint 工具链还有 16 项 moderate（来自 `minimatch`），在等上游修复，详见[依赖审查](V2.0/docs/DEPENDENCY_SECURITY_REVIEW.md)。
 
 我导出的图能否投稿，取决于你是否核对过尺寸、字体、统计假设和图注。实验设计是否成立，我不替你下结论。
 
