@@ -17,6 +17,7 @@ from .research_contract import ResearchModel
 from .research_figure_routes import register_figure_routes
 from .research_preparation import LIMITS, PreparationError, PreparationPlan, parse_sources, prepare
 from .research_reuse_routes import register_reuse_routes
+from .research_rows import count, observation_page, sample_page
 from .research_store import ResearchStore, current_view, present
 
 
@@ -121,11 +122,25 @@ def register_research_routes(
                     "preview-expired", "This preview has expired. Preview again."
                 )
         else:
-            row = active_store.current(project_id)
-            if row is None or row["id"] != revision:
-                raise PreparationError(
-                    "research-conflict", "The revision changed. Reload research."
+            # An applied revision pages its rows instead of parsing the whole snapshot.
+            with active_store.connect() as connection:
+                head = connection.execute(
+                    "SELECT revision_id FROM research_heads WHERE project_id=?", (project_id,)
+                ).fetchone()
+                if head is None or head["revision_id"] != revision:
+                    raise PreparationError(
+                        "research-conflict", "The revision changed. Reload research."
+                    )
+                page = (observation_page if kind == "observations" else sample_page)(
+                    connection, head["revision_id"], offset, limit
                 )
+                return {
+                    "kind": kind,
+                    "offset": offset,
+                    "total": count(connection, head["revision_id"], kind),
+                    "observations": page if kind == "observations" else [],
+                    "samples": page if kind == "samples" else [],
+                }
         prepared = json.loads(row["prepared_json"])
         return {
             "kind": kind,

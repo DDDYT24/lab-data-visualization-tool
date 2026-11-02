@@ -11,6 +11,7 @@ from labviz_api.local_schema import CURRENT_REVISION, install_local_baseline, pr
 from labviz_api.repository import ProjectRepository
 from labviz_api.research_dataset import decode_raw, encode_raw
 from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
+from labviz_api.research_rows import count, observation_page, sample_page
 from labviz_api.research_store import ResearchStore, snapshot
 
 TTL = 7_200
@@ -155,3 +156,95 @@ def test_a_copied_project_keeps_its_research_history(tmp_path: Path) -> None:
     assert current["prepared_json"] == chain[1][2]
     with store.connect() as connection:
         assert store.raw(connection, "copy", current["id"]) == chain[1][1]
+
+
+def snapshot_of(database: Path, revision_id: str) -> dict[str, Any]:
+    store = ResearchStore(database)
+    with store.connect() as connection:
+        return dict(json.loads(store.prepared(connection, "p", revision_id)))
+
+
+def test_upgrading_writes_every_revision_as_rows(tmp_path: Path) -> None:
+    database = tmp_path / "labviz.db"
+    chain = legacy_profile(database)
+
+    prepare_local_database(database, project_ttl_seconds=TTL)
+
+    store = ResearchStore(database)
+    with store.connect() as connection:
+        for revision_id, _, prepared_json in chain:
+            prepared = json.loads(prepared_json)
+            observations = prepared["observations"]
+            assert count(connection, revision_id, "observations") == len(observations)
+            assert observation_page(connection, revision_id, 0, 200) == observations
+            assert observation_page(connection, revision_id, 1, 2) == observations[1:3]
+            assert sample_page(connection, revision_id, 0, 200) == prepared["samples"]
+            analysis = connection.execute(
+                "SELECT analysis_unit, observation_count, sample_count, independent_unit_count, "
+                "summary_json FROM research_analyses WHERE revision_id=?",
+                (revision_id,),
+            ).fetchone()
+            summary = prepared["summary"]
+            assert tuple(analysis)[:4] == (
+                summary["analysisUnit"],
+                summary["observations"],
+                summary["samples"],
+                summary["independentUnits"],
+            )
+            assert json.loads(analysis["summary_json"]) == summary
+
+
+def test_rows_answer_provenance_and_state_queries_in_sql(tmp_path: Path) -> None:
+    database = tmp_path / "labviz.db"
+    chain = legacy_profile(database)
+    prepare_local_database(database, project_ttl_seconds=TTL)
+    raw = chain[0][1]
+    second = raw["sources"][1]["id"]
+
+    with ResearchStore(database).connect() as connection:
+        traced = connection.execute(
+            "SELECT o.observation_id, o.sample_label FROM research_lineage l "
+            "JOIN research_observations o ON o.revision_id=l.revision_id "
+            "AND o.ordinal=l.observation_ordinal "
+            "WHERE l.revision_id='r1' AND l.source_id=? AND l.source_row=3",
+            (second,),
+        ).fetchall()
+        missing = connection.execute(
+            "SELECT sample_label FROM research_observations WHERE revision_id='r1' "
+            "AND state='missing'"
+        ).fetchall()
+    # Row 3 of two.csv is É; B has no reading in one.csv.
+    assert [tuple(row) for row in traced] == [(raw["rows"][4]["id"], "É")]
+    assert [row[0] for row in missing] == ["B"]
+
+
+def test_applied_and_copied_revisions_keep_their_rows(tmp_path: Path) -> None:
+    database = tmp_path / "labviz.db"
+    legacy_profile(database)
+    prepare_local_database(database, project_ttl_seconds=TTL)
+    store = ResearchStore(database)
+    with store.connect() as connection:
+        raw = store.raw(connection, "p", "r2")
+    steps = [{"kind": "filter", "field": "sample", "values": ["A", "D"]}]
+    prepared = prepare(raw, plan(steps=steps))
+    applied = store.apply("p", store.stage("p", "r2", raw, prepared), "r2")
+    repository = ProjectRepository(database, TTL)
+    repository.duplicate_project(
+        source_project_id="p", project_id="copy", job_id="job", owner_user_id="user"
+    )
+    copied = ResearchStore(database).current("copy")
+    assert copied is not None
+
+    with store.connect() as connection:
+        for revision_id in (applied, copied["id"]):
+            assert observation_page(connection, revision_id, 0, 200) == prepared["observations"]
+            recorded = connection.execute(
+                "SELECT kind, input_rows, output_rows FROM research_steps WHERE revision_id=?",
+                (revision_id,),
+            ).fetchall()
+            assert [tuple(row) for row in recorded] == [("filter", 5, 2)]
+
+    assert repository.delete_project("p")
+    with store.connect() as connection:
+        assert count(connection, applied, "observations") == 0
+        assert count(connection, copied["id"], "observations") == 2

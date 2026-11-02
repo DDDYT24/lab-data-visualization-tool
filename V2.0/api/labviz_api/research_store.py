@@ -13,6 +13,7 @@ from uuid import uuid4
 from .artifacts import local_artifact_store
 from .research_dataset import encode_raw, freeze_raw, load_raw
 from .research_preparation import PreparationError, PreparationPlan, prepare
+from .research_rows import write_rows
 
 if TYPE_CHECKING:
     from .parquet import ParquetArtifact
@@ -142,6 +143,7 @@ class ResearchStore:
     ) -> None:
         """Record an applied revision; ``dataset`` is ``encode_raw(raw)``, built unlocked."""
         version_id = freeze_raw(connection, self.artifacts, project_id, raw, dataset)
+        prepared = json.loads(prepared_json)
         connection.execute(
             "INSERT INTO research_revisions "
             "(id,project_id,parent_id,dataset_version_id,plan_json,created_at) "
@@ -151,7 +153,7 @@ class ResearchStore:
                 project_id,
                 parent_id,
                 version_id,
-                json.dumps(json.loads(prepared_json)["plan"], sort_keys=True),
+                json.dumps(prepared["plan"], sort_keys=True),
                 created_at,
             ),
         )
@@ -159,6 +161,7 @@ class ResearchStore:
             "INSERT INTO research_prepared (revision_id,prepared_json) VALUES (?,?)",
             (revision_id, prepared_json),
         )
+        write_rows(connection, revision_id, prepared)
 
     @staticmethod
     def check_head(connection: sqlite3.Connection, project_id: str, expected: str | None) -> None:

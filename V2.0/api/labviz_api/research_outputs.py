@@ -15,6 +15,7 @@ from pydantic import Field
 
 from .artifacts import MEDIA_TYPES, remember
 from .research_contract import ResearchModel
+from .research_dataset import version_sources
 from .research_figure_board import artifact_row, read_board
 from .research_figure_sources import source
 from .research_preparation import PreparationError
@@ -113,6 +114,17 @@ def materialize(
                     "sourceReferences",
                 ]
                 prepared = json.loads(store.prepared(c, project_id, panel["revisionId"]))
+                version_id = store.revision(c, project_id, panel["revisionId"])[
+                    "dataset_version_id"
+                ]
+                # Hashing the original files against these digests proves where rows came from.
+                dataset = {
+                    "datasetVersionId": version_id,
+                    "contentSha256": c.execute(
+                        "SELECT content_sha256 FROM dataset_versions WHERE id=?", (version_id,)
+                    ).fetchone()[0],
+                    "sources": version_sources(c, version_id),
+                }
                 plan, history = prepared["plan"], prepared["history"]
                 method = {
                     "chart": science["spec"],
@@ -177,6 +189,7 @@ def materialize(
                     "contents."
                 )
                 count, excluded, independent = len(observations), None, None
+                dataset = None
             files[f"panels/{label}-source.csv"] = csv_bytes(csv_rows, headers)
             files[f"panels/{label}-analysis.json"] = encoded(analysis)
             panels.append(
@@ -192,6 +205,7 @@ def materialize(
                     "unit": panel["unit"],
                     "dataRole": reported_role,
                     "method": method,
+                    "dataset": dataset,
                     "csvColumns": headers,
                     "sourceCsvRows": len(csv_rows),
                 }
