@@ -15,6 +15,7 @@ from uuid import uuid4
 from labviz_api.artifacts import MEDIA_TYPES, ArtifactStore, local_artifact_store, remember, sweep
 from labviz_api.persistence_types import ProjectCreation
 from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, fixed_window
+from labviz_api.research_rows import copy_rows
 
 if TYPE_CHECKING:
     from labviz_api.parquet import ParquetArtifact
@@ -1139,6 +1140,7 @@ class ProjectRepository:
                         "SELECT ?,prepared_json FROM research_prepared WHERE revision_id=?",
                         (revision_ids[row["id"]], row["id"]),
                     )
+                    copy_rows(connection, row["id"], revision_ids[row["id"]])
                 head = connection.execute(
                     "SELECT * FROM research_heads WHERE project_id=?", (source_project_id,)
                 ).fetchone()
