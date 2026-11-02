@@ -99,9 +99,9 @@ jobs:
         run: python -m pip install -r requirements-dev.lock.txt
       - name: Verify API
         run: |
-          ruff check labviz_api tests migrations migrations_local scripts
-          ruff format --check labviz_api tests migrations migrations_local scripts
-          mypy labviz_api tests migrations migrations_local scripts
+          ruff check labviz_api tests migrations scripts
+          ruff format --check labviz_api tests migrations scripts
+          mypy labviz_api tests migrations scripts
           pytest
       - name: Stop API integration services
         if: always()
