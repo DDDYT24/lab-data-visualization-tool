@@ -1053,8 +1053,8 @@ class ProjectRepository:
                     INSERT INTO dataset_versions (
                         id, project_id, parent_version_id, version_number, kind,
                         content_sha256, schema_json, provenance_json, row_count, column_count,
-                        created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        created_at, namespace
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         version_ids[row["id"]],
@@ -1068,7 +1068,18 @@ class ProjectRepository:
                         row["row_count"],
                         row["column_count"],
                         row["created_at"],
+                        row["namespace"],
                     ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO dataset_sources (
+                        dataset_version_id, ordinal, source_id, name, sha256, byte_size
+                    )
+                    SELECT ?, ordinal, source_id, name, sha256, byte_size
+                    FROM dataset_sources WHERE dataset_version_id = ?
+                    """,
+                    (version_ids[row["id"]], row["id"]),
                 )
             if source["dataset_version_id"]:
                 connection.execute(
@@ -1112,16 +1123,21 @@ class ProjectRepository:
                 for row in research:
                     connection.execute(
                         "INSERT INTO research_revisions "
-                        "(id,project_id,parent_id,raw_json,prepared_json,created_at) "
+                        "(id,project_id,parent_id,dataset_version_id,plan_json,created_at) "
                         "VALUES (?,?,?,?,?,?)",
                         (
                             revision_ids[row["id"]],
                             project_id,
                             revision_ids[row["parent_id"]] if row["parent_id"] else None,
-                            row["raw_json"],
-                            row["prepared_json"],
+                            version_ids[row["dataset_version_id"]],
+                            row["plan_json"],
                             now,
                         ),
+                    )
+                    connection.execute(
+                        "INSERT INTO research_prepared (revision_id,prepared_json) "
+                        "SELECT ?,prepared_json FROM research_prepared WHERE revision_id=?",
+                        (revision_ids[row["id"]], row["id"]),
                     )
                 head = connection.execute(
                     "SELECT * FROM research_heads WHERE project_id=?", (source_project_id,)

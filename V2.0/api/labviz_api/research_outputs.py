@@ -112,11 +112,7 @@ def materialize(
                     "exclusionReason",
                     "sourceReferences",
                 ]
-                revision = c.execute(
-                    "SELECT prepared_json FROM research_revisions WHERE project_id=? AND id=?",
-                    (project_id, panel["revisionId"]),
-                ).fetchone()
-                prepared = json.loads(revision["prepared_json"])
+                prepared = json.loads(store.prepared(c, project_id, panel["revisionId"]))
                 plan, history = prepared["plan"], prepared["history"]
                 method = {
                     "chart": science["spec"],
