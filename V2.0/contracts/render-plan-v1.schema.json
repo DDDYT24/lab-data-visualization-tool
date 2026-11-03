@@ -1,0 +1,624 @@
+{
+  "$defs": {
+    "Axis": {
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "enum": [
+            "linear",
+            "category"
+          ],
+          "title": "Scale",
+          "type": "string"
+        },
+        "domain": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Domain",
+          "type": "array"
+        },
+        "ticks": {
+          "items": {
+            "$ref": "#/$defs/Tick"
+          },
+          "title": "Ticks",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "niceRule": {
+          "anyOf": [
+            {
+              "const": "nice-1-2-5-v1",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Nicerule"
+        }
+      },
+      "required": [
+        "scale",
+        "domain",
+        "ticks",
+        "title",
+        "niceRule"
+      ],
+      "title": "Axis",
+      "type": "object"
+    },
+    "LegendEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "symbol": {
+          "enum": [
+            "line",
+            "marker"
+          ],
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "color",
+        "symbol"
+      ],
+      "title": "LegendEntry",
+      "type": "object"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "axes": {
+          "$ref": "#/$defs/PanelAxes"
+        },
+        "marks": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "points": "#/$defs/PointsMark",
+                "segments": "#/$defs/SegmentsMark",
+                "summary": "#/$defs/SummaryMark",
+                "violin": "#/$defs/ViolinMark"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/PointsMark"
+              },
+              {
+                "$ref": "#/$defs/SegmentsMark"
+              },
+              {
+                "$ref": "#/$defs/ViolinMark"
+              },
+              {
+                "$ref": "#/$defs/SummaryMark"
+              }
+            ]
+          },
+          "title": "Marks",
+          "type": "array"
+        },
+        "legend": {
+          "items": {
+            "$ref": "#/$defs/LegendEntry"
+          },
+          "title": "Legend",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "axes",
+        "marks",
+        "legend"
+      ],
+      "title": "Panel",
+      "type": "object"
+    },
+    "PanelAxes": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/Axis"
+        },
+        "y": {
+          "$ref": "#/$defs/Axis"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "PanelAxes",
+      "type": "object"
+    },
+    "PlanRendering": {
+      "additionalProperties": false,
+      "properties": {
+        "pointRendering": {
+          "enum": [
+            "auto",
+            "vector",
+            "raster"
+          ],
+          "title": "Pointrendering",
+          "type": "string"
+        },
+        "rasterizePoints": {
+          "title": "Rasterizepoints",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pointRendering",
+        "rasterizePoints"
+      ],
+      "title": "PlanRendering",
+      "type": "object"
+    },
+    "PlanSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "grouped_strip",
+            "paired",
+            "violin"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "resultSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Resultsha256",
+          "type": "string"
+        },
+        "algorithmVersion": {
+          "title": "Algorithmversion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "resultSha256",
+        "algorithmVersion"
+      ],
+      "title": "PlanSource",
+      "type": "object"
+    },
+    "PointsMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "points",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "marker": {
+          "enum": [
+            "o",
+            "s",
+            "^",
+            "D",
+            "v"
+          ],
+          "title": "Marker",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "number"
+        },
+        "opacity": {
+          "title": "Opacity",
+          "type": "number"
+        },
+        "x": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y",
+          "type": "array"
+        },
+        "sourceRefs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sourcerefs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "marker",
+        "size",
+        "opacity",
+        "x",
+        "y",
+        "sourceRefs"
+      ],
+      "title": "PointsMark",
+      "type": "object"
+    },
+    "SegmentsMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "segments",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "opacity": {
+          "title": "Opacity",
+          "type": "number"
+        },
+        "x0": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X0",
+          "type": "array"
+        },
+        "y0": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y0",
+          "type": "array"
+        },
+        "x1": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X1",
+          "type": "array"
+        },
+        "y1": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y1",
+          "type": "array"
+        },
+        "sourceRefs": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Sourcerefs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "width",
+        "opacity",
+        "x0",
+        "y0",
+        "x1",
+        "y1",
+        "sourceRefs"
+      ],
+      "title": "SegmentsMark",
+      "type": "object"
+    },
+    "SummaryMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "summary",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "x0": {
+          "title": "X0",
+          "type": "number"
+        },
+        "x1": {
+          "title": "X1",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "statistic": {
+          "enum": [
+            "mean",
+            "median"
+          ],
+          "title": "Statistic",
+          "type": "string"
+        },
+        "summaryUnit": {
+          "enum": [
+            "observation",
+            "sample",
+            "experimental_unit"
+          ],
+          "title": "Summaryunit",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "width",
+        "x0",
+        "x1",
+        "y",
+        "statistic",
+        "summaryUnit",
+        "n"
+      ],
+      "title": "SummaryMark",
+      "type": "object"
+    },
+    "Tick": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "Tick",
+      "type": "object"
+    },
+    "ViolinMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "violin",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "opacity": {
+          "title": "Opacity",
+          "type": "number"
+        },
+        "position": {
+          "title": "Position",
+          "type": "number"
+        },
+        "grid": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Grid",
+          "type": "array"
+        },
+        "halfWidths": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Halfwidths",
+          "type": "array"
+        },
+        "bandwidth": {
+          "title": "Bandwidth",
+          "type": "number"
+        },
+        "bandwidthRule": {
+          "title": "Bandwidthrule",
+          "type": "string"
+        },
+        "scale": {
+          "enum": [
+            "equal_width",
+            "common_density"
+          ],
+          "title": "Scale",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "sourceRefs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sourcerefs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "opacity",
+        "position",
+        "grid",
+        "halfWidths",
+        "bandwidth",
+        "bandwidthRule",
+        "scale",
+        "n",
+        "sourceRefs"
+      ],
+      "title": "ViolinMark",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "contract": {
+      "const": "render-plan-v1",
+      "title": "Contract",
+      "type": "string"
+    },
+    "planHash": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Planhash",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/PlanSource"
+    },
+    "rendering": {
+      "$ref": "#/$defs/PlanRendering"
+    },
+    "panels": {
+      "items": {
+        "$ref": "#/$defs/Panel"
+      },
+      "title": "Panels",
+      "type": "array"
+    },
+    "disclosures": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Disclosures",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "contract",
+    "planHash",
+    "source",
+    "rendering",
+    "panels",
+    "disclosures"
+  ],
+  "title": "RenderPlan",
+  "type": "object"
+}
