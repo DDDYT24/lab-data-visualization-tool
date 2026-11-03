@@ -18,7 +18,7 @@
 AppId={{55B46BB7-101E-46DC-951A-3DE7E402EDD0}
 AppName=LabViz V2.3
 AppVersion=2.3.0
-AppVerName=LabViz V2.3 2.3.0-rc.1
+AppVerName=LabViz V2.3 2.3.0-rc.2
 AppPublisher=LabViz
 DefaultDirName={localappdata}\Programs\LabVizV23
 DefaultGroupName=LabViz V2.3
@@ -28,7 +28,7 @@ MinVersion=10.0
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=LabViz-V23-2.3.0-rc.1-Setup
+OutputBaseFilename=LabViz-V23-2.3.0-rc.2-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -39,7 +39,7 @@ CloseApplications=no
 RestartApplications=no
 AppMutex=Local\LabVizV23-App
 SetupMutex=Local\LabVizV23-Setup
-VersionInfoVersion=2.3.0.0
+VersionInfoVersion=2.3.0.2
 VersionInfoDescription=LabViz V2.3 release candidate
 VersionInfoCopyright=LabViz contributors
 

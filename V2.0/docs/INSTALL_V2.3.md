@@ -1,13 +1,13 @@
 # Install and manage the V2.3 Windows RC
 
-V2.3.0-rc.1 is an unsigned preview for Windows 10 or later on compatible 64-bit systems. Use synthetic data or copies while evaluating it. Actual clean-machine, physical offline, screen-reader, phone, and researcher-pilot acceptance remain open.
+V2.3.0-rc.2 is an unsigned preview for Windows 10 or later on compatible 64-bit systems. Use synthetic data or copies while evaluating it. Actual clean-machine, physical offline, screen-reader, phone, and researcher-pilot acceptance remain open.
 
 ## Install and start
 
 Download the installer and `SHA256SUMS.txt` from the V2.3 RC release. Compare the installer hash before running it:
 
 ```powershell
-Get-FileHash .\LabViz-V23-2.3.0-rc.1-Setup.exe -Algorithm SHA256
+Get-FileHash .\LabViz-V23-2.3.0-rc.2-Setup.exe -Algorithm SHA256
 ```
 
 The RC has no code signature. Keep Windows security controls enabled. If Windows or security software blocks it, retain the message and report it; do not disable protection to finish a test.
