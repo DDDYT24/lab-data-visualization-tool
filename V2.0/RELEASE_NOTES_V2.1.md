@@ -1,7 +1,7 @@
 # LabViz V2.1.0 / 本地发布
 
 > 本文件是 V2.1.0 GitHub Release 的正式说明，记录本地发布范围、验证结果和限制；
-> 当前补丁版本是 V2.1.1。未来实现顺序和勾选状态只以 [`TODO.md`](TODO.md#v21-roadmap) 为准；
+> 当前补丁版本是 V2.1.1。未来实现顺序和勾选状态只以 维护者本地待办 为准；
 > 各版本功能范围见 [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)。
 
 ## 目标

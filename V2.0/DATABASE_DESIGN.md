@@ -1,7 +1,7 @@
 # LabViz V2.0 Database and Storage Design
 
 **Status:** Current persistence architecture reference for the V2.1.1 local release and optional
-Phase 6 cloud track. Current completion status is maintained in [`TODO.md`](TODO.md).
+Phase 6 cloud track. Current completion status is maintained in the maintainer's local backlog.
 **Decision date:** 2026-07-29
 **Phase 1 implementation:** 2026-07-29
 **Phase 2 implementation:** 2026-07-30 — see [`PERSISTENCE_PHASE2.md`](PERSISTENCE_PHASE2.md)

@@ -42,6 +42,10 @@ htmlcov/
 !V2.0/contracts/fixtures/v23/batch-1.csv
 !V2.0/contracts/fixtures/v23/batch-2.csv
 outputs/
+# Planning files stay with the maintainer.
+V2.0/TODO.md
+V2.0/V*_PLAN.md
+debug.log
 
 # Node and Next.js
 node_modules/

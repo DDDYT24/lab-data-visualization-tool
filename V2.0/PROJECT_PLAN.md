@@ -5,7 +5,7 @@ local privacy documentation, and the local release matrix are implemented and ac
 cloud deployment remains an optional maintainer track and is not a release requirement.
 **Product source of truth:** [`prd.md`](prd.md)
 **Prototype source of truth:** [LabViz V2.0 — Product Prototype](https://www.figma.com/design/xKdEwynLhAj2dyiqeEw58n)
-**Current status and execution backlog:** [`TODO.md`](TODO.md#v21-roadmap)
+**Current status and execution backlog:** the maintainer's local backlog
 **V2.1 release notes:** [`RELEASE_NOTES_V2.1.md`](RELEASE_NOTES_V2.1.md)
 **Version baseline:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
@@ -191,8 +191,8 @@ self-hosting work.
 ### V2.1 — Structured 3D and research workflow
 
 **Status:** P0-1 through P0-3, P1-1 through P1-3, and C-1 through C-6 are implemented, verified,
-and published as the V2.1.1 local release. Current completion status remains in [`TODO.md`](TODO.md).
-Detailed task IDs and acceptance criteria are tracked in [`TODO.md`](TODO.md).
+and published as the V2.1.1 local release. Current completion status remains in the maintainer's local backlog.
+Detailed task IDs and acceptance criteria are tracked in the maintainer's local backlog.
 
 - **P0:** add structured-grid validation and explicit surface fields, make quality findings and
   recommendations grid-aware, and add browser-level surface preview/export parity coverage.

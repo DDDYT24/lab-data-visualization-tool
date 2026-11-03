@@ -3,7 +3,7 @@ PASS
 # Phase 6B Application-Implementation Acceptance
 
 > Historical acceptance record. Current release status and future work are maintained in
-> [`TODO.md`](TODO.md) and [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md).
+> the maintainer's local backlog and [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md).
 
 - **Accepted locally on:** 2026-08-12
 - **Phase-boundary correction:** 2026-08-17
