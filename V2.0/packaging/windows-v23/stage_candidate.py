@@ -316,7 +316,7 @@ def main() -> None:
         raise ValueError("Payload exceeds the installer's verified Windows path bound.")
     identity = {
         "appId": APP_ID,
-        "version": "2.3.0-rc.1",
+        "version": "2.3.0-rc.2",
         "dataEpoch": 2,
         "files": files,
     }
@@ -330,7 +330,7 @@ def main() -> None:
     metadata = {
         "appId": APP_ID,
         "candidateId": candidate_id,
-        "version": "2.3.0-rc.1",
+        "version": "2.3.0-rc.2",
         "dataEpoch": 2,
         "webBuildId": (output / "V2.0/web/.next-v23-package/BUILD_ID")
         .read_text()
