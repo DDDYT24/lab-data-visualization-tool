@@ -1,13 +1,15 @@
 # LabViz Version Baseline
 
-- **Last reviewed:** 2026-10-07
+- **Last reviewed:** 2026-11-03
 - **Current release:** V2.2.0 Windows local release (single Windows profile; unsigned)
 - **Future backlog and completion status:** [`V2.0/TODO.md`](V2.0/TODO.md)
+- **V2.4 plan and progress:** [`V2.0/V2.4_PLAN.md`](V2.0/V2.4_PLAN.md)
 
-This branch also contains the V2.3.0-rc.2 source candidate; V2.3.0-rc.1 was published
-as a Windows pre-release on 2026-10-18. Its research workspace,
-optional overview interface, and separate Windows RC pipeline are implemented;
-end-to-end candidate acceptance and publication remain in progress. V2.2.0 stays
+V2.3.0-rc.1 (2026-10-18) and V2.3.0-rc.2 (2026-11-03) are published as Windows
+pre-releases. Their research workspace, optional overview interface, and separate Windows
+RC pipeline are implemented; rc.2 adds the local storage refit (S0–S2 of the V2.4 plan) and
+an automated upgrade-and-rollback check against the published rc.1. Clean-machine, offline,
+accessibility and researcher acceptance remain open, and V2.3.0 final is not released. V2.2.0 stays
 the stable release. See the [V2.3 RC notes](V2.0/RELEASE_NOTES_V2.3.md) for scope
 and pending observations.
 
