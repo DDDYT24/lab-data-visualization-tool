@@ -1,0 +1,37 @@
+name: Public text
+
+# Rejects restricted terms in changed files, commit messages, commit identities,
+# the branch name and the pull request title and body. The term list is the
+# RESTRICTED_TERMS repository secret, so it never appears in the repository or
+# in a log; see CONTRIBUTING.md.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  restricted-terms:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check restricted terms
+        env:
+          RESTRICTED_TERMS: ${{ secrets.RESTRICTED_TERMS }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A push that creates the branch has no previous commit.
+          if [ -z "${BASE//0/}" ]; then BASE="$HEAD~1"; fi
+          python3 .github/scripts/check_public_text.py --require-terms \
+            --range "$BASE" "$HEAD" --env PR_TITLE --env PR_BODY --env BRANCH_NAME
