@@ -9,16 +9,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN groupadd --system labviz && useradd --system --gid labviz --create-home labviz
 
-WORKDIR /app
+WORKDIR /app/api
 
-COPY requirements.lock.txt ./
+COPY api/requirements.lock.txt ./
 RUN python -m pip install --no-cache-dir --require-hashes -r requirements.lock.txt
 
-COPY alembic.ini ./
-COPY migrations ./migrations
-COPY labviz_api ./labviz_api
-COPY scripts ./scripts
-COPY samples ./samples
+COPY api/alembic.ini ./
+COPY api/migrations ./migrations
+COPY api/labviz_api ./labviz_api
+COPY api/scripts ./scripts
+COPY api/samples ./samples
+COPY contracts ../contracts
+COPY assets ../assets
 
 RUN mkdir -p /home/labviz/.cache/matplotlib /home/labviz/.labviz/objects \
     && chown -R labviz:labviz /home/labviz

@@ -1,5 +1,7 @@
 "use client";
 
+import { forgetDesktopProject } from "../workspace/desktop-session";
+
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
@@ -34,11 +36,14 @@ import {
   Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
+import GridViewRoundedIcon from "@mui/icons-material/GridViewRounded";
+import { useInterfaceMode } from "@/components/layout/interface-mode";
 import { ApiStatePanel } from "@/components/common/api-state-panel";
 import { DataPreviewTable } from "@/components/common/data-preview-table";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
@@ -50,6 +55,10 @@ function formatBytes(bytes: number): string {
 }
 
 export function HistoryScreen() {
+  const overview = useInterfaceMode().mode === "overview";
+  const zh = useLocale().startsWith("zh");
+  const [listView, setListView] = useState(true);
+  const asRows = overview && listView;
   const t = useTranslations("history");
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -111,7 +120,8 @@ export function HistoryScreen() {
   });
   const deleteMutation = useMutation({
     mutationFn: (projectId: string) => labvizApi.deleteProject(projectId),
-    onSuccess: async () => {
+    onSuccess: async (_result, projectId) => {
+      forgetDesktopProject(projectId);
       setDeleteProjectId(null);
       setSearch("");
       setChartType("all");
@@ -238,6 +248,10 @@ export function HistoryScreen() {
             <MenuItem value="30">{t("last30Days")}</MenuItem>
           </Select>
         </FormControl>
+        {overview && <Stack direction="row" aria-label={zh ? "项目视图" : "Project view"}>
+          <IconButton aria-label={zh ? "列表视图" : "List view"} aria-pressed={listView} onClick={() => setListView(true)}><ViewListRoundedIcon /></IconButton>
+          <IconButton aria-label={zh ? "网格视图" : "Grid view"} aria-pressed={!listView} onClick={() => setListView(false)}><GridViewRoundedIcon /></IconButton>
+        </Stack>}
         {(search || chartType !== "all" || updatedWithin !== "all") && (
           <Chip
             label={t("clearFilters")}
@@ -302,7 +316,7 @@ export function HistoryScreen() {
           sx={{
             display: "grid",
             gap: 2,
-            gridTemplateColumns: {
+            gridTemplateColumns: asRows ? "minmax(0, 1fr)" : {
               xs: "1fr",
               sm: "repeat(2, minmax(0, 1fr))",
               xl: "repeat(3, minmax(0, 1fr))",
@@ -312,7 +326,7 @@ export function HistoryScreen() {
           {projects.map((project) => (
             <Paper
               key={project.id}
-              sx={{ border: 1, borderColor: "divider", overflow: "hidden" }}
+              sx={{ border: 1, borderColor: "divider", overflow: "hidden", display: asRows ? "grid" : "block", gridTemplateColumns: { xs: "minmax(0,1fr)", sm: "180px minmax(0,1fr)" } }}
             >
               <Box
                 sx={{
@@ -321,7 +335,8 @@ export function HistoryScreen() {
                   borderBottom: 1,
                   borderColor: "divider",
                   display: "flex",
-                  height: 168,
+                  height: asRows ? "100%" : 168,
+                  minHeight: asRows ? { xs: 100, sm: 160 } : undefined,
                   justifyContent: "center",
                   overflow: "hidden",
                 }}
@@ -409,7 +424,8 @@ export function HistoryScreen() {
                 >
                   {t("continueEditing")}
                 </Button>
-                <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                {overview && <Button component={Link} href={`/workspace/${project.id}?workspace=research`} variant="text">{zh ? "打开研究工作台" : "Open research workspace"}</Button>}
+                <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
                   <Typography color="text.secondary" variant="caption">
                     {t("figureStats", {
                       count: project.figureSnapshotCount,

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { gridColor } from "../src/domain/chart-render-contract";
 import { expect, test } from "./fixtures";
 
 test.skip(!process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY, "Requires packaged local API and launcher bootstrap.");
@@ -67,6 +68,7 @@ test("real API scientific controls persist into the downloaded figure", async ({
   expect(svg).toContain("Live controls verified");
   expect(svg).toContain("#dc2626");
   expect(svg).toContain("<svg");
+  expect(svg.toLowerCase()).not.toContain(`stroke: ${gridColor.toLowerCase()}`);
   await download.saveAs(test.info().outputPath("controls.svg"));
   const workspace = new URL(page.url()).pathname;
   await page.goto(`${workspace}?step=chart`, { waitUntil: "networkidle" });

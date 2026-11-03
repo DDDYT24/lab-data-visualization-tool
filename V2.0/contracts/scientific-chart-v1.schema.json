@@ -1,0 +1,166 @@
+{
+  "$defs": {
+    "CategoryStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Group"
+        },
+        "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "marker": {
+          "default": "o",
+          "enum": [
+            "o",
+            "s",
+            "^",
+            "D",
+            "v"
+          ],
+          "title": "Marker",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group",
+        "color"
+      ],
+      "title": "CategoryStyle",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "pointRendering": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "vector",
+        "raster"
+      ],
+      "title": "Pointrendering",
+      "type": "string"
+    },
+    "kind": {
+      "default": "grouped_strip",
+      "enum": [
+        "grouped_strip",
+        "paired",
+        "violin"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "title": {
+      "default": "",
+      "maxLength": 160,
+      "title": "Title",
+      "type": "string"
+    },
+    "locale": {
+      "default": "en",
+      "enum": [
+        "en",
+        "zh"
+      ],
+      "title": "Locale",
+      "type": "string"
+    },
+    "jitterSeed": {
+      "default": "labviz-strip-v1",
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Jitterseed",
+      "type": "string"
+    },
+    "jitterWidth": {
+      "default": 0.3,
+      "maximum": 0.45,
+      "minimum": 0,
+      "title": "Jitterwidth",
+      "type": "number"
+    },
+    "showPoints": {
+      "default": true,
+      "title": "Showpoints",
+      "type": "boolean"
+    },
+    "summary": {
+      "default": "none",
+      "enum": [
+        "none",
+        "mean",
+        "median"
+      ],
+      "title": "Summary",
+      "type": "string"
+    },
+    "summaryUnit": {
+      "default": "experimental_unit",
+      "enum": [
+        "observation",
+        "sample",
+        "experimental_unit"
+      ],
+      "title": "Summaryunit",
+      "type": "string"
+    },
+    "pairTimes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 2,
+      "title": "Pairtimes",
+      "type": "array"
+    },
+    "bandwidth": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bandwidth"
+    },
+    "densityScale": {
+      "default": "equal_width",
+      "enum": [
+        "equal_width",
+        "common_density"
+      ],
+      "title": "Densityscale",
+      "type": "string"
+    },
+    "categoryStyles": {
+      "items": {
+        "$ref": "#/$defs/CategoryStyle"
+      },
+      "maxItems": 100,
+      "title": "Categorystyles",
+      "type": "array"
+    }
+  },
+  "title": "ScientificChartSpec",
+  "type": "object"
+}

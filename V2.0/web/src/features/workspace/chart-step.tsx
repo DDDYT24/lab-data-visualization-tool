@@ -33,6 +33,7 @@ import type { ChartAnalysis } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
+import { analysisCacheKey } from "./analysis-cache-key";
 import { StepLayout } from "./step-layout";
 import { useWorkspaceStore } from "./workspace-store";
 
@@ -48,9 +49,11 @@ const chartTypes: ChartSpec["type"][] = [
 ];
 
 export function ChartStep({
+  active = true,
   onBack,
   onContinue,
 }: {
+  active?: boolean;
   onBack: () => void;
   onContinue: () => void;
 }) {
@@ -86,24 +89,14 @@ export function ChartStep({
   const excludedFindingIds = Object.entries(issueActions)
     .filter(([, action]) => ["exclude", "remove"].includes(action))
     .map(([findingId]) => findingId);
-  const analysisKey = JSON.stringify({
-    fitting: chartSpec.fitting,
-    groupField: chartSpec.groupField,
-    issueActions,
-    panelCount: chartSpec.panelCount,
-    secondaryYAxis: chartSpec.secondaryYAxis,
-    series: chartSpec.series,
-    type: chartSpec.type,
-    uncertainty: chartSpec.uncertainty,
-    xAxis: chartSpec.xAxis.field,
-  });
+  const analysisKey = analysisCacheKey(chartSpec, issueActions);
   const analysisQuery = useQuery({
     queryKey: ["chart-analysis", projectId, analysisKey],
     queryFn: ({ signal }) => {
       if (!projectId) throw new Error("No project is open.");
       return labvizApi.analyzeChart(projectId, chartSpec, signal);
     },
-    enabled: Boolean(projectId) && !surfaceNeedsAnotherField,
+    enabled: active && Boolean(projectId) && !surfaceNeedsAnotherField,
     retry: 1,
     staleTime: 30_000,
   });
@@ -473,6 +466,7 @@ export function ChartStep({
           />
         ) : (
           <ChartCanvas
+            active={active}
             analysis={analysisQuery.data}
             excludedFindingIds={excludedFindingIds}
             findings={quality.findings}
@@ -490,6 +484,7 @@ export function ChartStep({
             {t("dataTableDescription")}
           </Typography>
           <DataPreviewTable
+        active={active}
             findings={quality.findings}
             emphasizeIssues
             preview={preview}

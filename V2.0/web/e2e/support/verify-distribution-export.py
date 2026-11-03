@@ -5,14 +5,16 @@ Flate-compressed vector page content produced by LabViz's Matplotlib PDF backend
 """
 
 import json
-from pathlib import Path
 import re
 import sys
 import zlib
+from pathlib import Path
 
 from PIL import Image
 
-root = Path(sys.argv[1])
+root = Path(sys.argv[1]).resolve()
+if sys.platform == "win32" and not str(root).startswith("\\\\?\\"):
+    root = Path("\\\\?\\" + str(root))
 bins = json.loads(sys.argv[2])
 count = max(b["count"] for b in bins)
 span = bins[-1]["end"] - bins[0]["start"]
@@ -21,7 +23,7 @@ span = bins[-1]["end"] - bins[0]["start"]
 pdf = (root / "export.pdf").read_bytes()
 paths = []
 number = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
-for match in re.finditer(rb"stream\r?\n(.*?)\r?\nendstream", pdf, re.S):
+for match in re.finditer(rb"stream\r?\n(.*?)\r?\nendstream", pdf, re.DOTALL):
     try:
         content = zlib.decompress(match[1]).decode("latin1")
     except zlib.error:

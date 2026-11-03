@@ -1,0 +1,8 @@
+{
+  "identifier": "acceptance-ready",
+  "description": "Allow only the guarded readiness timing command in the native main loopback page.",
+  "windows": ["main"],
+  "local": false,
+  "remote": { "urls": ["http://127.0.0.1:*"] },
+  "permissions": ["allow-acceptance-editor-ready"]
+}

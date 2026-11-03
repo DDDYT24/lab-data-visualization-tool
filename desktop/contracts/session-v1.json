@@ -1,0 +1,69 @@
+{
+  "format": "labviz-desktop-session-contract-v1",
+  "checkpointFormat": "labviz-desktop-checkpoint-v1",
+  "envelopeFormat": "labviz-desktop-checkpoint-envelope-v1",
+  "identity": [
+    "profileId",
+    "projectId",
+    "baseRevision",
+    "componentVersion"
+  ],
+  "storedFields": [
+    "route",
+    "workspaceStep",
+    "preparationDraft",
+    "chartDraft",
+    "figureDraft",
+    "undoRedo",
+    "replacementMapping",
+    "notes",
+    "stagedFileReferences"
+  ],
+  "cachePolicy": "Reload saved results and task status; invalidate preview and replacement capabilities and renewed output-review consent",
+  "scientificMutation": "A checkpoint never applies preparation, creates a scientific revision or freezes an output",
+  "storage": {
+    "snapshot": "profileRoot/session/checkpoint.json",
+    "sources": "profileRoot/session/files/<sha256>",
+    "atomicWrite": "temporary-file-fsync-and-replace",
+    "integrity": "sha256-over-canonical-utf8-json",
+    "maxSnapshotBytes": 16777216,
+    "maxSourceBytes": 52428800,
+    "maxUniqueSourcesBytes": 104857600,
+    "stagingCeilingBytes": 536870912,
+    "checkpointReserveBytes": 104857600,
+    "stagingHardCeilingBytes": 641728512,
+    "reclaimPolicy": "After durable ACK only, preserve current/previous/all retained recovery references. Before ACK, a bounded capture reserve may be used only with verified snapshots and enough proven reclaimable bytes to return below the steady ceiling. Unknown/corrupt recovery blocks cleanup and reserve."
+  },
+  "recovery": {
+    "revisionConflict": "Keep the draft and require explicit use of the saved state",
+    "missingProject": "Open home and retain the checkpoint",
+    "corruption": "Retain original bytes and show a warning",
+    "stagedSource": "Verify hash and reconstruct File objects before mounting import hooks"
+  },
+  "pauseProtocol": [
+    "fresh-client-readiness",
+    "no-native-downloads",
+    "backend-idle",
+    "close-new-request-admission",
+    "same-drain-generation",
+    "capture-and-atomically-acknowledge-draft",
+    "recheck-idle-and-generation",
+    "destroy-page-acknowledgement",
+    "normal-owned-service-stop",
+    "retain-light-controller-and-tray-host"
+  ],
+  "activity": [
+    "upload-receive",
+    "request-execution",
+    "final-response-send",
+    "background-tasks",
+    "queued-and-running-figure-jobs",
+    "artifact-callbacks",
+    "maintenance",
+    "native-download-identifiers"
+  ],
+  "idleSeconds": 45,
+  "failurePolicy": "Keep editor and services before page destruction on unknown activity or an unacknowledged checkpoint. After committed destruction, abnormal service shutdown retains the durable checkpoint and reports failure instead of suspended; see shutdown-v1.json",
+  "reopenPolicy": "Cancel a pending pause; after page destruction, finish owned shutdown and resume once",
+  "credentials": "Current-user DPAPI, loopback listener ownership, PID creation identity, profile identity and a new launch key for each service cycle"
+}

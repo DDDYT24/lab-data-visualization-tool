@@ -30,6 +30,7 @@ from labviz_api.db.models import (
     User,
 )
 from labviz_api.db.session import Database
+from labviz_api.local_schema import prepare_local_database
 from labviz_api.main import create_app
 from labviz_api.parquet import ParquetContractError, read_parquet, write_parquet
 from labviz_api.persistence.contracts import ProjectStore
@@ -99,6 +100,7 @@ def project_store(
     postgres_database: Database,
 ) -> ProjectStore:
     if request.param == "sqlite":
+        prepare_local_database(tmp_path / "reference.db", project_ttl_seconds=7_200)
         reference = SqliteReferenceRepository(tmp_path / "reference.db", 7_200)
         return SqliteProjectStore(reference)
     return PostgresProjectStore(

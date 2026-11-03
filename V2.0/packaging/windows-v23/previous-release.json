@@ -1,0 +1,9 @@
+{
+  "tag": "v2.3.0-rc.1",
+  "dataEpoch": 1,
+  "installer": {
+    "name": "LabViz-V23-2.3.0-rc.1-Setup.exe",
+    "url": "https://github.com/DDDYT24/lab-data-visualization-tool/releases/download/v2.3.0-rc.1/LabViz-V23-2.3.0-rc.1-Setup.exe",
+    "sha256": "57f0e5e2c88c4e9f82ab3b56e3f84ecc3e577d3ce16a77f46f1e942da3e95cbd"
+  }
+}

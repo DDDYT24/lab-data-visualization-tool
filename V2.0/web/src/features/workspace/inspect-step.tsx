@@ -1,4 +1,5 @@
 "use client";
+import { useDesktopDraft } from "./desktop-session";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -41,7 +42,7 @@ import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 import { StepLayout } from "./step-layout";
 import { useWorkspaceStore, type IssueAction } from "./workspace-store";
 
-export function InspectStep({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }) {
+export function InspectStep({ onBack, onContinue, active = true }: { onBack: () => void; onContinue: () => void; active?: boolean }) {
   const t = useTranslations("inspect");
   const projectId = useWorkspaceStore((state) => state.projectId);
   const preview = useWorkspaceStore((state) => state.preview);
@@ -64,6 +65,11 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
   const [rangeField, setRangeField] = useState("");
   const [rangeMinimum, setRangeMinimum] = useState("");
   const [rangeMaximum, setRangeMaximum] = useState("");
+  const desktopRevision = useWorkspaceStore((state) => state.currentRevisionId);
+  useDesktopDraft(`inspect:${projectId ?? "new"}`, projectId, { project: desktopRevision }, { selectedIndex, statusFilter, kindFilter, rangeField, rangeMinimum, rangeMaximum }, draft => {
+    setSelectedIndex(draft.selectedIndex); setStatusFilter(draft.statusFilter); setKindFilter(draft.kindFilter);
+    setRangeField(draft.rangeField); setRangeMinimum(draft.rangeMinimum); setRangeMaximum(draft.rangeMaximum);
+  }, !!preview && !!quality);
   const issueKinds = Array.from(
     new Set(quality?.findings.map((finding) => finding.kind) ?? []),
   );
@@ -237,6 +243,7 @@ export function InspectStep({ onBack, onContinue }: { onBack: () => void; onCont
         </Alert>
       </Stack>
       <DataPreviewTable
+        active={active}
         emphasizeIssues
         findings={quality.findings}
         preview={preview}

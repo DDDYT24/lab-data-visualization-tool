@@ -11,9 +11,10 @@ from datetime import UTC, datetime
 from typing import Any, BinaryIO, cast
 from uuid import uuid4
 
-import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
+
+from labviz_api.scientific_imports import desktop_module
 
 from .base import (
     DEFAULT_INVENTORY_PAGE_SIZE,
@@ -28,6 +29,7 @@ from .base import (
 )
 from .cursor import decode_cursor, encode_cursor
 
+boto3 = desktop_module("boto3")
 CHUNK_SIZE = 1024 * 1024
 MIN_MULTIPART_PART_SIZE = 5 * 1024 * 1024
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")

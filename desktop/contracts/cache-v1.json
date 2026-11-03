@@ -1,0 +1,11 @@
+{
+  "format": "labviz-desktop-cache-policy-v1",
+  "action": "clear-cache",
+  "entry": "Desktop data and drafts panel",
+  "admission": "Uses the existing maintenance fence, accepted-work drain, durable checkpoint, page destruction and verified normal service shutdown. Refuse while exiting or after suspension commits.",
+  "allowed": ["owned backend profile/cache/matplotlib"],
+  "protected": ["database and object files", "frozen scientific exports", "preferences", "current/previous/recovery checkpoints", "staged draft sources", "backups and restored profiles", "credentials", "WebView cookies, IndexedDB and local storage", "unknown cache directories"],
+  "deletion": "Check profile identity, data epoch and exclusive writer lock. Reject all linked paths and scan the entire target before deleting any member. Report completion only if every planned deletion succeeds. Missing cache is an idempotent success.",
+  "failure": "Report failed maintenance, preserve scientific data and checkpoints, restart services. A partial cache deletion may be regenerated; it is never reported as completed.",
+  "recovery": "Rebuild calculation cache on next use, restore durable UI checkpoint and retain frozen artifact bytes. Native WebView cache deletion is intentionally outside this action."
+}

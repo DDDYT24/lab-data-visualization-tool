@@ -1,0 +1,716 @@
+{
+  "$defs": {
+    "Acquisition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "batch": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Batch",
+          "type": "string"
+        },
+        "protocol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Protocol"
+        }
+      },
+      "required": [
+        "id",
+        "batch",
+        "protocol"
+      ],
+      "title": "Acquisition",
+      "type": "object"
+    },
+    "Analysis": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "dataRevision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Datarevision",
+          "type": "string"
+        },
+        "method": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Method",
+          "type": "string"
+        },
+        "methodVersion": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Methodversion",
+          "type": "string"
+        },
+        "parametersJson": {
+          "title": "Parametersjson",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "analysisUnit": {
+          "enum": [
+            "experimental_unit",
+            "sample",
+            "observation"
+          ],
+          "title": "Analysisunit",
+          "type": "string"
+        },
+        "inputObservationIds": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Inputobservationids",
+          "type": "array"
+        },
+        "excluded": {
+          "items": {
+            "$ref": "#/$defs/Exclusion"
+          },
+          "title": "Excluded",
+          "type": "array"
+        },
+        "independentUnitCount": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Independentunitcount"
+        },
+        "sampleCount": {
+          "minimum": 0,
+          "title": "Samplecount",
+          "type": "integer"
+        },
+        "observationCount": {
+          "minimum": 1,
+          "title": "Observationcount",
+          "type": "integer"
+        },
+        "resultJson": {
+          "title": "Resultjson",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "dataRevision",
+        "method",
+        "methodVersion",
+        "parametersJson",
+        "seed",
+        "analysisUnit",
+        "inputObservationIds",
+        "excluded",
+        "independentUnitCount",
+        "sampleCount",
+        "observationCount",
+        "resultJson"
+      ],
+      "title": "Analysis",
+      "type": "object"
+    },
+    "AxisLink": {
+      "additionalProperties": false,
+      "properties": {
+        "axis": {
+          "enum": [
+            "x",
+            "y"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "panelIds": {
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Panelids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "axis",
+        "panelIds"
+      ],
+      "title": "AxisLink",
+      "type": "object"
+    },
+    "Exclusion": {
+      "additionalProperties": false,
+      "properties": {
+        "observationId": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Observationid",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observationId",
+        "reason"
+      ],
+      "title": "Exclusion",
+      "type": "object"
+    },
+    "Figure": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "panels": {
+          "items": {
+            "$ref": "#/$defs/Panel"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Panels",
+          "type": "array"
+        },
+        "axisLinks": {
+          "items": {
+            "$ref": "#/$defs/AxisLink"
+          },
+          "title": "Axislinks",
+          "type": "array"
+        },
+        "styleId": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Styleid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "revision",
+        "panels",
+        "axisLinks",
+        "styleId"
+      ],
+      "title": "Figure",
+      "type": "object"
+    },
+    "Lineage": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "sheet": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sheet"
+        },
+        "row": {
+          "minimum": 1,
+          "title": "Row",
+          "type": "integer"
+        },
+        "column": {
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourceId",
+        "sheet",
+        "row",
+        "column"
+      ],
+      "title": "Lineage",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "sampleId": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sampleid"
+        },
+        "acquisitionId": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Acquisitionid",
+          "type": "string"
+        },
+        "timePoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Timepoint"
+        },
+        "technicalRepeat": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Technicalrepeat"
+        },
+        "pairKey": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pairkey"
+        },
+        "unit": {
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "observed",
+            "missing",
+            "not_measured",
+            "failed",
+            "below_detection",
+            "below_quantification",
+            "out_of_range",
+            "saturated"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "reportedText": {
+          "title": "Reportedtext",
+          "type": "string"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Limit"
+        },
+        "lineage": {
+          "items": {
+            "$ref": "#/$defs/Lineage"
+          },
+          "minItems": 1,
+          "title": "Lineage",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "sampleId",
+        "acquisitionId",
+        "timePoint",
+        "technicalRepeat",
+        "pairKey",
+        "unit",
+        "state",
+        "value",
+        "reportedText",
+        "limit",
+        "lineage"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ],
+          "title": "Id",
+          "type": "string"
+        },
+        "chartType": {
+          "enum": [
+            "line",
+            "scatter",
+            "bar",
+            "histogram",
+            "box",
+            "heatmap",
+            "strip",
+            "paired",
+            "violin"
+          ],
+          "title": "Charttype",
+          "type": "string"
+        },
+        "dataRevision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Datarevision",
+          "type": "string"
+        },
+        "analysisId": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Analysisid"
+        },
+        "xField": {
+          "minLength": 1,
+          "title": "Xfield",
+          "type": "string"
+        },
+        "yField": {
+          "minLength": 1,
+          "title": "Yfield",
+          "type": "string"
+        },
+        "xUnit": {
+          "minLength": 1,
+          "title": "Xunit",
+          "type": "string"
+        },
+        "yUnit": {
+          "minLength": 1,
+          "title": "Yunit",
+          "type": "string"
+        },
+        "jitterSeed": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Jitterseed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "chartType",
+        "dataRevision",
+        "analysisId",
+        "xField",
+        "yField",
+        "xUnit",
+        "yUnit",
+        "jitterSeed"
+      ],
+      "title": "Panel",
+      "type": "object"
+    },
+    "ProcessingStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "stack",
+            "map_roles",
+            "wide_to_long",
+            "long_to_wide",
+            "filter",
+            "convert_unit"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "inputRevision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Inputrevision",
+          "type": "string"
+        },
+        "outputRevision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Outputrevision",
+          "type": "string"
+        },
+        "algorithmVersion": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Algorithmversion",
+          "type": "string"
+        },
+        "parametersJson": {
+          "title": "Parametersjson",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "operation",
+        "inputRevision",
+        "outputRevision",
+        "algorithmVersion",
+        "parametersJson"
+      ],
+      "title": "ProcessingStep",
+      "type": "object"
+    },
+    "Sample": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "experimentalUnitId": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Experimentalunitid"
+        },
+        "parentSampleId": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parentsampleid"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Group"
+        }
+      },
+      "required": [
+        "id",
+        "experimentalUnitId",
+        "parentSampleId",
+        "group"
+      ],
+      "title": "Sample",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "sha256",
+        "name"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "dataRevision": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Datarevision",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "maxItems": 5,
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/Sample"
+      },
+      "title": "Samples",
+      "type": "array"
+    },
+    "acquisitions": {
+      "items": {
+        "$ref": "#/$defs/Acquisition"
+      },
+      "minItems": 1,
+      "title": "Acquisitions",
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/Observation"
+      },
+      "maxItems": 100000,
+      "minItems": 1,
+      "title": "Observations",
+      "type": "array"
+    },
+    "processing": {
+      "items": {
+        "$ref": "#/$defs/ProcessingStep"
+      },
+      "title": "Processing",
+      "type": "array"
+    },
+    "analyses": {
+      "items": {
+        "$ref": "#/$defs/Analysis"
+      },
+      "title": "Analyses",
+      "type": "array"
+    },
+    "figure": {
+      "$ref": "#/$defs/Figure"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "dataRevision",
+    "sources",
+    "samples",
+    "acquisitions",
+    "observations",
+    "processing",
+    "analyses",
+    "figure"
+  ],
+  "title": "ResearchContractV1",
+  "type": "object"
+}
