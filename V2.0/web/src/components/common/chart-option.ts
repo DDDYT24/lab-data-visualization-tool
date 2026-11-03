@@ -33,32 +33,6 @@ function visibleRows(
   return preview.rows.filter((row) => !excludedRows.has(String(row.rowId)));
 }
 
-function numericValues(preview: DataPreview, field: string) {
-  return preview.rows
-    .map((row) => row[field])
-    .filter((value): value is number => typeof value === "number");
-}
-
-function quantile(sorted: number[], fraction: number) {
-  const index = (sorted.length - 1) * fraction;
-  const lower = Math.floor(index);
-  const upper = Math.ceil(index);
-  if (lower === upper) return sorted[lower];
-  return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
-}
-
-function boxValues(values: number[]) {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  return [
-    sorted[0],
-    quantile(sorted, 0.25),
-    quantile(sorted, 0.5),
-    quantile(sorted, 0.75),
-    sorted.at(-1)!,
-  ];
-}
-
 function legendOption(position: ChartSpec["export"]["legendPosition"]) {
   if (position === "none") return { show: false };
   if (position === "left" || position === "right") {
@@ -319,15 +293,13 @@ export function buildChartOption({
   }
 
   if (spec.type === "box") {
-    const boxes = analysis?.preview.boxes.length
-      ? analysis.preview.boxes.map((box) => ({
-          label: box.label,
-          values: [box.minimum, box.q1, box.median, box.q3, box.maximum],
-        }))
-      : spec.series.flatMap((series) => {
-          const values = boxValues(numericValues({ ...preview, rows }, series.field));
-          return values ? [{ label: series.label, values }] : [];
-        });
+    // Only the API's five-number summary is drawn. A browser quantile over the
+    // sampled preview rows is a second statistic that the Matplotlib export
+    // cannot reproduce, so an unavailable summary stays empty instead.
+    const boxes = (analysis?.preview.boxes ?? []).map((box) => ({
+      label: box.label,
+      values: [box.minimum, box.q1, box.median, box.q3, box.maximum],
+    }));
     return {
       ...common,
       grid: { left: 72, right: 38, top: 86, bottom: 62, containLabel: true },

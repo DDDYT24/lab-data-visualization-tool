@@ -2,15 +2,25 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
+      # Verbatim upstream licence texts are recorded by SHA-256 in
+      # desktop/packaging/license-supplements/sources.json and verified by
+      # licenses.py, so normalising their whitespace would break that record.
       - id: trailing-whitespace
+        exclude: ^desktop/packaging/license-supplements/
       - id: end-of-file-fixer
+        exclude: ^desktop/packaging/license-supplements/
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
         exclude: ^V2\.0/assets/fonts/NotoSansSC-VF\.ttf$
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.2
     hooks:
+      # The desktop host keeps its own conventions and carries no ruff
+      # configuration; CI lints only V2.0/api, so these hooks were the only
+      # thing that would reach desktop/ now that it is tracked.
       - id: ruff
         args: ["--fix"]
+        exclude: ^desktop/
       - id: ruff-format
+        exclude: ^desktop/

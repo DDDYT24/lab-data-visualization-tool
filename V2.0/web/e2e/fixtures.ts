@@ -7,6 +7,12 @@ type RuntimeErrorGuard = {
 };
 
 export const test = base.extend<RuntimeErrorGuard>({
+  page: async ({ page }, runTest) => {
+    if (process.env.LABVIZ_E2E_INTERFACE_MODE === "overview") {
+      await page.addInitScript(() => localStorage.setItem("labviz:v23:interface-mode:v1", "overview"));
+    }
+    await runTest(page);
+  },
   expectConsoleError: [
     async ({ page }, use) => {
       const consoleErrors: string[] = [];

@@ -693,7 +693,8 @@
     "saveFeedback": "Save diagnostic",
     "openIssue": "Open GitHub issue",
     "copiedFeedback": "Diagnostic copied to the clipboard.",
-    "savedFeedback": "Diagnostic saved as a local text file.",
+    "savedFeedback": "Download requested. Choose a location in the save dialog to keep the diagnostic JSON file.",
+    "copyFeedbackFailed": "Clipboard access failed. Select the diagnostic text above and copy it manually.",
     "externalWarning": "GitHub is an external website. Review the diagnostic text before opening it. Continue?",
     "feedbackIssueTitle": "LabViz feedback"
   },

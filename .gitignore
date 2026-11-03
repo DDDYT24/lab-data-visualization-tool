@@ -30,6 +30,7 @@ htmlcov/
 *.pdf
 !V2.0/assets/*.png
 !V2.0/assets/*.svg
+!V2.0/web/public/about/*.svg
 !V2.0/assets/*.ico
 !V2.0/web/e2e/*-snapshots/*.png
 !V2.0/api/samples/
@@ -38,16 +39,22 @@ htmlcov/
 !V2.0/api/samples/v22/**/*.tsv
 !V2.0/api/samples/v22/**/*.txt
 !V2.0/api/samples/v22/**/*.xlsx
+!V2.0/contracts/fixtures/v23/batch-1.csv
+!V2.0/contracts/fixtures/v23/batch-2.csv
 outputs/
 
 # Node and Next.js
 node_modules/
 .next/
 .next-e2e/
+.next-v23-package/
 coverage/
 *.tsbuildinfo
 playwright-report/
 test-results/
+desktop/prototypes/tauri/target/
+desktop/host/target/
+desktop/prototypes/pywebview/*.spec
 
 # Editors and operating systems
 .streamlit/
@@ -57,6 +64,8 @@ test-results/
 Thumbs.db
 
 # Terraform runtime artifacts (provider lock files remain tracked)
+desktop/host/gen/
+desktop/prototypes/tauri/gen/
 **/.terraform/*
 *.tfstate
 *.tfstate.*

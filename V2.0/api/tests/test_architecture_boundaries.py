@@ -703,3 +703,25 @@ def test_phase6d_drafts_are_prepared_without_bypassing_phase6c() -> None:
     assert load_recovery["disasterRecovery"]["rpoMinutesMaximum"] == 15
     assert load_recovery["disasterRecovery"]["rtoMinutesMaximum"] == 240
     assert load_recovery["disasterRecovery"]["localSimulationIsAcceptance"] is False
+
+
+def test_every_sqlite_insert_names_its_columns() -> None:
+    """Positional inserts break silently when a local migration adds or drops a column.
+
+    The local schema is now owned by the ``labviz_api/local_migrations`` chain, so a statement that
+    relies on ``CREATE TABLE`` order would start writing values into the wrong column
+    instead of failing. Naming the columns makes a schema change a visible error.
+    """
+    positional = re.compile(r"INSERT\s+INTO\s+([a-z_]+)\s+(?:VALUES|SELECT)\b", re.IGNORECASE)
+    offenders: list[str] = []
+    for path in sorted((V2_ROOT / "api" / "labviz_api").rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        # Join adjacent string literals so a statement split across lines is checked once.
+        joined = re.sub(r'"\s*\n\s*"', "", text)
+        joined = re.sub(r"\s+", " ", joined)
+        offenders.extend(
+            f"{path.relative_to(V2_ROOT)}: INSERT INTO {table}"
+            for table in positional.findall(joined)
+        )
+
+    assert offenders == []

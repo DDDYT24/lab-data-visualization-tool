@@ -2,21 +2,29 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import pandas as pd
+else:
+    pd = scientific_module("pandas")
+
 from collections.abc import Iterable
 from types import TracebackType
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-import pandas as pd
-
-from labviz_api.db.models import (
-    CleaningDecisionSet,
-    ProcessingRun,
-    Project,
-    ProjectRevision,
-    QualityReportRecord,
-    SourceFile,
-    StoredObject,
-)
+if TYPE_CHECKING:
+    from labviz_api.db.models import (
+        CleaningDecisionSet,
+        ProcessingRun,
+        Project,
+        ProjectRevision,
+        QualityReportRecord,
+        SourceFile,
+        StoredObject,
+    )
 from labviz_api.persistence_types import ProjectCreation
 
 

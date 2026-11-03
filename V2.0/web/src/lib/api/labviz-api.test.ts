@@ -39,6 +39,28 @@ afterEach(() => {
 });
 
 describe("LabViz API client contract", () => {
+  it("finishes reading the local bootstrap response before requesting project data", async () => {
+    vi.resetModules();
+    const bootstrap = apiResponse({ unlocked: true });
+    const drained = vi.spyOn(bootstrap, "arrayBuffer");
+    const location = { hash: "#labviz-access=test-only-key", pathname: "/", search: "" };
+    vi.stubGlobal("window", {
+      location,
+      history: { replaceState: vi.fn(() => { location.hash = ""; }) },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(bootstrap)
+      .mockImplementationOnce(async () => {
+        expect(bootstrap.bodyUsed).toBe(true);
+        return apiResponse(readySession);
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const { labvizApi: isolatedApi } = await import("./labviz-api");
+    await isolatedApi.getProject("project-regression");
+    expect(drained).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("parses a ready processing job and keeps cookie credentials enabled", async () => {
     const fetchMock = vi.fn().mockResolvedValue(apiResponse(readySession));
     vi.stubGlobal("fetch", fetchMock);

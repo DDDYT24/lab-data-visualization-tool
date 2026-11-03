@@ -53,7 +53,13 @@ test("saves feedback locally and requires consent before preparing an external i
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("labviz-feedback-diagnostic.json");
   expect(await download.failure()).toBeNull();
-  await expect(page.getByText("Diagnostic saved as a local text file.")).toBeVisible();
+  // The native save dialog keeps the object URL alive, so the notice reports a
+  // requested download rather than claiming the file is already written.
+  await expect(
+    page.getByText(
+      "Download requested. Choose a location in the save dialog to keep the diagnostic JSON file.",
+    ),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Open GitHub issue" }).click();
   expect(await page.locator("html").getAttribute("data-external-issue-url")).toBeNull();

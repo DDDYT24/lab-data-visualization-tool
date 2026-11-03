@@ -24,9 +24,9 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { EmailCodeDialog } from "@/features/auth/email-code-dialog";
@@ -38,10 +38,18 @@ import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
 import { LanguageSwitcher } from "./language-switcher";
 import { LabvizLogo } from "./labviz-logo";
+import { InterfaceModeToggle, useInterfaceMode } from "./interface-mode";
+import { requestWorkspaceMode } from "@/features/workspace/research-navigation";
 
 export function AppHeader({ landing = false }: { landing?: boolean }) {
   const t = useTranslations("app");
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const zh = useLocale().startsWith("zh");
+  const { mode: interfaceMode, setMode: setInterfaceMode } = useInterfaceMode();
+  const overview = interfaceMode === "overview";
+  const onWorkspace = pathname.startsWith("/workspace/");
+  const inResearch = searchParams.get("workspace") === "research";
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [signInOpen, setSignInOpen] = useState(false);
@@ -78,21 +86,21 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
       <Box
         component="header"
         sx={{
-          bgcolor: landing ? "background.default" : "background.paper",
-          borderBottom: landing ? 0 : 1,
+          bgcolor: overview ? "background.paper" : landing ? "background.default" : "background.paper",
+          borderBottom: landing && !overview ? 0 : 1,
           borderColor: "divider",
           position: "relative",
           zIndex: 10,
         }}
       >
-        <Container maxWidth={landing ? "xl" : false} sx={{ px: { xs: 2, md: 3 } }}>
+        <Container maxWidth={overview ? false : landing ? "xl" : false} sx={{ px: { xs: 2, md: 3 }, ...(overview && { maxWidth: 1660 }) }}>
           <Stack
             direction="row"
             spacing={2}
             sx={{
               alignItems: "center",
               justifyContent: "space-between",
-              minHeight: landing ? 72 : 64,
+              minHeight: overview ? 70 : landing ? 72 : 64,
             }}
           >
             <Stack direction="row" spacing={2.5} sx={{ alignItems: "center" }}>
@@ -109,7 +117,7 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
               <Stack
                 direction="row"
                 spacing={0.25}
-                sx={{ display: landing ? "none" : { xs: "none", md: "flex" } }}
+                sx={{ display: landing || overview ? "none" : { xs: "none", md: "flex" } }}
               >
                 <Button component={Link} href="/history" prefetch={false} size="small">
                   {t("history")}
@@ -123,7 +131,7 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
               </Stack>
             </Stack>
 
-            {landing ? (
+            {landing || overview ? (
               <Stack
                 component="nav"
                 aria-label={t("primaryNavigation")}
@@ -138,7 +146,24 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
                   transform: "translate(-50%, -50%)",
                 }}
               >
-                {[
+                {overview ? [
+                  { href: "/", label: zh ? "首页" : "Home", active: pathname === "/" },
+                  { href: "/history", label: zh ? "项目" : "Projects", active: pathname === "/history" },
+                  { href: "/?workspace=quick#import", label: zh ? "快速出图" : "Quick plot", active: onWorkspace && !inResearch, research: false },
+                  { href: "/?workspace=research#import", label: zh ? "研究工作台" : "Research workspace", active: onWorkspace && inResearch, research: true },
+                  { href: "/help", label: zh ? "帮助" : "Help", active: pathname === "/help" },
+                ].map((item) => {
+                  const sx = { borderRadius: 0, color: item.active ? "primary.main" : "text.secondary", fontWeight: 650, minWidth: "auto", px: 1.5, minHeight: 70, borderBottom: "2px solid", borderColor: item.active ? "primary.main" : "transparent" };
+                  if (onWorkspace && item.research !== undefined) {
+                    const query = new URLSearchParams(searchParams);
+                    if (item.research) query.set("workspace", "research");
+                    else query.delete("workspace");
+                    return <Button key={item.label} component={Link} href={`${pathname}?${query}`} prefetch={false}
+                      aria-current={item.active ? "page" : undefined}
+                      onClick={(event) => { event.preventDefault(); requestWorkspaceMode(item.research!); }} sx={sx}>{item.label}</Button>;
+                  }
+                  return <Button key={item.label} component={Link} href={item.href} prefetch={false} aria-current={item.active ? "page" : undefined} sx={sx}>{item.label}</Button>;
+                }) : [
                   { href: "/", label: t("navWorkspace"), active: pathname === "/" },
                   { href: "/history", label: t("navProjects"), active: pathname === "/history" },
                   { href: "/help", label: t("navDocs"), active: pathname === "/help" },
@@ -165,7 +190,7 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
             ) : null}
 
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              {!landing ? (
+              {!landing && !overview ? (
                 <Chip
                   color="secondary"
                   label={t("cloudPreview")}
@@ -174,6 +199,8 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
                   sx={{ display: { xs: "none", sm: "inline-flex" } }}
                 />
               ) : null}
+              {overview && localUser && <Chip color="secondary" label={zh ? "本机会话" : "Local session"} size="small" variant="outlined" sx={{ display: { xs: "none", lg: "inline-flex" } }} />}
+              <InterfaceModeToggle />
               <Tooltip
                 title={
                   theme.palette.mode === "dark"
@@ -198,7 +225,7 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
                 </IconButton>
               </Tooltip>
               <LanguageSwitcher />
-              {authQuery.isPending || localUser ? null : landing ? (
+              {authQuery.isPending || localUser || overview ? null : landing ? (
                 <Tooltip title={user?.email ?? t("signIn")}>
                   <IconButton
                     aria-label={user?.email ?? t("signIn")}
@@ -228,7 +255,7 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
               <IconButton
                 aria-label={t("menu")}
                 onClick={(event) => setMenuAnchor(event.currentTarget)}
-                sx={{ display: { xs: "inline-flex", sm: "none" } }}
+                sx={{ display: "inline-flex" }}
               >
                 <MenuRoundedIcon />
               </IconButton>
@@ -244,6 +271,15 @@ export function AppHeader({ landing = false }: { landing?: boolean }) {
         onClose={() => setMenuAnchor(null)}
         open={Boolean(menuAnchor)}
       >
+        {overview && <MenuItem component={Link} href="/" prefetch={false} onClick={() => setMenuAnchor(null)}>{zh ? "首页" : "Home"}</MenuItem>}
+        {overview && [false, true].map((research) => <MenuItem key={String(research)}
+          component={onWorkspace ? "li" : Link} href={onWorkspace ? undefined : `/?workspace=${research ? "research" : "quick"}#import`}
+          onClick={() => { if (onWorkspace) requestWorkspaceMode(research); setMenuAnchor(null); }}>
+          {research ? (zh ? "研究工作台" : "Research workspace") : (zh ? "快速出图" : "Quick plot")}
+        </MenuItem>)}
+        <MenuItem onClick={() => { setInterfaceMode(overview ? "classic" : "overview"); setMenuAnchor(null); }}>
+          {overview ? (zh ? "切换到经典界面" : "Switch to classic interface") : (zh ? "切换到概览 A 界面" : "Switch to overview A interface")}
+        </MenuItem>
         <MenuItem component={Link} href="/history" prefetch={false} onClick={() => setMenuAnchor(null)}>
           <ListItemIcon><HistoryRoundedIcon fontSize="small" /></ListItemIcon>
           {t("history")}
