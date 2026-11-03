@@ -7,7 +7,7 @@ keys: all jobs use GitHub OIDC.
 The desired branch protection, environment, variable, and secret-name structure is versioned in
 [`contracts/phase6-github-governance-v1.json`](contracts/phase6-github-governance-v1.json). Its
 The `prepared-not-applied` state is now due to missing external prerequisites and GitHub settings,
-not missing workflow files. Current status is tracked in [`TODO.md`](TODO.md).
+not missing workflow files. Current status is tracked in the maintainer's local backlog.
 
 ## 1. Select hosted zones, then bootstrap once from the MFA-backed IAM profile
 

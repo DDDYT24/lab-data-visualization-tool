@@ -3,7 +3,7 @@
 **Status:** Phase 6-0 and Phase 6A were verified on 2026-08-09. Phase 6-PRE was accepted on
 2026-08-11; Phase 6B application implementation passed on 2026-08-12. The 2026-08-17 boundary
 correction admits Phase 6C while keeping all real AWS evidence blocking for Phase 6C acceptance.
-Current status is maintained in [`TODO.md`](TODO.md); see the historical acceptance record in
+Current status is maintained in the maintainer's local backlog; see the historical acceptance record in
 [`PHASE6B_LOCAL_ACCEPTANCE.md`](PHASE6B_LOCAL_ACCEPTANCE.md).
 
 The versioned [`contracts/phase6-gates-v1.json`](contracts/phase6-gates-v1.json) contract encodes
