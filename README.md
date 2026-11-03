@@ -16,7 +16,7 @@ I'm LabViz, a scientific plotting tool that runs on your own computer. Hand me a
 ## Where I am
 
 - **V2.2.0**: stable. Use this one for everyday work.
-- **V2.3.0-rc.1**: preview. The installer is unsigned and acceptance is incomplete, so try it with synthetic data or a copy.
+- **V2.3.0-rc.2**: preview. The installer is unsigned and acceptance is incomplete, so try it with synthetic data or a copy.
 - **Desktop edition** (`desktop/`): I'm learning to run in my own window instead of a browser. Not released yet.
 
 ## What I do
@@ -34,10 +34,12 @@ Everything runs locally. No account, database server or online service is needed
 Download the installer and `SHA256SUMS.txt` from [Releases](https://github.com/DDDYT24/lab-data-visualization-tool/releases) and check the hash first:
 
 ```powershell
-Get-FileHash .\LabViz-V23-2.3.0-rc.1-Setup.exe -Algorithm SHA256
+Get-FileHash .\LabViz-V23-2.3.0-rc.2-Setup.exe -Algorithm SHA256
 ```
 
 I bring my own Python, Node.js, scientific libraries and fonts. Start **LabViz V2.3** from the Start menu, and use **Stop LabViz V2.3** before a backup. V2.3 and V2.2 keep separate programs and data; you import old data explicitly, and I keep your data when uninstalled.
+
+Installing rc.2 over rc.1 moves your data to a format rc.1 cannot open. If you roll back, I restore the snapshot taken before the upgrade and keep anything saved in rc.2 in a separate retained folder.
 
 See [install, import, backup and uninstall](V2.0/docs/INSTALL_V2.3.md).
 
@@ -48,7 +50,7 @@ You need Git, Python 3.12 or 3.13, and Node.js 22.22.2 or later (packaging uses 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
 Set-Location -LiteralPath .\lab-data-visualization-tool
-git checkout v2.3.0-rc.1
+git checkout v2.3.0-rc.2
 .\start-labviz.cmd
 ```
 

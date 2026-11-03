@@ -31,6 +31,6 @@ The release's verification and provenance attachments identify the exact source 
 
 Actual clean-machine use, a physically disconnected complete workflow, desktop 200% zoom and assistive speech, physical iPhone use, and a researcher pilot with 3 to 5 participants remain pending. Browser emulation and automated accessibility checks do not complete those observations. This RC is available for evaluation; formal stable acceptance is incomplete.
 
-The official npm audit reports five high-severity findings in the development lint chain, rooted in `braces` through `micromatch` and `fast-glob`. The audited production tree has no reported findings. The published `braces` version was still 3.0.3 at review, and the suggested automatic fix downgraded the Next.js lint configuration. The locked versions remain in place pending a compatible fix. See [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+The production npm audit reports no findings. The full audit reports 16 moderate development findings through `minimatch` below 11.0.1 in the ESLint plugin chain, which runs only while linting; no compatible fix is published. The earlier `braces` findings no longer appear. See [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) and the [dependency review](docs/DEPENDENCY_SECURITY_REVIEW.md).
 
 Native macOS/Linux installers and hosted collaboration are outside this RC. Existing scientific limits and the four-panel bound remain in effect.

@@ -16,7 +16,7 @@
 ## 我现在的版本
 
 - **V2.2.0**：稳定版，日常使用请选它。
-- **V2.3.0-rc.1**：预览版。安装器未签名，验收还没做完，请用合成数据或数据副本试用。
+- **V2.3.0-rc.2**：预览版。安装器未签名，验收还没做完，请用合成数据或数据副本试用。
 - **桌面版**（`desktop/`）：我正在学着不靠浏览器、用独立窗口运行，还没有发布。
 
 ## 我能做什么
@@ -34,10 +34,12 @@
 从 [Releases](https://github.com/DDDYT24/lab-data-visualization-tool/releases) 下载安装器和 `SHA256SUMS.txt`，先核对哈希：
 
 ```powershell
-Get-FileHash .\LabViz-V23-2.3.0-rc.1-Setup.exe -Algorithm SHA256
+Get-FileHash .\LabViz-V23-2.3.0-rc.2-Setup.exe -Algorithm SHA256
 ```
 
 我自带 Python、Node.js、科研依赖和字体，装好即可使用。从开始菜单打开 **LabViz V2.3**；备份前请用 **Stop LabViz V2.3** 让我停下。V2.3 和 V2.2 的程序与资料互不干扰，旧数据需要你显式导入，卸载时我默认保留资料。
+
+在 rc.1 上安装 rc.2 后，资料会升级成 rc.1 打不开的格式。如果回滚，我会恢复升级前的快照，rc.2 里保存的新内容另外保留在 retained 文件夹。
 
 详见[安装、导入、备份与卸载](V2.0/docs/INSTALL_V2.3.md)。
 
@@ -48,7 +50,7 @@ Get-FileHash .\LabViz-V23-2.3.0-rc.1-Setup.exe -Algorithm SHA256
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
 Set-Location -LiteralPath .\lab-data-visualization-tool
-git checkout v2.3.0-rc.1
+git checkout v2.3.0-rc.2
 .\start-labviz.cmd
 ```
 
