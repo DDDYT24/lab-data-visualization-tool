@@ -1,8 +1,16 @@
-# LabViz V2.3.0-rc.1
+# LabViz V2.3.0-rc.2
 
 This Windows preview adds a local research workspace and an optional overview interface. V2.2.0 remains the stable release while the RC is evaluated.
 
-## Changes
+## Changes since V2.3.0-rc.1
+
+- Local storage now uses Alembic migrations. Project tables are Parquet dataset versions, and rendered figures and export archives live outside the database.
+- Research observations, lineage, steps, and analyses are stored as rows. Each local cleaning decision freezes the rows it removes and saves a cleaned dataset version.
+- Upgraded profiles use data epoch 2, which V2.3.0-rc.1 cannot open. Rolling back to rc.1 restores the snapshot taken before the upgrade; later work stays in the retained data directory.
+- Previews, cache keys, and box charts match their exports. Fit libraries load in the background once a desktop project opens.
+- Next.js, zod, and vitest are updated for advisories published after rc.1.
+
+## Changes in V2.3
 
 - Import research tables with explicit sample, experimental-unit, group, time-point, pair, and unit mappings. Preview preparation and exclusions before saving a revision.
 - Create grouped raw-point, paired-change, and violin charts, then arrange up to four independent 2D panels in a saved figure layout.
