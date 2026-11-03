@@ -79,6 +79,8 @@ jobs:
             outputs/v23-release/rc1/portable-lifecycle/**/*.json
             outputs/v23-release/rc1/installed-lifecycle/**/*.log
             outputs/v23-release/rc1/installed-lifecycle/**/*.json
+            outputs/v23-release/rc1/previous-upgrade/**/*.log
+            outputs/v23-release/rc1/previous-upgrade/**/*.json
             outputs/v23-release/rc1/acceptance-logs/**/*.log
           if-no-files-found: warn
           retention-days: 7
