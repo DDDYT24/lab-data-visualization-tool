@@ -22,6 +22,7 @@ from labviz_api.auth import AuthService, MemoryEmailSender
 from labviz_api.config import Settings
 from labviz_api.db.models import ExportJobRecord, Project, ProjectRevision, ShareLinkRecord, User
 from labviz_api.db.session import Database
+from labviz_api.local_schema import prepare_local_database
 from labviz_api.main import create_app
 from labviz_api.models import UpdateProjectDescriptionRequest
 from labviz_api.persistence.exceptions import PersistenceNotFound, ProjectRevisionConflict
@@ -278,6 +279,9 @@ def ready_saved_store(
         with database.session() as session:
             session.add(User(id=UUID(owner_id), email=f"{owner_id}@example.test"))
     else:
+        prepare_local_database(
+            configured.database_path, project_ttl_seconds=configured.project_ttl_seconds
+        )
         store = SqliteProjectStore(
             SqliteReferenceRepository(configured.database_path, configured.project_ttl_seconds)
         )

@@ -2,6 +2,7 @@
 
 import type { PaletteMode } from "@mui/material";
 import { alpha, createTheme } from "@mui/material/styles";
+import type { InterfaceMode } from "@/features/settings/interface-mode";
 
 export const chartPalette = [
   "#2563EB",
@@ -20,8 +21,9 @@ export const chatGptDarkPalette = {
   textSecondary: "#B4B4B4",
 } as const;
 
-export function createLabvizTheme(mode: PaletteMode) {
+export function createLabvizTheme(mode: PaletteMode, interfaceMode: InterfaceMode = "classic") {
   const dark = mode === "dark";
+  const overview = interfaceMode === "overview";
   const actionContrastText = dark ? "#0D0D0D" : "#FFFFFF";
   return createTheme({
   cssVariables: {
@@ -30,26 +32,26 @@ export function createLabvizTheme(mode: PaletteMode) {
   palette: {
     mode,
     primary: {
-      main: dark ? chatGptDarkPalette.text : "#2563EB",
+      main: dark ? (overview ? "#8FB2FF" : chatGptDarkPalette.text) : "#2563EB",
       dark: dark ? "#D1D1D1" : "#1D4ED8",
       light: dark ? chatGptDarkPalette.border : "#EAF1FF",
       contrastText: actionContrastText,
     },
     secondary: {
-      main: dark ? chatGptDarkPalette.textSecondary : "#0F766E",
+      main: dark ? (overview ? "#77C9BE" : chatGptDarkPalette.textSecondary) : "#0F766E",
       dark: dark ? "#D1D1D1" : "#0B5F59",
       light: dark ? chatGptDarkPalette.surface : "#E8F5F2",
       contrastText: actionContrastText,
     },
     background: {
-      default: dark ? chatGptDarkPalette.background : "#F6F8FB",
+      default: dark ? chatGptDarkPalette.background : overview ? "#F7F6F2" : "#F6F8FB",
       paper: dark ? chatGptDarkPalette.surface : "#FFFFFF",
     },
     text: {
-      primary: dark ? chatGptDarkPalette.text : "#172033",
-      secondary: dark ? chatGptDarkPalette.textSecondary : "#667085",
+      primary: dark ? chatGptDarkPalette.text : overview ? "#1C1C1B" : "#172033",
+      secondary: dark ? chatGptDarkPalette.textSecondary : overview ? "#6D716F" : "#667085",
     },
-    divider: dark ? chatGptDarkPalette.border : "#D8DEE8",
+    divider: dark ? chatGptDarkPalette.border : overview ? "#E7E7E3" : "#D8DEE8",
     success: {
       main: dark ? "#19C37D" : "#1B6848",
       dark: dark ? "#4DD8A0" : "#145038",
@@ -99,7 +101,7 @@ export function createLabvizTheme(mode: PaletteMode) {
     },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: overview ? 12 : 8,
   },
   components: {
     MuiCssBaseline: {
@@ -118,8 +120,8 @@ export function createLabvizTheme(mode: PaletteMode) {
       },
       styleOverrides: {
         root: {
-          minHeight: 40,
-          borderRadius: 7,
+          minHeight: overview ? 44 : 40,
+          borderRadius: overview ? 11 : 7,
           paddingInline: 18,
         },
       },

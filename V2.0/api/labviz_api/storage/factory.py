@@ -6,7 +6,6 @@ from labviz_api.config import Settings
 
 from .base import ObjectStorage
 from .local import LocalObjectStorage
-from .s3 import S3ObjectStorage
 
 
 def build_object_storage(settings: Settings) -> ObjectStorage:
@@ -17,6 +16,8 @@ def build_object_storage(settings: Settings) -> ObjectStorage:
         )
     if settings.s3_bucket is None:
         raise ValueError("S3 object storage requires LABVIZ_S3_BUCKET.")
+    from .s3 import S3ObjectStorage
+
     return S3ObjectStorage(
         bucket=settings.s3_bucket,
         prefix=settings.s3_prefix,

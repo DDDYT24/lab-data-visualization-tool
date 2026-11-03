@@ -1,0 +1,1338 @@
+{
+  "$defs": {
+    "AxisSpec": {
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 120,
+          "title": "Title",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 40,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "title",
+        "unit"
+      ],
+      "title": "AxisSpec",
+      "type": "object"
+    },
+    "CategoryStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Group"
+        },
+        "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "marker": {
+          "default": "o",
+          "enum": [
+            "o",
+            "s",
+            "^",
+            "D",
+            "v"
+          ],
+          "title": "Marker",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group",
+        "color"
+      ],
+      "title": "CategoryStyle",
+      "type": "object"
+    },
+    "ChartSpec": {
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "line",
+            "scatter",
+            "bar",
+            "histogram",
+            "box",
+            "heatmap",
+            "surface3d"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "title": "Title",
+          "type": "string"
+        },
+        "subtitle": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Subtitle",
+          "type": "string"
+        },
+        "xAxis": {
+          "$ref": "#/$defs/AxisSpec"
+        },
+        "yAxis": {
+          "$ref": "#/$defs/AxisSpec"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/SeriesSpec"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Series",
+          "type": "array"
+        },
+        "groupField": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Groupfield"
+        },
+        "panelCount": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Panelcount",
+          "type": "integer"
+        },
+        "fitting": {
+          "$ref": "#/$defs/FittingSpec"
+        },
+        "uncertainty": {
+          "$ref": "#/$defs/UncertaintySpec"
+        },
+        "secondaryYAxis": {
+          "$ref": "#/$defs/SecondaryYAxisSpec"
+        },
+        "export": {
+          "$ref": "#/$defs/ExportSpec"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "type",
+        "title",
+        "xAxis",
+        "yAxis",
+        "series",
+        "panelCount",
+        "export"
+      ],
+      "title": "ChartSpec",
+      "type": "object"
+    },
+    "ConvertStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "convert_unit",
+          "title": "Kind",
+          "type": "string"
+        },
+        "valueField": {
+          "title": "Valuefield",
+          "type": "string"
+        },
+        "unitField": {
+          "title": "Unitfield",
+          "type": "string"
+        },
+        "toUnit": {
+          "title": "Tounit",
+          "type": "string"
+        },
+        "limitField": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limitfield"
+        }
+      },
+      "required": [
+        "kind",
+        "valueField",
+        "unitField",
+        "toUnit"
+      ],
+      "title": "ConvertStep",
+      "type": "object"
+    },
+    "ExclusionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "observationId": {
+          "title": "Observationid",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observationId",
+        "reason"
+      ],
+      "title": "ExclusionDecision",
+      "type": "object"
+    },
+    "ExportSpec": {
+      "properties": {
+        "format": {
+          "enum": [
+            "png",
+            "svg",
+            "pdf"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "dpi": {
+          "enum": [
+            300,
+            600
+          ],
+          "title": "Dpi",
+          "type": "integer"
+        },
+        "sizePreset": {
+          "enum": [
+            "single-column",
+            "double-column",
+            "a4",
+            "custom"
+          ],
+          "title": "Sizepreset",
+          "type": "string"
+        },
+        "grayscalePreview": {
+          "title": "Grayscalepreview",
+          "type": "boolean"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2000,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2000,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "unit": {
+          "default": "in",
+          "enum": [
+            "mm",
+            "cm",
+            "in"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "fontFamily": {
+          "default": "Arial",
+          "enum": [
+            "Arial",
+            "Times New Roman"
+          ],
+          "title": "Fontfamily",
+          "type": "string"
+        },
+        "fontSize": {
+          "default": 10,
+          "maximum": 36,
+          "minimum": 6,
+          "title": "Fontsize",
+          "type": "number"
+        },
+        "lineWidth": {
+          "default": 1.5,
+          "maximum": 10,
+          "minimum": 0.25,
+          "title": "Linewidth",
+          "type": "number"
+        },
+        "markerSize": {
+          "default": 4,
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Markersize",
+          "type": "number"
+        },
+        "legendPosition": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "top",
+            "bottom",
+            "left",
+            "right",
+            "none"
+          ],
+          "title": "Legendposition",
+          "type": "string"
+        },
+        "transparentBackground": {
+          "default": false,
+          "title": "Transparentbackground",
+          "type": "boolean"
+        },
+        "gridVisible": {
+          "default": true,
+          "title": "Gridvisible",
+          "type": "boolean"
+        },
+        "backgroundColor": {
+          "default": "#FFFFFF",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Backgroundcolor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "dpi",
+        "sizePreset",
+        "grayscalePreview"
+      ],
+      "title": "ExportSpec",
+      "type": "object"
+    },
+    "FigureBoardSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "default": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "pointRendering": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "vector",
+            "raster"
+          ],
+          "title": "Pointrendering",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Title",
+          "type": "string"
+        },
+        "axisMode": {
+          "default": "independent",
+          "enum": [
+            "independent",
+            "shared_x",
+            "shared_y",
+            "shared_xy"
+          ],
+          "title": "Axismode",
+          "type": "string"
+        },
+        "palette": {
+          "default": "blue_teal",
+          "enum": [
+            "blue_teal",
+            "grayscale"
+          ],
+          "title": "Palette",
+          "type": "string"
+        },
+        "fontSize": {
+          "default": 10,
+          "maximum": 16,
+          "minimum": 8,
+          "title": "Fontsize",
+          "type": "integer"
+        },
+        "gridVisible": {
+          "default": true,
+          "title": "Gridvisible",
+          "type": "boolean"
+        },
+        "panelTitles": {
+          "items": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Paneltitles",
+          "type": "array"
+        },
+        "panelChartIds": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Panelchartids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "panelChartIds"
+      ],
+      "title": "FigureBoardSpec",
+      "type": "object"
+    },
+    "FilterStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "filter",
+          "title": "Kind",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1000,
+          "minItems": 1,
+          "title": "Values",
+          "type": "array"
+        },
+        "keep": {
+          "default": true,
+          "title": "Keep",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "field",
+        "values"
+      ],
+      "title": "FilterStep",
+      "type": "object"
+    },
+    "FittingSpec": {
+      "properties": {
+        "model": {
+          "default": "none",
+          "enum": [
+            "none",
+            "linear",
+            "polynomial",
+            "exponential",
+            "logarithmic",
+            "power"
+          ],
+          "title": "Model",
+          "type": "string"
+        },
+        "polynomialOrder": {
+          "default": 2,
+          "enum": [
+            1,
+            2,
+            3
+          ],
+          "title": "Polynomialorder",
+          "type": "integer"
+        },
+        "fitMethod": {
+          "default": "ordinary-least-squares",
+          "enum": [
+            "ordinary-least-squares",
+            "weighted-least-squares",
+            "robust-huber"
+          ],
+          "title": "Fitmethod",
+          "type": "string"
+        },
+        "showEquation": {
+          "default": true,
+          "title": "Showequation",
+          "type": "boolean"
+        },
+        "showRSquared": {
+          "default": true,
+          "title": "Showrsquared",
+          "type": "boolean"
+        },
+        "confidenceBand": {
+          "default": false,
+          "title": "Confidenceband",
+          "type": "boolean"
+        },
+        "confidenceMethod": {
+          "default": "student-t",
+          "enum": [
+            "student-t",
+            "bootstrap"
+          ],
+          "title": "Confidencemethod",
+          "type": "string"
+        },
+        "confidenceLevel": {
+          "default": 95,
+          "enum": [
+            90,
+            95,
+            99
+          ],
+          "title": "Confidencelevel",
+          "type": "integer"
+        },
+        "intervalKind": {
+          "default": "pointwise-mean",
+          "enum": [
+            "pointwise-mean",
+            "prediction",
+            "simultaneous"
+          ],
+          "title": "Intervalkind",
+          "type": "string"
+        }
+      },
+      "title": "FittingSpec",
+      "type": "object"
+    },
+    "LongStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "long_to_wide",
+          "title": "Kind",
+          "type": "string"
+        },
+        "indexFields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Indexfields",
+          "type": "array"
+        },
+        "nameField": {
+          "title": "Namefield",
+          "type": "string"
+        },
+        "valueField": {
+          "title": "Valuefield",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "indexFields",
+        "nameField",
+        "valueField"
+      ],
+      "title": "LongStep",
+      "type": "object"
+    },
+    "PreparationPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "default": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "mapping": {
+          "$ref": "#/$defs/RoleMapping"
+        },
+        "steps": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "convert_unit": "#/$defs/ConvertStep",
+                "filter": "#/$defs/FilterStep",
+                "long_to_wide": "#/$defs/LongStep",
+                "wide_to_long": "#/$defs/WideStep"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/FilterStep"
+              },
+              {
+                "$ref": "#/$defs/ConvertStep"
+              },
+              {
+                "$ref": "#/$defs/WideStep"
+              },
+              {
+                "$ref": "#/$defs/LongStep"
+              }
+            ]
+          },
+          "maxItems": 30,
+          "title": "Steps",
+          "type": "array"
+        },
+        "exclusions": {
+          "items": {
+            "$ref": "#/$defs/ExclusionDecision"
+          },
+          "title": "Exclusions",
+          "type": "array"
+        },
+        "analysisUnit": {
+          "default": "observation",
+          "enum": [
+            "experimental_unit",
+            "sample",
+            "observation"
+          ],
+          "title": "Analysisunit",
+          "type": "string"
+        },
+        "validatePairs": {
+          "default": false,
+          "title": "Validatepairs",
+          "type": "boolean"
+        },
+        "pairTimes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Pairtimes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "mapping"
+      ],
+      "title": "PreparationPlan",
+      "type": "object"
+    },
+    "RoleMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "experimentalUnit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experimentalunit"
+        },
+        "parentSample": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parentsample"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time"
+        },
+        "batch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch"
+        },
+        "technicalRepeat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Technicalrepeat"
+        },
+        "pair": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pair"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "defaultUnit": {
+          "default": "unspecified",
+          "title": "Defaultunit",
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit"
+        },
+        "reported": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reported"
+        },
+        "measurementType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measurementtype"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "recordLink": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recordlink"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "RoleMapping",
+      "type": "object"
+    },
+    "ScientificChartSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "default": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "pointRendering": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "vector",
+            "raster"
+          ],
+          "title": "Pointrendering",
+          "type": "string"
+        },
+        "kind": {
+          "default": "grouped_strip",
+          "enum": [
+            "grouped_strip",
+            "paired",
+            "violin"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Title",
+          "type": "string"
+        },
+        "locale": {
+          "default": "en",
+          "enum": [
+            "en",
+            "zh"
+          ],
+          "title": "Locale",
+          "type": "string"
+        },
+        "jitterSeed": {
+          "default": "labviz-strip-v1",
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Jitterseed",
+          "type": "string"
+        },
+        "jitterWidth": {
+          "default": 0.3,
+          "maximum": 0.45,
+          "minimum": 0,
+          "title": "Jitterwidth",
+          "type": "number"
+        },
+        "showPoints": {
+          "default": true,
+          "title": "Showpoints",
+          "type": "boolean"
+        },
+        "summary": {
+          "default": "none",
+          "enum": [
+            "none",
+            "mean",
+            "median"
+          ],
+          "title": "Summary",
+          "type": "string"
+        },
+        "summaryUnit": {
+          "default": "experimental_unit",
+          "enum": [
+            "observation",
+            "sample",
+            "experimental_unit"
+          ],
+          "title": "Summaryunit",
+          "type": "string"
+        },
+        "pairTimes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Pairtimes",
+          "type": "array"
+        },
+        "bandwidth": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bandwidth"
+        },
+        "densityScale": {
+          "default": "equal_width",
+          "enum": [
+            "equal_width",
+            "common_density"
+          ],
+          "title": "Densityscale",
+          "type": "string"
+        },
+        "categoryStyles": {
+          "items": {
+            "$ref": "#/$defs/CategoryStyle"
+          },
+          "maxItems": 100,
+          "title": "Categorystyles",
+          "type": "array"
+        }
+      },
+      "title": "ScientificChartSpec",
+      "type": "object"
+    },
+    "SecondaryYAxisSpec": {
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "title": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Title",
+          "type": "string"
+        },
+        "unit": {
+          "default": "",
+          "maxLength": 40,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "title": "SecondaryYAxisSpec",
+      "type": "object"
+    },
+    "SeriesSpec": {
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "lineStyle": {
+          "default": "solid",
+          "enum": [
+            "solid",
+            "dashed",
+            "dotted",
+            "dashdot"
+          ],
+          "title": "Linestyle",
+          "type": "string"
+        },
+        "panel": {
+          "default": 1,
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Panel",
+          "type": "integer"
+        },
+        "yAxis": {
+          "default": "primary",
+          "enum": [
+            "primary",
+            "secondary"
+          ],
+          "title": "Yaxis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "label",
+        "color"
+      ],
+      "title": "SeriesSpec",
+      "type": "object"
+    },
+    "TemplatePanel": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "scientific",
+            "legacy"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "sourceColumns": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Sourcecolumns",
+          "type": "array"
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreparationPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "chart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScientificChartSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "legacyChart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChartSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sampleField": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Samplefield"
+        },
+        "expectedUnit": {
+          "title": "Expectedunit",
+          "type": "string"
+        },
+        "legacyColors": {
+          "items": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "maxItems": 240,
+          "title": "Legacycolors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "sourceColumns",
+        "expectedUnit"
+      ],
+      "title": "TemplatePanel",
+      "type": "object"
+    },
+    "UncertaintySpec": {
+      "properties": {
+        "mode": {
+          "default": "none",
+          "enum": [
+            "none",
+            "standard-deviation",
+            "standard-error",
+            "confidence-interval",
+            "column"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "errorField": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errorfield"
+        },
+        "confidenceLevel": {
+          "default": 95,
+          "enum": [
+            90,
+            95,
+            99
+          ],
+          "title": "Confidencelevel",
+          "type": "integer"
+        }
+      },
+      "title": "UncertaintySpec",
+      "type": "object"
+    },
+    "WideStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "wide_to_long",
+          "title": "Kind",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Fields",
+          "type": "array"
+        },
+        "nameField": {
+          "title": "Namefield",
+          "type": "string"
+        },
+        "valueField": {
+          "title": "Valuefield",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "fields",
+        "nameField",
+        "valueField"
+      ],
+      "title": "WideStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "figure": {
+      "$ref": "#/$defs/FigureBoardSpec"
+    },
+    "panels": {
+      "items": {
+        "$ref": "#/$defs/TemplatePanel"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Panels",
+      "type": "array"
+    },
+    "exclusionPolicy": {
+      "const": "review-new-data",
+      "default": "review-new-data",
+      "title": "Exclusionpolicy",
+      "type": "string"
+    },
+    "exportFormats": {
+      "default": [
+        "svg",
+        "png",
+        "pdf"
+      ],
+      "items": {
+        "enum": [
+          "svg",
+          "png",
+          "pdf"
+        ],
+        "type": "string"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Exportformats",
+      "type": "array"
+    },
+    "pngDpi": {
+      "const": 300,
+      "default": 300,
+      "title": "Pngdpi",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "name",
+    "figure",
+    "panels"
+  ],
+  "title": "WorkflowTemplate",
+  "type": "object"
+}

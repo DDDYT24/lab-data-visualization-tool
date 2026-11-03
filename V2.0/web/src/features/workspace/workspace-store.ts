@@ -213,13 +213,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       exportReady: false,
     }),
   markProjectSaved: (session) =>
-    set({
+    set((state) => state.projectId !== session.projectId ? state : ({
       storageMode: session.storageMode,
       description: session.description,
       currentRevisionId: session.currentRevisionId,
       job: session.job,
       loadError: null,
-    }),
+    })),
   applyProjectDescription: (description, currentRevisionId) =>
     set({ description, currentRevisionId }),
   addShare: (share) =>
@@ -238,13 +238,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     }),
   setWorkspaceData: (preview, quality) =>
     set((state) => {
+      if (preview.projectId !== quality.projectId || (state.projectId && state.projectId !== preview.projectId)) return state;
       const numericColumns = preview.columns.filter(
         (column) => column.kind === "number",
       );
       const textColumns = preview.columns.filter((column) => column.kind === "text");
       const xColumn = numericColumns[0];
       const yColumn = numericColumns[1] ?? numericColumns[0];
-      const sampleType = state.selectedFile?.recommendedChart;
+      const sampleType = state.selectedFile?.recommendedChart
+        ?? (numericColumns.length === 1 ? "histogram" : undefined);
       const sampleValueColumn =
         sampleType && ["histogram", "box"].includes(sampleType)
           ? numericColumns[0]

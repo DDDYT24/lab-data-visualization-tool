@@ -2,6 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import matplotlib
+    import numpy as np
+    import pandas as pd
+else:
+    matplotlib = scientific_module("matplotlib")
+    np = scientific_module("numpy")
+    pd = scientific_module("pandas")
+
 import base64
 import csv
 import io
@@ -11,6 +24,7 @@ import os
 import re
 import zlib
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 from functools import lru_cache
 from itertools import combinations
@@ -18,16 +32,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 from zipfile import BadZipFile, ZipFile
 
-import matplotlib
-import numpy as np
-import pandas as pd
-from fontTools import subset
-from matplotlib import font_manager
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.figure import Figure
-from scipy.stats import f as fisher_f
-from scipy.stats import t as student_t
-
+from .cleaning_recipe import EXCLUDING_ACTIONS, FrozenRows
 from .models import ChartSpec, JsonScalar
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
@@ -41,7 +46,10 @@ from .render_contract import (
     matplotlib_line_style,
 )
 
-matplotlib.use("Agg")
+if os.environ.get("LABVIZ_DESKTOP_MODE") == "1":
+    os.environ["MPLBACKEND"] = "Agg"
+else:
+    matplotlib.use("Agg")
 
 SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".txt", ".json", ".xlsx"}
 MAX_PREVIEW_ROWS = 200
@@ -102,6 +110,8 @@ def _cjk_font_candidates() -> list[Path]:
 @lru_cache(maxsize=1)
 def _cjk_font_info() -> tuple[str, str] | None:
     """Return a registered CJK family and its source path, if one is available."""
+    from matplotlib import font_manager
+
     seen: set[Path] = set()
     for candidate in _cjk_font_candidates():
         resolved = candidate.resolve() if candidate.exists() else candidate
@@ -926,7 +936,7 @@ def default_chart_spec(
             "heatmap",
             "surface3d",
         }
-        else "line"
+        else ("histogram" if len(numeric_columns) == 1 else "line")
     )
     if len(numeric_columns) == 1 and chart_type in {"line", "scatter", "bar"}:
         # A single measured variable supports a distribution, not an X/Y relation.
@@ -991,18 +1001,13 @@ def serialize_dataframe(frame: pd.DataFrame) -> bytes:
     return zlib.compress(raw, level=6)
 
 
-def deserialize_dataframe(payload: bytes) -> pd.DataFrame:
-    parsed = json.loads(zlib.decompress(payload).decode("utf-8"))
-    return pd.DataFrame(data=parsed["data"], columns=parsed["columns"], index=parsed["index"])
-
-
 def apply_chart_decisions(
     frame: pd.DataFrame,
     quality: dict[str, Any],
     decisions: list[dict[str, str]],
     actions: set[str] | None = None,
 ) -> pd.DataFrame:
-    excluded_actions = actions or {"exclude", "remove"}
+    excluded_actions = actions or EXCLUDING_ACTIONS
     excluded_findings = {
         item["findingId"] for item in decisions if item["action"] in excluded_actions
     }
@@ -1013,6 +1018,73 @@ def apply_chart_decisions(
     if not excluded_mask.any():
         return frame
     return frame.iloc[np.flatnonzero(~excluded_mask)]
+
+
+def cleaned_frame(
+    parent: pd.DataFrame, removed: Sequence[int] | np.ndarray[Any, Any]
+) -> pd.DataFrame:
+    """Return the table a cleaned version stores: ``parent`` without the ``removed`` rows."""
+    kept = np.setdiff1d(np.arange(len(parent)), np.asarray(removed, dtype=np.int64))
+    return parent.iloc[kept].reset_index(drop=True)
+
+
+def decided_mask(
+    decisions: Iterable[Mapping[str, str]],
+    frozen: Mapping[str, FrozenRows],
+    actions: Iterable[str],
+    row_count: int,
+) -> np.ndarray[Any, Any]:
+    """Mark the parent rows frozen by the decisions with one of ``actions``."""
+    wanted = set(actions)
+    mask = np.zeros(row_count, dtype=bool)
+    for item in decisions:
+        if item["action"] in wanted:
+            gaps = np.frombuffer(frozen[item["findingId"]].gaps(), dtype="<u4")
+            mask[np.cumsum(gaps, dtype=np.int64)] = True
+    return mask
+
+
+def select_cleaned_rows(
+    cleaned: pd.DataFrame,
+    parent_row_count: int,
+    decisions: list[dict[str, str]],
+    frozen: Mapping[str, FrozenRows],
+    actions: Iterable[str],
+) -> pd.DataFrame:
+    """Label a cleaned version's rows by their positions in its parent, then drop the rows
+    of the decisions with one of ``actions`` that the version still holds.
+
+    Readers before cleaned versions sliced the parent table, so its rows kept those labels.
+    """
+    removed = decided_mask(decisions, frozen, {"remove"}, parent_row_count)
+    kept = np.flatnonzero(~removed)
+    if len(kept) != len(cleaned):
+        raise ValueError("The cleaned dataset version does not match its parent.")
+    if len(kept) != parent_row_count:
+        cleaned.index = pd.Index(kept)
+    dropped = decided_mask(decisions, frozen, actions, parent_row_count)[kept]
+    if not dropped.any():
+        return cleaned
+    return cleaned.iloc[np.flatnonzero(~dropped)]
+
+
+def freeze_decision_rows(
+    frame: pd.DataFrame, quality: dict[str, Any], finding_ids: Iterable[str]
+) -> dict[str, list[int]]:
+    """Return the row positions each finding covers in ``frame``.
+
+    A finding the report no longer has covers no rows, as it did when it was detected on
+    every read.
+    """
+    findings = {str(finding["id"]): finding for finding in quality["findings"]}
+    return {
+        finding_id: (
+            np.flatnonzero(_quality_finding_mask(frame, findings[finding_id])).tolist()
+            if finding_id in findings
+            else []
+        )
+        for finding_id in finding_ids
+    }
 
 
 def _quality_finding_mask(frame: pd.DataFrame, finding: dict[str, Any]) -> np.ndarray[Any, Any]:
@@ -1168,6 +1240,35 @@ def _sample_positions(length: int, limit: int = MAX_ANALYSIS_POINTS) -> np.ndarr
     if length <= limit:
         return np.arange(length)
     return np.linspace(0, length - 1, num=limit, dtype=int)
+
+
+def _envelope_positions(
+    values: np.ndarray[Any, Any], limit: int = MAX_ANALYSIS_POINTS
+) -> np.ndarray[Any, Any]:
+    """Keep every bucket's extremes so a decimated preview still shows real peaks.
+
+    Evenly spaced positions drop narrow peaks and troughs that the full-data
+    export still draws, which reads as an export defect rather than a preview
+    limit. Selecting each bucket's minimum and maximum preserves the visible
+    envelope. It never changes the analysed data or the reported sample size.
+    """
+    length = len(values)
+    if length <= limit:
+        return np.arange(length)
+    buckets = max(1, (limit - 2) // 2)
+    edges = np.linspace(0, length, num=buckets + 1, dtype=int)
+    keep = {0, length - 1}
+    for start, end in zip(edges[:-1], edges[1:], strict=True):
+        window = np.asarray(values[start:end], dtype=float)
+        if window.size == 0:
+            continue
+        if not np.isfinite(window).any():
+            keep.add(int(start))
+            continue
+        masked = np.where(np.isfinite(window), window, np.nan)
+        keep.add(int(start) + int(np.nanargmin(masked)))
+        keep.add(int(start) + int(np.nanargmax(masked)))
+    return np.array(sorted(keep), dtype=int)
 
 
 def _fit_equation(model: str, coefficients: np.ndarray[Any, Any]) -> str:
@@ -1520,6 +1621,8 @@ def _fit_analysis(
                 covariance = residual_variance * np.linalg.pinv(weighted_design.T @ weighted_design)
             variance = np.einsum("ij,jk,ik->i", grid_design, covariance, grid_design)
             if interval_kind == "simultaneous":
+                from scipy.stats import f as fisher_f
+
                 fisher_quantile = float(
                     fisher_f.ppf(
                         fitting.confidence_level / 100,
@@ -1529,6 +1632,8 @@ def _fit_analysis(
                 )
                 critical = math.sqrt(parameter_count * fisher_quantile)
             else:
+                from scipy.stats import t as student_t
+
                 critical = float(
                     student_t.ppf((1 + fitting.confidence_level / 100) / 2, degrees_of_freedom)
                 )
@@ -1774,6 +1879,8 @@ def _uncertainty_analysis(
                 errors = standard_error
             else:
                 probability = (1 + uncertainty.confidence_level / 100) / 2
+                from scipy.stats import t as student_t
+
                 critical = student_t.ppf(probability, grouped["count"] - 1)
                 errors = standard_error * critical
         positions = _sample_positions(len(grouped))
@@ -2011,7 +2118,7 @@ def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> l
         return []
     if x_field == y_field:
         numeric = pd.to_numeric(frame[y_field], errors="coerce").dropna()
-        numeric = numeric.iloc[_sample_positions(len(numeric))]
+        numeric = numeric.iloc[_envelope_positions(numeric.to_numpy(dtype=float))]
         return [
             {"x": _json_value(value), "y": float(value)}
             for value in numeric
@@ -2021,7 +2128,7 @@ def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> l
     numeric_y = pd.to_numeric(complete[y_field], errors="coerce")
     complete = complete[numeric_y.notna()].copy()
     complete[y_field] = numeric_y[numeric_y.notna()]
-    complete = complete.iloc[_sample_positions(len(complete))]
+    complete = complete.iloc[_envelope_positions(complete[y_field].to_numpy(dtype=float))]
     return [
         {"x": _json_value(row[x_field]), "y": float(row[y_field])}
         for _, row in complete.iterrows()
@@ -2288,7 +2395,15 @@ def render_chart(
     chart: ChartSpec,
     *,
     provenance: dict[str, Any] | None = None,
+    _target_figure: Any = None,
+    _target_axes: Any = None,
+    _frozen_analysis: dict[str, Any] | None = None,
+    _series_colors: dict[str, str] | None = None,
 ) -> bytes:
+    from matplotlib import font_manager
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.figure import Figure
+
     if frame.empty:
         raise ProcessingError("There are no rows available to export.", "empty-chart-data")
     export = chart.export_settings
@@ -2321,10 +2436,10 @@ def render_chart(
             "figure-too-large",
         )
 
-    figure = Figure(figsize=figure_size, dpi=export.dpi)
+    figure = _target_figure or Figure(figsize=figure_size, dpi=export.dpi)
     column_count = 1 if chart.panel_count == 1 else 2
     row_count = math.ceil(chart.panel_count / column_count)
-    axes = [
+    axes = _target_axes or [
         figure.add_subplot(
             row_count,
             column_count,
@@ -2343,7 +2458,7 @@ def render_chart(
         for index, item in enumerate(chart.series)
     ]
     x_field = chart.x_axis.field
-    derived = analyze_chart(frame, chart)
+    derived = _frozen_analysis or analyze_chart(frame, chart)
     analyses = derived["series"]
     preview = derived["preview"]
     if chart.type == "surface3d":
@@ -2398,6 +2513,7 @@ def render_chart(
                     grouped=bool(chart.group_field),
                     index=analysis_index,
                 )
+                color = (_series_colors or {}).get(analysis["label"], color)
                 label = analysis["label"]
                 style = matplotlib_line_style(item.line_style)
                 x_values = [point["x"] for point in points]
@@ -2595,15 +2711,16 @@ def render_chart(
         else:
             axis.set_title(f"Panel {panel_index}")
         if chart.type not in {"box", "heatmap", "surface3d"}:
-            axis.grid(
-                export.grid_visible,
-                color=GRID_COLOR,
-                linewidth=0.7,
-                alpha=0.8,
-            )
+            if export.grid_visible:
+                axis.grid(True, color=GRID_COLOR, linewidth=0.7, alpha=0.8)
+            else:
+                axis.grid(False)
         _configure_legend(axis, export.legend_position)
         if secondary_axis is not None:
             _configure_legend(secondary_axis, export.legend_position)
+
+    if _target_axes is not None:
+        return b""
 
     if chart.panel_count > 1:
         figure.suptitle(
@@ -2661,6 +2778,8 @@ def render_chart(
             figure.savefig(output, **save_kwargs)
         if resolved_font_properties is not None:
             # Embed only used glyphs; SVG text remains selectable without OS fonts.
+            from fontTools import subset
+
             font = subset.load_font(str(resolved_font_properties.get_file()), subset.Options())
             subsetter = subset.Subsetter()
             subsetter.populate(

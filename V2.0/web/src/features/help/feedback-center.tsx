@@ -18,40 +18,19 @@ import {
 } from "@mui/material";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
+import { copyText } from "./copy-text";
 
 import {
   serializeFeedbackDiagnostic,
   type FeedbackCategory,
 } from "./feedback-diagnostic";
 
-async function copyText(value: string): Promise<boolean> {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(value);
-      return true;
-    } catch {
-      // Some local HTTP/browser contexts expose the API but reject clipboard writes.
-      // Fall through to the older document command so offline feedback still works.
-    }
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  return copied;
-}
-
 export function FeedbackCenter() {
   const t = useTranslations("help");
   const [category, setCategory] = useState<FeedbackCategory>("bug");
   const [description, setDescription] = useState("");
   const [context, setContext] = useState({ pathname: "", userAgent: "" });
-  const [notice, setNotice] = useState<"copied" | "saved" | null>(null);
+  const [notice, setNotice] = useState<"copied" | "saved" | "copy-failed" | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -78,7 +57,7 @@ export function FeedbackCenter() {
     anchor.href = url;
     anchor.download = "labviz-feedback-diagnostic.json";
     anchor.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     setNotice("saved");
   };
 
@@ -135,7 +114,7 @@ export function FeedbackCenter() {
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button
             onClick={async () => {
-              if (await copyText(diagnostic)) setNotice("copied");
+              setNotice(await copyText(diagnostic) ? "copied" : "copy-failed");
             }}
             startIcon={<ContentCopyRoundedIcon />}
             variant="outlined"
@@ -150,7 +129,8 @@ export function FeedbackCenter() {
           </Button>
         </Stack>
         {notice === "copied" ? <Alert severity="success">{t("copiedFeedback")}</Alert> : null}
-        {notice === "saved" ? <Alert severity="success">{t("savedFeedback")}</Alert> : null}
+        {notice === "copy-failed" ? <Alert severity="warning">{t("copyFeedbackFailed")}</Alert> : null}
+        {notice === "saved" ? <Alert severity="info">{t("savedFeedback")}</Alert> : null}
       </Stack>
     </Paper>
   );

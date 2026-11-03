@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "LabViz D1 Tauri",
+  "version": "0.1.0",
+  "identifier": "org.labviz.desktop.prototype.tauri",
+  "app": { "windows": [], "security": { "csp": null } },
+  "bundle": { "active": false, "icon": ["../../../V2.0/assets/labviz-logo.ico"] }
+}

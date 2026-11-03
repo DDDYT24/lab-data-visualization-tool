@@ -1,3 +1,42 @@
+# V2.3 web dependency follow-up — 2026-11-02
+
+The V2.3 Windows RC pipeline stopped at its production npm audit on PR #7. Advisories
+published after V2.3.0-rc.1 affect the locked web dependencies. The audits below use the
+official npm registry, because the default mirror does not implement the audit endpoint.
+
+## Updates
+
+- Next.js and eslint-config-next: 16.3.8 → 16.4.3. Next.js 16.0.0–16.4.0 is affected by
+  unauthenticated remote code execution in the Image Optimization API with SVG files
+  ([GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw)) and in `use cache`
+  functions returning typed arrays ([GHSA-673q-mjm6-r5xr](https://github.com/advisories/GHSA-673q-mjm6-r5xr)),
+  and by a Server Actions denial of service ([GHSA-p3m5-59mp-jv5r](https://github.com/advisories/GHSA-p3m5-59mp-jv5r)).
+- zod: 4.4.3 → 4.6.7, for memory exhaustion when validating oversized constrained
+  collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)).
+- vitest: 4.1.11 → 4.1.12, and vite within its existing range to 8.3.5, for the
+  `@vitest/mocker` and `vite` development advisories.
+
+Lock entries rewritten by this update keep the `registry.npmjs.org` source they had before.
+
+## Result
+
+The production audit reports zero findings. The full audit reports 16 moderate findings and
+no high or critical ones, all through `minimatch` below 11.0.1
+([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)) in the ESLint
+plugin chain. No compatible fix is published: ESLint 10.14.0 still depends on
+`minimatch ^10.2.6`, and the plugins use the 3.x API, so a forced override would break linting.
+The earlier `braces`, `micromatch` and `fast-glob` findings no longer appear.
+
+Disposition, accepted by the owner: the `minimatch` chain runs only while linting, so the
+development-audit gate in `packaging/windows-v23/build_rc.py` now allows these 16 packages and
+drops the `braces` chain it no longer needs. The gate is narrower than the name list it replaces:
+a package passes only while every finding on it stays at moderate or below and traces to the
+`minimatch` advisory alone, so a new or more severe advisory on the same package still stops
+the build. Reassess when ESLint or its plugins move to minimatch 11.0.1 or later.
+
+V2.2.0 on `main` locked Next.js 16.3.6, also in the affected range; the follow-up below
+updates it to the same versions.
+
 # V2.2 web dependency follow-up — 2026-11-02
 
 Advisories published after V2.2.0 affect its locked web dependencies. The audits below use the
