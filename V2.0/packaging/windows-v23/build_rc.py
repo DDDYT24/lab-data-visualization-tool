@@ -476,6 +476,19 @@ def main():
                 output / "installed-lifecycle",
             ],
         )
+        run(
+            "previous-release-upgrade",
+            [
+                test_python,
+                SOURCE / "tests/verify_previous_upgrade.py",
+                "--build",
+                output / "installer",
+                "--payload",
+                output / "payload",
+                "--output",
+                output / "previous-upgrade",
+            ],
+        )
 
     def artifacts():
         run(

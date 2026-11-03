@@ -23,6 +23,12 @@ INSTALLER_CHECKS = {
     "reinstallReopensRetainedProfile",
     "acceptanceInstallerRemovedDataRetained",
 }
+UPGRADE_CHECKS = {
+    "publishedReleaseInstalledAndHealthy",
+    "upgradeFromPublishedReleaseKeepsProfileAndData",
+    "rollbackToPublishedReleaseRestoresItsSnapshot",
+    "upgradedInstallationRemovedDataRetained",
+}
 PENDING = [
     "Clean-machine acceptance",
     "Complete workflow with networking physically disconnected",
@@ -54,6 +60,7 @@ def main():
         raise ValueError("Runtime versions differ from the pinned inputs.")
     portable = read(build_root / "portable-lifecycle/verification.json")
     installed = read(build_root / "installed-lifecycle/verification.json")
+    upgrade = read(build_root / "previous-upgrade/verification.json")
     compiler = read(build_root / "installer/build-verification.json")
     if (
         compiler["appId"] != APP_ID
@@ -67,6 +74,7 @@ def main():
     for receipt, required in (
         (portable, REQUIRED_CHECKS),
         (installed, INSTALLER_CHECKS),
+        (upgrade, UPGRADE_CHECKS),
     ):
         if (
             not receipt.get("passed")
@@ -91,7 +99,10 @@ def main():
             raise ValueError("Pipeline phase is incomplete: " + phase)
     name, digest = next(iter(compiler["installers"].items()))
     installer = build_root / "installer" / name
-    if sha(installer) != digest or installed["installerSha256"] != digest:
+    if sha(installer) != digest or {
+        installed["installerSha256"],
+        upgrade["installerSha256"],
+    } != {digest}:
         raise ValueError("The installed and published installer bytes differ.")
     destination = build_root / "release"
     destination.mkdir(exist_ok=False)
@@ -101,7 +112,7 @@ def main():
     )
     shutil.copyfile(payload / "source-inputs.json", destination / "source-inputs.json")
     with zipfile.ZipFile(
-        destination / "LabViz-2.3.0-rc.1-Test-Data.zip",
+        destination / "LabViz-2.3.0-rc.2-Test-Data.zip",
         "w",
         compression=zipfile.ZIP_DEFLATED,
     ) as archive:
@@ -131,6 +142,8 @@ def main():
         "frontendUnitTests": unit["numTotalTests"],
         "portableChecks": portable["checks"],
         "installedChecks": installed["checks"],
+        "upgradedFrom": upgrade["previousRelease"]["tag"],
+        "upgradeChecks": upgrade["checks"],
         "pendingAcceptance": PENDING,
         "unsigned": True,
         "stableAcceptanceComplete": False,
@@ -147,6 +160,7 @@ def main():
         "installedEvidenceSha256": sha(
             build_root / "installed-lifecycle/verification.json"
         ),
+        "upgradeEvidenceSha256": sha(build_root / "previous-upgrade/verification.json"),
         "sourceInputManifestSha256": sha(payload / "source-inputs.json"),
         "buildWorkflowRun": (
             "https://github.com/"
