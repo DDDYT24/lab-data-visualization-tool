@@ -1,4 +1,4 @@
-# LabViz Product Backlog (V2.2.0 local release; V2.3 separate development)
+# LabViz Product Backlog (V2.2.0 local release; V2.3 pre-releases; V2.4 in development)
 
 This file is the single source of truth for future work, completion status, release gates,
 compatibility issues, and deferred decisions. Update it first whenever the product status
@@ -8,9 +8,9 @@ this file lists what is next and links to that plan. Other Markdown files may ex
 contract or preserve historical evidence, but they must not create a competing backlog.
 
 - **Current release:** V2.2.0 Windows local release, single ordinary Windows profile
-- **Status review:** 2026-10-07
+- **Status review:** 2026-11-03
 - **Frozen release line:** V2.2.0; see publication decision and release assets below
-- **Next development roadmap:** [V2.3 Local Research Workspace](#v23-roadmap), planned on 2026-09-27; no V2.3 implementation or release is claimed
+- **V2.3 line:** [V2.3 Local Research Workspace](#v23-roadmap); V2.3.0-rc.1 (2026-10-18) and V2.3.0-rc.2 (2026-11-03) are published as Windows pre-releases; V2.3.0 final is not released
 - **Active development:** [V2.4 — next steps](#v24-roadmap); detailed plan and progress in [`V2.4_PLAN.md`](V2.4_PLAN.md)
 - **Version history:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
