@@ -2,13 +2,16 @@
 
 This file is the single source of truth for future work, completion status, release gates,
 compatibility issues, and deferred decisions. Update it first whenever the product status
-changes. Other Markdown files may explain a stable contract or preserve historical evidence,
-but they must not create a competing backlog.
+changes. From V2.4 on, each version also has a plan file (`V2.4_PLAN.md`) that holds its
+detailed stages, the files each step touches, its gates and the acceptance actually recorded;
+this file lists what is next and links to that plan. Other Markdown files may explain a stable
+contract or preserve historical evidence, but they must not create a competing backlog.
 
 - **Current release:** V2.2.0 Windows local release, single ordinary Windows profile
 - **Status review:** 2026-10-07
 - **Frozen release line:** V2.2.0; see publication decision and release assets below
 - **Next development roadmap:** [V2.3 Local Research Workspace](#v23-roadmap), planned on 2026-09-27; no V2.3 implementation or release is claimed
+- **Active development:** [V2.4 — next steps](#v24-roadmap); detailed plan and progress in [`V2.4_PLAN.md`](V2.4_PLAN.md)
 - **Version history:** [`../VERSION_BASELINE.md`](../VERSION_BASELINE.md)
 
 This file records the V2.0 baseline, completed V2.1 work, the ordered V2.2 plan, the V2.3
@@ -1181,6 +1184,24 @@ editing remain non-blocking follow-up work.
   is supported by reproducible evidence from the release commit.
   - **Remaining:** README, CHANGELOG and VERSION_BASELINE now describe the current local evidence
     and limitations; final release metadata and notes wait for all blocking gates.
+
+<a id="v24-roadmap"></a>
+
+## V2.4 — next steps
+
+**Detailed plan, progress and acceptance records:** [`V2.4_PLAN.md`](V2.4_PLAN.md).
+S0–S2 shipped in V2.3.0-rc.2; S3a is done on branch `v2.4/s3-renderplan`.
+
+1. **S3b** — research single-chart exports draw only from the RenderPlan, and the plan is
+   stored with each chart. This changes new charts' y range and ticks relative to rc.2, so
+   the owner approves a side-by-side comparison before it merges.
+2. **V2.3.0-rc.2 re-cut** — once PR 10's Windows packaging job passes, merge it, then:
+   1. Move the tag.
+   2. Replace the assets with that run's `labviz-v23-rc` artifact.
+   3. Rerun download verification.
+   4. Refresh `DOWNLOAD-VERIFICATION.json` and `SHA256SUMS`.
+3. **S3c and S3e** — interactive research charts and the `chart-render-v2.json` geometry
+   contract. They are independent of each other and both follow S3b.
 
 <a id="v23-roadmap"></a>
 
