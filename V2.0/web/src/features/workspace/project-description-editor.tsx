@@ -11,6 +11,7 @@ import { PROJECT_DESCRIPTION_MAX_UTF8_BYTES } from "@/domain/api-contract";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
 import { useWorkspaceStore } from "./workspace-store";
+import { useDesktopDraft } from "./desktop-session";
 
 function utf8Length(value: string) {
   return new TextEncoder().encode(value).byteLength;
@@ -28,6 +29,7 @@ export function ProjectDescriptionEditor() {
     (state) => state.applyProjectDescription,
   );
   const [draft, setDraft] = useState(description);
+  useDesktopDraft(`description:${projectId ?? "new"}`, projectId, { project: currentRevisionId }, { draft }, value => setDraft(value.draft));
 
   const bytes = useMemo(() => utf8Length(draft), [draft]);
   const tooLarge = bytes > PROJECT_DESCRIPTION_MAX_UTF8_BYTES;

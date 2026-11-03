@@ -44,12 +44,12 @@ export default defineConfig({
     },
     {
       name: "firefox-smoke",
-      testMatch: /(?:cross-browser|performance|live-samples)\.spec\.ts/,
+      testMatch: /(?:cross-browser|performance|live-samples|overview-interface)\.spec\.ts/,
       use: { ...devices["Desktop Firefox"] },
     },
     {
       name: "webkit-smoke",
-      testMatch: /(?:cross-browser|performance|live-samples)\.spec\.ts/,
+      testMatch: /(?:cross-browser|performance|live-samples|overview-interface)\.spec\.ts/,
       use: { ...devices["Desktop Safari"] },
     },
   ],

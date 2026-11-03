@@ -303,4 +303,43 @@ describe("chart render contract", () => {
       },
     ]);
   });
+
+  it("draws only the API five-number summary for a box chart", () => {
+    const preview: DataPreview = {
+      apiVersion: "v1",
+      projectId: "box-project",
+      columns: [{ field: "response", kind: "number", label: "Sample A", nullable: false, unit: null }],
+      rows: [
+        { rowId: 1, response: 1 },
+        { rowId: 2, response: 2 },
+        { rowId: 3, response: 3 },
+        { rowId: 4, response: 90 },
+      ],
+      sampled: true,
+      sampleStrategy: "evenly-distributed",
+      totalRows: 4_000,
+    };
+    const spec = { ...defaultChartSpec, type: "box" as const };
+    const analysis: ChartAnalysis = {
+      apiVersion: "v1", projectId: "box-project", recommendations: [], series: [],
+      preview: {
+        histograms: [],
+        boxes: [{ field: "response", label: "Sample A", minimum: 0, q1: 2, median: 4, q3: 6, maximum: 9, outliers: [] }],
+        heatmaps: [], surfaceDiagnostics: [], surfacePoints: [],
+      },
+    };
+
+    const served = buildChartOption({
+      analysis, excludedFindingIds: [], findings: [], preview, spec,
+    });
+    expect((served.series as Array<{ data: number[][] }>)[0].data).toEqual([[0, 2, 4, 6, 9]]);
+
+    // Without the API summary the browser must not compute a second quantile
+    // over the sampled preview rows; the Matplotlib export cannot reproduce it.
+    const unavailable = buildChartOption({
+      analysis: undefined, excludedFindingIds: [], findings: [], preview, spec,
+    });
+    expect((unavailable.series as Array<{ data: number[][] }>)[0].data).toEqual([]);
+    expect(unavailable.xAxis).toMatchObject({ data: [] });
+  });
 });

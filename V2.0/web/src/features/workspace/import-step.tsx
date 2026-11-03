@@ -1,4 +1,5 @@
 "use client";
+import { useDesktopDraft } from "./desktop-session";
 
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
@@ -31,7 +32,9 @@ import { useWorkspaceStore } from "./workspace-store";
 export function ImportStep({
   onContinue,
   onReimport,
+  active = true,
 }: {
+  active?: boolean;
   onContinue: () => void;
   onReimport: (sheetName: string | null, headerRow: number) => void;
 }) {
@@ -43,6 +46,10 @@ export function ImportStep({
   const updateChart = useWorkspaceStore((state) => state.updateChart);
   const [sheetName, setSheetName] = useState(file?.sheetName ?? "");
   const [headerRow, setHeaderRow] = useState(file?.headerRow ?? 1);
+  const desktopProject = useWorkspaceStore((state) => state.projectId);
+  const desktopRevision = useWorkspaceStore((state) => state.currentRevisionId);
+  const desktopLoadStatus = useWorkspaceStore((state) => state.loadStatus);
+  useDesktopDraft(`import:${desktopProject ?? "new"}`, desktopProject, { project: desktopRevision }, { sheetName, headerRow }, draft => { setSheetName(draft.sheetName); setHeaderRow(draft.headerRow); }, desktopLoadStatus === "ready" && !!preview && preview.projectId === desktopProject);
 
   if (!preview) {
     return (
@@ -82,7 +89,7 @@ export function ImportStep({
           variant="outlined"
         />
       </Stack>
-      <DataPreviewTable preview={preview} />
+      <DataPreviewTable active={active} preview={preview} />
     </Paper>
   );
 

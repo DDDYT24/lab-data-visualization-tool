@@ -1,11 +1,13 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$RefreshDependencies,
     [switch]$SkipOpenBrowser,
+    [switch]$CheckConfiguration,
+    [string]$DataDirectory,
     [ValidateRange(1, 65535)]
-    [int]$WebPort = 3000,
+    [int]$WebPort = 3001,
     [ValidateRange(1, 65535)]
-    [int]$ApiPort = 8000
+    [int]$ApiPort = 8001
 )
 
 Set-StrictMode -Version Latest
@@ -17,6 +19,62 @@ $apiRoot = Join-Path $repoRoot "V2.0\api"
 $webRoot = Join-Path $repoRoot "V2.0\web"
 $venvRoot = Join-Path $apiRoot ".venv"
 $venvPython = Join-Path $venvRoot "Scripts\python.exe"
+
+# This workspace is exclusively for V2.3 source development.
+if ($WebPort -eq $ApiPort -or $WebPort -in @(3000, 8000) -or $ApiPort -in @(3000, 8000)) {
+    throw 'V2.3 requires distinct ports; 3000 and 8000 are reserved for V2.2.'
+}
+$developmentDataRoot = Join-Path $apiRoot '.labviz\v23-development'
+if ($DataDirectory) {
+    $restoredParent = [IO.Path]::GetFullPath((Join-Path $apiRoot '.labviz\v23-restored')).TrimEnd('\') + '\'
+    $candidateDataRoot = [IO.Path]::GetFullPath($DataDirectory).TrimEnd('\')
+    if (-not $candidateDataRoot.StartsWith($restoredParent, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Only an independently restored V2.3 source copy can be selected.'
+    }
+    $restoreRecordPath = Join-Path $candidateDataRoot 'restore-manifest.json'
+    if (-not (Test-Path -LiteralPath $restoreRecordPath -PathType Leaf)) { throw 'Missing restore verification record.' }
+    $restoreRecord = Get-Content -LiteralPath $restoreRecordPath -Raw | ConvertFrom-Json
+    if ($restoreRecord.format -ne 'labviz-v23-restored-copy' -or $restoreRecord.schemaVersion -ne 1) {
+        throw 'Unsupported restore verification record.'
+    }
+    Push-Location $apiRoot
+    try {
+    $candidateResolved = & $venvPython -X utf8 -c "import sys; from pathlib import Path; from labviz_api.source_data import check_database,safe_files; p=Path(sys.argv[1]); base=Path(sys.argv[2]).resolve(); assert p.resolve().is_relative_to(base); check_database(p/'labviz.db'); assert (p/'objects').is_dir(); safe_files(p/'objects'); print(str(p.resolve()))" $candidateDataRoot $restoredParent.TrimEnd("\")
+    if ($LASTEXITCODE -ne 0) { throw 'Restored source data failed its startup integrity or path check.' }
+    $developmentDataRoot = $candidateResolved
+    } finally { Pop-Location }
+}
+$developmentEnvironment = @{
+    LABVIZ_DEVELOPMENT_LINE = '2.3'
+    LABVIZ_ENVIRONMENT = 'development'
+    LABVIZ_RUNTIME_ROLE = 'api'
+    LABVIZ_PERSISTENCE_BACKEND = 'sqlite'
+    LABVIZ_DATABASE_PATH = Join-Path $developmentDataRoot 'labviz.db'
+    LABVIZ_OBJECT_STORAGE_BACKEND = 'local'
+    LABVIZ_OBJECT_STORAGE_ROOT = Join-Path $developmentDataRoot 'objects'
+    LABVIZ_AUTH_MODE = 'console'
+    LABVIZ_COOKIE_SECURE = 'false'
+    LABVIZ_PUBLIC_WEB_URL = "http://127.0.0.1:$WebPort"
+    LABVIZ_ALLOWED_ORIGINS = "http://127.0.0.1:$WebPort,http://localhost:$WebPort"
+    NEXT_PUBLIC_LABVIZ_API_URL = '/api/v1'
+}
+if ($CheckConfiguration) {
+    [ordered]@{
+        developmentLine = '2.3'
+        webPort = $WebPort
+        apiPort = $ApiPort
+        database = $developmentEnvironment.LABVIZ_DATABASE_PATH
+        objects = $developmentEnvironment.LABVIZ_OBJECT_STORAGE_ROOT
+        apiProxyTarget = "http://127.0.0.1:$ApiPort"
+        browserApi = '/api/v1'
+        cookieSuffix = '_v23'
+        pythonEnvironment = $venvRoot
+        nodeModules = Join-Path $webRoot 'node_modules'
+        sessionRoot = Join-Path $env:LOCALAPPDATA 'LabVizV23Development\source-sessions'
+        productionPackagingEnabled = $false
+    } | ConvertTo-Json
+    return
+}
 
 function Test-PythonCandidate {
     param(
@@ -128,6 +186,11 @@ if (-not $ownsSessionMutex) {
             $session.apiPort -lt 1 -or $session.apiPort -gt 65535) {
             throw 'The existing LabViz session is invalid.'
         }
+        $sessionDataRoot = Join-Path $apiRoot '.labviz\v23-development'
+        if ($session.PSObject.Properties.Name -contains 'dataDirectory') { $sessionDataRoot = $session.dataDirectory }
+        if (-not [string]::Equals($sessionDataRoot, $developmentDataRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Stop the active source launcher before switching to a restored copy.'
+        }
         $null = Get-Process -Id $session.webPid -ErrorAction Stop
         $null = Get-Process -Id $session.apiPid -ErrorAction Stop
         $encrypted = [Convert]::FromBase64String($session.protectedKey)
@@ -197,6 +260,7 @@ try {
     } while (-not $webReady -and (Get-Date) -lt $deadline)
     if (-not $webReady) { throw "LabViz did not become ready at http://127.0.0.1:$WebPort/. Logs: $logRoot" }
     $sessionRecord = @{
+        dataDirectory = $developmentDataRoot
         webPort = $WebPort
         apiPort = $ApiPort
         webPid = $webProcess.Id

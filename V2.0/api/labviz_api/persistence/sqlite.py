@@ -2,15 +2,30 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from labviz_api.scientific_imports import scientific_module
+
+if TYPE_CHECKING:
+    import pandas as pd
+else:
+    pd = scientific_module("pandas")
+
 import hashlib
 import io
 import json
 from typing import Any
 from uuid import UUID, uuid4
 
-import pandas as pd
 from PIL import Image
 
+from labviz_api.cleaning_recipe import (
+    EXCLUDING_ACTIONS,
+    CleanedVersion,
+    FrozenRows,
+    recipe_from_sets,
+    recipe_sha256,
+)
 from labviz_api.persistence.exceptions import (
     IdempotencyConflict,
     PersistenceConflict,
@@ -19,9 +34,10 @@ from labviz_api.persistence.exceptions import (
 )
 from labviz_api.persistence_types import ProjectCreation
 from labviz_api.processing import (
-    apply_chart_decisions,
-    deserialize_dataframe,
-    serialize_dataframe,
+    cleaned_frame,
+    decided_mask,
+    freeze_decision_rows,
+    select_cleaned_rows,
 )
 from labviz_api.repository import ProjectRepository as SqliteReferenceRepository
 from labviz_api.repository import expires_in, iso_now
@@ -120,10 +136,13 @@ class SqliteProjectStore:
         quality: dict[str, Any],
         chart: dict[str, Any],
     ) -> None:
+        from labviz_api.parquet import write_parquet
+
+        units = {str(item["field"]): item.get("unit") for item in preview["columns"]}
         self.repository.complete_project(
             project_id=project_id,
             source=source,
-            data_blob=serialize_dataframe(frame),
+            dataset=write_parquet(frame, units=units),
             preview=preview,
             quality=quality,
             chart=chart,
@@ -136,18 +155,20 @@ class SqliteProjectStore:
             project["ready"] = bool(
                 project.get("preview_json")
                 and project.get("quality_json")
-                and project.get("data_blob")
+                and project.get("dataset_version_id")
             )
         return project
 
     def save_chart(self, project_id: str, chart: dict[str, Any]) -> str:
         return self.repository.save_chart(project_id, chart)
 
-    def load_quality_dataframe(self, project_id: str) -> pd.DataFrame:
-        payload = self.repository.get_data_blob(project_id)
-        if payload is None:
+    def load_quality_dataframe(self, project_id: str, *, touch: bool = True) -> pd.DataFrame:
+        from labviz_api.parquet import read_parquet
+
+        digest = self.repository.dataset_digest(project_id, touch=touch)
+        if digest is None:
             raise ValueError("Ready project data does not exist.")
-        return deserialize_dataframe(payload)
+        return read_parquet(self.repository.artifacts.read(digest), expected_sha256=digest)
 
     def save_quality_report(
         self,
@@ -160,33 +181,103 @@ class SqliteProjectStore:
         return self.repository.replace_quality(project_id, quality)
 
     def save_decisions(self, project_id: str, decisions: list[dict[str, str]]) -> str:
-        return self.repository.save_decisions(project_id, decisions)
+        from labviz_api.parquet import read_parquet, write_parquet
+
+        project = self.repository.get_project(project_id, touch=False)
+        version_id = project["dataset_version_id"] if project else None
+        if project is None or version_id is None or project["quality_json"] is None:
+            return self.repository.save_decisions(project_id, decisions)
+        parent = self.repository.dataset_version(version_id)
+        if parent is None:
+            raise ValueError("Ready project data does not exist.")
+        loaded: list[pd.DataFrame] = []
+
+        def parsed() -> pd.DataFrame:
+            if not loaded:
+                digest = parent["content_sha256"]
+                loaded.append(
+                    read_parquet(self.repository.artifacts.read(digest), expected_sha256=digest)
+                )
+            return loaded[0]
+
+        # Rows are detected once, when a finding first removes rows from this version;
+        # later saves keep what was frozen then, and readers never detect again.
+        frozen = self.repository.frozen_rows(project_id, version_id)
+        pending = [
+            item["findingId"]
+            for item in decisions
+            if item["action"] in EXCLUDING_ACTIONS and item["findingId"] not in frozen
+        ]
+        row_sets = (
+            {
+                finding: FrozenRows.of(rows)
+                for finding, rows in freeze_decision_rows(
+                    parsed(), json.loads(project["quality_json"]), pending
+                ).items()
+            }
+            if pending
+            else {}
+        )
+        cleaned = None
+        if any(item["action"] in EXCLUDING_ACTIONS for item in decisions):
+            rows = {**frozen, **row_sets}
+            recipe = recipe_from_sets(parent["content_sha256"], decisions, rows)
+            sha256 = recipe_sha256(recipe)
+            removed = decided_mask(decisions, rows, {"remove"}, parent["row_count"]).nonzero()[0]
+            dataset = None
+            # Undoing a decision returns to a version that already holds this table.
+            if len(removed) and not self.repository.has_recipe(project_id, sha256):
+                schema = json.loads(parent["schema_json"])
+                units = {str(column["name"]): column.get("unit") for column in schema["columns"]}
+                dataset = write_parquet(cleaned_frame(parsed(), removed), units=units)
+            cleaned = CleanedVersion(recipe, sha256, dataset)
+        return self.repository.save_decisions(
+            project_id,
+            decisions,
+            dataset_version_id=version_id,
+            row_sets=row_sets,
+            cleaned=cleaned,
+        )
 
     def get_decisions(self, project_id: str) -> list[dict[str, str]]:
         return self.repository.get_decisions(project_id)
 
-    def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame:
-        frame = self.load_quality_dataframe(project_id)
-        project = self.repository.get_project(project_id, touch=False)
+    def _decided_dataframe(
+        self, project_id: str, *, touch: bool = True, actions: set[str] | None = None
+    ) -> pd.DataFrame:
+        """Read the project's cleaned version and drop the rows ``actions`` leave out."""
+        from labviz_api.parquet import read_parquet
+
+        project = self.repository.get_project(project_id, touch=touch)
         if project is None or project["quality_json"] is None:
             raise ValueError("Ready project quality report does not exist.")
-        return apply_chart_decisions(
-            frame,
-            json.loads(project["quality_json"]),
-            self.get_decisions(project_id),
-            actions={"remove"},
+        decisions = self.get_decisions(project_id)
+        if project["cleaned_version_id"] is None:
+            if any(item["action"] in EXCLUDING_ACTIONS for item in decisions):
+                raise ValueError("Saved decisions have no cleaned dataset version.")
+            return self.load_quality_dataframe(project_id, touch=False)
+        parent = self.repository.dataset_version(project["dataset_version_id"])
+        cleaned = self.repository.dataset_version(project["cleaned_version_id"])
+        if parent is None or cleaned is None:
+            raise ValueError("Ready project data does not exist.")
+        frozen = self.repository.frozen_rows(project_id, parent["id"])
+        recipe = recipe_from_sets(parent["content_sha256"], decisions, frozen)
+        if recipe_sha256(recipe) != cleaned["recipe_sha256"]:
+            raise ValueError("The cleaned dataset version does not match the saved decisions.")
+        digest = cleaned["content_sha256"]
+        return select_cleaned_rows(
+            read_parquet(self.repository.artifacts.read(digest), expected_sha256=digest),
+            parent["row_count"],
+            decisions,
+            frozen,
+            actions or EXCLUDING_ACTIONS,
         )
 
+    def load_cleaned_dataframe(self, project_id: str) -> pd.DataFrame:
+        return self._decided_dataframe(project_id, actions={"remove"})
+
     def load_chart_dataframe(self, project_id: str) -> pd.DataFrame:
-        frame = self.load_quality_dataframe(project_id)
-        project = self.repository.get_project(project_id, touch=False)
-        if project is None or project["quality_json"] is None:
-            raise ValueError("Ready project quality report does not exist.")
-        return apply_chart_decisions(
-            frame,
-            json.loads(project["quality_json"]),
-            self.get_decisions(project_id),
-        )
+        return self._decided_dataframe(project_id)
 
     def save_project(
         self,
@@ -408,11 +499,7 @@ class SqliteProjectStore:
         if project is None:
             return None
         chart = json.loads(project["chart_json"])
-        frame = apply_chart_decisions(
-            deserialize_dataframe(bytes(project["data_blob"])),
-            json.loads(project["quality_json"]),
-            self.repository.get_decisions(project["id"]),
-        )
+        frame = self._decided_dataframe(project["id"], touch=False)
         formats = self.repository.latest_exports(project["id"])
         return (
             {

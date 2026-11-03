@@ -6,8 +6,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import secrets
 import time
+import weakref
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any, Final, Literal, cast
@@ -31,9 +33,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from . import __version__
 from .auth import AuthError, AuthRepository, AuthService, build_auth_service
 from .client_identity import ClientIdentityError, ClientIdentityResolver
 from .config import Settings
+from .installed_profile import DATA_EPOCH, cookie_suffix, environment_profile
+from .local_schema import prepare_local_database
 from .models import (
     AuthenticatedUser,
     AuthState,
@@ -94,12 +99,18 @@ from .processing import (
 )
 from .rate_limits import AuthRateLimitUnavailable
 from .repository import ProjectRepository
+from .research_routes import register_research_routes
 from .sample_catalog import SampleCatalogError, catalog_response, sample_payload
+from .scientific_imports import prefetch
+from .source_data_routes import register_source_data_routes
 
 LOGGER = logging.getLogger(__name__)
-SESSION_COOKIE = "labviz_session"
-GUEST_COOKIE = "labviz_guest"
-LOCAL_COOKIE = "labviz_local_session"
+# Cookies are shared across ports on the same host. Source development must
+# not replace a running V2.2 session; ordinary deployments retain their names.
+COOKIE_SUFFIX = cookie_suffix()
+SESSION_COOKIE = f"labviz_session{COOKIE_SUFFIX}"
+GUEST_COOKIE = f"labviz_guest{COOKIE_SUFFIX}"
+LOCAL_COOKIE = f"labviz_local_session{COOKIE_SUFFIX}"
 LOCAL_USER_ID = "local-profile"
 LOCAL_STORAGE_CONTRACT_VERSION: Final[Literal["local-storage-v1"]] = "local-storage-v1"
 API_PREFIX = "/api/v1"
@@ -251,7 +262,11 @@ def _require_ready_project(repository: ProjectReader, project_id: str) -> dict[s
         )
     ready = project.get("ready")
     if ready is None:
-        ready = bool(project["preview_json"] and project["quality_json"] and project["data_blob"])
+        ready = bool(
+            project["preview_json"]
+            and project["quality_json"]
+            and project.get("dataset_version_id")
+        )
     if not ready:
         raise ApiProblem(409, "processing-not-ready", "The uploaded file is still being processed.")
     return project
@@ -405,6 +420,7 @@ def _process_project(
             quality=quality,
             chart=chart,
         )
+        prefetch()
         if save_local:
             if not isinstance(repository, SqliteProjectStore):
                 raise RuntimeError("Local projects require SQLite persistence.")
@@ -441,9 +457,33 @@ def create_app(
     project_store: ProjectStore | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_env()
+    installed = environment_profile()
+    installed_guard = None
+    if installed:
+        if (
+            not resolved_settings.local_access_key
+            or resolved_settings.persistence_backend != "sqlite"
+            or resolved_settings.object_storage_backend != "local"
+            or resolved_settings.database_path.resolve() != installed.data / "labviz.db"
+            or resolved_settings.object_storage_root.resolve() != installed.data / "objects"
+        ):
+            raise ValueError("Installed settings must match the authenticated local profile.")
+        installed_guard = installed.lock()
+        if installed.epoch() > DATA_EPOCH:
+            installed_guard.close()
+            raise ValueError("Newer data requires a compatible runtime or a verified older backup.")
+        installed.set_epoch(DATA_EPOCH)
     resolved_repository = repository or ProjectRepository(
         resolved_settings.database_path, resolved_settings.project_ttl_seconds
     )
+    if resolved_settings.persistence_backend == "sqlite":
+        # Install every baseline table in a defined order and let Alembic own the
+        # changes after it, instead of patching columns from whichever constructor
+        # happened to run first.
+        prepare_local_database(
+            resolved_repository.database_path,
+            project_ttl_seconds=resolved_settings.project_ttl_seconds,
+        )
     resolved_project_store = project_store or build_project_store(
         resolved_settings, resolved_repository
     )
@@ -466,12 +506,22 @@ def create_app(
             yield
             return
         resolved_project_store.recover_stale_jobs()
+        figure_jobs = getattr(_app.state, "figure_jobs", None)
+        if figure_jobs is not None:
+            await asyncio.to_thread(figure_jobs.start)
 
         async def maintain_temporary_data() -> None:
             while True:
                 await asyncio.sleep(60)
-                await asyncio.to_thread(resolved_project_store.cleanup_expired)
-                await asyncio.to_thread(resolved_project_store.recover_stale_jobs)
+                activity = getattr(_app.state, "desktop_activity", None)
+                if activity is None:
+                    await asyncio.to_thread(resolved_project_store.cleanup_expired)
+                    await asyncio.to_thread(resolved_project_store.recover_stale_jobs)
+                else:
+                    with activity.operation() as admitted:
+                        if admitted:
+                            await asyncio.to_thread(resolved_project_store.cleanup_expired)
+                            await asyncio.to_thread(resolved_project_store.recover_stale_jobs)
 
         maintenance = asyncio.create_task(maintain_temporary_data())
         try:
@@ -480,10 +530,14 @@ def create_app(
             maintenance.cancel()
             with suppress(asyncio.CancelledError):
                 await maintenance
+            if figure_jobs is not None:
+                await asyncio.to_thread(figure_jobs.close)
+            if installed_guard is not None:
+                installed_guard.close()
 
     app = FastAPI(
         title="LabViz API",
-        version="2.2.0-dev",
+        version=__version__,
         description="Processing, quality review, chart export, history, sharing, and auth.",
         lifespan=lifespan,
     )
@@ -492,6 +546,8 @@ def create_app(
     app.state.project_store = resolved_project_store
     app.state.auth_repository = resolved_auth_repository
     app.state.auth_service = resolved_auth
+    if installed_guard is not None:
+        weakref.finalize(app, installed_guard.close)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(resolved_settings.allowed_origins),
@@ -656,6 +712,20 @@ def create_app(
             path="/",
         )
         return {"ready": True}
+
+    @app.get(f"{API_PREFIX}/local/instance")
+    def installed_instance(
+        local_key: str | None = Header(default=None, alias="X-LabViz-Local-Key"),
+    ) -> dict[str, Any]:
+        if (
+            not installed
+            or not local_key
+            or not secrets.compare_digest(local_key, resolved_settings.local_access_key or "")
+        ):
+            raise ApiProblem(403, "local-access-denied", "The local launch credential is invalid.")
+        from .installed_profile import APP_ID
+
+        return {"appId": APP_ID, "profileId": installed.identifier, "pid": os.getpid()}
 
     @app.post(
         f"{API_PREFIX}/projects",
@@ -963,6 +1033,9 @@ def create_app(
             owner_user_id=user["id"],
             guest_token_digest=_guest_digest(guest_token) if guest_token else None,
         )
+        clear_research = getattr(app.state, "clear_research_caches", None)
+        if clear_research is not None:
+            clear_research(project_id)
         return Response(status_code=204)
 
     @app.post(
@@ -1646,6 +1719,7 @@ def create_app(
         repository: ProjectStore = Depends(get_project_store),
     ) -> ChartAnalysis:
         _require_project_access(repository, project_id, user, guest_token, ready=True)
+        prefetch()
         try:
             frame = repository.load_chart_dataframe(project_id)
             analysis = analyze_chart(frame, body.chart)
@@ -1717,6 +1791,17 @@ def create_app(
         result.headers["Referrer-Policy"] = "no-referrer"
         result.headers["Cache-Control"] = "no-store"
         return result
+
+    register_source_data_routes(app, resolved_settings, optional_user, LOCAL_USER_ID)
+
+    register_research_routes(
+        app,
+        resolved_settings,
+        get_project_store,
+        optional_user,
+        _require_project_access,
+        GUEST_COOKIE,
+    )
 
     return app
 

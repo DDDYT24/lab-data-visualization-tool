@@ -1,0 +1,20 @@
+{
+  "format": "labviz-desktop-host-contract-v1",
+  "appId": "org.labviz.desktop.preview",
+  "sourceCommit": "b587db848ba5f1930657d5a316e0160c71864ead",
+  "profileDirectory": "LocalAppData/LabVizDesktopPreview",
+  "webviewDirectory": "profileRoot/webview",
+  "closeBehavior": "hide-existing-window-and-retain-services",
+  "secondLaunch": "wake-existing-instance-without-new-services",
+  "explicitExit": "confirm-unsaved-work-loss-then-stop-owned-controller",
+  "startupDeadlineSeconds": 180,
+  "startupFailure": "retain-startup-window-with-retry-logs-exit",
+  "serviceFailure": "retain-editing-window-and-show-connection-lost-title",
+  "controllerLoss": "owned-job-closes-descendants",
+  "readiness": ["loopback-url", "candidate-id", "profile-id", "owned-launcher-pid", "existing-api-instance-identity-check"],
+  "adapter": {"metadata": "window.labvizDesktop", "apiBase": "current-origin/api/v1", "nativeAuthority": "no-application-invoke-commands", "externalSchemes": ["http", "https", "mailto"], "internalNewWindow": "navigate-existing-window"},
+  "preferences": {"storage": "profileRoot/preferences.json", "write": "atomic-replace-and-fsync", "transport": "loopback-exact-origin-with-random-token", "allowedKeys": ["labviz:user-preferences:v1", "labviz:v23:interface-mode:v1"], "locales": ["en", "zh"], "draftsIncluded": false},
+  "automaticSuspension": false,
+  "unsavedDraftRecovery": false,
+  "hostPrivateCommitBudgetMiB": 32
+}

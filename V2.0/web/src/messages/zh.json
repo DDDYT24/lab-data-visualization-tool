@@ -693,7 +693,8 @@
     "saveFeedback": "保存诊断信息",
     "openIssue": "打开 GitHub issue",
     "copiedFeedback": "诊断信息已复制到剪贴板。",
-    "savedFeedback": "诊断信息已保存为本地文本文件。",
+    "savedFeedback": "已请求下载。请在保存对话框中选择位置，保存诊断 JSON 文件。",
+    "copyFeedbackFailed": "无法访问剪贴板，请选中上方诊断文本手动复制。",
     "externalWarning": "GitHub 是外部网站。打开前请检查诊断文字。继续吗？",
     "feedbackIssueTitle": "LabViz 反馈"
   },

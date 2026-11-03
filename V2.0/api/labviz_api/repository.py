@@ -4,15 +4,22 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from functools import cached_property
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
+from labviz_api.artifacts import MEDIA_TYPES, ArtifactStore, local_artifact_store, remember, sweep
 from labviz_api.persistence_types import ProjectCreation
 from labviz_api.rate_limits import AuthRateLimitUnavailable, auth_bucket_specs, fixed_window
+from labviz_api.research_rows import copy_rows
+
+if TYPE_CHECKING:
+    from labviz_api.cleaning_recipe import CleanedVersion, FrozenRows
+    from labviz_api.parquet import ParquetArtifact
 
 
 def utc_now() -> datetime:
@@ -39,6 +46,10 @@ class ProjectRepository:
         self.project_ttl_seconds = project_ttl_seconds
         database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
+
+    @cached_property
+    def artifacts(self) -> ArtifactStore:
+        return local_artifact_store(self.database_path)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -356,6 +367,8 @@ class ProjectRepository:
                 "DELETE FROM auth_requests WHERE requested_at < ?", (request_cutoff,)
             )
             connection.execute("DELETE FROM auth_rate_limit_buckets WHERE expires_at <= ?", (now,))
+        # Expired exports and deleted projects leave their artifacts unreferenced.
+        sweep(self.database_path, self.artifacts)
 
     def create_project(
         self,
@@ -678,22 +691,47 @@ class ProjectRepository:
         *,
         project_id: str,
         source: dict[str, Any],
-        data_blob: bytes,
+        dataset: ParquetArtifact,
         preview: dict[str, Any],
         quality: dict[str, Any],
         chart: dict[str, Any],
     ) -> None:
+        version_id = uuid4().hex
         with self._connect() as connection:
+            remember(connection, self.artifacts, dataset.payload, media_type=MEDIA_TYPES["parquet"])
+            connection.execute(
+                """
+                INSERT INTO dataset_versions (
+                    id, project_id, parent_version_id, version_number, kind, content_sha256,
+                    schema_json, provenance_json, row_count, column_count, created_at
+                )
+                SELECT ?, ?, NULL, COALESCE(MAX(version_number), 0) + 1, 'parsed',
+                       ?, ?, ?, ?, ?, ?
+                FROM dataset_versions WHERE project_id = ?
+                """,
+                (
+                    version_id,
+                    project_id,
+                    dataset.sha256,
+                    json.dumps(dataset.schema_document, sort_keys=True),
+                    json.dumps(dataset.provenance, sort_keys=True),
+                    dataset.row_count,
+                    dataset.column_count,
+                    iso_now(),
+                    project_id,
+                ),
+            )
             connection.execute(
                 """
                 UPDATE projects
-                SET source_json = ?, data_blob = ?, preview_json = ?, quality_json = ?,
-                    chart_json = ?, updated_at = ?, expires_at = ?
+                SET source_json = ?, dataset_version_id = ?, cleaned_version_id = NULL,
+                    preview_json = ?, quality_json = ?, chart_json = ?, updated_at = ?,
+                    expires_at = ?
                 WHERE id = ?
                 """,
                 (
                     json.dumps(source, ensure_ascii=False),
-                    data_blob,
+                    version_id,
                     json.dumps(preview, ensure_ascii=False),
                     json.dumps(quality, ensure_ascii=False),
                     json.dumps(chart, ensure_ascii=False),
@@ -702,6 +740,9 @@ class ProjectRepository:
                     project_id,
                 ),
             )
+            # Decisions name findings of the replaced report and froze rows of the replaced
+            # version, so they go with both, as they do when the report is rebuilt.
+            connection.execute("DELETE FROM decisions WHERE project_id = ?", (project_id,))
 
     def _touch(self, connection: sqlite3.Connection, project_id: str) -> None:
         connection.execute(
@@ -762,25 +803,47 @@ class ProjectRepository:
             return None
         return cast(dict[str, Any], json.loads(project[column]))
 
-    def get_data_blob(self, project_id: str) -> bytes | None:
-        project = self.get_project(project_id)
-        if not project or project["data_blob"] is None:
+    def dataset_digest(self, project_id: str, *, touch: bool = True) -> str | None:
+        """Return the artifact digest of the project's current dataset version."""
+        project = self.get_project(project_id, touch=touch)
+        if not project or project["dataset_version_id"] is None:
             return None
-        return bytes(project["data_blob"])
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT content_sha256 FROM dataset_versions WHERE id = ?",
+                (project["dataset_version_id"],),
+            ).fetchone()
+        return str(row[0]) if row else None
 
     def replace_quality(self, project_id: str, quality: dict[str, Any]) -> str:
         updated_at = iso_now()
         with self._connect() as connection:
             self._touch(connection, project_id)
             connection.execute(
-                "UPDATE projects SET quality_json = ?, updated_at = ? WHERE id = ?",
+                "UPDATE projects SET quality_json = ?, cleaned_version_id = NULL, updated_at = ? "
+                "WHERE id = ?",
                 (json.dumps(quality, ensure_ascii=False), updated_at, project_id),
             )
             connection.execute("DELETE FROM decisions WHERE project_id = ?", (project_id,))
             connection.execute("DELETE FROM exports WHERE project_id = ?", (project_id,))
         return updated_at
 
-    def save_decisions(self, project_id: str, decisions: Iterable[dict[str, str]]) -> str:
+    def save_decisions(
+        self,
+        project_id: str,
+        decisions: Iterable[dict[str, str]],
+        *,
+        dataset_version_id: str | None = None,
+        row_sets: Mapping[str, FrozenRows] | None = None,
+        cleaned: CleanedVersion | None = None,
+    ) -> str:
+        """Replace the project's decisions.
+
+        ``row_sets`` freezes the rows each named finding removes, as positions in
+        ``dataset_version_id``. A frozen set stays while its decision keeps removing rows,
+        and is dropped with the decision or when it is set to ``ignore``. The project then
+        reads ``cleaned``, or its parsed version when no decision drops rows.
+        """
         now = iso_now()
         decision_rows = [(project_id, item["findingId"], item["action"], now) for item in decisions]
         with self._connect() as connection:
@@ -794,7 +857,12 @@ class ProjectRepository:
             ).fetchall()
             previous = [(row["finding_id"], row["action"]) for row in previous_rows]
             replacement = sorted((row[1], row[2]) for row in decision_rows)
-            connection.execute("DELETE FROM decisions WHERE project_id = ?", (project_id,))
+            kept = {row[1] for row in decision_rows}
+            # Deleting a decision cascades to its frozen rows, so only the dropped ones go.
+            connection.executemany(
+                "DELETE FROM decisions WHERE project_id = ? AND finding_id = ?",
+                [(project_id, finding) for finding, _ in previous if finding not in kept],
+            )
             connection.executemany(
                 """
                 INSERT INTO decisions (project_id, finding_id, action, updated_at)
@@ -804,9 +872,136 @@ class ProjectRepository:
                 """,
                 decision_rows,
             )
+            connection.executemany(
+                "DELETE FROM decision_row_sets WHERE project_id = ? AND finding_id = ?",
+                [(project_id, row[1]) for row in decision_rows if row[2] == "ignore"],
+            )
+            for finding, rows in (row_sets or {}).items():
+                if dataset_version_id is None or finding not in kept:
+                    continue
+                connection.execute(
+                    "DELETE FROM decision_row_sets WHERE project_id = ? AND finding_id = ?",
+                    (project_id, finding),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO decision_row_sets (
+                        project_id, finding_id, dataset_version_id, row_count, frozen_at,
+                        rows_sha256, rows_packed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project_id,
+                        finding,
+                        dataset_version_id,
+                        rows.row_count,
+                        now,
+                        rows.sha256,
+                        rows.packed,
+                    ),
+                )
+            cleaned_id = (
+                None
+                if cleaned is None or dataset_version_id is None
+                else self._cleaned_version(connection, project_id, dataset_version_id, cleaned)
+            )
+            connection.execute(
+                "UPDATE projects SET cleaned_version_id = ? WHERE id = ?", (cleaned_id, project_id)
+            )
             if previous != replacement:
                 connection.execute("DELETE FROM exports WHERE project_id = ?", (project_id,))
         return now
+
+    def _cleaned_version(
+        self,
+        connection: sqlite3.Connection,
+        project_id: str,
+        parent_id: str,
+        cleaned: CleanedVersion,
+    ) -> str:
+        """Return the project's version for this recipe, writing it the first time.
+
+        Undoing a decision returns to an earlier recipe, and so to the version it wrote.
+        """
+        existing = connection.execute(
+            "SELECT id FROM dataset_versions WHERE project_id = ? AND recipe_sha256 = ?",
+            (project_id, cleaned.sha256),
+        ).fetchone()
+        if existing:
+            return str(existing[0])
+        if cleaned.dataset is None:
+            parent = connection.execute(
+                "SELECT * FROM dataset_versions WHERE id = ?", (parent_id,)
+            ).fetchone()
+            digest = str(parent["content_sha256"])
+            schema_json = str(parent["schema_json"])
+            provenance = json.loads(parent["provenance_json"])
+            row_count = int(parent["row_count"])
+            column_count = int(parent["column_count"])
+        else:
+            dataset = cleaned.dataset
+            remember(connection, self.artifacts, dataset.payload, media_type=MEDIA_TYPES["parquet"])
+            digest = dataset.sha256
+            schema_json = json.dumps(dataset.schema_document, sort_keys=True)
+            provenance = dict(dataset.provenance)
+            row_count = dataset.row_count
+            column_count = dataset.column_count
+        version_id = uuid4().hex
+        connection.execute(
+            """
+            INSERT INTO dataset_versions (
+                id, project_id, parent_version_id, version_number, kind, content_sha256,
+                schema_json, provenance_json, row_count, column_count, created_at,
+                recipe_sha256
+            )
+            SELECT ?, ?, ?, COALESCE(MAX(version_number), 0) + 1, 'cleaned',
+                   ?, ?, ?, ?, ?, ?, ?
+            FROM dataset_versions WHERE project_id = ?
+            """,
+            (
+                version_id,
+                project_id,
+                parent_id,
+                digest,
+                schema_json,
+                json.dumps({**provenance, "recipe": cleaned.recipe}, sort_keys=True),
+                row_count,
+                column_count,
+                iso_now(),
+                cleaned.sha256,
+                project_id,
+            ),
+        )
+        return version_id
+
+    def has_recipe(self, project_id: str, recipe_sha256: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM dataset_versions WHERE project_id = ? AND recipe_sha256 = ?",
+                (project_id, recipe_sha256),
+            ).fetchone()
+        return row is not None
+
+    def dataset_version(self, version_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM dataset_versions WHERE id = ?", (version_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def frozen_rows(self, project_id: str, dataset_version_id: str) -> dict[str, FrozenRows]:
+        """Return the rows each finding froze in ``dataset_version_id``, still packed."""
+        from labviz_api.cleaning_recipe import FrozenRows
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT finding_id, row_count, rows_sha256, rows_packed FROM decision_row_sets
+                WHERE project_id = ? AND dataset_version_id = ?
+                """,
+                (project_id, dataset_version_id),
+            ).fetchall()
+        return {str(row[0]): FrozenRows(int(row[1]), str(row[2]), bytes(row[3])) for row in rows}
 
     def get_decisions(self, project_id: str) -> list[dict[str, str]]:
         with self._connect() as connection:
@@ -854,7 +1049,7 @@ class ProjectRepository:
                 SELECT projects.*,
                     (SELECT id FROM figure_snapshots
                      WHERE project_id = projects.id AND format = 'png'
-                       AND thumbnail_png IS NOT NULL
+                       AND thumbnail_sha256 IS NOT NULL
                      ORDER BY created_at DESC LIMIT 1) AS thumbnail_snapshot_id,
                     (SELECT COUNT(*) FROM figure_snapshots
                      WHERE project_id = projects.id) AS figure_snapshot_count,
@@ -982,8 +1177,8 @@ class ProjectRepository:
                 INSERT INTO projects (
                     id, title, description, current_revision_id, source_json, storage_mode,
                     owner_user_id, expires_at, updated_at, chart_json, preview_json,
-                    quality_json, data_blob, experiment_run_id
-                ) VALUES (?, ?, ?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?, ?)
+                    quality_json, experiment_run_id
+                ) VALUES (?, ?, ?, ?, ?, 'saved-cloud', ?, NULL, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -996,10 +1191,62 @@ class ProjectRepository:
                     source["chart_json"],
                     source["preview_json"],
                     source["quality_json"],
-                    source["data_blob"],
                     source["experiment_run_id"],
                 ),
             )
+            # Versions are immutable, so the copy shares their bytes and only owns new rows.
+            versions = connection.execute(
+                "SELECT * FROM dataset_versions WHERE project_id = ? ORDER BY version_number",
+                (source_project_id,),
+            ).fetchall()
+            version_ids = {row["id"]: uuid4().hex for row in versions}
+            for row in versions:
+                parent = row["parent_version_id"]
+                connection.execute(
+                    """
+                    INSERT INTO dataset_versions (
+                        id, project_id, parent_version_id, version_number, kind,
+                        content_sha256, schema_json, provenance_json, row_count, column_count,
+                        created_at, namespace, recipe_sha256
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        version_ids[row["id"]],
+                        project_id,
+                        version_ids[parent] if parent else None,
+                        row["version_number"],
+                        row["kind"],
+                        row["content_sha256"],
+                        row["schema_json"],
+                        row["provenance_json"],
+                        row["row_count"],
+                        row["column_count"],
+                        row["created_at"],
+                        row["namespace"],
+                        row["recipe_sha256"],
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO dataset_sources (
+                        dataset_version_id, ordinal, source_id, name, sha256, byte_size
+                    )
+                    SELECT ?, ordinal, source_id, name, sha256, byte_size
+                    FROM dataset_sources WHERE dataset_version_id = ?
+                    """,
+                    (version_ids[row["id"]], row["id"]),
+                )
+            if source["dataset_version_id"]:
+                cleaned_id = source["cleaned_version_id"]
+                connection.execute(
+                    "UPDATE projects SET dataset_version_id = ?, cleaned_version_id = ? "
+                    "WHERE id = ?",
+                    (
+                        version_ids[source["dataset_version_id"]],
+                        version_ids[cleaned_id] if cleaned_id else None,
+                        project_id,
+                    ),
+                )
             connection.execute(
                 """
                 INSERT INTO project_description_revisions (
@@ -1023,6 +1270,238 @@ class ProjectRepository:
                 """,
                 (project_id, now, source_project_id),
             )
+            frozen_sets = connection.execute(
+                "SELECT * FROM decision_row_sets WHERE project_id = ?", (source_project_id,)
+            ).fetchall()
+            for frozen_set in frozen_sets:
+                connection.execute(
+                    """
+                    INSERT INTO decision_row_sets (
+                        project_id, finding_id, dataset_version_id, row_count, frozen_at,
+                        migrated_from, rows_sha256, rows_packed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project_id,
+                        frozen_set["finding_id"],
+                        version_ids[frozen_set["dataset_version_id"]],
+                        frozen_set["row_count"],
+                        frozen_set["frozen_at"],
+                        frozen_set["migrated_from"],
+                        frozen_set["rows_sha256"],
+                        frozen_set["rows_packed"],
+                    ),
+                )
+
+            # Copy applied research history atomically with the project. Observation/source
+            # identities describe the same acquired data; only revision ownership changes.
+            research_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_revisions'"
+            ).fetchone()
+            if research_exists:
+                research = connection.execute(
+                    "SELECT * FROM research_revisions WHERE project_id=?", (source_project_id,)
+                ).fetchall()
+                revision_ids = {row["id"]: uuid4().hex for row in research}
+                for row in research:
+                    connection.execute(
+                        "INSERT INTO research_revisions "
+                        "(id,project_id,parent_id,dataset_version_id,plan_json,created_at) "
+                        "VALUES (?,?,?,?,?,?)",
+                        (
+                            revision_ids[row["id"]],
+                            project_id,
+                            revision_ids[row["parent_id"]] if row["parent_id"] else None,
+                            version_ids[row["dataset_version_id"]],
+                            row["plan_json"],
+                            now,
+                        ),
+                    )
+                    connection.execute(
+                        "INSERT INTO research_prepared (revision_id,prepared_json) "
+                        "SELECT ?,prepared_json FROM research_prepared WHERE revision_id=?",
+                        (revision_ids[row["id"]], row["id"]),
+                    )
+                    copy_rows(connection, row["id"], revision_ids[row["id"]])
+                head = connection.execute(
+                    "SELECT * FROM research_heads WHERE project_id=?", (source_project_id,)
+                ).fetchone()
+                if head:
+                    connection.execute(
+                        "INSERT INTO research_heads (project_id,revision_id,future_json) "
+                        "VALUES (?,?,?)",
+                        (
+                            project_id,
+                            revision_ids[head["revision_id"]],
+                            json.dumps(
+                                [revision_ids[key] for key in json.loads(head["future_json"])]
+                            ),
+                        ),
+                    )
+
+                charts_exist = connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_charts'"
+                ).fetchone()
+                if charts_exist:
+                    chart_ids: dict[str, str] = {}
+                    for chart in connection.execute(
+                        "SELECT * FROM research_charts WHERE project_id=?", (source_project_id,)
+                    ).fetchall():
+                        chart_ids[chart["id"]] = uuid4().hex
+                        connection.execute(
+                            "INSERT INTO research_charts "
+                            "(id,project_id,revision_id,result_json,"
+                            "svg_sha256,png_sha256,pdf_sha256,created_at) "
+                            "VALUES (?,?,?,?,?,?,?,?)",
+                            (
+                                chart_ids[chart["id"]],
+                                project_id,
+                                revision_ids[chart["revision_id"]],
+                                chart["result_json"],
+                                chart["svg_sha256"],
+                                chart["png_sha256"],
+                                chart["pdf_sha256"],
+                                now,
+                            ),
+                        )
+
+                    boards_exist = connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='research_figure_boards'"
+                    ).fetchone()
+                    if boards_exist:
+                        sources_exist = connection.execute(
+                            "SELECT 1 FROM sqlite_master WHERE name='research_figure_sources'"
+                        ).fetchone()
+                        if sources_exist:
+                            for source_panel in connection.execute(
+                                "SELECT * FROM research_figure_sources WHERE project_id=?",
+                                (source_project_id,),
+                            ).fetchall():
+                                chart_ids[source_panel["id"]] = uuid4().hex
+                                connection.execute(
+                                    "INSERT INTO research_figure_sources "
+                                    "(id,project_id,result_json,created_at) "
+                                    "VALUES (?,?,?,?)",
+                                    (
+                                        chart_ids[source_panel["id"]],
+                                        project_id,
+                                        source_panel["result_json"],
+                                        now,
+                                    ),
+                                )
+                        headers_exist = connection.execute(
+                            "SELECT 1 FROM sqlite_master WHERE name='research_panel_headers'"
+                        ).fetchone()
+                        if headers_exist:
+                            for old_id, new_id in chart_ids.items():
+                                header = connection.execute(
+                                    "SELECT header_json FROM research_panel_headers WHERE id=?",
+                                    (old_id,),
+                                ).fetchone()
+                                if header:
+                                    data = json.loads(header["header_json"])
+                                    data["revisionId"] = revision_ids.get(
+                                        data["revisionId"], data["revisionId"]
+                                    )
+                                    connection.execute(
+                                        "INSERT INTO research_panel_headers "
+                                        "(id,project_id,header_json) VALUES (?,?,?)",
+                                        (new_id, project_id, json.dumps(data)),
+                                    )
+                        board_ids: dict[str, str] = {}
+                        for board in connection.execute(
+                            "SELECT * FROM research_figure_boards WHERE project_id=?",
+                            (source_project_id,),
+                        ).fetchall():
+                            board_spec = json.loads(board["spec_json"])
+                            board_spec["panelChartIds"] = [
+                                chart_ids[key] for key in board_spec["panelChartIds"]
+                            ]
+                            new_board_id = uuid4().hex
+                            board_ids[board["id"]] = new_board_id
+                            connection.execute(
+                                "INSERT INTO research_figure_boards "
+                                "(id,project_id,spec_json,created_at) VALUES (?,?,?,?)",
+                                (new_board_id, project_id, json.dumps(board_spec), now),
+                            )
+                            if sources_exist:
+                                connection.execute(
+                                    "INSERT INTO research_figure_artifacts "
+                                    "(board_id,svg_sha256,png_sha256,pdf_sha256,scene_json) "
+                                    "SELECT ?,svg_sha256,png_sha256,pdf_sha256,scene_json "
+                                    "FROM research_figure_artifacts WHERE board_id=?",
+                                    (new_board_id, board["id"]),
+                                )
+
+                            jobs_exist = connection.execute(
+                                "SELECT 1 FROM sqlite_master WHERE name='research_figure_jobs'"
+                            ).fetchone()
+                            job = (
+                                connection.execute(
+                                    "SELECT * FROM research_figure_jobs WHERE board_id=?",
+                                    (board["id"],),
+                                ).fetchone()
+                                if jobs_exist
+                                else None
+                            )
+                            if job:
+                                panels = json.loads(job["panels_json"])
+                                for panel in panels:
+                                    panel["chartId"] = chart_ids[panel["chartId"]]
+                                    panel["revisionId"] = revision_ids.get(
+                                        panel["revisionId"], panel["revisionId"]
+                                    )
+                                completed = job["state"] == "ready"
+                                connection.execute(
+                                    "INSERT INTO research_figure_jobs "
+                                    "(board_id,state,panels_json,error) "
+                                    "VALUES (?,?,?,?)",
+                                    (
+                                        new_board_id,
+                                        "ready" if completed else "failed",
+                                        json.dumps(panels),
+                                        None
+                                        if completed
+                                        else "Copied layout saved; retry generation.",
+                                    ),
+                                )
+
+                        reuse_exists = connection.execute(
+                            "SELECT 1 FROM sqlite_master WHERE type='table' "
+                            "AND name='research_templates'"
+                        ).fetchone()
+                        if reuse_exists:
+                            for template in connection.execute(
+                                "SELECT * FROM research_templates WHERE project_id=?",
+                                (source_project_id,),
+                            ).fetchall():
+                                connection.execute(
+                                    "INSERT INTO research_templates "
+                                    "(id,project_id,spec_json,created_at) "
+                                    "VALUES (?,?,?,?)",
+                                    (uuid4().hex, project_id, template["spec_json"], now),
+                                )
+                            for output in connection.execute(
+                                "SELECT * FROM research_outputs WHERE project_id=?",
+                                (source_project_id,),
+                            ).fetchall():
+                                # Keep the frozen archive and its original provenance byte-for-byte.
+                                connection.execute(
+                                    "INSERT INTO research_outputs "
+                                    "(id,project_id,board_id,manifest_json,notes_json,"
+                                    "sha256,created_at) "
+                                    "VALUES (?,?,?,?,?,?,?)",
+                                    (
+                                        uuid4().hex,
+                                        project_id,
+                                        board_ids[output["board_id"]],
+                                        output["manifest_json"],
+                                        output["notes_json"],
+                                        output["sha256"],
+                                        now,
+                                    ),
+                                )
 
     def delete_project(self, project_id: str) -> bool:
         with self._connect() as connection:
@@ -1139,18 +1618,21 @@ class ProjectRepository:
     ) -> None:
         with self._connect() as connection:
             self._touch(connection, project_id)
+            digest = remember(
+                connection, self.artifacts, payload, media_type=MEDIA_TYPES[format_name]
+            )
             connection.execute(
                 """
                 INSERT INTO exports (
-                    id, project_id, format, status, payload, expires_at, message, created_at,
-                    experiment_json
+                    id, project_id, format, status, payload_sha256, expires_at, message,
+                    created_at, experiment_json
                 ) VALUES (?, ?, ?, 'ready', ?, ?, ?, ?, ?)
                 """,
                 (
                     export_id,
                     project_id,
                     format_name,
-                    payload,
+                    digest,
                     expires_at,
                     message,
                     iso_now(),
@@ -1158,12 +1640,13 @@ class ProjectRepository:
                 ),
             )
             if figure_snapshot is not None:
+                thumbnail = figure_snapshot.get("thumbnail_png")
                 connection.execute(
                     """
                     INSERT INTO figure_snapshots (
-                        id, project_id, title, format, chart_json, payload, thumbnail_png,
+                        id, project_id, title, format, chart_json, thumbnail_sha256,
                         sha256, byte_size, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         figure_snapshot["id"],
@@ -1171,9 +1654,13 @@ class ProjectRepository:
                         figure_snapshot["title"],
                         format_name,
                         figure_snapshot["chart_json"],
-                        payload,
-                        figure_snapshot.get("thumbnail_png"),
-                        figure_snapshot["sha256"],
+                        (
+                            remember(connection, self.artifacts, thumbnail, media_type="image/png")
+                            if thumbnail
+                            else None
+                        ),
+                        # The snapshot shares the export's bytes; its digest is the reference.
+                        digest,
                         len(payload),
                         iso_now(),
                     ),
@@ -1184,7 +1671,7 @@ class ProjectRepository:
             rows = connection.execute(
                 """
                 SELECT id, project_id, title, format, sha256, byte_size, created_at,
-                    thumbnail_png IS NOT NULL AS has_thumbnail
+                    thumbnail_sha256 IS NOT NULL AS has_thumbnail
                 FROM figure_snapshots
                 WHERE project_id = ?
                 ORDER BY created_at DESC, id DESC
@@ -1199,7 +1686,13 @@ class ProjectRepository:
                 "SELECT * FROM figure_snapshots WHERE project_id = ? AND id = ?",
                 (project_id, snapshot_id),
             ).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        snapshot = dict(row)
+        snapshot["payload"] = self.artifacts.read(snapshot["sha256"])
+        thumbnail = snapshot.pop("thumbnail_sha256")
+        snapshot["thumbnail_png"] = self.artifacts.read(thumbnail) if thumbnail else None
+        return snapshot
 
     def delete_figure_snapshot(self, project_id: str, snapshot_id: str) -> bool:
         with self._connect() as connection:
@@ -1213,7 +1706,12 @@ class ProjectRepository:
         self.cleanup_expired()
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM exports WHERE id = ?", (export_id,)).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        export = dict(row)
+        digest = export.pop("payload_sha256")
+        export["payload"] = self.artifacts.read(digest) if digest else None
+        return export
 
     def latest_exports(self, project_id: str) -> dict[str, str]:
         self.cleanup_expired()
