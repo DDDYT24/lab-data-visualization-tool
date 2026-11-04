@@ -19,12 +19,33 @@ from time import perf_counter
 from typing import Any, cast
 
 from .models import ChartSpec
-from .plan_classic import build_classic_plan
-from .processing import _cjk_font_info, _contains_cjk
+from .plan_classic import SERIES_KINDS, build_classic_plan
+from .processing import _cjk_font_info, _contains_cjk, series_rows
 from .processing import render_chart as legacy_render
 from .render_plan import build_research_plan, merge_axis, plan_bytes, plan_hash
 from .research_chart_render import _RENDER_LOCK, COLORS, draw_plan, rasterize_points
 from .research_preparation import PreparationError
+
+
+def frame_rows(panel: dict[str, Any], chart: ChartSpec, frame: Any) -> Any:
+    """Every row of a captured panel, or None when its frozen frame cannot supply them.
+
+    The frozen frame stores dates as numbers and floats to ten places. A panel whose frame no
+    longer holds the x values it was captured with keeps its frozen reduced points.
+    """
+    if chart.type not in SERIES_KINDS:
+        return None
+
+    def key(x: Any) -> Any:
+        return round(x, 9) if isinstance(x, float) else x
+
+    rows = series_rows(frame, chart)
+    analyses = panel["analysis"]["series"]
+    matches = len(rows) == len(analyses) and all(
+        {key(p["x"]) for p in analysis["points"]} <= {key(p["x"]) for p in series}
+        for analysis, series in zip(analyses, rows, strict=False)
+    )
+    return rows if matches else None
 
 
 def render_board(
@@ -54,8 +75,10 @@ def render_board(
             key=lambda x: (x is not None, x or ""),
         )
         colors = {label: palette[i % len(palette)] for i, label in enumerate(labels)}
-        # Line, scatter and correlation panels have no plan yet.
+        # Correlation panels have no plan yet.
         plans: list[dict[str, Any] | None] = [None] * count
+        # Text x values sit at numeric positions, so hit targets need the same mapping.
+        x_positions: list[dict[str, float]] = [{} for _ in range(count)]
         for i, (panel, ax) in enumerate(zip(sources, axes, strict=True)):
             if "scientific" in panel:
                 planned = build_research_plan(
@@ -74,7 +97,30 @@ def render_board(
                     series.color = palette[j % len(palette)]
                 frame = pd.DataFrame(**panel["frame"])
                 series_colors = None if spec.palette == "grayscale" else panel.get("seriesColors")
-                plans[i] = build_classic_plan(chart, panel["analysis"], series_colors=series_colors)
+                planned_rows = frame_rows(panel, chart, frame)
+                # The board stores the reduced plan; its exports draw every row.
+                stored = build_classic_plan(
+                    chart,
+                    panel["analysis"],
+                    rows=planned_rows,
+                    detail="preview",
+                    series_colors=series_colors,
+                )
+                full = build_classic_plan(
+                    chart, panel["analysis"], rows=planned_rows, series_colors=series_colors
+                )
+                if stored is not None and full is not None:
+                    stored["rendering"] = full["rendering"] = {
+                        "pointRendering": spec.point_rendering,
+                        "rasterizePoints": rasterize_points(
+                            spec.point_rendering, len(panel["rows"])
+                        ),
+                    }
+                plans[i] = stored
+                if stored is not None and stored["panels"][0]["axes"]["x"]["scale"] == "category":
+                    points = planned_rows or [a["points"] for a in panel["analysis"]["series"]]
+                    names = [str(p["x"]) for row in points for p in row if p["x"] is not None]
+                    x_positions[i] = {x: float(n) for n, x in enumerate(dict.fromkeys(names))}
                 legacy_render(
                     frame,
                     chart,
@@ -82,7 +128,7 @@ def render_board(
                     _target_axes=[ax],
                     _frozen_analysis=panel["analysis"],
                     _series_colors=series_colors,
-                    _plan=plans[i],
+                    _plan=full,
                 )
                 # Dense legacy line/scatter data artists share the same 300 dpi policy.
                 if panel["kind"] in {"line", "scatter"} and rasterize_points(
@@ -135,8 +181,8 @@ def render_board(
             if plan is not None:
                 plan["panels"][0] |= {"id": "ABCD"[i], "title": heading}
                 plan["disclosures"] = footer.split("\n")
-                for axis in plan["panels"][0]["axes"].values():
-                    axis["grid"] = spec.grid_visible
+                for name in ("x", "y"):
+                    plan["panels"][0]["axes"][name]["grid"] = spec.grid_visible
             legend = ax.get_legend()
             if legend:
                 for text in legend.get_texts():
@@ -253,7 +299,8 @@ def render_board(
             for j, mark in enumerate(raw):
                 if mark["kind"] == "point" and j not in shown:
                     continue
-                x = cast(Any, ax).convert_xunits(mark["x"])
+                x = x_positions[i].get(str(mark["x"]), mark["x"])
+                x = cast(Any, ax).convert_xunits(x)
                 y = cast(Any, ax).convert_yunits(mark["y"])
                 pixel = ax.transData.transform(
                     (float(np.asarray(x).item()), float(np.asarray(y).item()))

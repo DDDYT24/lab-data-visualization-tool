@@ -109,12 +109,19 @@ describe("planAppearanceKey", () => {
     expect(planAppearanceKey(restyled)).toBe(planAppearanceKey(histogram));
   });
 
-  it("leaves charts without a plan alone, so restyling reruns no fit", () => {
+  it("follows line, scatter and fitted charts, whose plans draw their style", () => {
     const fitted: ChartSpec = { ...defaultChartSpec, type: "bar", fitting: { ...defaultChartSpec.fitting, model: "linear" } };
-    const uncertain: ChartSpec = { ...defaultChartSpec, type: "bar", uncertainty: { ...defaultChartSpec.uncertainty, mode: "standard-deviation" } };
-    for (const spec of [{ ...defaultChartSpec, type: "line" as const }, fitted, uncertain]) {
+    for (const spec of [{ ...defaultChartSpec, type: "line" as const }, fitted]) {
       const recoloured = { ...spec, series: [{ ...spec.series[0], color: "#DC2626" }] };
-      expect(planAppearanceKey(recoloured)).toBe(planAppearanceKey(spec));
+      const widened = { ...spec, export: { ...spec.export, lineWidth: spec.export.lineWidth + 1 } };
+      expect(planAppearanceKey(recoloured)).not.toBe(planAppearanceKey(spec));
+      expect(planAppearanceKey(widened)).not.toBe(planAppearanceKey(spec));
     }
+  });
+
+  it("leaves charts without a plan alone", () => {
+    const heatmap: ChartSpec = { ...defaultChartSpec, type: "heatmap" };
+    const recoloured = { ...heatmap, series: [{ ...heatmap.series[0], color: "#DC2626" }] };
+    expect(planAppearanceKey(recoloured)).toBe(planAppearanceKey(heatmap));
   });
 });

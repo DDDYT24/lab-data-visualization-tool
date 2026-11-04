@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { RenderPlan, RenderPlanMark } from "@/domain/render-plan";
 
 import { zoomedWindow } from "./render-plan-chart";
-import { buildPlanOption, planSelection, planTooltip } from "./render-plan-option";
+import { buildPlanOption, planAxisTooltip, planSelection, planTooltip } from "./render-plan-option";
 
 const text = { mean: "Mean", median: "Median" };
 const axis = (ticks: [number, string][], scale: "linear" | "category") => ({
@@ -15,13 +15,13 @@ const base = { group: "A <b>", color: "#1768ac" };
 const marks: RenderPlanMark[] = [
   { ...base, kind: "violin", id: "density:0", opacity: 0.3, position: 0, grid: [1, 2, 3], halfWidths: [0.1, 0.4, 0.1], bandwidth: 0.5, bandwidthRule: "scott-sample-sd", scale: "equal_width", n: 3, sourceRefs: ["o1", "o2", "o3"] },
   { ...base, kind: "segments", id: "pairs:0", width: 1.2, opacity: 0.65, x0: [0], y0: [1], x1: [1], y1: [3], sourceRefs: [["o1", "o2"]] },
-  { ...base, kind: "points", id: "points:0", marker: "v", size: 4, opacity: 0.7, x: [0.1, 1.2], y: [1, 3], sourceRefs: ["o1", "o2"] },
+  { ...base, kind: "points", id: "points:0", marker: "v", size: 4, opacity: 0.7, axis: "y", x: [0.1, 1.2], y: [1, 3], sourceRefs: ["o1", "o2"], decimation: null },
   { ...base, kind: "summary", id: "summary:0", width: 2.4, x0: -0.25, x1: 0.25, y: 2, statistic: "mean", summaryUnit: "sample", n: 2 },
 ];
 const plan: RenderPlan = {
   schemaVersion: 1, contract: "render-plan-v1", planHash: "0".repeat(64),
   source: { kind: "grouped_strip", resultSha256: "1".repeat(64), algorithmVersion: "scientific-charts-v1" },
-  geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: "sha256-uniform-v1", density: null, histogram: null, quantile: null },
+  geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: "sha256-uniform-v1", density: null, histogram: null, quantile: null, decimation: null },
   rendering: { pointRendering: "auto", rasterizePoints: false },
   disclosures: [],
   panels: [{
@@ -30,6 +30,7 @@ const plan: RenderPlan = {
     axes: {
       x: axis([[0, "A\nobs=2"], [1, "B"]], "category"),
       y: axis([[0, "0"], [2, "2"], [4, "4"]], "linear"),
+      y2: null,
     },
   }],
 };
@@ -37,6 +38,67 @@ const plan: RenderPlan = {
 type Series = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const option = (extra: Partial<Parameters<typeof buildPlanOption>[0]> = {}) => buildPlanOption({ plan, text, ...extra });
 const series = (index: number) => option().series[index] as Series;
+
+const classicMarks: RenderPlanMark[] = [
+  { ...base, kind: "polyline", id: "line:0", width: 1.5, lineStyle: "dashed", markerSize: 3, axis: "y", x: [0, 1], y: [1, 2], decimation: null },
+  { ...base, kind: "polyline", id: "fit:0", width: 1, lineStyle: "dashed", markerSize: 0, axis: "y2", x: [0, 1], y: [5, 6], decimation: null },
+  { ...base, kind: "band", id: "band:0", opacity: 0.15, axis: "y", x: [0, 1], lower: [0, 1], upper: [2, 3] },
+  { ...base, kind: "errorbar", id: "error:0", width: 1, capSize: 2, opacity: 0.9, axis: "y", x: [1], y: [2], error: [0.5] },
+];
+const classic: RenderPlan = {
+  ...plan,
+  panels: [{
+    ...plan.panels[0]!, marks: classicMarks,
+    legend: [{ label: "fit", color: "#1768ac", symbol: "dashed" }],
+    axes: { ...plan.panels[0]!.axes, y2: { ...axis([[5, "5"], [6, "6"]], "linear"), grid: false } },
+  }],
+};
+
+describe("classic marks", () => {
+  const built = buildPlanOption({ plan: classic, text }) as Series;
+
+  it("draws a polyline with its style and marks hidden when it has none", () => {
+    expect(built.series[0]).toMatchObject({
+      type: "line", showSymbol: true, symbolSize: 6, data: [[0, 1], [1, 2]], yAxisIndex: 0,
+      lineStyle: { color: "#1768ac", width: 1.5, type: "dashed" },
+    });
+    expect(built.series[1]).toMatchObject({ showSymbol: false, silent: true, yAxisIndex: 1 });
+  });
+
+  it("gives each panel a right-hand axis only when it has one", () => {
+    expect(built.yAxis).toHaveLength(2);
+    expect(built.yAxis[1]).toMatchObject({ position: "right", min: -0.5, max: 4.5 });
+    expect(built.yAxis[1].splitLine.show).toBe(false);
+    expect(built.dataZoom[1].yAxisIndex).toEqual([0, 1]);
+  });
+
+  it("outlines a band between its limits", () => {
+    const drawn = built.series[2].renderItem({}, { coord: (point: number[]) => point });
+    expect(drawn.shape.points).toEqual([[0, 2], [1, 3], [1, 1], [0, 0]]);
+    expect(drawn.style).toMatchObject({ fill: "#1768ac", opacity: 0.15 });
+  });
+
+  it("draws an error bar with two caps", () => {
+    const drawn = built.series[3].renderItem({ dataIndex: 0 }, { coord: (point: number[]) => point });
+    expect(drawn.children[0].shape).toEqual({ x1: 1, y1: 2.5, x2: 1, y2: 1.5 });
+    expect(drawn.children[1].shape).toEqual({ x1: -2, y1: 2.5, x2: 4, y2: 2.5 });
+  });
+
+  it("gives fits a dashed legend symbol", () => {
+    expect(built.legend.data[0].icon).toContain("path://");
+  });
+
+  it("selects nothing for points that have no observations", () => {
+    const points: RenderPlanMark = { ...base, kind: "points", id: "scatter:0", marker: "o", size: 4, opacity: 0.8, axis: "y", x: [1], y: [2], sourceRefs: [], decimation: null };
+    const scatter = { ...plan, panels: [{ ...plan.panels[0]!, marks: [points] }] };
+    expect(planSelection(scatter, 0, 0)).toEqual([]);
+  });
+
+  it("lists every series at one x in the shared tooltip", () => {
+    const tooltip = planAxisTooltip(plan)([{ seriesName: "A <b>", value: [1, 2] }]);
+    expect(tooltip).toBe("B<br/>A &#60;b&#62;: 2");
+  });
+});
 
 describe("render plan adapter", () => {
   it("draws axes exactly as the plan states them", () => {
@@ -54,7 +116,7 @@ describe("render plan adapter", () => {
   it("draws a grid only on the axes whose plan asks for one", () => {
     const [panel] = plan.panels;
     const { x, y } = panel!.axes;
-    const swapped = { ...plan, panels: [{ ...panel!, axes: { x: { ...x, grid: true }, y: { ...y, grid: false } } }] };
+    const swapped = { ...plan, panels: [{ ...panel!, axes: { x: { ...x, grid: true }, y: { ...y, grid: false }, y2: null } }] };
     const { xAxis: [xAxis], yAxis: [yAxis] } = buildPlanOption({ plan: swapped, text }) as Series;
     expect([xAxis.splitLine.show, yAxis.splitLine.show]).toEqual([true, false]);
   });
@@ -119,7 +181,7 @@ describe("render plan adapter", () => {
   });
 
   it("draws rects as the plan's intervals, whichever way they grow", () => {
-    const rects: RenderPlanMark = { ...base, kind: "rects", id: "bar:0", opacity: 0.5, width: 1, shape: "bars", x0: [0, 2], x1: [1, 3], y0: [0, 0], y1: [4, -2] };
+    const rects: RenderPlanMark = { ...base, kind: "rects", id: "bar:0", opacity: 0.5, width: 1, shape: "bars", axis: "y", x0: [0, 2], x1: [1, 3], y0: [0, 0], y1: [4, -2], decimation: null };
     const drawn = buildPlanOption({ plan: { ...plan, panels: [{ ...plan.panels[0]!, marks: [rects] }] }, text }).series[0] as Series;
     const coord = (point: number[]) => [point[0]! * 10, 100 - point[1]! * 10];
     expect(drawn.renderItem({ dataIndex: 0 }, { coord }).shape).toEqual({ x: 0, y: 60, width: 10, height: 40 });

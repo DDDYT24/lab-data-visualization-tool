@@ -1,4 +1,4 @@
-import { gridColor } from "@/domain/chart-render-contract";
+import { chartLineType, gridColor } from "@/domain/chart-render-contract";
 import type { RenderPlan, RenderPlanMark, RenderPlanPanel } from "@/domain/render-plan";
 
 // The adapter only draws what the plan states: it computes no statistics, axes or geometry.
@@ -6,6 +6,10 @@ const TEXT_COLOR = "#20252d";
 const POINT_PIXELS_PER_SIZE = 2;
 const LABEL_PIXELS = 8;
 const LONG_AXIS_TICKS = 4;
+// Two dashes; ECharts has no built-in dashed legend icon.
+const DASHED_LEGEND_ICON = "path://M0 0h6v2H0zM10 0h6v2h-6z";
+const LEGEND_ICONS = { line: "roundRect", marker: "circle", dashed: DASHED_LEGEND_ICON };
+const ERRORBAR_CAP_PIXELS = 1.5;
 
 const SYMBOLS = {
   o: { symbol: "circle", symbolRotate: 0 },
@@ -32,7 +36,11 @@ const shown = (value: number) =>
 function tooltipLines(mark: RenderPlanMark, index: number, text: PlanText) {
   switch (mark.kind) {
     case "points":
+    case "polyline":
       return [mark.group, shown(mark.y[index]!)];
+    case "band":
+    case "errorbar":
+      return [mark.group];
     case "segments":
       return [mark.group, `${shown(mark.y0[index]!)} → ${shown(mark.y1[index]!)}`];
     case "violin":
@@ -55,10 +63,22 @@ export function planTooltip(plan: RenderPlan, seriesIndex: number, index: number
   return mark ? tooltipLines(mark, index, text).map(escapeHtml).join("<br/>") : "";
 }
 
+/** The shared tooltip of line and scatter charts: one x and each series' value there. */
+export function planAxisTooltip(plan: RenderPlan) {
+  const names = new Map(plan.panels.flatMap((panel) => panel.axes.x.ticks).map((tick) => [tick.value, tick.label]));
+  return (params: { seriesName: string; value: [number, number] }[]) => {
+    const [first] = params;
+    if (!first) return "";
+    const x = first.value[0];
+    return [names.get(x) ?? shown(x), ...params.map((item) => `${item.seriesName}: ${shown(item.value[1])}`)]
+      .map(escapeHtml).join("<br/>");
+  };
+}
+
 /** The observations one drawn item stands for; violins and summaries have no single row. */
 export function planSelection(plan: RenderPlan, seriesIndex: number, index: number): string[] {
   const mark = planMarks(plan)[seriesIndex];
-  if (mark?.kind === "points") return [mark.sourceRefs[index]!];
+  if (mark?.kind === "points") return mark.sourceRefs.length ? [mark.sourceRefs[index]!] : [];
   if (mark?.kind === "segments") return [...mark.sourceRefs[index]!];
   return [];
 }
@@ -125,8 +145,55 @@ function boxItem(mark: Extract<RenderPlanMark, { kind: "box" }>, api: RenderApi)
   };
 }
 
+function errorbarItem(mark: Extract<RenderPlanMark, { kind: "errorbar" }>, index: number, api: RenderApi) {
+  const x = mark.x[index]!;
+  const [left, top] = api.coord([x, mark.y[index]! + mark.error[index]!]) as [number, number];
+  const [, bottom] = api.coord([x, mark.y[index]! - mark.error[index]!]) as [number, number];
+  const cap = mark.capSize * ERRORBAR_CAP_PIXELS;
+  const style = { stroke: mark.color, lineWidth: mark.width, opacity: mark.opacity };
+  const line = (x1: number, y1: number, x2: number, y2: number) => ({ type: "line", shape: { x1, y1, x2, y2 }, style });
+  return {
+    type: "group",
+    children: [
+      line(left, top, left, bottom),
+      line(left - cap, top, left + cap, top),
+      line(left - cap, bottom, left + cap, bottom),
+    ],
+  };
+}
+
 function markSeries(mark: RenderPlanMark) {
   switch (mark.kind) {
+    case "polyline":
+      return {
+        id: mark.id, name: mark.group, type: "line", z: 3, animation: false,
+        showSymbol: mark.markerSize > 0, symbolSize: mark.markerSize * POINT_PIXELS_PER_SIZE,
+        data: mark.x.map((x, index) => [x, mark.y[index]!]),
+        itemStyle: { color: mark.color },
+        lineStyle: { color: mark.color, width: mark.width, type: chartLineType(mark.lineStyle) },
+        silent: mark.markerSize === 0,
+        ...(mark.markerSize === 0 ? { tooltip: { show: false } } : {}),
+      };
+    case "band": {
+      const upper = mark.x.map((x, index) => [x, mark.upper[index]!]);
+      const lower = mark.x.map((x, index) => [x, mark.lower[index]!]).reverse();
+      const outline = [...upper, ...lower];
+      return {
+        id: mark.id, name: `${mark.group} band`, type: "custom", coordinateSystem: "cartesian2d", clip: true,
+        z: 1, silent: true, tooltip: { show: false }, data: [[mark.x[0]!, mark.lower[0]!]],
+        renderItem: (_params: unknown, api: RenderApi) => ({
+          type: "polygon",
+          shape: { points: outline.map((point) => api.coord(point)) },
+          style: { fill: mark.color, opacity: mark.opacity },
+        }),
+      };
+    }
+    case "errorbar":
+      return {
+        id: mark.id, name: `${mark.group} error`, type: "custom", coordinateSystem: "cartesian2d", clip: true,
+        z: 3, silent: true, tooltip: { show: false }, data: mark.x.map((x, index) => [x, mark.y[index]!]),
+        renderItem: (params: { dataIndex: number }, api: RenderApi) => errorbarItem(mark, params.dataIndex, api),
+      };
     case "rects":
       return {
         id: mark.id, name: mark.group, type: "custom", coordinateSystem: "cartesian2d", clip: true, z: 2,
@@ -217,6 +284,10 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
   const grid = panels.map((item, index) => panelGrid(item, index, panels.length));
   const axisIndexes = (count: number) => Array.from({ length: count }, (_, index) => index);
   const seriesIn = panels.flatMap((item, index) => item.marks.map((mark) => ({ mark, index })));
+  // Each panel's y axes, in the order yAxis lists them below.
+  const yAxisStart = panels.map((_, index) => panels.slice(0, index).reduce((sum, item) => sum + (item.axes.y2 ? 2 : 1), 0));
+  const yAxisIndex = (mark: RenderPlanMark, index: number) =>
+    yAxisStart[index]! + ("axis" in mark && mark.axis === "y2" ? 1 : 0);
   return {
     animation: false,
     backgroundColor: "#ffffff",
@@ -224,9 +295,7 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
     title: { text: panel.title, left: "center", textStyle: { color: colors.text, fontSize: 15 } },
     legend: {
       show: panels.some((item) => item.legend.length > 0), top: 28, right: 16, textStyle: { color: colors.text },
-      data: panels.flatMap((item) => item.legend).map((entry) => ({
-        name: entry.label, icon: entry.symbol === "line" ? "roundRect" : "circle",
-      })),
+      data: panels.flatMap((item) => item.legend).map((entry) => ({ name: entry.label, icon: LEGEND_ICONS[entry.symbol] })),
     },
     grid,
     tooltip: {
@@ -235,18 +304,21 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
         planTooltip(plan, params.seriesIndex, params.dataIndex, text),
     },
     xAxis: panels.map((item, index) => axisOption(item.axes.x, zoomed, 48, index, colors)),
-    yAxis: panels.map((item, index) => {
+    yAxis: panels.flatMap((item, index) => {
       const left = (grid[index] as { left: number | string }).left;
-      return axisOption(item.axes.y, zoomed, typeof left === "number" ? left - 20 : 44, index, colors);
+      const primary = axisOption(item.axes.y, zoomed, typeof left === "number" ? left - 20 : 44, index, colors);
+      return item.axes.y2
+        ? [primary, { ...axisOption(item.axes.y2, zoomed, 44, index, colors), position: "right" }]
+        : [primary];
     }),
     dataZoom: PLAN_ZOOM_IDS.map((id, axis) => ({
       id, type: "inside", filterMode: "none",
-      [axis ? "yAxisIndex" : "xAxisIndex"]: axisIndexes(panels.length),
+      [axis ? "yAxisIndex" : "xAxisIndex"]: axisIndexes(axis ? yAxisStart.at(-1)! + (panels.at(-1)!.axes.y2 ? 2 : 1) : panels.length),
       // A plain wheel keeps scrolling the page.
       zoomOnMouseWheel: "ctrl", moveOnMouseWheel: false,
     })),
     series: [
-      ...seriesIn.map(({ mark, index }) => ({ ...markSeries(mark), xAxisIndex: index, yAxisIndex: index })),
+      ...seriesIn.map(({ mark, index }) => ({ ...markSeries(mark), xAxisIndex: index, yAxisIndex: yAxisIndex(mark, index) })),
       {
         id: "selection", type: "scatter", silent: true, symbol: "circle", symbolSize: 16, z: 6,
         data: selectedCoordinates(plan, selected),

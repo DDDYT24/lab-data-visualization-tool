@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .render_contract import GRID_COLOR
+from .render_contract import GRID_COLOR, LINE_STYLES
 
 
 def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
@@ -45,8 +45,36 @@ def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
             marker=mark["marker"],
             color=mark["color"],
             alpha=mark["opacity"],
+            label=mark["group"],
             zorder=4,
             rasterized=dense,
+        )
+    elif mark["kind"] == "polyline":
+        ax.plot(
+            mark["x"],
+            mark["y"],
+            label=mark["group"],
+            color=mark["color"],
+            linestyle=LINE_STYLES[mark["lineStyle"]],
+            linewidth=mark["width"],
+            marker="o" if mark["markerSize"] else None,
+            markersize=mark["markerSize"],
+            rasterized=dense,
+        )
+    elif mark["kind"] == "band":
+        ax.fill_between(
+            mark["x"], mark["lower"], mark["upper"], color=mark["color"], alpha=mark["opacity"]
+        )
+    elif mark["kind"] == "errorbar":
+        ax.errorbar(
+            mark["x"],
+            mark["y"],
+            yerr=mark["error"],
+            fmt="none",
+            ecolor=mark["color"],
+            elinewidth=mark["width"],
+            capsize=mark["capSize"],
+            alpha=mark["opacity"],
         )
     elif mark["kind"] == "summary":
         ax.plot(
@@ -57,17 +85,18 @@ def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
             zorder=5,
         )
     elif mark["kind"] == "rects":
-        draw_rects(ax, mark)
+        draw_rects(ax, mark, dense)
     else:
         draw_box(ax, mark)
 
 
-def draw_rects(ax: Any, mark: dict[str, Any]) -> None:
+def draw_rects(ax: Any, mark: dict[str, Any], dense: bool) -> None:
     style = {
         "alpha": mark["opacity"],
         "color": mark["color"],
         "label": mark["group"],
         "linewidth": mark["width"],
+        "rasterized": dense,
     }
     if mark["shape"] == "stairs":
         ax.stairs(mark["y1"], [*mark["x0"], mark["x1"][-1]], fill=True, **style)
@@ -107,17 +136,25 @@ def draw_box(ax: Any, mark: dict[str, Any]) -> None:
     )
 
 
-def draw_panel(ax: Any, panel: dict[str, Any]) -> None:
+def draw_y_axis(ax: Any, axis: dict[str, Any]) -> None:
+    ax.set_yticks([t["value"] for t in axis["ticks"]], [t["label"] for t in axis["ticks"]])
+    ax.set_ylim(*axis["domain"])
+    ax.set_ylabel(axis["title"])
+
+
+def draw_panel(
+    ax: Any, panel: dict[str, Any], *, secondary: Any = None, dense: bool = False
+) -> None:
     """Draw one classic panel: its marks, then exactly the axes the plan states."""
     for mark in panel["marks"]:
-        draw_mark(ax, mark, False)
+        draw_mark(secondary if mark.get("axis") == "y2" else ax, mark, dense)
     x_axis, y_axis = panel["axes"]["x"], panel["axes"]["y"]
     ax.set_xticks([t["value"] for t in x_axis["ticks"]], [t["label"] for t in x_axis["ticks"]])
-    ax.set_yticks([t["value"] for t in y_axis["ticks"]], [t["label"] for t in y_axis["ticks"]])
     ax.set_xlim(*x_axis["domain"])
-    ax.set_ylim(*y_axis["domain"])
     ax.set_xlabel(x_axis["title"])
-    ax.set_ylabel(y_axis["title"])
+    draw_y_axis(ax, y_axis)
+    if secondary is not None:
+        draw_y_axis(secondary, panel["axes"]["y2"])
     for name, axis in (("x", x_axis), ("y", y_axis)):
         if axis["grid"]:
             ax.grid(True, axis=name, color=GRID_COLOR, linewidth=0.7, alpha=0.8)

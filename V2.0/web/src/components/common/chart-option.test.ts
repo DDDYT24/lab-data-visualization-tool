@@ -349,10 +349,10 @@ describe("chart render contract", () => {
     const plan: RenderPlan = {
       schemaVersion: 1, contract: "render-plan-v1", planHash: "0".repeat(64),
       source: { kind: "bar", resultSha256: "1".repeat(64), algorithmVersion: "classic-charts-v1" },
-      geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: null, density: null, histogram: null, quantile: null },
+      geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: null, density: null, histogram: null, quantile: null, decimation: null },
       rendering: { pointRendering: "auto", rasterizePoints: false }, disclosures: [],
       panels: [{
-        id: "1", title: "Chart", legend: [], axes: { x: axis, y: axis },
+        id: "1", title: "Chart", legend: [], axes: { x: axis, y: axis, y2: null },
         marks: [{ kind: "summary", id: "summary:0", group: "A", color: "#1768ac", width: 2, x0: 0, x1: 1, y: 1, statistic: "mean", summaryUnit: "sample", n: 2 }],
       }],
     };

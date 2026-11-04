@@ -120,10 +120,10 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
         assert artifacts["png"][1:4] == b"PNG"
         assert artifacts["pdf"][:4] == b"%PDF"
         view = client.get(url + "/interaction").json()
-        # Captured box panels have plans; line, scatter and correlation panels do not yet.
+        # Captured panels have plans; correlation panels do not yet.
         panel_plan = client.get(url + "/plans/B")
         assert panel_plan.json()["planHash"] == view["panels"][1]["planHash"]
-        if kind == "box":
+        if kind != "heatmap":
             captured_plan = RenderPlan.model_validate_json(client.get(url + "/plans/A").content)
             assert captured_plan.plan_hash == view["panels"][0]["planHash"]
             assert captured_plan.panels[0].id == "A"
@@ -209,15 +209,16 @@ def test_shared_axes_geometry_and_formats_use_one_frozen_figure(
     assert selected["selectedKind"] == "density"
 
 
-def captured_box(values: list[float]) -> dict[str, Any]:
+def captured_box(values: list[float], kind: str = "box") -> dict[str, Any]:
     import pandas as pd
 
     from labviz_api.processing import default_chart_spec
     from labviz_api.research_figure_sources import legacy_snapshot
 
-    frame = pd.DataFrame({"x": list(range(len(values))), "v": values})
+    frame = pd.DataFrame({"x": [float(i) for i in range(len(values))], "v": values})
     chart = default_chart_spec(frame)
-    chart["type"] = "box"
+    chart["type"] = kind
+    chart["xAxis"]["field"] = "x"
     chart["yAxis"].update(field="v", title="Signal", unit="mV")
     chart["series"] = [{**chart["series"][0], "field": "v", "label": "v", "panel": 1}]
 
@@ -258,6 +259,41 @@ def test_shared_axis_ticks_cover_the_whole_axis_on_captured_panels(
         assert ticks[-1] > 300
         assert (plan["panels"][0]["axes"]["x"]["grid"], y_axis["grid"]) == (True, True)
     assert all(panel["planHash"] for panel in scene["panels"])
+
+
+def test_long_captures_link_marks_to_their_rows_and_export_every_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = [float(i % 97) for i in range(4000)]
+    panel = captured_box(values, "line")
+    for mark in panel["marks"]:
+        row = int(mark["rowIds"][0].rsplit(":", 1)[1])
+        assert (float(row), values[row]) == (mark["x"], mark["y"])
+    original = Figure.savefig
+    drawn: list[int] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        drawn.extend(len(line.get_xdata()) for line in figure.axes[0].get_lines())
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    artifacts, _ = render_board([panel], FigureBoardSpec(panel_chart_ids=["a"]))
+    assert set(drawn) == {4000}
+    stored = json.loads(artifacts["plan:A"])["panels"][0]["marks"][0]
+    assert stored["decimation"]["input"] == 4000 and len(stored["y"]) <= 250
+
+
+def test_capture_with_dates_keeps_its_frozen_points() -> None:
+    import pandas as pd
+
+    panel = captured_box([1.0, 2.0, 3.0, 4.0], "line")
+    dates = pd.date_range("2026-01-01", periods=4)
+    for series in panel["analysis"]["series"]:
+        for point, date in zip(series["points"], dates, strict=True):
+            point["x"] = date.isoformat()
+    artifacts, _ = render_board([panel], FigureBoardSpec(panel_chart_ids=["a"]))
+    axis = json.loads(artifacts["plan:A"])["panels"][0]["axes"]["x"]
+    assert [tick["label"] for tick in axis["ticks"]][0] == dates[0].isoformat()
 
 
 @pytest.mark.parametrize("grid_visible", [False, True])

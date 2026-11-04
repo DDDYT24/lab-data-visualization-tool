@@ -64,6 +64,75 @@
       "title": "Axis",
       "type": "object"
     },
+    "BandMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "band",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "opacity": {
+          "title": "Opacity",
+          "type": "number"
+        },
+        "axis": {
+          "enum": [
+            "y",
+            "y2"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "x": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X",
+          "type": "array"
+        },
+        "lower": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Lower",
+          "type": "array"
+        },
+        "upper": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Upper",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "opacity",
+        "axis",
+        "x",
+        "lower",
+        "upper"
+      ],
+      "title": "BandMark",
+      "type": "object"
+    },
     "BoxMark": {
       "additionalProperties": false,
       "properties": {
@@ -149,6 +218,109 @@
       "title": "BoxMark",
       "type": "object"
     },
+    "Decimation": {
+      "additionalProperties": false,
+      "properties": {
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "input": {
+          "title": "Input",
+          "type": "integer"
+        },
+        "drawn": {
+          "title": "Drawn",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rule",
+        "input",
+        "drawn"
+      ],
+      "title": "Decimation",
+      "type": "object"
+    },
+    "ErrorbarMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "errorbar",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "capSize": {
+          "title": "Capsize",
+          "type": "number"
+        },
+        "opacity": {
+          "title": "Opacity",
+          "type": "number"
+        },
+        "axis": {
+          "enum": [
+            "y",
+            "y2"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "x": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y",
+          "type": "array"
+        },
+        "error": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Error",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "width",
+        "capSize",
+        "opacity",
+        "axis",
+        "x",
+        "y",
+        "error"
+      ],
+      "title": "ErrorbarMark",
+      "type": "object"
+    },
     "LegendEntry": {
       "additionalProperties": false,
       "properties": {
@@ -164,7 +336,8 @@
         "symbol": {
           "enum": [
             "line",
-            "marker"
+            "marker",
+            "dashed"
           ],
           "title": "Symbol",
           "type": "string"
@@ -196,8 +369,11 @@
           "items": {
             "discriminator": {
               "mapping": {
+                "band": "#/$defs/BandMark",
                 "box": "#/$defs/BoxMark",
+                "errorbar": "#/$defs/ErrorbarMark",
                 "points": "#/$defs/PointsMark",
+                "polyline": "#/$defs/PolylineMark",
                 "rects": "#/$defs/RectsMark",
                 "segments": "#/$defs/SegmentsMark",
                 "summary": "#/$defs/SummaryMark",
@@ -208,6 +384,15 @@
             "oneOf": [
               {
                 "$ref": "#/$defs/PointsMark"
+              },
+              {
+                "$ref": "#/$defs/PolylineMark"
+              },
+              {
+                "$ref": "#/$defs/BandMark"
+              },
+              {
+                "$ref": "#/$defs/ErrorbarMark"
               },
               {
                 "$ref": "#/$defs/SegmentsMark"
@@ -255,11 +440,22 @@
         },
         "y": {
           "$ref": "#/$defs/Axis"
+        },
+        "y2": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Axis"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "x",
-        "y"
+        "y",
+        "y2"
       ],
       "title": "PanelAxes",
       "type": "object"
@@ -319,6 +515,17 @@
             }
           ],
           "title": "Quantile"
+        },
+        "decimation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Decimation"
         }
       },
       "required": [
@@ -327,7 +534,8 @@
         "jitter",
         "density",
         "histogram",
-        "quantile"
+        "quantile",
+        "decimation"
       ],
       "title": "PlanGeometry",
       "type": "object"
@@ -366,7 +574,9 @@
             "violin",
             "histogram",
             "box",
-            "bar"
+            "bar",
+            "line",
+            "scatter"
           ],
           "title": "Kind",
           "type": "string"
@@ -429,6 +639,14 @@
           "title": "Opacity",
           "type": "number"
         },
+        "axis": {
+          "enum": [
+            "y",
+            "y2"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
         "x": {
           "items": {
             "type": "number"
@@ -449,6 +667,16 @@
           },
           "title": "Sourcerefs",
           "type": "array"
+        },
+        "decimation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Decimation"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -459,11 +687,101 @@
         "marker",
         "size",
         "opacity",
+        "axis",
         "x",
         "y",
-        "sourceRefs"
+        "sourceRefs",
+        "decimation"
       ],
       "title": "PointsMark",
+      "type": "object"
+    },
+    "PolylineMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "polyline",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "lineStyle": {
+          "enum": [
+            "solid",
+            "dashed",
+            "dotted",
+            "dashdot"
+          ],
+          "title": "Linestyle",
+          "type": "string"
+        },
+        "markerSize": {
+          "title": "Markersize",
+          "type": "number"
+        },
+        "axis": {
+          "enum": [
+            "y",
+            "y2"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "x": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y",
+          "type": "array"
+        },
+        "decimation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Decimation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "width",
+        "lineStyle",
+        "markerSize",
+        "axis",
+        "x",
+        "y",
+        "decimation"
+      ],
+      "title": "PolylineMark",
       "type": "object"
     },
     "RectsMark": {
@@ -503,6 +821,14 @@
           "title": "Shape",
           "type": "string"
         },
+        "axis": {
+          "enum": [
+            "y",
+            "y2"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
         "x0": {
           "items": {
             "type": "number"
@@ -530,6 +856,16 @@
           },
           "title": "Y1",
           "type": "array"
+        },
+        "decimation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Decimation"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -540,10 +876,12 @@
         "opacity",
         "width",
         "shape",
+        "axis",
         "x0",
         "x1",
         "y0",
-        "y1"
+        "y1",
+        "decimation"
       ],
       "title": "RectsMark",
       "type": "object"

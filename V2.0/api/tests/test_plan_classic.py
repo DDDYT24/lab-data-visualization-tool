@@ -10,7 +10,7 @@ from matplotlib.patches import Rectangle
 
 from labviz_api.models import ChartSpec
 from labviz_api.plan_classic import build_classic_plan
-from labviz_api.processing import analyze_chart, render_chart
+from labviz_api.processing import analyze_chart, classic_plan, render_chart
 from labviz_api.render_plan import RenderPlan
 
 
@@ -151,23 +151,137 @@ def test_bars_start_from_zero_and_text_categories_stay_in_order() -> None:
     assert panel["marks"][0]["x0"][0] == pytest.approx(-0.4)
 
 
-def test_bar_with_a_fit_or_secondary_axis_keeps_the_existing_drawing() -> None:
-    fitted = spec("bar", fitting={"model": "linear"})
-    assert build_classic_plan(fitted, analyze_chart(FRAME, fitted)) is None
-    secondary = spec(
-        "bar",
-        secondaryYAxis={"enabled": True, "field": "b", "title": "Other", "unit": ""},
+LONG = pd.DataFrame({"x": [float(i) for i in range(4000)]})
+LONG["a"] = 1.0
+LONG.loc[1111, "a"] = 97.5
+LONG.loc[2222, "a"] = -42.5
+
+
+def long_chart(kind: str) -> ChartSpec:
+    return spec(kind, series=[{"field": "a", "label": "Alpha", "color": "#2563EB"}])
+
+
+@pytest.mark.parametrize("kind", ["line", "scatter", "bar"])
+def test_export_draws_every_row_and_preview_keeps_its_axes(
+    monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    chart = long_chart(kind)
+    analysis = analyze_chart(LONG, chart)
+    full = classic_plan(LONG, chart, analysis)
+    preview = classic_plan(LONG, chart, analysis, detail="preview")
+    assert full and preview
+    field = "y1" if kind == "bar" else "y"
+    mark, reduced = full["panels"][0]["marks"][0], preview["panels"][0]["marks"][0]
+    assert len(mark[field]) == 4000
+    assert mark["decimation"] is None
+    assert len(reduced[field]) <= 250
+    assert reduced["decimation"] == {
+        "rule": "min-max-envelope-v1",
+        "input": 4000,
+        "drawn": len(reduced[field]),
+    }
+    assert max(reduced[field]) == 97.5 and min(reduced[field]) == -42.5
+    assert full["panels"][0]["axes"] == preview["panels"][0]["axes"]
+
+    original = Figure.savefig
+    drawn: list[int] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        axis = figure.axes[0]
+        drawn.extend(len(line.get_xdata()) for line in axis.get_lines())
+        drawn.extend(len(container) for container in axis.containers)
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    assert render_chart(LONG, chart)
+    assert drawn == [4000]
+
+
+def test_dense_exports_rasterize_their_data() -> None:
+    frame = pd.DataFrame({"x": [float(i) for i in range(20001)]})
+    frame["a"] = frame["x"] * 0.5
+    chart = long_chart("line")
+    plan = classic_plan(frame, chart, analyze_chart(frame, chart))
+    assert plan and plan["rendering"]["rasterizePoints"] is True
+    assert build_classic_plan(chart, analyze_chart(LONG, chart)) is not None
+
+
+def test_fit_band_and_error_bars_are_marks_inside_the_axes() -> None:
+    chart = spec(
+        "scatter",
+        series=[{"field": "b", "label": "Beta", "color": "#0F766E"}],
+        fitting={"model": "linear", "confidenceBand": True, "showEquation": True},
+        uncertainty={"mode": "standard-deviation"},
+    )
+    panel = planned(chart)["panels"][0]
+    kinds = [mark["kind"] for mark in panel["marks"]]
+    assert kinds[0] == "points" and "polyline" in kinds and "band" in kinds
+    fit = next(mark for mark in panel["marks"] if mark["kind"] == "polyline")
+    assert fit["lineStyle"] == "dashed" and fit["markerSize"] == 0
+    assert fit["group"].startswith("Beta fit")
+    assert {entry["symbol"] for entry in panel["legend"]} == {"marker", "dashed"}
+    low, high = panel["axes"]["y"]["domain"]
+    band = next(mark for mark in panel["marks"] if mark["kind"] == "band")
+    assert low <= min(band["lower"]) and max(band["upper"]) <= high
+
+
+def test_secondary_axis_is_stated_and_drawn(monkeypatch: pytest.MonkeyPatch) -> None:
+    chart = spec(
+        "line",
+        secondaryYAxis={"enabled": True, "field": "b", "title": "Other", "unit": "A"},
         series=[
             {"field": "a", "label": "Alpha", "color": "#2563EB"},
             {"field": "b", "label": "Beta", "color": "#0F766E", "yAxis": "secondary"},
         ],
     )
-    assert build_classic_plan(secondary, analyze_chart(FRAME, secondary)) is None
-    assert render_chart(FRAME, secondary)
+    panel = planned(chart)["panels"][0]
+    assert [mark["axis"] for mark in panel["marks"]] == ["y", "y2"]
+    y2 = panel["axes"]["y2"]
+    assert y2["title"] == "Other (A)" and y2["grid"] is False
+    assert y2["domain"][1] < panel["axes"]["y"]["domain"][1]
+    original = Figure.savefig
+    limits: list[Any] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        limits.extend(axis.get_ylim() for axis in figure.axes)
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    assert render_chart(FRAME, chart)
+    assert list(limits[1]) == pytest.approx(y2["domain"])
 
 
-def test_other_kinds_have_no_plan_yet() -> None:
-    chart = spec("line")
+def test_grouped_series_and_text_categories() -> None:
+    frame = FRAME.assign(group=["u", "v"] * 4)
+    chart = spec(
+        "line",
+        groupField="group",
+        xAxis={"field": "name", "title": "Name", "unit": ""},
+        series=[{"field": "b", "label": "Beta", "color": "#0F766E"}],
+    )
+    plan = classic_plan(frame, chart, analyze_chart(frame, chart))
+    assert plan
+    panel = plan["panels"][0]
+    assert [mark["group"] for mark in panel["marks"]] == ["Beta · u", "Beta · v"]
+    assert panel["axes"]["x"]["scale"] == "category"
+    assert [tick["label"] for tick in panel["axes"]["x"]["ticks"]][:2] == ["p", "r"]
+
+
+def test_category_ticks_stay_readable_with_many_rows() -> None:
+    frame = pd.DataFrame({"name": [f"row {i}" for i in range(1000)], "a": [1.0] * 1000})
+    chart = spec(
+        "bar",
+        xAxis={"field": "name", "title": "Name", "unit": ""},
+        series=[{"field": "a", "label": "Alpha", "color": "#2563EB"}],
+    )
+    plan = classic_plan(frame, chart, analyze_chart(frame, chart))
+    assert plan
+    assert len(plan["panels"][0]["axes"]["x"]["ticks"]) <= 250
+    assert len(plan["panels"][0]["marks"][0]["y1"]) == 1000
+
+
+def test_correlation_and_surface_have_no_plan_yet() -> None:
+    chart = spec("heatmap")
     assert build_classic_plan(chart, analyze_chart(FRAME, chart)) is None
 
 

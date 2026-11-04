@@ -38,7 +38,7 @@ def _spiked_frame(rows: int = 4_000) -> pd.DataFrame:
     return frame
 
 
-def test_preview_keeps_narrow_peaks_that_the_export_still_draws() -> None:
+def test_preview_keeps_narrow_peaks() -> None:
     frame = _spiked_frame()
     chart = _chart()
 

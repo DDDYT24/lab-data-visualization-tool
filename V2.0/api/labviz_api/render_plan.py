@@ -36,6 +36,7 @@ DENSE_POINT_THRESHOLD = GEOMETRY["points"]["denseThreshold"]
 
 Color = Annotated[str, Field(pattern=r"^#[0-9a-f]{6}$")]
 Marker = Literal["o", "s", "^", "D", "v"]
+YAxisName = Literal["y", "y2"]
 
 
 class Tick(ResearchModel):
@@ -55,6 +56,13 @@ class Axis(ResearchModel):
 class PanelAxes(ResearchModel):
     x: Axis
     y: Axis
+    y2: Axis | None
+
+
+class Decimation(ResearchModel):
+    rule: str
+    input: int
+    drawn: int
 
 
 class PointsMark(ResearchModel):
@@ -65,9 +73,51 @@ class PointsMark(ResearchModel):
     marker: Marker
     size: float
     opacity: float
+    axis: YAxisName
     x: list[float]
     y: list[float]
     source_refs: list[str]
+    decimation: Decimation | None
+
+
+class PolylineMark(ResearchModel):
+    kind: Literal["polyline"]
+    id: str
+    group: str
+    color: Color
+    width: float
+    line_style: Literal["solid", "dashed", "dotted", "dashdot"]
+    marker_size: float
+    axis: YAxisName
+    x: list[float]
+    y: list[float]
+    decimation: Decimation | None
+
+
+class BandMark(ResearchModel):
+    kind: Literal["band"]
+    id: str
+    group: str
+    color: Color
+    opacity: float
+    axis: YAxisName
+    x: list[float]
+    lower: list[float]
+    upper: list[float]
+
+
+class ErrorbarMark(ResearchModel):
+    kind: Literal["errorbar"]
+    id: str
+    group: str
+    color: Color
+    width: float
+    cap_size: float
+    opacity: float
+    axis: YAxisName
+    x: list[float]
+    y: list[float]
+    error: list[float]
 
 
 class SegmentsMark(ResearchModel):
@@ -122,10 +172,12 @@ class RectsMark(ResearchModel):
     opacity: float
     width: float
     shape: Literal["stairs", "bars"]
+    axis: YAxisName
     x0: list[float]
     x1: list[float]
     y0: list[float]
     y1: list[float]
+    decimation: Decimation | None
 
 
 class BoxMark(ResearchModel):
@@ -146,7 +198,15 @@ class BoxMark(ResearchModel):
 
 
 Mark = Annotated[
-    PointsMark | SegmentsMark | ViolinMark | SummaryMark | RectsMark | BoxMark,
+    PointsMark
+    | PolylineMark
+    | BandMark
+    | ErrorbarMark
+    | SegmentsMark
+    | ViolinMark
+    | SummaryMark
+    | RectsMark
+    | BoxMark,
     Field(discriminator="kind"),
 ]
 
@@ -154,7 +214,7 @@ Mark = Annotated[
 class LegendEntry(ResearchModel):
     label: str
     color: Color
-    symbol: Literal["line", "marker"]
+    symbol: Literal["line", "marker", "dashed"]
 
 
 class Panel(ResearchModel):
@@ -166,7 +226,7 @@ class Panel(ResearchModel):
 
 
 class PlanSource(ResearchModel):
-    kind: Literal["grouped_strip", "paired", "violin", "histogram", "box", "bar"]
+    kind: Literal["grouped_strip", "paired", "violin", "histogram", "box", "bar", "line", "scatter"]
     result_sha256: Digest
     algorithm_version: str
 
@@ -178,6 +238,7 @@ class PlanGeometry(ResearchModel):
     density: str | None
     histogram: str | None
     quantile: str | None
+    decimation: str | None
 
 
 class PlanRendering(ResearchModel):
@@ -407,9 +468,11 @@ def build_research_plan(
                     "marker": styles.get(group["label"], {}).get("marker", "o"),
                     "size": 4.0,
                     "opacity": 0.7,
+                    "axis": "y",
                     "x": [float(p["x"]) for p in points],
                     "y": [float(p["y"]) for p in points],
                     "sourceRefs": [p["observation"]["id"] for p in points],
+                    "decimation": None,
                 }
             )
             y_values += [float(p["y"]) for p in points]
@@ -442,6 +505,7 @@ def build_research_plan(
             "density": GEOMETRY["density"]["rule"] if spec["kind"] == "violin" else None,
             "histogram": None,
             "quantile": None,
+            "decimation": None,
         },
         "rendering": {
             "pointRendering": mode,
@@ -461,6 +525,7 @@ def build_research_plan(
                         "niceRule": AXIS_NICE_RULE,
                         "grid": True,
                     },
+                    "y2": None,
                 },
                 "marks": marks,
                 "legend": legend,
