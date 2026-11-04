@@ -1,8 +1,11 @@
 import renderContract from "../../../contracts/chart-render-v1.json";
+import geometryContract from "../../../contracts/chart-render-v2.json";
 
 import type { ChartSpec } from "./chart-spec";
 
 export const chartRenderContract = renderContract;
+export { geometryContract };
+export const densePointThreshold = geometryContract.points.denseThreshold;
 export const grayscalePalette = renderContract.grayscalePalette;
 export const groupPalette = renderContract.groupPalette;
 export const gridColor = renderContract.gridColor;

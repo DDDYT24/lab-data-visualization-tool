@@ -37,6 +37,7 @@ from .models import ChartSpec, JsonScalar
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
     CORRELATION_PALETTE,
+    GEOMETRY,
     GRID_COLOR,
     HISTOGRAM_AXIS_PADDING,
     HISTOGRAM_FILL_OPACITY,
@@ -55,7 +56,7 @@ SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".txt", ".json", ".xlsx"}
 MAX_PREVIEW_ROWS = 200
 MAX_PREVIEW_CELLS = 15_000
 MAX_FINDING_ROW_IDS = 100
-MAX_ANALYSIS_POINTS = 250
+MAX_ANALYSIS_POINTS = GEOMETRY["decimation"]["maxPoints"]
 BOOTSTRAP_RESAMPLES = 400
 MAX_XLSX_ENTRIES = 5_000
 MAX_XLSX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
@@ -2258,7 +2259,7 @@ def _derived_chart_preview(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, A
             values = values[np.isfinite(values)]
             if not len(values):
                 raise ProcessingError("A histogram needs at least one value.", "empty-chart-data")
-            counts, edges = np.histogram(values, bins="auto")
+            counts, edges = np.histogram(values, bins=GEOMETRY["histogram"]["numpyBins"])
             histograms.append(
                 {
                     "field": item.field,
@@ -2280,9 +2281,11 @@ def _derived_chart_preview(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, A
             values = np.sort(values[np.isfinite(values)])
             if not len(values):
                 raise ProcessingError("Each box needs at least one value.", "empty-chart-data")
-            q1, median, q3 = np.quantile(values, [0.25, 0.5, 0.75])
-            spread = q3 - q1
-            included = values[(values >= q1 - 1.5 * spread) & (values <= q3 + 1.5 * spread)]
+            q1, median, q3 = np.quantile(
+                values, [0.25, 0.5, 0.75], method=GEOMETRY["quantile"]["numpyMethod"]
+            )
+            spread = (q3 - q1) * GEOMETRY["quantile"]["whiskerIqr"]
+            included = values[(values >= q1 - spread) & (values <= q3 + spread)]
             outliers = values[(values < included[0]) | (values > included[-1])]
             boxes.append(
                 {

@@ -9,12 +9,14 @@ import pandas as pd
 import pytest
 from matplotlib.figure import Figure
 
+from labviz_api import render_plan, research_charts, research_strip
 from labviz_api.models import ChartSpec
-from labviz_api.processing import analyze_chart, render_chart
+from labviz_api.processing import MAX_ANALYSIS_POINTS, analyze_chart, render_chart
 from labviz_api.render_contract import (
     CHART_RENDER_CONTRACT_VERSION,
     CONFIDENCE_BAND_OPACITY,
     CORRELATION_PALETTE,
+    GEOMETRY,
     GRAYSCALE_PALETTE,
     GRID_COLOR,
     GROUP_PALETTE,
@@ -28,6 +30,20 @@ from labviz_api.render_contract import (
 )
 
 CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "chart-render-v1.json"
+GEOMETRY_PATH = CONTRACT_PATH.with_name("chart-render-v2.json")
+
+
+def test_python_geometry_reads_the_shared_file() -> None:
+    contract = json.loads(GEOMETRY_PATH.read_text(encoding="utf-8"))
+    assert contract == GEOMETRY
+    assert contract["contractVersion"] == "chart-render-v2"
+    assert contract["axis"]["rule"] == render_plan.AXIS_NICE_RULE
+    assert contract["axis"]["maxTicks"] == render_plan.AXIS_MAX_TICKS
+    assert contract["points"]["denseThreshold"] == render_plan.DENSE_POINT_THRESHOLD
+    assert contract["density"] == research_charts.DENSITY
+    assert research_strip.StripSpec().jitter_seed == contract["jitter"]["defaultSeed"]
+    assert research_strip.StripSpec().jitter_width == contract["jitter"]["defaultWidth"]
+    assert contract["decimation"]["maxPoints"] == MAX_ANALYSIS_POINTS
 
 
 def test_python_renderer_matches_shared_render_contract() -> None:

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 2,
+  "contractVersion": "chart-render-v2",
+  "axis": {
+    "rule": "nice-1-2-5-v1",
+    "margin": 0.05,
+    "maxTicks": 9,
+    "stepMultiples": [1, 2, 5, 10],
+    "minRelativeSpan": 1e-12,
+    "plainExponents": [-4, 5]
+  },
+  "jitter": {
+    "rule": "sha256-uniform-v1",
+    "defaultSeed": "labviz-strip-v1",
+    "defaultWidth": 0.3,
+    "maxWidth": 0.45
+  },
+  "density": {
+    "rule": "gaussian-kde-v1",
+    "kernel": "gaussian",
+    "bandwidthRule": "scott-sample-sd",
+    "scottExponent": -0.2,
+    "tailBandwidths": 3,
+    "minGridPoints": 129,
+    "gridPointsPerBandwidth": 4,
+    "maxSpanBandwidths": 512,
+    "maxHalfWidth": 0.4
+  },
+  "histogram": {
+    "rule": "numpy-auto-v1",
+    "numpyBins": "auto"
+  },
+  "quantile": {
+    "rule": "linear-v1",
+    "numpyMethod": "linear",
+    "whiskerIqr": 1.5
+  },
+  "decimation": {
+    "rule": "min-max-envelope-v1",
+    "maxPoints": 250
+  },
+  "points": {
+    "denseThreshold": 20000
+  }
+}

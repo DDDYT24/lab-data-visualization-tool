@@ -20,6 +20,7 @@ export type RenderPlanPanel = {
 export type RenderPlan = {
   schemaVersion: 1; contract: "render-plan-v1"; planHash: string;
   source: { kind: "grouped_strip" | "paired" | "violin"; resultSha256: string; algorithmVersion: string };
+  geometry: { contract: "chart-render-v2"; axis: string; jitter: string | null; density: string | null };
   rendering: { pointRendering: "auto" | "vector" | "raster"; rasterizePoints: boolean };
   panels: RenderPlanPanel[]; disclosures: string[];
 };

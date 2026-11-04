@@ -15,20 +15,24 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
+from .render_contract import GEOMETRY
 from .research_contract import Digest, ResearchModel
 from .research_preparation import PreparationError
 from .research_styles import COLORS
 
 CONTRACT = "render-plan-v1"
-AXIS_NICE_RULE = "nice-1-2-5-v1"
+AXIS_NICE_RULE = GEOMETRY["axis"]["rule"]
 # Matplotlib's default data margin, kept so new plans frame data as rc.2 charts did.
-AXIS_MARGIN = 0.05
-AXIS_MAX_TICKS = 9
+AXIS_MARGIN = GEOMETRY["axis"]["margin"]
+AXIS_MAX_TICKS = GEOMETRY["axis"]["maxTicks"]
+AXIS_STEP_MULTIPLES = GEOMETRY["axis"]["stepMultiples"]
 # Below this span, relative to the values, ticks cannot be told apart: treat them as one value.
-AXIS_MIN_RELATIVE_SPAN = 1e-12
+AXIS_MIN_RELATIVE_SPAN = GEOMETRY["axis"]["minRelativeSpan"]
 # Labels stay in plain digits for these powers of ten, where Matplotlib also leaves them plain.
-AXIS_PLAIN_EXPONENTS = range(-4, 6)
-DENSE_POINT_THRESHOLD = 20_000
+AXIS_PLAIN_EXPONENTS = range(
+    GEOMETRY["axis"]["plainExponents"][0], GEOMETRY["axis"]["plainExponents"][1] + 1
+)
+DENSE_POINT_THRESHOLD = GEOMETRY["points"]["denseThreshold"]
 
 Color = Annotated[str, Field(pattern=r"^#[0-9a-f]{6}$")]
 Marker = Literal["o", "s", "^", "D", "v"]
@@ -132,6 +136,13 @@ class PlanSource(ResearchModel):
     algorithm_version: str
 
 
+class PlanGeometry(ResearchModel):
+    contract: Literal["chart-render-v2"]
+    axis: str
+    jitter: str | None
+    density: str | None
+
+
 class PlanRendering(ResearchModel):
     point_rendering: Literal["auto", "vector", "raster"]
     rasterize_points: bool
@@ -142,6 +153,7 @@ class RenderPlan(ResearchModel):
     contract: Literal["render-plan-v1"]
     plan_hash: Digest
     source: PlanSource
+    geometry: PlanGeometry
     rendering: PlanRendering
     panels: list[Panel]
     disclosures: list[str]
@@ -179,7 +191,7 @@ def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[s
         raise PreparationError("chart-axis-range", "These values are too extreme to plot.")
     magnitude = 10.0 ** math.floor(math.log10((high - low) / AXIS_MAX_TICKS))
     # A 10x step always fits: the span is under AXIS_MAX_TICKS of them.
-    for multiple in (1, 2, 5, 10):
+    for multiple in AXIS_STEP_MULTIPLES:
         step = multiple * magnitude
         start = math.ceil(low / step - 1e-9)
         end = math.floor(high / step + 1e-9)
@@ -370,6 +382,12 @@ def build_research_plan(
             "kind": spec["kind"],
             "resultSha256": result["resultSha256"],
             "algorithmVersion": result["algorithmVersion"],
+        },
+        "geometry": {
+            "contract": GEOMETRY["contractVersion"],
+            "axis": AXIS_NICE_RULE,
+            "jitter": None if spec["kind"] == "paired" else GEOMETRY["jitter"]["rule"],
+            "density": GEOMETRY["density"]["rule"] if spec["kind"] == "violin" else None,
         },
         "rendering": {
             "pointRendering": mode,

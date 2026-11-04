@@ -99,6 +99,19 @@ def test_plan_hash_binds_presentation_and_source() -> None:
     assert plan["source"]["resultSha256"] == result["resultSha256"]
 
 
+def test_plan_cites_the_geometry_rules_it_used() -> None:
+    assert build_research_plan(grouped())["geometry"] == {
+        "contract": "chart-render-v2",
+        "axis": "nice-1-2-5-v1",
+        "jitter": "sha256-uniform-v1",
+        "density": None,
+    }
+    assert build_research_plan(paired())["geometry"]["jitter"] is None
+    assert build_research_plan(grouped({"kind": "violin"}))["geometry"]["density"] == (
+        "gaussian-kde-v1"
+    )
+
+
 def test_paired_plan_keeps_each_pair_and_its_times() -> None:
     result = paired()
     plan = build_research_plan(result)

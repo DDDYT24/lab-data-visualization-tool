@@ -8,6 +8,7 @@ import {
   TextField, Typography,
 } from "@mui/material";
 import type { ChartHistory, ScientificChart, ScientificChartSpec } from "@/domain/research-charts";
+import { geometryContract } from "@/domain/chart-render-contract";
 import { researchChartApi } from "@/lib/api/research-chart-api";
 import { useDesktopDraft, desktopDraftValue } from "./desktop-session";
 import { DesktopPdfPreview } from "./desktop-pdf-preview";
@@ -21,7 +22,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
   const [pointRendering, setPointRendering] = useState<"auto" | "vector" | "raster">("auto");
   const [kind, setKind] = useState<ScientificChartSpec["kind"]>("grouped_strip");
   const [title, setTitle] = useState("");
-  const [seed, setSeed] = useState("labviz-strip-v1");
+  const [seed, setSeed] = useState(geometryContract.jitter.defaultSeed);
   const [summary, setSummary] = useState<ScientificChartSpec["summary"]>("none");
   const [summaryUnit, setSummaryUnit] = useState<ScientificChartSpec["summaryUnit"]>("experimental_unit");
   const [first, setFirst] = useState("before");
@@ -145,7 +146,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
           <Button variant="contained" disabled={busy || pending || !revisionId || missingPairRoles}
             onClick={() => void run(async () => {
               const created = await researchChartApi.create(projectId, revisionId!, {
-                schemaVersion: 1, kind, title, locale: zh ? "zh" : "en", jitterSeed: seed, jitterWidth: 0.3,
+                schemaVersion: 1, kind, title, locale: zh ? "zh" : "en", jitterSeed: seed, jitterWidth: geometryContract.jitter.defaultWidth,
                 showPoints: kind === "violin" ? points : true,
                 summary: kind === "paired" ? "none" : summary, summaryUnit,
                 pairTimes: kind === "paired" ? [first, second] : [],

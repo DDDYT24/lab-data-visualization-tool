@@ -9,6 +9,7 @@ const axis = (scale: "linear" | "category") => ({
 const plan: RenderPlan = {
   schemaVersion: 1, contract: "render-plan-v1", planHash: digest,
   source: { kind: "violin", resultSha256: digest, algorithmVersion: "scientific-charts-v1" },
+  geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: "sha256-uniform-v1", density: null },
   rendering: { pointRendering: "auto", rasterizePoints: false },
   panels: [{
     id: "A", title: "Violin distribution", legend: [{ label: "A", color: "#1768ac", symbol: "line" }],

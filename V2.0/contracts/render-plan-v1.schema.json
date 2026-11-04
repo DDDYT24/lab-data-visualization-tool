@@ -166,6 +166,50 @@
       "title": "PanelAxes",
       "type": "object"
     },
+    "PlanGeometry": {
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "const": "chart-render-v2",
+          "title": "Contract",
+          "type": "string"
+        },
+        "axis": {
+          "title": "Axis",
+          "type": "string"
+        },
+        "jitter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Jitter"
+        },
+        "density": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Density"
+        }
+      },
+      "required": [
+        "contract",
+        "axis",
+        "jitter",
+        "density"
+      ],
+      "title": "PlanGeometry",
+      "type": "object"
+    },
     "PlanRendering": {
       "additionalProperties": false,
       "properties": {
@@ -592,6 +636,9 @@
     "source": {
       "$ref": "#/$defs/PlanSource"
     },
+    "geometry": {
+      "$ref": "#/$defs/PlanGeometry"
+    },
     "rendering": {
       "$ref": "#/$defs/PlanRendering"
     },
@@ -615,6 +662,7 @@
     "contract",
     "planHash",
     "source",
+    "geometry",
     "rendering",
     "panels",
     "disclosures"
