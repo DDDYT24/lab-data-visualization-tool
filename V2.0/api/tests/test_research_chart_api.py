@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
@@ -13,8 +14,10 @@ from matplotlib.figure import Figure
 from test_research_api import PLAN, SOURCE, project, settings, unlock
 from test_research_charts import paired_data, prepared_csv
 
+from labviz_api.artifacts import local_artifact_store, sweep
 from labviz_api.main import create_app
-from labviz_api.research_chart_render import render_chart
+from labviz_api.render_plan import RenderPlan
+from labviz_api.research_chart_render import draw_plan, render_chart
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
 
 
@@ -77,8 +80,10 @@ def test_all_render_formats_share_geometry_and_do_not_recompute(
         observed = [xy for group in point_geometry[0] for xy in group]
         assert sorted(observed) == sorted((p["x"], p["y"]) for p in result["points"])
     else:
-        segments = captured[0][0][1]
-        assert segments == [[[0, p["first"]], [1, p["second"]]] for p in result["pairs"]]
+        segments = [segment for _, paths in captured[0] for segment in paths]
+        assert sorted(segments) == sorted(
+            [[0, p["first"]], [1, p["second"]]] for p in result["pairs"]
+        )
 
 
 def test_saved_chart_exports_restart_copy_delete_and_stale_revision(tmp_path: Path) -> None:
@@ -128,6 +133,48 @@ def test_saved_chart_exports_restart_copy_delete_and_stale_revision(tmp_path: Pa
         assert connection.execute(
             "SELECT count(*) FROM research_charts WHERE project_id=?", (identifier,)
         ).fetchone() == (0,)
+
+
+def test_chart_keeps_its_plan_through_copy_and_cleanup_and_older_charts_stay_frozen(
+    tmp_path: Path,
+) -> None:
+    config = settings(tmp_path)
+    with TestClient(create_app(config)) as client:
+        unlock(client)
+        identifier = project(client)
+        revision = applied(client, identifier)
+        url = f"/api/v1/projects/{identifier}/research/charts"
+        chart = client.post(url, json={"revisionId": revision, "spec": {"kind": "violin"}}).json()
+        plan = client.get(f"{url}/{chart['id']}/plan")
+        assert plan.status_code == 200, plan.text
+        assert plan.headers["content-type"] == "application/json"
+        stored = RenderPlan.model_validate_json(plan.content)
+        assert stored.source.result_sha256 == chart["resultSha256"]
+        with sqlite3.connect(config.database_path) as connection:
+            digest = connection.execute(
+                "SELECT plan_sha256 FROM research_charts WHERE id=?", (chart["id"],)
+            ).fetchone()[0]
+        assert digest == hashlib.sha256(plan.content).hexdigest()
+
+        copied = client.post(f"/api/v1/projects/{identifier}/duplicate").json()["projectId"]
+        copied_url = f"/api/v1/projects/{copied}/research/charts"
+        copied_id = client.get(copied_url).json()["charts"][0]["id"]
+        assert client.get(f"{copied_url}/{copied_id}/plan").content == plan.content
+
+        sweep(config.database_path, local_artifact_store(config.database_path))
+        assert client.get(f"{url}/{chart['id']}/plan").content == plan.content
+
+        # A chart saved before plans existed serves the files it froze and reports no plan.
+        frozen = client.get(f"{url}/{chart['id']}/artifact/png").content
+        with sqlite3.connect(config.database_path) as connection:
+            connection.execute(
+                "UPDATE research_charts SET plan_sha256=NULL WHERE id=?", (chart["id"],)
+            )
+        assert client.get(f"{url}/{chart['id']}/artifact/png").content == frozen
+        missing = client.get(f"{url}/{chart['id']}/plan")
+        assert missing.status_code == 404 and missing.json()["code"] == "chart-plan-missing"
+        unknown = client.get(f"{url}/{'0' * 32}/plan")
+        assert unknown.status_code == 404 and unknown.json()["code"] == "chart-not-found"
 
 
 def test_paired_api_and_invalid_data_do_not_save_chart(tmp_path: Path) -> None:
@@ -298,7 +345,7 @@ def test_computation_batch_restores_gc_state_on_success_and_failure(
     from labviz_api.research_preparation import PreparationError
 
     original_compute = compute_chart
-    original_render = render_chart
+    original_render = draw_plan
     observed = []
 
     def checked(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[str, Any]:
@@ -307,16 +354,16 @@ def test_computation_batch_restores_gc_state_on_success_and_failure(
             raise PreparationError("chart-test-failure", "Injected batch failure")
         return original_compute(prepared, spec)
 
-    def checked_render(result: dict[str, Any]) -> dict[str, bytes]:
+    def checked_render(plan: dict[str, Any]) -> dict[str, bytes]:
         assert not gc.isenabled()
-        return original_render(result)
+        return original_render(plan)
 
     with TestClient(create_app(settings(tmp_path))) as client:
         unlock(client)
         identifier = project(client)
         revision = applied(client, identifier)
         monkeypatch.setattr(research_chart_routes, "compute_chart", checked)
-        monkeypatch.setattr(research_chart_routes, "render_chart", checked_render)
+        monkeypatch.setattr(research_chart_routes, "draw_plan", checked_render)
         previous = gc.isenabled()
         (gc.enable if enabled else gc.disable)()
         try:

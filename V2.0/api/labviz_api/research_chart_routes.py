@@ -12,8 +12,16 @@ from fastapi import Cookie, FastAPI, Query
 from fastapi.responses import Response
 from pydantic_core import from_json
 
-from .research_chart_render import render_chart
-from .research_chart_store import chart_row, chart_view, install_charts, read_chart_page, save_chart
+from .render_plan import build_research_plan
+from .research_chart_render import draw_plan
+from .research_chart_store import (
+    chart_row,
+    chart_view,
+    install_charts,
+    read_chart_page,
+    read_chart_plan,
+    save_chart,
+)
 from .research_charts import ScientificChartSpec, compute_chart
 from .research_contract import ResearchModel
 from .research_preparation import PreparationError
@@ -109,16 +117,19 @@ def register_chart_routes(
                     del prepared
                     large = len(result["points"]) > 20_000
                     computed = perf_counter()
-                    artifacts = render_chart(result)
+                    plan = build_research_plan(result)
+                    artifacts = draw_plan(plan)
                     rendered = perf_counter()
-                    identifier = save_chart(active, project_id, body.revision_id, result, artifacts)
+                    identifier = save_chart(
+                        active, project_id, body.revision_id, result, artifacts, plan
+                    )
                     stored = perf_counter()
                     view = chart_view(
                         chart_row(active, project_id, identifier, header_only=True), result=result
                     )
                     # The response owns only its bounded first page. Release the full
                     # snapshot and exports before collecting Matplotlib's cycles.
-                    del result, artifacts
+                    del result, plan, artifacts
                 finally:
                     if cyclic_enabled:
                         gc.enable()
@@ -144,6 +155,21 @@ def register_chart_routes(
     ) -> dict[str, Any]:
         require_access(repository, project_id, user, guest_token, ready=True)
         return read_chart_page(available(), project_id, chart_id, offset)
+
+    @app.get("/api/v1/projects/{project_id}/research/charts/{chart_id}/plan")
+    def chart_plan(
+        project_id: str,
+        chart_id: str,
+        user: Any = user_dep,
+        guest_token: str | None = Cookie(default=None, alias=guest_cookie),
+        repository: Any = repository_dep,
+    ) -> Response:
+        require_access(repository, project_id, user, guest_token, ready=True)
+        return Response(
+            read_chart_plan(available(), project_id, chart_id),
+            media_type="application/json",
+            headers={"Cache-Control": "private, no-store"},
+        )
 
     @app.get("/api/v1/projects/{project_id}/research/charts/{chart_id}/artifact/{format}")
     def chart_artifact(

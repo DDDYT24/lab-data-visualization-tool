@@ -59,6 +59,7 @@ def register_research_routes(
         )
         if error.code in {
             "chart-not-found",
+            "chart-plan-missing",
             "figure-not-found",
             "template-not-found",
             "output-not-found",

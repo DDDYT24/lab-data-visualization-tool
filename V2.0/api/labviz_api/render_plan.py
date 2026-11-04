@@ -14,7 +14,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
-from .research_chart_render import rasterize_points
 from .research_contract import Digest, ResearchModel
 from .research_styles import COLORS
 
@@ -22,7 +21,8 @@ CONTRACT = "render-plan-v1"
 AXIS_NICE_RULE = "nice-1-2-5-v1"
 # Matplotlib's default data margin, kept so new plans frame data as rc.2 charts did.
 AXIS_MARGIN = 0.05
-AXIS_MAX_TICKS = 6
+AXIS_MAX_TICKS = 9
+DENSE_POINT_THRESHOLD = 20_000
 
 Color = Annotated[str, Field(pattern=r"^#[0-9a-f]{6}$")]
 Marker = Literal["o", "s", "^", "D", "v"]
@@ -141,6 +141,10 @@ class RenderPlan(ResearchModel):
     disclosures: list[str]
 
 
+def rasterize_points(mode: str, count: int) -> bool:
+    return mode == "raster" or (mode == "auto" and count > DENSE_POINT_THRESHOLD)
+
+
 def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[str, Any]]]:
     """Pad the data by AXIS_MARGIN; tick at the smallest 1/2/5 x 10^k step that fits."""
     if low == high:
@@ -159,7 +163,9 @@ def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[s
     digits = max(0, -math.floor(math.log10(step)))
     # Integer multiples avoid accumulated floating error; rounding removes representation noise.
     values = [round(i * step, digits) + 0.0 for i in range(start, end + 1)]
-    ticks = [{"value": value, "label": f"{value:.{digits}f}"} for value in values]
+    # Labels use U+2212, the minus sign Matplotlib prints, rather than a hyphen.
+    labels = [f"{value:.{digits}f}".replace("-", "\u2212") for value in values]
+    ticks = [{"value": value, "label": label} for value, label in zip(values, labels, strict=True)]
     return (low, high), ticks
 
 
@@ -170,12 +176,17 @@ def grayscale(color: str) -> str:
     return "#" + format(round(gray * 255), "02x") * 3
 
 
+def plan_bytes(plan: dict[str, Any]) -> bytes:
+    """Canonical JSON: the same plan always hashes and stores as the same bytes."""
+    encoded = json.dumps(
+        plan, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
+    return encoded.encode("utf-8")
+
+
 def plan_hash(plan: dict[str, Any]) -> str:
     payload = {key: value for key, value in plan.items() if key != "planHash"}
-    encoded = json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
-    )
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return hashlib.sha256(plan_bytes(payload)).hexdigest()
 
 
 def build_research_plan(

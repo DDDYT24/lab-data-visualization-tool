@@ -38,6 +38,7 @@ REFERENCES = (
     ("research_charts", "svg_sha256"),
     ("research_charts", "png_sha256"),
     ("research_charts", "pdf_sha256"),
+    ("research_charts", "plan_sha256"),
     ("research_figure_artifacts", "svg_sha256"),
     ("research_figure_artifacts", "png_sha256"),
     ("research_figure_artifacts", "pdf_sha256"),
@@ -50,6 +51,7 @@ MEDIA_TYPES = {
     "pdf": "application/pdf",
     "zip": "application/zip",
     "parquet": "application/vnd.apache.parquet",
+    "json": "application/json",
 }
 
 
@@ -155,10 +157,15 @@ def sweep(database_path: Path, store: ArtifactStore) -> int:
             if REGISTRY_TABLE not in tables:
                 connection.execute("ROLLBACK")
                 return 0
+            # A profile on an older local revision may lack a table or a column.
+            columns = {
+                table: {str(row[1]) for row in connection.execute(f"PRAGMA table_info({table})")}
+                for table in tables
+            }
             referenced = " UNION ALL ".join(
                 f"SELECT {column} FROM {table} WHERE {column} IS NOT NULL"
                 for table, column in REFERENCES
-                if table in tables
+                if column in columns.get(table, ())
             )
             rows = connection.execute(
                 f"SELECT sha256 FROM {REGISTRY_TABLE} WHERE sha256 NOT IN ({referenced})"

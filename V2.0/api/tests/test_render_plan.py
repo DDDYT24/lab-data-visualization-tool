@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from labviz_api.render_plan import RenderPlan, build_research_plan, grayscale, nice_axis
+from labviz_api.research_chart_render import draw_plan
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
 from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
 
@@ -51,7 +52,7 @@ def assert_axis_frames(axis: dict[str, Any], values: list[float]) -> None:
     assert (low, high) == pytest.approx((min(values) - margin, max(values) + margin))
     ticks = [t["value"] for t in axis["ticks"]]
     assert low <= ticks[0] and ticks[-1] <= high and ticks == sorted(ticks)
-    assert 2 <= len(ticks) <= 6
+    assert 2 <= len(ticks) <= 9
     step = ticks[1] - ticks[0]
     mantissa = step / 10 ** math.floor(math.log10(step))
     assert any(math.isclose(mantissa, m) for m in (1, 2, 5))
@@ -123,7 +124,12 @@ def test_violin_plan_frames_the_full_density_support() -> None:
     [
         (0.12, 9.7, (-0.359, 10.179), ["0", "2", "4", "6", "8", "10"]),
         (1.0, 1.0, (0.89, 1.11), ["0.90", "0.95", "1.00", "1.05", "1.10"]),
-        (-250.0, -20.0, (-261.5, -8.5), ["-250", "-200", "-150", "-100", "-50"]),
+        (
+            -250.0,
+            -20.0,
+            (-261.5, -8.5),
+            ["\u2212250", "\u2212200", "\u2212150", "\u2212100", "\u221250"],
+        ),
     ],
 )
 def test_nice_axis_steps_through_one_two_five(
@@ -132,6 +138,58 @@ def test_nice_axis_steps_through_one_two_five(
     found, ticks = nice_axis(low, high)
     assert found == pytest.approx(domain)
     assert [t["label"] for t in ticks] == labels
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        pytest.param(lambda: grouped({"summary": "mean", "summaryUnit": "observation"}), id="dots"),
+        pytest.param(paired, id="paired"),
+        pytest.param(lambda: grouped({"kind": "violin"}), id="violin"),
+    ],
+)
+def test_every_export_format_draws_the_axes_the_plan_states(
+    monkeypatch: pytest.MonkeyPatch, result: Any
+) -> None:
+    from matplotlib.figure import Figure
+
+    plan = build_research_plan(result())
+    original = Figure.savefig
+    drawn = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        ax = figure.axes[0]
+        drawn.append(
+            (
+                ax.get_ylim(),
+                ax.get_xlim(),
+                [float(tick) for tick in ax.get_yticks()],
+                [label.get_text() for label in ax.get_yticklabels()],
+            )
+        )
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    artifacts = draw_plan(plan)
+    assert set(artifacts) == {"png", "svg", "pdf"} and len(drawn) == 3
+    axes = plan["panels"][0]["axes"]
+    expected = (
+        tuple(axes["y"]["domain"]),
+        tuple(axes["x"]["domain"]),
+        [tick["value"] for tick in axes["y"]["ticks"]],
+        [tick["label"] for tick in axes["y"]["ticks"]],
+    )
+    assert all(frame == expected for frame in drawn)
+
+
+def test_board_panel_keeps_axes_it_can_share() -> None:
+    from matplotlib.figure import Figure
+    from matplotlib.ticker import FixedLocator
+
+    figure = Figure()
+    axis = figure.subplots()
+    assert draw_plan(build_research_plan(grouped()), target_figure=figure, target_axis=axis) == {}
+    assert not isinstance(axis.yaxis.get_major_locator(), FixedLocator)
 
 
 def test_grayscale_matches_matplotlib() -> None:

@@ -10,6 +10,7 @@ from uuid import uuid4
 from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
+from .render_plan import plan_bytes
 from .research_panel_headers import install_headers, remember_header, scientific_header
 from .research_preparation import PreparationError
 from .research_store import ResearchStore
@@ -43,6 +44,7 @@ def save_chart(
     revision: str,
     result: dict[str, Any],
     artifacts: dict[str, bytes],
+    plan: dict[str, Any],
 ) -> str:
     identifier = uuid4().hex
     created_at = datetime.now(UTC).isoformat()
@@ -53,16 +55,20 @@ def save_chart(
             remember(connection, store.artifacts, artifacts[kind], media_type=MEDIA_TYPES[kind])
             for kind in ("svg", "png", "pdf")
         ]
+        plan_digest = remember(
+            connection, store.artifacts, plan_bytes(plan), media_type=MEDIA_TYPES["json"]
+        )
         connection.execute(
             "INSERT INTO research_charts "
-            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,created_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,"
+            "plan_sha256,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 identifier,
                 project_id,
                 revision,
                 to_json(result, ensure_ascii=False, round_trip=True).decode("utf-8"),
                 *digests,
+                plan_digest,
                 created_at,
             ),
         )
@@ -110,6 +116,19 @@ def chart_row(
     if field in {"svg", "png", "pdf"} and not header_only:
         chart[field] = store.artifacts.read(chart[field])
     return chart
+
+
+def read_chart_plan(store: ResearchStore, project_id: str, chart_id: str) -> bytes:
+    with store.connect() as connection:
+        row = connection.execute(
+            "SELECT plan_sha256 FROM research_charts WHERE id=? AND project_id=?",
+            (chart_id, project_id),
+        ).fetchone()
+    if row is None:
+        raise PreparationError("chart-not-found", "This chart is not available in this project.")
+    if row["plan_sha256"] is None:
+        raise PreparationError("chart-plan-missing", "This chart was saved without a render plan.")
+    return store.artifacts.read(row["plan_sha256"])
 
 
 def read_chart_page(
