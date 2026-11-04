@@ -163,6 +163,7 @@ def test_chart_keeps_its_plan_through_copy_and_cleanup_and_older_charts_stay_fro
 
         sweep(config.database_path, local_artifact_store(config.database_path))
         assert client.get(f"{url}/{chart['id']}/plan").content == plan.content
+        assert chart["hasPlan"] and client.get(f"{url}/{chart['id']}").json()["hasPlan"]
 
         # A chart saved before plans existed serves the files it froze and reports no plan.
         frozen = client.get(f"{url}/{chart['id']}/artifact/png").content
@@ -173,6 +174,7 @@ def test_chart_keeps_its_plan_through_copy_and_cleanup_and_older_charts_stay_fro
         assert client.get(f"{url}/{chart['id']}/artifact/png").content == frozen
         missing = client.get(f"{url}/{chart['id']}/plan")
         assert missing.status_code == 404 and missing.json()["code"] == "chart-plan-missing"
+        assert client.get(f"{url}/{chart['id']}").json()["hasPlan"] is False
         unknown = client.get(f"{url}/{'0' * 32}/plan")
         assert unknown.status_code == 404 and unknown.json()["code"] == "chart-not-found"
 
@@ -214,6 +216,10 @@ def test_saved_chart_data_pages_use_frozen_full_data(tmp_path: Path) -> None:
         chart = response.json()
         assert len(chart["rows"]) == 100 and chart["totalRows"] == 205
         last = client.get(f"{url}/{chart['id']}?offset=200").json()
+        target = last["rows"][0]["id"]
+        found = client.get(f"{url}/{chart['id']}?observation={target}").json()
+        assert found["offset"] == last["offset"] and found["rows"] == last["rows"]
+        assert client.get(f"{url}/{chart['id']}?observation=unknown").status_code == 404
         assert len(last["rows"]) == 5
         assert last["resultSha256"] == chart["resultSha256"]
 

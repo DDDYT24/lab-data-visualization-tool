@@ -149,12 +149,13 @@ def register_chart_routes(
         project_id: str,
         chart_id: str,
         offset: int = Query(default=0, ge=0),
+        observation: str | None = Query(default=None, max_length=128),
         user: Any = user_dep,
         guest_token: str | None = Cookie(default=None, alias=guest_cookie),
         repository: Any = repository_dep,
     ) -> dict[str, Any]:
         require_access(repository, project_id, user, guest_token, ready=True)
-        return read_chart_page(available(), project_id, chart_id, offset)
+        return read_chart_page(available(), project_id, chart_id, offset, observation)
 
     @app.get("/api/v1/projects/{project_id}/research/charts/{chart_id}/plan")
     def chart_plan(

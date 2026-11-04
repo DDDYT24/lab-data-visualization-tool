@@ -4,14 +4,38 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Checkbox, FormControlLabel,
-  MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  MenuItem, Paper, Skeleton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Typography,
 } from "@mui/material";
+import { RenderPlanChart } from "@/components/common/render-plan-chart";
 import type { ChartHistory, ScientificChart, ScientificChartSpec } from "@/domain/research-charts";
-import { geometryContract } from "@/domain/chart-render-contract";
+import { densePointThreshold, geometryContract } from "@/domain/chart-render-contract";
+import type { RenderPlan } from "@/domain/render-plan";
 import { researchChartApi } from "@/lib/api/research-chart-api";
 import { useDesktopDraft, desktopDraftValue } from "./desktop-session";
 import { DesktopPdfPreview } from "./desktop-pdf-preview";
+
+/** Interactive when the chart has a plan a browser can hold; otherwise the frozen PNG. */
+function ChartPreview({ alt, chart, onSelect, projectId, selected }: {
+  alt: string; chart: ScientificChart; onSelect: (ids: string[]) => void; projectId: string; selected: string[];
+}) {
+  const interactive = chart.hasPlan && chart.observations <= densePointThreshold;
+  const [loaded, setLoaded] = useState<{ chartId: string; plan: RenderPlan | null } | null>(null);
+  useEffect(() => {
+    if (!interactive) return;
+    let mounted = true;
+    researchChartApi.plan(projectId, chart.id).then(
+      (plan) => { if (mounted) setLoaded({ chartId: chart.id, plan }); },
+      () => { if (mounted) setLoaded({ chartId: chart.id, plan: null }); },
+    );
+    return () => { mounted = false; };
+  }, [chart.id, interactive, projectId]);
+  const current = loaded?.chartId === chart.id ? loaded : null;
+  if (interactive && !current) return <Skeleton height={440} variant="rounded" />;
+  if (interactive && current?.plan) return <RenderPlanChart key={current.plan.planHash} label={alt} onSelect={onSelect} plan={current.plan} selected={selected} />;
+  return <Box component="img" src={researchChartApi.artifact(projectId, chart.id, "png", false, true)}
+    alt={alt} sx={{ width: "100%", height: "auto", bgcolor: "white" }} />;
+}
 
 export function ResearchChartWorkspace({ projectId, revisionId, active = true, pending, onSaved, refreshKey = 0, mapping }: {
   mapping?: Record<string, string | null>;
@@ -32,6 +56,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
   const [points, setPoints] = useState(true);
   const [history, setHistory] = useState<ChartHistory>({ charts: [] });
   const [chart, setChart] = useState<ScientificChart | null>(null);
+  const [selection, setSelection] = useState<{ chartId: string; ids: string[] } | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recoveredDraft] = useState(() => desktopDraftValue(`chart:${projectId}`) as { selectedChartId?: string | null; selectedChartOffset?: number } | undefined);
@@ -70,6 +95,16 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
     violin: t("Violin distribution", "小提琴分布图"),
   };
   const savedSpec = chart?.spec as ScientificChartSpec | undefined;
+  const selected = selection && selection.chartId === chart?.id ? selection.ids : [];
+  const selectedRow = chart?.rows.find((row) => row.id === selected[0]);
+  function selectObservations(ids: string[]) {
+    if (!chart) return;
+    setSelection({ chartId: chart.id, ids });
+    if (chart.rows.some((row) => row.id === ids[0])) return;
+    researchChartApi.getWithObservation(projectId, chart.id, ids[0]!).then(setChart, (cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : "Chart failed");
+    });
+  }
   const missingPairRoles = kind === "paired" && ["sample", "pair", "time"].some((key) => !mapping?.[key]);
   function downloadExample(example: ScientificChartSpec["kind"]) {
     const rows = ["sample,group,repeat,value,unit,time,pair"];
@@ -188,8 +223,12 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
           {t("Observations", "观测")}: {chart.observations} · {t("Excluded", "已排除")}: {chart.excluded} ·
           {t("Research revision", "研究版本")}: {chart.revisionId.slice(0, 8)}
         </Typography>
-        {active && <Box component="img" src={researchChartApi.artifact(projectId, chart.id, "png", false, true)}
-          alt={savedSpec.title || names[savedSpec.kind]} sx={{ width: "100%", height: "auto", bgcolor: "white" }} />}
+        {active && <ChartPreview alt={savedSpec.title || names[savedSpec.kind]} chart={chart} onSelect={selectObservations}
+          projectId={projectId} selected={selected} />}
+        {selectedRow && <Typography role="status" variant="body2" data-testid="chart-selection">
+          {selectedRow.sampleLabel ?? "?"} · {selectedRow.group ?? t("Undeclared group", "未声明分组")} · {selectedRow.value ?? "—"} {selectedRow.unit} ·{" "}
+          {selectedRow.lineage.map((cell) => `${chart.sources.find((source) => source.id === cell.sourceId)?.name}: ${cell.row}, ${cell.column}`).join("; ")}
+        </Typography>}
         <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1 }}>
           <DesktopPdfPreview href={researchChartApi.artifact(projectId, chart.id, "pdf", false)} />
           {(["png", "svg", "pdf", "json"] as const).map((format) => <Button component="a" key={format}
@@ -224,7 +263,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
           <TableHead><TableRow>{[t("Sample / unit", "样本／独立单位"), t("Group / time", "分组／时间"),
             t("Value / reported", "值／原始报告"), t("State / exclusion", "状态／排除"), t("Source cells", "来源单元格")]
             .map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
-          <TableBody>{active && chart.rows.map((row) => <TableRow key={row.id}>
+          <TableBody>{active && chart.rows.map((row) => <TableRow key={row.id} selected={selected.includes(row.id)}>
             <TableCell>{row.sampleLabel ?? "?"} / {row.experimentalUnit ?? "?"}</TableCell>
             <TableCell>{row.group ?? "?"} / {row.time ?? "—"}</TableCell>
             <TableCell>{row.value ?? "—"} {row.unit}<br />{row.reportedText} {row.reportedUnit}</TableCell>

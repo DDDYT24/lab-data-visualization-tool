@@ -18,7 +18,7 @@ const chartHeader = z.object({
 export const chartHistorySchema = z.object({ charts: z.array(chartHeader) });
 export const scientificChartSchema = chartHeader.extend({
   resultSha256: z.string(), observations: z.number(), excluded: z.number(), totalRows: z.number(),
-  offset: z.number(), pairCount: z.number(),
+  offset: z.number(), pairCount: z.number(), hasPlan: z.boolean(),
   sources: researchDataSchema.shape.sources,
   rows: researchDataSchema.shape.observations,
   groups: z.array(z.object({
