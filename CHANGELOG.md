@@ -1,11 +1,9 @@
 # 更新记录
 
-版本功能基准见 [`VERSION_BASELINE.md`](VERSION_BASELINE.md)；接下来要做什么见
-[`V2.0/TODO.md`](V2.0/TODO.md)；V2.4 的详细计划、进度和验收记录见 [`V2.0/V2.4_PLAN.md`](V2.0/V2.4_PLAN.md)。
+版本功能基准见 [`VERSION_BASELINE.md`](VERSION_BASELINE.md)。
 
 ## V2.4（开发中，尚未发布）
 
-- 新增 V2.4 计划文件：分阶段计划（S0–S5）、每一步改动的文件、验收门槛和实际验收记录；TODO.md 只列下一步。
 - S0–S2（存储迁移、Parquet 数据集版本、冻结清洗行）已随 V2.3.0-rc.2 交付，内容见下一节。
 - S3 RenderPlan 进行中：S3a（研究图的统一作图契约）已在开发分支完成，尚未合并进 main，不影响现有出图。
 - 仓库新增公开文本检查：CI 和本地提交钩子会检查文件、提交消息、分支名和 PR 文本中的受限词。

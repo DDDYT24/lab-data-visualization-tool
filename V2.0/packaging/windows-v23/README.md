@@ -27,6 +27,12 @@ Use a new `--output` directory for a changed candidate or after a failed phase, 
 
 Do not run source recovery tests concurrently with live scientific acceptance on the same profile. Native fixtures belong under the current user's `LabVizV23Acceptance` directory. They are separate from default V2.2/V2.3 user data. Failed fixtures are retained for inspection.
 
-The pipeline never signs or publishes a release. After PR checks finish, create a draft pre-release for the verified commit, attach the complete asset set, download it again, verify hashes and the installer workflow, then publish the RC without replacing the stable V2.2 release. Changed bytes require a new candidate and fresh applicable evidence.
+The pipeline never signs or publishes a release. After PR checks finish, create a draft pre-release for the verified commit, attach the complete asset set, download it again, verify hashes and the installer workflow, then publish the RC without replacing the stable V2.2 release. Run the download check on a machine without an installed V2.3 identity, and upload the `DOWNLOAD-VERIFICATION.json` it writes:
+
+```powershell
+py -3.13 V2.0/packaging/windows-v23/tests/verify_published_release.py --tag v2.3.0-rc.2 --output outputs/v23-release/download-check
+```
+
+Changed bytes require a new candidate and fresh applicable evidence.
 
 The RC is unsigned. Actual clean-machine/offline use, assistive speech, physical-phone use, and researcher-pilot observations remain separate from these automated checks. Independent builds may have different Web build IDs and installer hashes.

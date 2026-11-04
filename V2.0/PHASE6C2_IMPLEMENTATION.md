@@ -3,7 +3,7 @@
 **Status:** Code is tracked on `main`; no AWS environment was applied and Phase 6C acceptance
 remains pending.
 
-**Current backlog and completion status:** [`TODO.md`](TODO.md)
+**Current backlog and completion status:** the maintainer's local backlog
 
 ## Boundary
 

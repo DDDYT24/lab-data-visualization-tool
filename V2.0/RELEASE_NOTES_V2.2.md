@@ -58,5 +58,5 @@ See the [English README](../README.md).
 - Native macOS/Linux packages, Unix launcher parity, Cloud sync/team/OAuth and hosted
   deployment are deferred. PostgreSQL/S3 integration source is retained, not publicly hosted.
 
-See [P7 evidence](docs/V2.2_P7_TEST_REPORT.md), [dependency review](docs/DEPENDENCY_SECURITY_REVIEW.md),
-[statistics](docs/STATISTICS_CONTRACT_V2.2.md) and [current backlog](TODO.md).
+See [P7 evidence](docs/V2.2_P7_TEST_REPORT.md), [dependency review](docs/DEPENDENCY_SECURITY_REVIEW.md)
+and [statistics](docs/STATISTICS_CONTRACT_V2.2.md).

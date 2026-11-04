@@ -3,7 +3,7 @@
 Status: **LOCAL PASS**
 
 This is a historical 2026-08-25 local integrity snapshot, not the current V2.1.1 release gate.
-The current release status and verification boundary are maintained in [`TODO.md`](TODO.md).
+The current release status and verification boundary are maintained in the maintainer's local backlog.
 
 Verified: 2026-08-25 (Asia/Shanghai)
 
