@@ -64,7 +64,7 @@ test("three scientific charts persist and export the same saved data", async ({ 
     const panel = plan.panels[0]!;
     const mark = panel.marks.find((item) => item.kind === "points");
     if (mark?.kind !== "points") throw new Error("Every saved chart here shows its points.");
-    const { grid } = buildPlanOption({ plan, text: { mean: "", median: "" } });
+    const grid = buildPlanOption({ plan, text: { mean: "", median: "" } }).grid[0] as { left: number; right: number; top: number; bottom: number };
     await img.scrollIntoViewIfNeeded();
     const canvas = (await img.locator("canvas").first().boundingBox())!;
     const place = ([low, high]: [number, number], value: number) => (value - low) / (high - low);

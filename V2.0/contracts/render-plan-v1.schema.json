@@ -59,6 +59,91 @@
       "title": "Axis",
       "type": "object"
     },
+    "BoxMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "box",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "medianColor": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Mediancolor",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "position": {
+          "title": "Position",
+          "type": "number"
+        },
+        "halfWidth": {
+          "title": "Halfwidth",
+          "type": "number"
+        },
+        "low": {
+          "title": "Low",
+          "type": "number"
+        },
+        "q1": {
+          "title": "Q1",
+          "type": "number"
+        },
+        "median": {
+          "title": "Median",
+          "type": "number"
+        },
+        "q3": {
+          "title": "Q3",
+          "type": "number"
+        },
+        "high": {
+          "title": "High",
+          "type": "number"
+        },
+        "outliers": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Outliers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "medianColor",
+        "width",
+        "position",
+        "halfWidth",
+        "low",
+        "q1",
+        "median",
+        "q3",
+        "high",
+        "outliers"
+      ],
+      "title": "BoxMark",
+      "type": "object"
+    },
     "LegendEntry": {
       "additionalProperties": false,
       "properties": {
@@ -106,7 +191,9 @@
           "items": {
             "discriminator": {
               "mapping": {
+                "box": "#/$defs/BoxMark",
                 "points": "#/$defs/PointsMark",
+                "rects": "#/$defs/RectsMark",
                 "segments": "#/$defs/SegmentsMark",
                 "summary": "#/$defs/SummaryMark",
                 "violin": "#/$defs/ViolinMark"
@@ -125,6 +212,12 @@
               },
               {
                 "$ref": "#/$defs/SummaryMark"
+              },
+              {
+                "$ref": "#/$defs/RectsMark"
+              },
+              {
+                "$ref": "#/$defs/BoxMark"
               }
             ]
           },
@@ -199,13 +292,37 @@
             }
           ],
           "title": "Density"
+        },
+        "histogram": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Histogram"
+        },
+        "quantile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantile"
         }
       },
       "required": [
         "contract",
         "axis",
         "jitter",
-        "density"
+        "density",
+        "histogram",
+        "quantile"
       ],
       "title": "PlanGeometry",
       "type": "object"
@@ -241,7 +358,10 @@
           "enum": [
             "grouped_strip",
             "paired",
-            "violin"
+            "violin",
+            "histogram",
+            "box",
+            "bar"
           ],
           "title": "Kind",
           "type": "string"
@@ -339,6 +459,88 @@
         "sourceRefs"
       ],
       "title": "PointsMark",
+      "type": "object"
+    },
+    "RectsMark": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "rects",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "opacity": {
+          "title": "Opacity",
+          "type": "number"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "shape": {
+          "enum": [
+            "stairs",
+            "bars"
+          ],
+          "title": "Shape",
+          "type": "string"
+        },
+        "x0": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X0",
+          "type": "array"
+        },
+        "x1": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X1",
+          "type": "array"
+        },
+        "y0": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y0",
+          "type": "array"
+        },
+        "y1": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y1",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "color",
+        "opacity",
+        "width",
+        "shape",
+        "x0",
+        "x1",
+        "y0",
+        "y1"
+      ],
+      "title": "RectsMark",
       "type": "object"
     },
     "SegmentsMark": {

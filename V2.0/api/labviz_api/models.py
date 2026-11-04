@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -637,6 +637,8 @@ class ChartAnalysis(VersionedModel):
     series: list[SeriesAnalysis]
     preview: ChartDerivedPreview
     recommendations: list[ChartRecommendation] = Field(default_factory=list)
+    # The RenderPlan the export of this chart draws; None until its kind moves to plans.
+    plan: dict[str, Any] | None = None
 
 
 class SharedChart(VersionedModel):

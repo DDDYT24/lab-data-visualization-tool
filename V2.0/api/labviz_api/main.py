@@ -86,6 +86,7 @@ from .persistence.exceptions import (
     PersistenceUnavailable,
 )
 from .persistence.sqlite import SqliteProjectStore
+from .plan_classic import build_classic_plan
 from .processing import (
     ProcessingError,
     analyze_chart,
@@ -1656,6 +1657,7 @@ def create_app(
                 series=derived["series"],
                 preview=derived["preview"],
                 recommendations=derived["recommendations"],
+                plan=build_classic_plan(chart, derived),
             ),
             downloads=downloads,
         )
@@ -1731,6 +1733,7 @@ def create_app(
             series=analysis["series"],
             preview=analysis["preview"],
             recommendations=analysis["recommendations"],
+            plan=build_classic_plan(body.chart, analysis),
         )
 
     @app.get(f"{API_PREFIX}/exports/{{export_id}}/download")

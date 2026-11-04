@@ -105,6 +105,8 @@ def test_plan_cites_the_geometry_rules_it_used() -> None:
         "axis": "nice-1-2-5-v1",
         "jitter": "sha256-uniform-v1",
         "density": None,
+        "histogram": None,
+        "quantile": None,
     }
     assert build_research_plan(paired())["geometry"]["jitter"] is None
     assert build_research_plan(grouped({"kind": "violin"}))["geometry"]["density"] == (

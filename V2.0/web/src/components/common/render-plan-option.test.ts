@@ -21,7 +21,7 @@ const marks: RenderPlanMark[] = [
 const plan: RenderPlan = {
   schemaVersion: 1, contract: "render-plan-v1", planHash: "0".repeat(64),
   source: { kind: "grouped_strip", resultSha256: "1".repeat(64), algorithmVersion: "scientific-charts-v1" },
-  geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: "sha256-uniform-v1", density: null },
+  geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: "sha256-uniform-v1", density: null, histogram: null, quantile: null },
   rendering: { pointRendering: "auto", rasterizePoints: false },
   disclosures: [],
   panels: [{
@@ -40,7 +40,7 @@ const series = (index: number) => option().series[index] as Series;
 
 describe("render plan adapter", () => {
   it("draws axes exactly as the plan states them", () => {
-    const { xAxis, yAxis } = option();
+    const { xAxis: [xAxis], yAxis: [yAxis] } = option() as Series;
     expect([yAxis.min, yAxis.max]).toEqual([-0.5, 4.5]);
     expect(yAxis.axisLabel.customValues).toEqual([0, 2, 4]);
     expect(yAxis.axisTick.customValues).toEqual([0, 2, 4]);
@@ -51,7 +51,7 @@ describe("render plan adapter", () => {
   });
 
   it("keeps category ticks but lets a zoomed value axis label its window", () => {
-    const { xAxis, yAxis } = option({ zoomed: true });
+    const { xAxis: [xAxis], yAxis: [yAxis] } = option({ zoomed: true }) as Series;
     expect(xAxis.axisLabel.customValues).toEqual([0, 1]);
     expect(yAxis.axisLabel.customValues).toBeUndefined();
     expect(yAxis.axisLabel.formatter(-1.23456789e-8)).toBe("−1.23457e−8");
@@ -107,6 +107,36 @@ describe("render plan adapter", () => {
     expect(planTooltip(plan, 3, 0, text)).toBe("A &#60;b&#62;<br/>Mean = 2<br/>n = 2");
     expect(planTooltip(plan, 0, 0, text)).toContain("n = 3<br/>h = 0.5 (scott-sample-sd)");
     expect(planTooltip(plan, 9, 0, text)).toBe("");
+  });
+
+  it("draws rects as the plan's intervals, whichever way they grow", () => {
+    const rects: RenderPlanMark = { ...base, kind: "rects", id: "bar:0", opacity: 0.5, width: 1, shape: "bars", x0: [0, 2], x1: [1, 3], y0: [0, 0], y1: [4, -2] };
+    const drawn = buildPlanOption({ plan: { ...plan, panels: [{ ...plan.panels[0]!, marks: [rects] }] }, text }).series[0] as Series;
+    const coord = (point: number[]) => [point[0]! * 10, 100 - point[1]! * 10];
+    expect(drawn.renderItem({ dataIndex: 0 }, { coord }).shape).toEqual({ x: 0, y: 60, width: 10, height: 40 });
+    expect(drawn.renderItem({ dataIndex: 1 }, { coord }).shape).toEqual({ x: 20, y: 100, width: 10, height: 20 });
+    expect(drawn.renderItem({ dataIndex: 0 }, { coord }).style).toEqual({ fill: "#1768ac", opacity: 0.5 });
+    expect(planTooltip({ ...plan, panels: [{ ...plan.panels[0]!, marks: [rects] }] }, 0, 1, text)).toBe("A &#60;b&#62;<br/>\u22122");
+  });
+
+  it("draws a box from the API's five numbers and its outliers", () => {
+    const box: RenderPlanMark = { ...base, kind: "box", id: "box:0", color: "#000000", medianColor: "#ff7f0e", width: 1, position: 1, halfWidth: 0.25, low: 1, q1: 2, median: 3, q3: 4, high: 5, outliers: [9] };
+    const boxed = { ...plan, panels: [{ ...plan.panels[0]!, marks: [box] }] };
+    const drawn = buildPlanOption({ plan: boxed, text }).series[0] as Series;
+    const { children } = drawn.renderItem({}, { coord: (point: number[]) => point });
+    expect(children[0].shape).toEqual({ x: 0.75, y: 2, width: 0.5, height: 2 });
+    expect(children.at(-2)).toMatchObject({ type: "line", shape: { y1: 3, y2: 3 }, style: { stroke: "#ff7f0e" } });
+    expect(children.at(-1)).toMatchObject({ type: "circle", shape: { cx: 1, cy: 9 } });
+    expect(planTooltip(boxed, 0, 0, text)).toBe("A &#60;b&#62;<br/>1 \u00b7 2 \u00b7 3 \u00b7 4 \u00b7 5");
+  });
+
+  it("gives each panel its own grid and axes", () => {
+    const panels = [plan.panels[0]!, { ...plan.panels[0]!, id: "B", marks: [marks[2]!] }];
+    const built = buildPlanOption({ plan: { ...plan, panels }, text }) as Series;
+    expect(built.grid).toHaveLength(2);
+    expect(built.xAxis.map((item: Series) => item.gridIndex)).toEqual([0, 1]);
+    expect(built.series[4].yAxisIndex).toBe(1);
+    expect(built.dataZoom[1].yAxisIndex).toEqual([0, 1]);
   });
 
   it("hides the legend when the plan has none", () => {

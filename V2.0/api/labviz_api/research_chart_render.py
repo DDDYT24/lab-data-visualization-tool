@@ -9,6 +9,7 @@ from typing import Any
 from .processing import _cjk_font_info, _contains_cjk
 from .render_plan import build_research_plan
 from .render_plan import rasterize_points as rasterize_points
+from .render_plan_draw import draw_mark
 from .research_preparation import PreparationError
 from .research_styles import COLORS as COLORS
 
@@ -21,57 +22,6 @@ LEFT_MARGIN = 0.12
 
 def render_chart(result: dict[str, Any]) -> dict[str, bytes]:
     return draw_plan(build_research_plan(result))
-
-
-def _draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
-    from matplotlib.collections import LineCollection
-
-    if mark["kind"] == "segments":
-        ax.add_collection(
-            LineCollection(
-                [
-                    [[x0, y0], [x1, y1]]
-                    for x0, y0, x1, y1 in zip(
-                        mark["x0"], mark["y0"], mark["x1"], mark["y1"], strict=True
-                    )
-                ],
-                colors=mark["color"],
-                linewidths=mark["width"],
-                alpha=mark["opacity"],
-                rasterized=dense,
-            )
-        )
-    elif mark["kind"] == "violin":
-        center = mark["position"]
-        ax.fill_betweenx(
-            mark["grid"],
-            [center - w for w in mark["halfWidths"]],
-            [center + w for w in mark["halfWidths"]],
-            alpha=mark["opacity"],
-            color=mark["color"],
-            linewidth=1,
-        )
-    elif mark["kind"] == "points":
-        ax.plot(
-            mark["x"],
-            mark["y"],
-            linestyle="None",
-            markersize=mark["size"],
-            markeredgewidth=1,
-            marker=mark["marker"],
-            color=mark["color"],
-            alpha=mark["opacity"],
-            zorder=4,
-            rasterized=dense,
-        )
-    else:
-        ax.plot(
-            [mark["x0"], mark["x1"]],
-            [mark["y"]] * 2,
-            color=mark["color"],
-            linewidth=mark["width"],
-            zorder=5,
-        )
 
 
 def draw_plan(
@@ -89,7 +39,7 @@ def draw_plan(
         figure = target_figure or Figure(figsize=(8, 5.5), dpi=300)
         ax = target_axis if target_axis is not None else figure.subplots()
         for mark in panel["marks"]:
-            _draw_mark(ax, mark, plan["rendering"]["rasterizePoints"])
+            draw_mark(ax, mark, plan["rendering"]["rasterizePoints"])
         x_axis, y_axis = panel["axes"]["x"], panel["axes"]["y"]
         ax.set_xticks(
             [tick["value"] for tick in x_axis["ticks"]],

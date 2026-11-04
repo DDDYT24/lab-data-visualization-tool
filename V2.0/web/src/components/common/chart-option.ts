@@ -14,6 +14,8 @@ import {
 } from "@/domain/chart-render-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
+import { buildPlanOption } from "./render-plan-option";
+
 type SeriesOptionRecord = Record<string, unknown>;
 
 function axisName(title: string, unit: string) {
@@ -232,6 +234,21 @@ export function buildChartOption({
     },
     tooltip: { trigger: "axis" as const },
   };
+
+  // Excluded findings are a local filter the saved analysis has not applied yet.
+  if (analysis?.plan && (spec.type !== "bar" || excludedFindingIds.length === 0)) {
+    const planned = buildPlanOption({
+      colors: { grid: chartGridColor, text: colorMode === "dark" ? "#ECECEC" : "#172033" },
+      plan: analysis.plan,
+      text: { mean: "Mean", median: "Median" },
+    });
+    return {
+      ...(planned as EChartsOption), ...common, tooltip: planned.tooltip as EChartsOption["tooltip"], dataZoom: [],
+      grid: panelGrids(spec.panelCount),
+      // A box plot has no legend in its export; the labels sit on the axis.
+      legend: planned.legend.show ? common.legend : { show: false },
+    };
+  }
 
   if (spec.type === "histogram") {
     // Draw the API's complete intervals: a value-axis bar only retains bin centers

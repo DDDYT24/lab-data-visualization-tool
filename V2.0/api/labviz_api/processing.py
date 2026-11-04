@@ -34,18 +34,18 @@ from zipfile import BadZipFile, ZipFile
 
 from .cleaning_recipe import EXCLUDING_ACTIONS, FrozenRows
 from .models import ChartSpec, JsonScalar
+from .plan_classic import axis_label, build_classic_plan
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
     CORRELATION_PALETTE,
     GEOMETRY,
     GRID_COLOR,
-    HISTOGRAM_AXIS_PADDING,
-    HISTOGRAM_FILL_OPACITY,
     SURFACE_GRAYSCALE_PALETTE,
     SURFACE_PALETTE,
     chart_series_color,
     matplotlib_line_style,
 )
+from .render_plan_draw import draw_panel
 
 if os.environ.get("LABVIZ_DESKTOP_MODE") == "1":
     os.environ["MPLBACKEND"] = "Agg"
@@ -2451,19 +2451,11 @@ def render_chart(
         )
         for index in range(chart.panel_count)
     ]
-    colors = [
-        chart_series_color(
-            configured_color=item.color,
-            grayscale=export.grayscale_preview,
-            grouped=False,
-            index=index,
-        )
-        for index, item in enumerate(chart.series)
-    ]
     x_field = chart.x_axis.field
     derived = _frozen_analysis or analyze_chart(frame, chart)
     analyses = derived["series"]
     preview = derived["preview"]
+    plan = build_classic_plan(chart, derived, series_colors=_series_colors)
     if chart.type == "surface3d":
         invalid_diagnostics = [
             diagnostic
@@ -2490,7 +2482,9 @@ def render_chart(
         ):
             secondary_axis = axis.twinx()
 
-        if chart.type in {"line", "scatter", "bar"}:
+        if plan is not None:
+            draw_panel(axis, next(p for p in plan["panels"] if p["id"] == str(panel_index)))
+        elif chart.type in {"line", "scatter", "bar"}:
             if x_field not in frame.columns:
                 raise ProcessingError(f"Chart field is missing: {x_field}", "invalid-chart-fields")
             panel_analyses = [
@@ -2594,64 +2588,15 @@ def render_chart(
                                 color=color,
                                 alpha=CONFIDENCE_BAND_OPACITY,
                             )
-            axis.set_xlabel(_axis_label(chart.x_axis.title, chart.x_axis.unit))
-            axis.set_ylabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
+            axis.set_xlabel(axis_label(chart.x_axis.title, chart.x_axis.unit))
+            axis.set_ylabel(axis_label(chart.y_axis.title, chart.y_axis.unit))
             if secondary_axis is not None:
                 secondary_axis.set_ylabel(
-                    _axis_label(
+                    axis_label(
                         chart.secondary_y_axis.title,
                         chart.secondary_y_axis.unit,
                     )
                 )
-        elif chart.type == "histogram":
-            panel_bins: list[dict[str, Any]] = []
-            for series_index, item in panel_series:
-                histogram = next(
-                    value
-                    for value in preview["histograms"]
-                    if value["field"] == item.field and value["label"] == item.label
-                )
-                bins = histogram["bins"]
-                panel_bins.extend(bins)
-                axis.stairs(
-                    [value["count"] for value in bins],
-                    [bins[0]["start"], *[value["end"] for value in bins]],
-                    fill=True,
-                    alpha=HISTOGRAM_FILL_OPACITY,
-                    label=item.label,
-                    color=colors[series_index],
-                    linewidth=export.line_width,
-                )
-            if panel_bins:
-                minimum = min(value["start"] for value in panel_bins)
-                maximum = max(value["end"] for value in panel_bins)
-                padding = (maximum - minimum) * HISTOGRAM_AXIS_PADDING
-                axis.set_xlim(minimum - padding, maximum + padding)
-                frequency_max = max(value["count"] for value in panel_bins)
-                axis.set_ylim(0, max(1, frequency_max * (1 + HISTOGRAM_AXIS_PADDING)))
-            axis.set_xlabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
-            axis.set_ylabel("Frequency")
-        elif chart.type == "box":
-            stats = []
-            for _, item in panel_series:
-                box = next(
-                    value
-                    for value in preview["boxes"]
-                    if value["field"] == item.field and value["label"] == item.label
-                )
-                stats.append(
-                    {
-                        "label": item.label,
-                        "whislo": box["minimum"],
-                        "q1": box["q1"],
-                        "med": box["median"],
-                        "q3": box["q3"],
-                        "whishi": box["maximum"],
-                        "fliers": box["outliers"],
-                    }
-                )
-            axis.bxp(stats)
-            axis.set_ylabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
         elif chart.type == "heatmap":
             heatmap = next(value for value in preview["heatmaps"] if value["panel"] == panel_index)
             correlations = np.array(
@@ -2704,7 +2649,7 @@ def render_chart(
                 raise ProcessingError(
                     "The selected 3D points do not span a surface.", "invalid-chart-fields"
                 ) from exc
-            axis.set_xlabel(_axis_label(chart.x_axis.title, chart.x_axis.unit))
+            axis.set_xlabel(axis_label(chart.x_axis.title, chart.x_axis.unit))
             axis.set_ylabel(panel_series[0][1].label)
             cast(Any, axis).set_zlabel(panel_series[1][1].label)
             figure.colorbar(surface, ax=axis, shrink=0.65, pad=0.1)
@@ -2818,10 +2763,6 @@ def _configure_legend(axis: Any, position: str) -> None:
         "right": "center right",
     }
     axis.legend(handles, labels, loc=locations[position])
-
-
-def _axis_label(title: str, unit: str) -> str:
-    return f"{title} ({unit})" if unit else title
 
 
 def sample_csv_bytes() -> bytes:

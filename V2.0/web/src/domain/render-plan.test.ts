@@ -9,7 +9,7 @@ const axis = (scale: "linear" | "category") => ({
 const plan: RenderPlan = {
   schemaVersion: 1, contract: "render-plan-v1", planHash: digest,
   source: { kind: "violin", resultSha256: digest, algorithmVersion: "scientific-charts-v1" },
-  geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: "sha256-uniform-v1", density: null },
+  geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: "sha256-uniform-v1", density: null, histogram: null, quantile: null },
   rendering: { pointRendering: "auto", rasterizePoints: false },
   panels: [{
     id: "A", title: "Violin distribution", legend: [{ label: "A", color: "#1768ac", symbol: "line" }],
@@ -19,6 +19,8 @@ const plan: RenderPlan = {
       { kind: "segments", id: "pairs:0", group: "A", color: "#1768ac", width: 1.2, opacity: 0.65, x0: [0], y0: [1], x1: [1], y1: [2], sourceRefs: [["o1", "o2"]] },
       { kind: "points", id: "points:0", group: "A", color: "#1768ac", marker: "o", size: 4, opacity: 0.7, x: [0.1], y: [1], sourceRefs: ["o1"] },
       { kind: "summary", id: "summary:0", group: "A", color: "#192d40", width: 2.4, x0: -0.25, x1: 0.25, y: 1, statistic: "mean", summaryUnit: "experimental_unit", n: 3 },
+      { kind: "rects", id: "bar:0", group: "A", color: "#1768ac", opacity: 0.55, width: 1, shape: "stairs", x0: [0], x1: [1], y0: [0], y1: [3] },
+      { kind: "box", id: "box:0", group: "A", color: "#000000", medianColor: "#ff7f0e", width: 1, position: 1, halfWidth: 0.075, low: 1, q1: 2, median: 3, q3: 4, high: 5, outliers: [9] },
     ],
   }],
   disclosures: ["Observations=1; independent units=1; excluded=0"],

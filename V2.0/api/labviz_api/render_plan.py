@@ -113,7 +113,41 @@ class SummaryMark(ResearchModel):
     n: int
 
 
-Mark = Annotated[PointsMark | SegmentsMark | ViolinMark | SummaryMark, Field(discriminator="kind")]
+class RectsMark(ResearchModel):
+    kind: Literal["rects"]
+    id: str
+    group: str
+    color: Color
+    opacity: float
+    width: float
+    shape: Literal["stairs", "bars"]
+    x0: list[float]
+    x1: list[float]
+    y0: list[float]
+    y1: list[float]
+
+
+class BoxMark(ResearchModel):
+    kind: Literal["box"]
+    id: str
+    group: str
+    color: Color
+    median_color: Color
+    width: float
+    position: float
+    half_width: float
+    low: float
+    q1: float
+    median: float
+    q3: float
+    high: float
+    outliers: list[float]
+
+
+Mark = Annotated[
+    PointsMark | SegmentsMark | ViolinMark | SummaryMark | RectsMark | BoxMark,
+    Field(discriminator="kind"),
+]
 
 
 class LegendEntry(ResearchModel):
@@ -131,7 +165,7 @@ class Panel(ResearchModel):
 
 
 class PlanSource(ResearchModel):
-    kind: Literal["grouped_strip", "paired", "violin"]
+    kind: Literal["grouped_strip", "paired", "violin", "histogram", "box", "bar"]
     result_sha256: Digest
     algorithm_version: str
 
@@ -141,6 +175,8 @@ class PlanGeometry(ResearchModel):
     axis: str
     jitter: str | None
     density: str | None
+    histogram: str | None
+    quantile: str | None
 
 
 class PlanRendering(ResearchModel):
@@ -401,6 +437,8 @@ def build_research_plan(
             "axis": AXIS_NICE_RULE,
             "jitter": None if spec["kind"] == "paired" else GEOMETRY["jitter"]["rule"],
             "density": GEOMETRY["density"]["rule"] if spec["kind"] == "violin" else None,
+            "histogram": None,
+            "quantile": None,
         },
         "rendering": {
             "pointRendering": mode,
