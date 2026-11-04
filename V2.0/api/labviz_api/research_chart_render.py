@@ -13,6 +13,10 @@ from .research_preparation import PreparationError
 from .research_styles import COLORS as COLORS
 
 _RENDER_LOCK = threading.RLock()
+# Room left of the axis, in inches: the y title and pads, plus one tick label's digits at 10 pt.
+LEFT_TITLE_INCHES = 0.4
+LEFT_DIGIT_INCHES = 0.09
+LEFT_MARGIN = 0.12
 
 
 def render_chart(
@@ -131,7 +135,9 @@ def draw_plan(
         )
         ax.set_ylim(*y_axis["domain"])
         figure.text(0.1, 0.02, "\n".join(plan["disclosures"]), fontsize=8)
-        figure.subplots_adjust(left=0.12, right=0.96, top=0.86, bottom=0.24)
+        widest = max(len(tick["label"]) for tick in y_axis["ticks"])
+        left = (LEFT_TITLE_INCHES + widest * LEFT_DIGIT_INCHES) / figure.get_figwidth()
+        figure.subplots_adjust(left=max(LEFT_MARGIN, left), right=0.96, top=0.86, bottom=0.24)
         texts = figure.findobj(Text)
         for text in texts:
             text.set_parse_math(False)

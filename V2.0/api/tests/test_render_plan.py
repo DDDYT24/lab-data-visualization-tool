@@ -230,8 +230,6 @@ def test_values_no_axis_can_hold_are_refused(low: float, high: float) -> None:
 def test_every_export_format_draws_the_axes_the_plan_states(
     monkeypatch: pytest.MonkeyPatch, result: Any
 ) -> None:
-    from matplotlib.figure import Figure
-
     plan = build_research_plan(result())
     original = Figure.savefig
     drawn = []
@@ -259,6 +257,26 @@ def test_every_export_format_draws_the_axes_the_plan_states(
         [tick["label"] for tick in axes["y"]["ticks"]],
     )
     assert all(frame == expected for frame in drawn)
+
+
+def test_long_tick_labels_stay_on_the_figure(monkeypatch: pytest.MonkeyPatch) -> None:
+    original = Figure.savefig
+    lefts = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        lefts.append(figure.axes[0].get_tightbbox().x0)
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    result = chart(
+        "s,g,v\na,A,123456789012\nb,A,123456789999\nc,B,123456790123\nd,B,123456790999\n",
+        {},
+        sample="s",
+        experimentalUnit="s",
+        group="g",
+    )
+    draw_plan(build_research_plan(result))
+    assert len(lefts) == 3 and min(lefts) >= 0
 
 
 def test_board_panel_keeps_axes_it_can_share() -> None:
