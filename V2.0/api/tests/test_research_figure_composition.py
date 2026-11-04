@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -13,7 +14,9 @@ from test_research_api import project, settings, unlock
 from test_research_charts import prepared_csv
 from test_research_figure_board import charts
 
+from labviz_api.artifacts import local_artifact_store, sweep
 from labviz_api.main import create_app
+from labviz_api.render_plan import RenderPlan, plan_hash
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
 from labviz_api.research_figure_board import FigureBoardSpec, interaction, scene_row_references
 from labviz_api.research_figure_render import render_board
@@ -117,6 +120,11 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
         assert artifacts["png"][1:4] == b"PNG"
         assert artifacts["pdf"][:4] == b"%PDF"
         view = client.get(url + "/interaction").json()
+        # The captured classic panel has no plan yet; the scientific one serves its plan.
+        assert view["panels"][0]["planHash"] is None
+        panel_plan = client.get(url + "/plans/B")
+        assert panel_plan.json()["planHash"] == view["panels"][1]["planHash"]
+        assert client.get(url + "/plans/A").json()["code"] == "figure-plan-missing"
         a_marks = [m for m in view["marks"] if m["panel"] == "A"]
         assert a_marks
         selected = client.get(url + "/interaction", params={"mark": a_marks[0]["id"]}).json()
@@ -140,6 +148,14 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
             client.get(copied_base + "/" + copied_id + "/interaction").json()["rows"]
             == view["rows"]
         )
+        sweep(config.database_path, local_artifact_store(config.database_path))
+        copied_url = copied_base + "/" + copied_id
+        assert client.get(copied_url + "/plans/B").content == panel_plan.content
+        # A board saved before plans existed keeps working from its frozen scene.
+        with sqlite3.connect(config.database_path) as connection:
+            connection.execute("DELETE FROM research_figure_panel_plans")
+        assert client.get(copied_url + "/plans/B").status_code == 404
+        assert client.get(copied_url + "/interaction").json()["rows"] == view["rows"]
 
 
 def test_shared_axes_geometry_and_formats_use_one_frozen_figure(
@@ -152,15 +168,33 @@ def test_shared_axes_geometry_and_formats_use_one_frozen_figure(
     recorded = []
 
     def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
-        recorded.append([(a.get_xlim(), a.get_ylim(), a.get_title()) for a in figure.axes])
+        recorded.append(
+            [
+                (a.get_xlim(), a.get_ylim(), a.get_title(), [float(v) for v in a.get_yticks()])
+                for a in figure.axes
+            ]
+        )
         return original(figure, *args, **kwargs)
 
     monkeypatch.setattr(Figure, "savefig", capture)
     artifacts, scene = render_board(
         panels, FigureBoardSpec(panel_chart_ids=["a", "b"], axis_mode="shared_xy")
     )
-    assert set(artifacts) == {"svg", "png", "pdf"}
+    assert set(artifacts) == {"svg", "png", "pdf", "plan:A", "plan:B"}
     assert recorded[0] == recorded[1] == recorded[2]
+    assert scene["schemaVersion"] == 3
+    # Each export drew exactly the axes its panel plan states, after the panels merged them.
+    for label, drawn, stated in zip("AB", recorded[0], scene["panels"], strict=True):
+        plan = json.loads(artifacts["plan:" + label])
+        RenderPlan.model_validate_json(artifacts["plan:" + label])
+        assert plan["planHash"] == stated["planHash"] == plan_hash(plan)
+        panel = plan["panels"][0]
+        assert (panel["id"], panel["title"]) == (label, drawn[2])
+        assert tuple(panel["axes"]["x"]["domain"]) == drawn[0]
+        assert tuple(panel["axes"]["y"]["domain"]) == drawn[1]
+        assert [tick["value"] for tick in panel["axes"]["y"]["ticks"]] == drawn[3]
+        assert plan["disclosures"][0].startswith("Input rows=")
+    assert recorded[0][0][1] == recorded[0][1][1]
     assert scene["panels"][0]["xLimits"] == scene["panels"][1]["xLimits"]
     assert scene["panels"][0]["yLimits"] == scene["panels"][1]["yLimits"]
     assert all(0 < m["cx"] < 1 and 0 < m["cy"] < 1 for m in scene["marks"])

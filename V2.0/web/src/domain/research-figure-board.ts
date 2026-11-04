@@ -37,5 +37,7 @@ export const figureInteractionSchema = z.object({
     lineage: z.array(z.object({ sourceId: z.string(), row: z.number(), column: z.string(), sheet: z.string().nullable() })),
   })),
   totalRows: z.number(), offset: z.number(), sampled: z.boolean(), selectedKind: z.string().nullable(), selectedInputs: z.number(),
+  // Scenes saved before schemaVersion 3 carry neither plan field.
+  panels: z.array(z.object({ label: z.string(), planHash: z.string().nullable().optional(), observations: z.number().optional() })).optional(),
 });
 export type FigureInteraction = z.infer<typeof figureInteractionSchema>;

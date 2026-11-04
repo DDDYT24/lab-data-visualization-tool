@@ -9,6 +9,7 @@ import type { FigureInteraction } from "@/domain/research-figure-board";
 import { researchFigureApi } from "@/lib/api/research-figure-api";
 import { useDesktopDraft } from "./desktop-session";
 import { DesktopPdfPreview } from "./desktop-pdf-preview";
+import { interactivePanels, ResearchFigurePanels } from "./research-figure-panels";
 
 const SourceRows = memo(function SourceRows({ rows, selected, choose }: {
   rows: FigureInteraction["rows"]; selected: boolean; choose: (next: { row?: string; mark?: string }) => void;
@@ -26,6 +27,7 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
   const zh = useLocale().startsWith("zh");
   const t = (en: string, cn: string) => zh ? cn : en;
   const [enlarged, setEnlarged] = useState(false);
+  const [panelView, setPanelView] = useState(false);
   const [geometry, setGeometry] = useState<FigureInteraction["marks"]>([]);
   const geometryKey = useRef<string | null>(null);
   const [view, setView] = useState<FigureInteraction | null>(null);
@@ -64,6 +66,8 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
     return () => clearTimeout(timer);
   }, [queryInput, query]);
   const choose = useCallback((next: { mark?: string; row?: string }) => { if (next.mark || next.row) setDetailsOpen(true); setLoading(true); setSelection(next); setOffset(0); }, []);
+  const selectPanelRow = useCallback((ids: string[]) => choose({ row: ids[0] }), [choose]);
+  const planned = useMemo(() => interactivePanels(view?.panels).map((panel) => panel.label), [view?.panels]);
   const compactPoints = geometry.length > 500;
   const staticMarks = useMemo(() => visible ? geometry.filter((mark) => !compactPoints || mark.kind !== "point").map((mark) => <circle key={mark.id} data-testid={`figure-mark-${mark.id}`} cx={mark.cx * 1000} cy={mark.cy * 1000}
     r={mark.kind === "point" ? 5 : 9} fill="transparent" stroke={mark.kind === "point" ? "transparent" : "#008577"} strokeWidth={1.5}
@@ -75,7 +79,10 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
     {error && <Alert severity="error" action={<Button onClick={() => { setLoading(true); setRetryKey((value) => value + 1); }}>{t("Retry source lookup", "重试来源查询")}</Button>}>{error}</Alert>}
     <Typography variant="caption" sx={overview ? { display: "none" } : undefined}>{t("Screen preview. Enlarge loads the original; downloads retain the complete 300 dpi figure.", "屏幕预览；放大后加载原图，下载保留完整 300 dpi 组合图。")}</Typography>
     <Button title={t("Screen preview; downloads retain the complete 300 dpi figure.", "屏幕预览；下载保留完整 300 dpi 组合图。")} sx={overview ? { alignSelf: "flex-start" } : undefined} onClick={() => setEnlarged(!enlarged)}>{enlarged ? t("Fit figure to screen", "组合图适应屏幕") : t("Enlarge figure for reading", "放大组合图阅读")}</Button>
-    <Box sx={{ overflowX: "auto", maxWidth: "100%" }}>
+    {!!planned.length && <Button sx={{ alignSelf: "flex-start" }} onClick={() => setPanelView(!panelView)}>{panelView ? t("Composed figure", "组合图") : t("Interactive panels", "交互面板")}</Button>}
+    {panelView && !!planned.length && <ResearchFigurePanels boardId={boardId} labels={planned} onSelect={selectPanelRow}
+      projectId={projectId} selected={selection.row ? [selection.row] : []} />}
+    <Box sx={{ overflowX: "auto", maxWidth: "100%", display: panelView && planned.length ? "none" : undefined }}>
     <Box sx={{ position: "relative", width: "100%", minWidth: enlarged ? 1000 : undefined, maxWidth: overview && !enlarged ? "calc(max(300px, 100dvh - 560px) * 1.272727)" : undefined, mx: "auto", bgcolor: "white" }}>
       <Box component="img" alt={t("Saved composed figure", "已保存组合图")} src={visible ? researchFigureApi.artifact(projectId, boardId, "png", false, !enlarged) : undefined} sx={{ width: "100%", display: "block" }} />
       <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label={t("Figure selection overlay", "组合图选择层")}

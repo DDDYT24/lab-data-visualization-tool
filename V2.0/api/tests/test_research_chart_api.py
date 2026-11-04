@@ -16,7 +16,7 @@ from test_research_charts import paired_data, prepared_csv
 
 from labviz_api.artifacts import local_artifact_store, sweep
 from labviz_api.main import create_app
-from labviz_api.render_plan import RenderPlan
+from labviz_api.render_plan import RenderPlan, build_research_plan
 from labviz_api.research_chart_render import draw_plan, render_chart
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
 
@@ -281,14 +281,14 @@ def test_grayscale_converts_explicit_group_color_without_changing_marker_or_valu
     from matplotlib.figure import Figure
     from test_research_charts import prepared_csv
 
-    from labviz_api.research_chart_render import render_chart
     from labviz_api.research_charts import ScientificChartSpec, compute_chart
 
     result = compute_chart(prepared_csv("v\n1\n2\n3\n"), ScientificChartSpec())
     result["spec"]["categoryStyles"] = [{"group": None, "color": "#008577", "marker": "s"}]
     figure = Figure()
     axis = figure.subplots()
-    render_chart(result, target_figure=figure, target_axis=axis, grayscale=True)
+    plan = build_research_plan(result, use_grayscale=True)
+    draw_plan(plan, target_figure=figure, target_axis=axis)
     line = next(line for line in axis.lines if line.get_linestyle() == "None")
     r, g, b = to_rgb(line.get_color())
     assert r == g == b
@@ -319,7 +319,7 @@ def test_hybrid_retains_full_geometry_vector_axes_and_300dpi_image() -> None:
     assert vector["groups"] == hybrid["groups"]
     figure = Figure(figsize=(8, 5.5), dpi=300)
     axis = figure.subplots()
-    render_chart(hybrid, target_figure=figure, target_axis=axis)
+    draw_plan(build_research_plan(hybrid), target_figure=figure, target_axis=axis)
     points = [line for line in axis.lines if line.get_linestyle() == "None"]
     assert sum(np.asarray(line.get_xdata()).size for line in points) == len(hybrid["points"])
     assert all(bool(line.get_rasterized()) for line in points)

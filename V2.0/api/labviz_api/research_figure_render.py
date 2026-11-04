@@ -21,7 +21,8 @@ from typing import Any, cast
 from .models import ChartSpec
 from .processing import _cjk_font_info, _contains_cjk
 from .processing import render_chart as legacy_render
-from .research_chart_render import _RENDER_LOCK, COLORS, rasterize_points, render_chart
+from .render_plan import build_research_plan, merge_axis, plan_bytes, plan_hash
+from .research_chart_render import _RENDER_LOCK, COLORS, draw_plan, rasterize_points
 from .research_preparation import PreparationError
 
 
@@ -52,16 +53,18 @@ def render_board(
             key=lambda x: (x is not None, x or ""),
         )
         colors = {label: palette[i % len(palette)] for i, label in enumerate(labels)}
+        # Scientific panels draw from a plan. Classic panels have none until they move to plans.
+        plans: list[dict[str, Any] | None] = [None] * count
         for i, (panel, ax) in enumerate(zip(sources, axes, strict=True)):
             if "scientific" in panel:
-                render_chart(
+                planned = build_research_plan(
                     panel["scientific"],
-                    target_figure=figure,
-                    target_axis=ax,
                     group_colors=colors,
-                    grayscale=spec.palette == "grayscale",
+                    use_grayscale=spec.palette == "grayscale",
                     point_rendering=spec.point_rendering,
                 )
+                plans[i] = planned
+                draw_plan(planned, target_figure=figure, target_axis=ax)
             else:
                 chart = ChartSpec.model_validate(panel["legacySpec"])
                 chart.export_settings.font_size = spec.font_size
@@ -91,7 +94,8 @@ def render_board(
                 or panel["title"]
                 or panel["kind"]
             )
-            ax.set_title(f"{'ABCD'[i]} · {title}", fontsize=spec.font_size + 1)
+            heading = f"{'ABCD'[i]} · {title}"
+            ax.set_title(heading, fontsize=spec.font_size + 1)
             ax.tick_params(labelsize=spec.font_size)
             ax.xaxis.label.set_fontsize(spec.font_size)
             ax.yaxis.label.set_fontsize(spec.font_size)
@@ -125,6 +129,10 @@ def render_board(
                     )
                 if legacy_spec["uncertainty"]["mode"] != "none":
                     footer += f"\nUncertainty: {legacy_spec['uncertainty']['mode']}"
+            plan = plans[i]
+            if plan is not None:
+                plan["panels"][0] |= {"id": "ABCD"[i], "title": heading}
+                plan["disclosures"] = footer.split("\n")
             legend = ax.get_legend()
             if legend:
                 for text in legend.get_texts():
@@ -152,7 +160,14 @@ def render_board(
             # Heatmaps use reversed y limits; preserve orientation as well as the domain.
             low, high = min(min(v) for v in limits), max(max(v) for v in limits)
             reverse = limits[0][0] > limits[0][1]
-            for ax in axes:
+            for ax, plan in zip(axes, plans, strict=True):
+                if plan is not None:
+                    axis = merge_axis(plan, dimension, low, high)
+                    if axis["scale"] == "linear":
+                        getattr(ax, f"set_{dimension}ticks")(
+                            [tick["value"] for tick in axis["ticks"]],
+                            [tick["label"] for tick in axis["ticks"]],
+                        )
                 getattr(ax, setter)((high, low) if reverse else (low, high))
         figure.suptitle(spec.title, fontsize=spec.font_size + 3)
         figure.subplots_adjust(
@@ -177,8 +192,13 @@ def render_board(
         FigureCanvasAgg(figure)
         # Resolve transforms/text geometry without painting the full dense data twice.
         figure.draw_without_rendering()
+        artifacts: dict[str, bytes] = {}
+        for label, plan in zip("ABCD", plans, strict=False):
+            if plan is not None:
+                plan["planHash"] = plan_hash(plan)
+                artifacts["plan:" + label] = plan_bytes(plan)
         scene: dict[str, Any] = {
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "panels": [],
             "marks": [],
             "rowSets": {},
@@ -209,6 +229,8 @@ def render_board(
                     "yLimits": list(ax.get_ylim()),
                     "xSignature": panel["xSignature"],
                     "ySignature": panel["ySignature"],
+                    "planHash": (plans[i] or {}).get("planHash"),
+                    "observations": len(panel["rows"]),
                 }
             )
             row_key = (
@@ -244,7 +266,6 @@ def render_board(
                 )
         if timings is not None:
             timings["geometry"] = (perf_counter() - started) * 1000
-        artifacts = {}
         for kind in ["png", "svg", "pdf"]:
             format_started = perf_counter()
             if kind == "svg":

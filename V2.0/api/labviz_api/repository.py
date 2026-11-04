@@ -1434,6 +1434,13 @@ class ProjectRepository:
                                     "FROM research_figure_artifacts WHERE board_id=?",
                                     (new_board_id, board["id"]),
                                 )
+                                connection.execute(
+                                    "INSERT INTO research_figure_panel_plans "
+                                    "(board_id,panel,plan_sha256) "
+                                    "SELECT ?,panel,plan_sha256 "
+                                    "FROM research_figure_panel_plans WHERE board_id=?",
+                                    (new_board_id, board["id"]),
+                                )
 
                             jobs_exist = connection.execute(
                                 "SELECT 1 FROM sqlite_master WHERE name='research_figure_jobs'"

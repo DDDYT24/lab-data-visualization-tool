@@ -189,6 +189,11 @@ def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[s
     low, high = low - margin, high + margin
     if not sys.float_info.min <= high - low < math.inf:
         raise PreparationError("chart-axis-range", "These values are too extreme to plot.")
+    return (low, high), axis_ticks(low, high)
+
+
+def axis_ticks(low: float, high: float) -> list[dict[str, Any]]:
+    """Tick a finished domain; a shared axis uses this after panels merge their domains."""
     magnitude = 10.0 ** math.floor(math.log10((high - low) / AXIS_MAX_TICKS))
     # A 10x step always fits: the span is under AXIS_MAX_TICKS of them.
     for multiple in AXIS_STEP_MULTIPLES:
@@ -201,8 +206,7 @@ def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[s
     # Integer multiples avoid accumulated floating error; rounding removes representation noise.
     values = [round(i * step, digits) + 0.0 for i in range(start, end + 1)]
     labels = tick_labels(values, step)
-    ticks = [{"value": value, "label": label} for value, label in zip(values, labels, strict=True)]
-    return (low, high), ticks
+    return [{"value": value, "label": label} for value, label in zip(values, labels, strict=True)]
 
 
 def grayscale(color: str) -> str:
@@ -218,6 +222,15 @@ def plan_bytes(plan: dict[str, Any]) -> bytes:
         plan, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     )
     return encoded.encode("utf-8")
+
+
+def merge_axis(plan: dict[str, Any], dimension: str, low: float, high: float) -> dict[str, Any]:
+    """Give a panel a shared domain. Value axes get new ticks; category ticks are the data."""
+    axis: dict[str, Any] = plan["panels"][0]["axes"][dimension]
+    axis["domain"] = [low, high]
+    if axis["scale"] == "linear":
+        axis["ticks"] = axis_ticks(low, high)
+    return axis
 
 
 def plan_hash(plan: dict[str, Any]) -> str:

@@ -292,14 +292,16 @@ def test_long_tick_labels_stay_on_the_figure(monkeypatch: pytest.MonkeyPatch) ->
     assert len(lefts) == 3 and min(lefts) >= 0
 
 
-def test_board_panel_keeps_axes_it_can_share() -> None:
+def test_board_panel_draws_the_axes_its_plan_states() -> None:
     from matplotlib.figure import Figure
     from matplotlib.ticker import FixedLocator
 
     figure = Figure()
     axis = figure.subplots()
-    assert draw_plan(build_research_plan(grouped()), target_figure=figure, target_axis=axis) == {}
-    assert not isinstance(axis.yaxis.get_major_locator(), FixedLocator)
+    plan = build_research_plan(grouped())
+    assert draw_plan(plan, target_figure=figure, target_axis=axis) == {}
+    assert isinstance(axis.yaxis.get_major_locator(), FixedLocator)
+    assert list(axis.get_ylim()) == plan["panels"][0]["axes"]["y"]["domain"]
 
 
 def test_grayscale_matches_matplotlib() -> None:

@@ -42,6 +42,7 @@ REFERENCES = (
     ("research_figure_artifacts", "svg_sha256"),
     ("research_figure_artifacts", "png_sha256"),
     ("research_figure_artifacts", "pdf_sha256"),
+    ("research_figure_panel_plans", "plan_sha256"),
     ("research_outputs", "sha256"),
     ("dataset_versions", "content_sha256"),
 )

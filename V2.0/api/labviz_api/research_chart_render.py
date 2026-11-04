@@ -19,22 +19,8 @@ LEFT_DIGIT_INCHES = 0.09
 LEFT_MARGIN = 0.12
 
 
-def render_chart(
-    result: dict[str, Any],
-    *,
-    target_figure: Any = None,
-    target_axis: Any = None,
-    group_colors: dict[Any, str] | None = None,
-    grayscale: bool = False,
-    point_rendering: str | None = None,
-) -> dict[str, bytes]:
-    plan = build_research_plan(
-        result,
-        group_colors=group_colors,
-        use_grayscale=grayscale,
-        point_rendering=point_rendering,
-    )
-    return draw_plan(plan, target_figure=target_figure, target_axis=target_axis)
+def render_chart(result: dict[str, Any]) -> dict[str, bytes]:
+    return draw_plan(build_research_plan(result))
 
 
 def _draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
@@ -124,16 +110,13 @@ def draw_plan(
         ax.set_ylabel(y_axis["title"])
         ax.grid(axis="y", alpha=0.2)
         ax.spines[["top", "right"]].set_visible(False)
-        if target_axis is not None:
-            # A board shares axes across panels after drawing them all, so its panels keep
-            # Matplotlib's limits until the plan can state the shared axes.
-            ax.autoscale_view(scalex=False)
-            return {}
         ax.set_yticks(
             [tick["value"] for tick in y_axis["ticks"]],
             [tick["label"] for tick in y_axis["ticks"]],
         )
         ax.set_ylim(*y_axis["domain"])
+        if target_axis is not None:
+            return {}
         figure.text(0.1, 0.02, "\n".join(plan["disclosures"]), fontsize=8)
         widest = max(len(tick["label"]) for tick in y_axis["ticks"])
         left = (LEFT_TITLE_INCHES + widest * LEFT_DIGIT_INCHES) / figure.get_figwidth()
