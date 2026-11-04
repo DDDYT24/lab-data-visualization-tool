@@ -47,6 +47,10 @@
             }
           ],
           "title": "Nicerule"
+        },
+        "grid": {
+          "title": "Grid",
+          "type": "boolean"
         }
       },
       "required": [
@@ -54,7 +58,8 @@
         "domain",
         "ticks",
         "title",
-        "niceRule"
+        "niceRule",
+        "grid"
       ],
       "title": "Axis",
       "type": "object"

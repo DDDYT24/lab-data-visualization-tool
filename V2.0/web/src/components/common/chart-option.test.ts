@@ -7,6 +7,7 @@ import {
   chartSeriesColor,
 } from "@/domain/chart-render-contract";
 import { defaultChartSpec } from "@/domain/chart-spec";
+import type { RenderPlan } from "@/domain/render-plan";
 
 import { buildChartOption } from "./chart-option";
 
@@ -341,5 +342,28 @@ describe("chart render contract", () => {
     });
     expect((unavailable.series as Array<{ data: number[][] }>)[0].data).toEqual([]);
     expect(unavailable.xAxis).toMatchObject({ data: [] });
+  });
+
+  it("names plan statistics in the reader's language", () => {
+    const axis = { scale: "linear" as const, domain: [0, 2] as [number, number], ticks: [{ value: 0, label: "0" }], title: "", niceRule: "nice-1-2-5-v1" as const, grid: true };
+    const plan: RenderPlan = {
+      schemaVersion: 1, contract: "render-plan-v1", planHash: "0".repeat(64),
+      source: { kind: "bar", resultSha256: "1".repeat(64), algorithmVersion: "classic-charts-v1" },
+      geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: null, density: null, histogram: null, quantile: null },
+      rendering: { pointRendering: "auto", rasterizePoints: false }, disclosures: [],
+      panels: [{
+        id: "1", title: "Chart", legend: [], axes: { x: axis, y: axis },
+        marks: [{ kind: "summary", id: "summary:0", group: "A", color: "#1768ac", width: 2, x0: 0, x1: 1, y: 1, statistic: "mean", summaryUnit: "sample", n: 2 }],
+      }],
+    };
+    const analysis = { apiVersion: "v1", projectId: "p", recommendations: [], series: [], plan,
+      preview: { histograms: [], boxes: [], heatmaps: [], surfaceDiagnostics: [], surfacePoints: [] } } as ChartAnalysis;
+    const preview: DataPreview = { apiVersion: "v1", projectId: "p", columns: [], rows: [], sampled: false, sampleStrategy: "none", totalRows: 0 };
+    const tooltip = (zh: boolean) => {
+      const option = buildChartOption({ analysis, excludedFindingIds: [], findings: [], preview, spec: { ...defaultChartSpec, type: "bar" }, zh });
+      return (option.tooltip as { formatter: (params: { seriesIndex: number; dataIndex: number }) => string }).formatter({ seriesIndex: 0, dataIndex: 0 });
+    };
+    expect(tooltip(true)).toContain("均值");
+    expect(tooltip(false)).toContain("Mean");
   });
 });

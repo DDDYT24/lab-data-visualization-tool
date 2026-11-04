@@ -19,6 +19,8 @@ type PlanAxis = RenderPlanPanel["axes"]["x"];
 type Coordinate = [number, number];
 type RenderApi = { coord: (point: number[]) => number[] };
 export type PlanText = { mean: string; median: string };
+export const planText = (zh: boolean): PlanText =>
+  zh ? { mean: "均值", median: "中位数" } : { mean: "Mean", median: "Median" };
 export type PlanColors = { text: string; grid: string };
 const DEFAULT_COLORS: PlanColors = { text: TEXT_COLOR, grid: gridColor };
 export const PLAN_ZOOM_IDS = ["zoom-x", "zoom-y"] as const;
@@ -192,7 +194,7 @@ function axisOption(axis: PlanAxis, zoomed: boolean, nameGap: number, gridIndex:
       rotate: axis.scale === "category" && axis.ticks.length > LONG_AXIS_TICKS ? 30 : 0,
       formatter: (value: number) => names.get(value) ?? shown(value),
     },
-    splitLine: { show: axis.scale === "linear", lineStyle: { color: colors.grid } },
+    splitLine: { show: axis.grid, lineStyle: { color: colors.grid } },
   };
 }
 

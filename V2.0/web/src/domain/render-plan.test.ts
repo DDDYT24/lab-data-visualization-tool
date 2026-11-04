@@ -4,7 +4,7 @@ import { renderPlanSchema, type RenderPlan } from "./render-plan";
 
 const digest = "a".repeat(64);
 const axis = (scale: "linear" | "category") => ({
-  scale, domain: [0, 1], ticks: [{ value: 0, label: "0" }], title: "", niceRule: scale === "linear" ? "nice-1-2-5-v1" : null,
+  scale, domain: [0, 1], ticks: [{ value: 0, label: "0" }], title: "", niceRule: scale === "linear" ? "nice-1-2-5-v1" : null, grid: scale === "linear",
 });
 const plan: RenderPlan = {
   schemaVersion: 1, contract: "render-plan-v1", planHash: digest,

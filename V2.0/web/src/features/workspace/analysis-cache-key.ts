@@ -31,3 +31,26 @@ export function analysisCacheKey(
     xAxis: spec.xAxis.field,
   });
 }
+
+/**
+ * What the analysis response's RenderPlan draws, for charts that have one.
+ *
+ * These charts run no fit or resample, so restyling them only costs a plan.
+ * Charts without a plan read their appearance from the spec, and stay out.
+ */
+export function planAppearanceKey(spec: ChartSpec): string {
+  const planned =
+    spec.type === "histogram" ||
+    spec.type === "box" ||
+    (spec.type === "bar" &&
+      spec.fitting.model === "none" &&
+      spec.uncertainty.mode === "none");
+  if (!planned) return "";
+  return JSON.stringify({
+    colors: spec.series.map((series) => series.color),
+    grayscale: spec.export.grayscalePreview,
+    grid: spec.export.gridVisible,
+    xAxis: [spec.xAxis.title, spec.xAxis.unit],
+    yAxis: [spec.yAxis.title, spec.yAxis.unit],
+  });
+}

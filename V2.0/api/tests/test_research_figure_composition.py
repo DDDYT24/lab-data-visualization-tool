@@ -120,11 +120,16 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
         assert artifacts["png"][1:4] == b"PNG"
         assert artifacts["pdf"][:4] == b"%PDF"
         view = client.get(url + "/interaction").json()
-        # The captured classic panel has no plan yet; the scientific one serves its plan.
-        assert view["panels"][0]["planHash"] is None
+        # Captured box panels have plans; line, scatter and correlation panels do not yet.
         panel_plan = client.get(url + "/plans/B")
         assert panel_plan.json()["planHash"] == view["panels"][1]["planHash"]
-        assert client.get(url + "/plans/A").json()["code"] == "figure-plan-missing"
+        if kind == "box":
+            captured_plan = RenderPlan.model_validate_json(client.get(url + "/plans/A").content)
+            assert captured_plan.plan_hash == view["panels"][0]["planHash"]
+            assert captured_plan.panels[0].id == "A"
+        else:
+            assert view["panels"][0]["planHash"] is None
+            assert client.get(url + "/plans/A").json()["code"] == "figure-plan-missing"
         a_marks = [m for m in view["marks"] if m["panel"] == "A"]
         assert a_marks
         selected = client.get(url + "/interaction", params={"mark": a_marks[0]["id"]}).json()
@@ -202,6 +207,69 @@ def test_shared_axes_geometry_and_formats_use_one_frozen_figure(
     selected = interaction(scene, density["id"], None, 0, "", False)
     assert selected["selectedInputs"] == 3
     assert selected["selectedKind"] == "density"
+
+
+def captured_box(values: list[float]) -> dict[str, Any]:
+    import pandas as pd
+
+    from labviz_api.processing import default_chart_spec
+    from labviz_api.research_figure_sources import legacy_snapshot
+
+    frame = pd.DataFrame({"x": list(range(len(values))), "v": values})
+    chart = default_chart_spec(frame)
+    chart["type"] = "box"
+    chart["yAxis"].update(field="v", title="Signal", unit="mV")
+    chart["series"] = [{**chart["series"][0], "field": "v", "label": "v", "panel": 1}]
+
+    class Repository:
+        def get_workspace(self, _: str) -> dict[str, Any]:
+            return {"chart": chart, "decisions": [], "quality": {}, "preview": {}}
+
+        def load_chart_dataframe(self, _: str) -> Any:
+            return frame
+
+        def load_quality_dataframe(self, _: str) -> Any:
+            return frame
+
+    return legacy_snapshot(Repository(), "id", 1)
+
+
+def test_shared_axis_ticks_cover_the_whole_axis_on_captured_panels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panels = [captured_box([1.0, 2.0, 3.0, 4.0]), captured_box([10.0, 20.0, 30.0, 400.0])]
+    original = Figure.savefig
+    drawn: list[list[Any]] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        drawn.extend([a.get_ylim(), [float(v) for v in a.get_yticks()]] for a in figure.axes)
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    artifacts, scene = render_board(
+        panels, FigureBoardSpec(panel_chart_ids=["a", "b"], axis_mode="shared_y", grid_visible=True)
+    )
+    assert set(artifacts) >= {"plan:A", "plan:B"}
+    for label, (limits, ticks) in zip("AB", drawn[:2], strict=True):
+        plan = json.loads(artifacts["plan:" + label])
+        y_axis = plan["panels"][0]["axes"]["y"]
+        assert ticks == [tick["value"] for tick in y_axis["ticks"]]
+        assert y_axis["domain"] == list(limits)
+        assert ticks[-1] > 300
+        assert (plan["panels"][0]["axes"]["x"]["grid"], y_axis["grid"]) == (True, True)
+    assert all(panel["planHash"] for panel in scene["panels"])
+
+
+@pytest.mark.parametrize("grid_visible", [False, True])
+def test_board_plans_state_the_grid_the_board_draws(grid_visible: bool) -> None:
+    result = compute_chart(prepared_csv("v\n0\n1\n2\n"), ScientificChartSpec())
+    sources = [scientific_source(result, "one"), captured_box([1.0, 2.0, 3.0, 9.0])]
+    artifacts, _ = render_board(
+        sources, FigureBoardSpec(panel_chart_ids=["a", "b"], grid_visible=grid_visible)
+    )
+    for label in "AB":
+        axes = json.loads(artifacts["plan:" + label])["panels"][0]["axes"]
+        assert (axes["x"]["grid"], axes["y"]["grid"]) == (grid_visible, grid_visible)
 
 
 def test_rejected_shared_axis_is_atomic_and_selection_never_changes_counts(tmp_path: Path) -> None:

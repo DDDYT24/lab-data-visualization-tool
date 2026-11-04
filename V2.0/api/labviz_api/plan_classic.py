@@ -188,7 +188,11 @@ def bar_panel(
     positions = {label: float(index) for index, label in enumerate(categories)}
     marks = []
     for order, (index, analysis) in enumerate(listed):
-        item = next(series for series in chart.series if series.field == analysis["field"])
+        item = next(
+            series
+            for series in chart.series
+            if series.field == analysis["field"] and series.panel == panel_index
+        )
         color = chart_series_color(
             configured_color=item.color,
             grayscale=chart.export_settings.grayscale_preview,
@@ -246,6 +250,8 @@ def build_classic_plan(
         uses_secondary or any(a["fit"] or a["uncertainty"] for a in analyses)
     ):
         return None
+    # Box exports have never drawn a grid.
+    grid = chart.export_settings.grid_visible and chart.type != "box"
     panels = []
     for panel_index in range(1, chart.panel_count + 1):
         items = [(i, s) for i, s in enumerate(chart.series) if s.panel == panel_index]
@@ -260,6 +266,8 @@ def build_classic_plan(
         )
         if panel is None:
             return None
+        for axis in panel["axes"].values():
+            axis["grid"] = grid
         title = f"{chart.title}\n{chart.subtitle}" if chart.subtitle else chart.title
         panels.append(
             {

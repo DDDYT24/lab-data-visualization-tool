@@ -2402,6 +2402,7 @@ def render_chart(
     _target_axes: Any = None,
     _frozen_analysis: dict[str, Any] | None = None,
     _series_colors: dict[str, str] | None = None,
+    _plan: dict[str, Any] | None = None,
 ) -> bytes:
     from matplotlib import font_manager
     from matplotlib.colors import LinearSegmentedColormap
@@ -2455,7 +2456,7 @@ def render_chart(
     derived = _frozen_analysis or analyze_chart(frame, chart)
     analyses = derived["series"]
     preview = derived["preview"]
-    plan = build_classic_plan(chart, derived, series_colors=_series_colors)
+    plan = _plan or build_classic_plan(chart, derived, series_colors=_series_colors)
     if chart.type == "surface3d":
         invalid_diagnostics = [
             diagnostic
@@ -2658,7 +2659,7 @@ def render_chart(
             axis.set_title(f"{chart.title}\n{chart.subtitle}" if chart.subtitle else chart.title)
         else:
             axis.set_title(f"Panel {panel_index}")
-        if chart.type not in {"box", "heatmap", "surface3d"}:
+        if plan is None and chart.type not in {"box", "heatmap", "surface3d"}:
             if export.grid_visible:
                 axis.grid(True, color=GRID_COLOR, linewidth=0.7, alpha=0.8)
             else:

@@ -8,7 +8,7 @@ import { buildPlanOption, planSelection, planTooltip } from "./render-plan-optio
 const text = { mean: "Mean", median: "Median" };
 const axis = (ticks: [number, string][], scale: "linear" | "category") => ({
   scale, domain: [-0.5, 4.5] as [number, number], title: scale === "linear" ? "mV" : "",
-  niceRule: scale === "linear" ? "nice-1-2-5-v1" as const : null,
+  niceRule: scale === "linear" ? "nice-1-2-5-v1" as const : null, grid: scale === "linear",
   ticks: ticks.map(([value, label]) => ({ value, label })),
 });
 const base = { group: "A <b>", color: "#1768ac" };
@@ -48,6 +48,15 @@ describe("render plan adapter", () => {
     expect(yAxis.name).toBe("mV");
     expect(xAxis.axisLabel.formatter(0)).toBe("A\nobs=2");
     expect(xAxis.splitLine.show).toBe(false);
+    expect(yAxis.splitLine.show).toBe(true);
+  });
+
+  it("draws a grid only on the axes whose plan asks for one", () => {
+    const [panel] = plan.panels;
+    const { x, y } = panel!.axes;
+    const swapped = { ...plan, panels: [{ ...panel!, axes: { x: { ...x, grid: true }, y: { ...y, grid: false } } }] };
+    const { xAxis: [xAxis], yAxis: [yAxis] } = buildPlanOption({ plan: swapped, text }) as Series;
+    expect([xAxis.splitLine.show, yAxis.splitLine.show]).toEqual([true, false]);
   });
 
   it("keeps category ticks but lets a zoomed value axis label its window", () => {

@@ -14,7 +14,7 @@ import {
 } from "@/domain/chart-render-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
-import { buildPlanOption } from "./render-plan-option";
+import { buildPlanOption, planText } from "./render-plan-option";
 
 type SeriesOptionRecord = Record<string, unknown>;
 
@@ -185,6 +185,7 @@ export function buildChartOption({
   showLegend = true,
   surfacePointLimit,
   surfaceView,
+  zh = false,
 }: {
   analysis?: ChartAnalysis;
   colorMode?: ChartColorMode;
@@ -200,6 +201,7 @@ export function buildChartOption({
     beta: number;
     distance: number;
   };
+  zh?: boolean;
 }): EChartsOption {
   const rows = visibleRows(preview, findings, excludedFindingIds);
   const colors = spec.series.map((series, index) =>
@@ -240,7 +242,7 @@ export function buildChartOption({
     const planned = buildPlanOption({
       colors: { grid: chartGridColor, text: colorMode === "dark" ? "#ECECEC" : "#172033" },
       plan: analysis.plan,
-      text: { mean: "Mean", median: "Median" },
+      text: planText(zh),
     });
     return {
       ...(planned as EChartsOption), ...common, tooltip: planned.tooltip as EChartsOption["tooltip"], dataZoom: [],

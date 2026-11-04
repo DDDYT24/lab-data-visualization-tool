@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { RenderPlan } from "@/domain/render-plan";
 
-import { buildPlanOption, PLAN_ZOOM_IDS, planSelection } from "./render-plan-option";
+import { buildPlanOption, PLAN_ZOOM_IDS, planSelection, planText } from "./render-plan-option";
 
 const HEIGHT = 440;
 const ZOOM_STEP = 25;
@@ -37,10 +37,10 @@ export function RenderPlanChart({ label, onSelect, plan, selected }: {
   const [view, setView] = useState<ZoomWindow>(FULL_VIEW);
   useEffect(() => { select.current = onSelect; }, [onSelect]);
   const zoomed = view.start > 0 || view.end < 100;
-  const option = useMemo(() => buildPlanOption({
-    plan, selected, zoomed,
-    text: zh ? { mean: "均值", median: "中位数" } : { mean: "Mean", median: "Median" },
-  }), [plan, selected, zh, zoomed]);
+  const option = useMemo(
+    () => buildPlanOption({ plan, selected, zoomed, text: planText(zh) }),
+    [plan, selected, zh, zoomed],
+  );
   // echarts-for-react rebuilds the chart when these handlers change identity.
   const events = useMemo(() => ({
     click: (params: { seriesIndex: number; dataIndex: number }) => {

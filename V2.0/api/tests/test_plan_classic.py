@@ -185,6 +185,50 @@ def test_panels_follow_their_series() -> None:
     assert [p["marks"][0]["group"] for p in plan["panels"]] == ["Alpha", "Beta"]
 
 
+@pytest.mark.parametrize(
+    ("kind", "visible", "drawn"),
+    [
+        ("histogram", True, True),
+        ("histogram", False, False),
+        ("bar", True, True),
+        ("bar", False, False),
+        ("box", True, False),
+    ],
+)
+def test_plan_states_the_grid_the_export_draws(
+    monkeypatch: pytest.MonkeyPatch, kind: str, visible: bool, drawn: bool
+) -> None:
+    chart = spec(kind)
+    chart.export_settings.grid_visible = visible
+    axes = planned(chart)["panels"][0]["axes"]
+    assert (axes["x"]["grid"], axes["y"]["grid"]) == (drawn, drawn)
+    original = Figure.savefig
+    exported: list[bool] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        axis = figure.axes[0]
+        lines = axis.get_xgridlines() + axis.get_ygridlines()
+        exported.extend(line.get_visible() for line in lines)
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    assert render_chart(FRAME, chart)
+    assert exported and all(state == drawn for state in exported)
+
+
+def test_bar_colour_comes_from_the_series_in_its_own_panel() -> None:
+    chart = spec(
+        "bar",
+        panelCount=2,
+        series=[
+            {"field": "a", "label": "Left", "color": "#2563EB", "panel": 1},
+            {"field": "a", "label": "Right", "color": "#0F766E", "panel": 2},
+        ],
+    )
+    colors = [panel["marks"][0]["color"] for panel in planned(chart)["panels"]]
+    assert colors == ["#2563eb", "#0f766e"]
+
+
 def test_grayscale_changes_the_plan_colours() -> None:
     chart = spec("box")
     chart.export_settings.grayscale_preview = True

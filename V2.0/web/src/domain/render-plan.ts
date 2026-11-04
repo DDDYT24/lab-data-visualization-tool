@@ -4,7 +4,7 @@ import generatedPlan from "../../../contracts/render-plan-v1.schema.json";
 type Tick = { value: number; label: string };
 type Axis = {
   scale: "linear" | "category"; domain: [number, number]; ticks: Tick[]; title: string;
-  niceRule: "nice-1-2-5-v1" | null;
+  niceRule: "nice-1-2-5-v1" | null; grid: boolean;
 };
 type MarkBase = { id: string; group: string; color: string };
 export type RenderPlanMark =

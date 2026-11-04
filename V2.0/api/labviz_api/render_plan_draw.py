@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .render_contract import GRID_COLOR
+
 
 def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
     from matplotlib.collections import LineCollection
@@ -116,3 +118,9 @@ def draw_panel(ax: Any, panel: dict[str, Any]) -> None:
     ax.set_ylim(*y_axis["domain"])
     ax.set_xlabel(x_axis["title"])
     ax.set_ylabel(y_axis["title"])
+    for name, axis in (("x", x_axis), ("y", y_axis)):
+        if axis["grid"]:
+            ax.grid(True, axis=name, color=GRID_COLOR, linewidth=0.7, alpha=0.8)
+        else:
+            # Off must also override a grid-enabled Matplotlib theme.
+            ax.grid(False, axis=name)

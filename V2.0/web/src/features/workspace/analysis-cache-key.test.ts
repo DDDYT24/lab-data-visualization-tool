@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { defaultChartSpec, type ChartSpec } from "@/domain/chart-spec";
 
-import { analysisCacheKey } from "./analysis-cache-key";
+import { analysisCacheKey, planAppearanceKey } from "./analysis-cache-key";
 import type { IssueAction } from "./workspace-store";
 
 const noDecisions: Record<string, IssueAction> = {};
@@ -84,5 +84,37 @@ describe("analysisCacheKey", () => {
     expect(analysisCacheKey(defaultChartSpec, { "missing:response": "remove" })).not.toBe(
       analysisCacheKey(defaultChartSpec, noDecisions),
     );
+  });
+});
+
+describe("planAppearanceKey", () => {
+  const histogram: ChartSpec = { ...defaultChartSpec, type: "histogram" };
+
+  it("separates everything a plan draws", () => {
+    const base = planAppearanceKey(histogram);
+    const variants: ChartSpec[] = [
+      { ...histogram, series: [{ ...histogram.series[0], color: "#DC2626" }] },
+      { ...histogram, xAxis: { ...histogram.xAxis, title: "Other title" } },
+      { ...histogram, xAxis: { ...histogram.xAxis, unit: "other-x" } },
+      { ...histogram, yAxis: { ...histogram.yAxis, title: "Other value" } },
+      { ...histogram, yAxis: { ...histogram.yAxis, unit: "other-y" } },
+      { ...histogram, export: { ...histogram.export, gridVisible: !histogram.export.gridVisible } },
+      { ...histogram, export: { ...histogram.export, grayscalePreview: !histogram.export.grayscalePreview } },
+    ];
+    for (const variant of variants) expect(planAppearanceKey(variant)).not.toBe(base);
+  });
+
+  it("ignores what the page draws over the plan", () => {
+    const restyled = { ...histogram, title: "Other", export: { ...histogram.export, fontSize: 14 } };
+    expect(planAppearanceKey(restyled)).toBe(planAppearanceKey(histogram));
+  });
+
+  it("leaves charts without a plan alone, so restyling reruns no fit", () => {
+    const fitted: ChartSpec = { ...defaultChartSpec, type: "bar", fitting: { ...defaultChartSpec.fitting, model: "linear" } };
+    const uncertain: ChartSpec = { ...defaultChartSpec, type: "bar", uncertainty: { ...defaultChartSpec.uncertainty, mode: "standard-deviation" } };
+    for (const spec of [{ ...defaultChartSpec, type: "line" as const }, fitted, uncertain]) {
+      const recoloured = { ...spec, series: [{ ...spec.series[0], color: "#DC2626" }] };
+      expect(planAppearanceKey(recoloured)).toBe(planAppearanceKey(spec));
+    }
   });
 });

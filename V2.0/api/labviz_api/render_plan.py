@@ -49,6 +49,7 @@ class Axis(ResearchModel):
     ticks: list[Tick]
     title: str
     nice_rule: Literal["nice-1-2-5-v1"] | None
+    grid: bool
 
 
 class PanelAxes(ResearchModel):
@@ -337,6 +338,7 @@ def build_research_plan(
             "ticks": [{"value": float(i), "label": t} for i, t in enumerate(spec["pairTimes"])],
             "title": "",
             "niceRule": None,
+            "grid": False,
         }
     else:
         for density in result["densities"]:
@@ -391,6 +393,7 @@ def build_research_plan(
             "ticks": ticks,
             "title": "",
             "niceRule": None,
+            "grid": False,
         }
     if spec["showPoints"]:
         for group in groups:
@@ -456,6 +459,7 @@ def build_research_plan(
                         "ticks": y_ticks,
                         "title": result["unit"],
                         "niceRule": AXIS_NICE_RULE,
+                        "grid": True,
                     },
                 },
                 "marks": marks,

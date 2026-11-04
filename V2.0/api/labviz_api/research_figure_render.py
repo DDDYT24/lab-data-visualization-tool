@@ -19,6 +19,7 @@ from time import perf_counter
 from typing import Any, cast
 
 from .models import ChartSpec
+from .plan_classic import build_classic_plan
 from .processing import _cjk_font_info, _contains_cjk
 from .processing import render_chart as legacy_render
 from .render_plan import build_research_plan, merge_axis, plan_bytes, plan_hash
@@ -53,7 +54,7 @@ def render_board(
             key=lambda x: (x is not None, x or ""),
         )
         colors = {label: palette[i % len(palette)] for i, label in enumerate(labels)}
-        # Scientific panels draw from a plan. Classic panels have none until they move to plans.
+        # Line, scatter and correlation panels have no plan yet.
         plans: list[dict[str, Any] | None] = [None] * count
         for i, (panel, ax) in enumerate(zip(sources, axes, strict=True)):
             if "scientific" in panel:
@@ -72,15 +73,16 @@ def render_board(
                 for j, series in enumerate(chart.series):
                     series.color = palette[j % len(palette)]
                 frame = pd.DataFrame(**panel["frame"])
+                series_colors = None if spec.palette == "grayscale" else panel.get("seriesColors")
+                plans[i] = build_classic_plan(chart, panel["analysis"], series_colors=series_colors)
                 legacy_render(
                     frame,
                     chart,
                     _target_figure=figure,
                     _target_axes=[ax],
                     _frozen_analysis=panel["analysis"],
-                    _series_colors=None
-                    if spec.palette == "grayscale"
-                    else panel.get("seriesColors"),
+                    _series_colors=series_colors,
+                    _plan=plans[i],
                 )
                 # Dense legacy line/scatter data artists share the same 300 dpi policy.
                 if panel["kind"] in {"line", "scatter"} and rasterize_points(
@@ -133,6 +135,8 @@ def render_board(
             if plan is not None:
                 plan["panels"][0] |= {"id": "ABCD"[i], "title": heading}
                 plan["disclosures"] = footer.split("\n")
+                for axis in plan["panels"][0]["axes"].values():
+                    axis["grid"] = spec.grid_visible
             legend = ax.get_legend()
             if legend:
                 for text in legend.get_texts():

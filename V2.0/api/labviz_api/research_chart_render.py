@@ -58,7 +58,11 @@ def draw_plan(
             )
         ax.set_title(panel["title"], pad=14, wrap=True)
         ax.set_ylabel(y_axis["title"])
-        ax.grid(axis="y", alpha=0.2)
+        for name in ("x", "y"):
+            if panel["axes"][name]["grid"]:
+                ax.grid(axis=name, alpha=0.2)
+            else:
+                ax.grid(False, axis=name)
         ax.spines[["top", "right"]].set_visible(False)
         ax.set_yticks(
             [tick["value"] for tick in y_axis["ticks"]],
