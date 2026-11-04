@@ -13,7 +13,7 @@ export const chartPalette = [
   "#137C8B",
 ] as const;
 
-export const chatGptDarkPalette = {
+export const neutralDarkPalette = {
   background: "#212121",
   border: "#424242",
   surface: "#2F2F2F",
@@ -32,26 +32,26 @@ export function createLabvizTheme(mode: PaletteMode, interfaceMode: InterfaceMod
   palette: {
     mode,
     primary: {
-      main: dark ? (overview ? "#8FB2FF" : chatGptDarkPalette.text) : "#2563EB",
+      main: dark ? (overview ? "#8FB2FF" : neutralDarkPalette.text) : "#2563EB",
       dark: dark ? "#D1D1D1" : "#1D4ED8",
-      light: dark ? chatGptDarkPalette.border : "#EAF1FF",
+      light: dark ? neutralDarkPalette.border : "#EAF1FF",
       contrastText: actionContrastText,
     },
     secondary: {
-      main: dark ? (overview ? "#77C9BE" : chatGptDarkPalette.textSecondary) : "#0F766E",
+      main: dark ? (overview ? "#77C9BE" : neutralDarkPalette.textSecondary) : "#0F766E",
       dark: dark ? "#D1D1D1" : "#0B5F59",
-      light: dark ? chatGptDarkPalette.surface : "#E8F5F2",
+      light: dark ? neutralDarkPalette.surface : "#E8F5F2",
       contrastText: actionContrastText,
     },
     background: {
-      default: dark ? chatGptDarkPalette.background : overview ? "#F7F6F2" : "#F6F8FB",
-      paper: dark ? chatGptDarkPalette.surface : "#FFFFFF",
+      default: dark ? neutralDarkPalette.background : overview ? "#F7F6F2" : "#F6F8FB",
+      paper: dark ? neutralDarkPalette.surface : "#FFFFFF",
     },
     text: {
-      primary: dark ? chatGptDarkPalette.text : overview ? "#1C1C1B" : "#172033",
-      secondary: dark ? chatGptDarkPalette.textSecondary : overview ? "#6D716F" : "#667085",
+      primary: dark ? neutralDarkPalette.text : overview ? "#1C1C1B" : "#172033",
+      secondary: dark ? neutralDarkPalette.textSecondary : overview ? "#6D716F" : "#667085",
     },
-    divider: dark ? chatGptDarkPalette.border : overview ? "#E7E7E3" : "#D8DEE8",
+    divider: dark ? neutralDarkPalette.border : overview ? "#E7E7E3" : "#D8DEE8",
     success: {
       main: dark ? "#19C37D" : "#1B6848",
       dark: dark ? "#4DD8A0" : "#145038",
