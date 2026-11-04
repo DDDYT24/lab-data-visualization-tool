@@ -6,11 +6,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from matplotlib.figure import Figure
 
 from labviz_api.render_plan import RenderPlan, build_research_plan, grayscale, nice_axis
 from labviz_api.research_chart_render import draw_plan
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
-from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
+from labviz_api.research_preparation import (
+    PreparationError,
+    PreparationPlan,
+    parse_sources,
+    prepare,
+)
 
 CONTRACT = Path(__file__).resolve().parents[2] / "contracts/render-plan-v1.schema.json"
 
@@ -123,7 +129,7 @@ def test_violin_plan_frames_the_full_density_support() -> None:
     ("low", "high", "domain", "labels"),
     [
         (0.12, 9.7, (-0.359, 10.179), ["0", "2", "4", "6", "8", "10"]),
-        (1.0, 1.0, (0.89, 1.11), ["0.90", "0.95", "1.00", "1.05", "1.10"]),
+        (1.0, 1.0, (0.945, 1.055), ["0.96", "0.98", "1.00", "1.02", "1.04"]),
         (
             -250.0,
             -20.0,
@@ -138,6 +144,79 @@ def test_nice_axis_steps_through_one_two_five(
     found, ticks = nice_axis(low, high)
     assert found == pytest.approx(domain)
     assert [t["label"] for t in ticks] == labels
+
+
+@pytest.mark.parametrize(
+    ("low", "high"),
+    [
+        (5.0, 5.0),
+        (0.0, 0.0),
+        (-3.0, -3.0),
+        (1.0, 1.0 + 2.3e-16),
+        (1e-9, 4.5e-9),
+        (1.2e9, 4.5e9),
+        (-250.0, -20.0),
+    ],
+)
+def test_domain_equals_matplotlib_autoscale(low: float, high: float) -> None:
+    axis = Figure().subplots()
+    axis.plot([0, 1], [low, high])
+    assert nice_axis(low, high)[0] == pytest.approx(axis.get_ylim())
+
+
+@pytest.mark.parametrize(
+    ("low", "high", "labels"),
+    [
+        (1e-9, 3e-9, ["1.0e\u22129", "1.5e\u22129", "2.0e\u22129", "2.5e\u22129", "3.0e\u22129"]),
+        (
+            -1e-9,
+            1e-9,
+            ["\u22121.0e\u22129", "\u22125.0e\u221210", "0", "5.0e\u221210", "1.0e\u22129"],
+        ),
+        (1e9, 3e9, ["1.0e9", "1.5e9", "2.0e9", "2.5e9", "3.0e9"]),
+        (1e5, 4e5, ["100000", "150000", "200000", "250000", "300000", "350000", "400000"]),
+        (1e6, 2e6, ["1.0e6", "1.2e6", "1.4e6", "1.6e6", "1.8e6", "2.0e6"]),
+        (1e-4, 3e-4, ["0.00010", "0.00015", "0.00020", "0.00025", "0.00030"]),
+        (
+            123456789012.0,
+            123456790999.0,
+            [
+                "1.234567890e11",
+                "1.234567895e11",
+                "1.234567900e11",
+                "1.234567905e11",
+                "1.234567910e11",
+            ],
+        ),
+    ],
+)
+def test_extreme_values_keep_short_labels_that_stand_alone(
+    low: float, high: float, labels: list[str]
+) -> None:
+    assert [t["label"] for t in nice_axis(low, high)[1]] == labels
+
+
+@pytest.mark.parametrize(
+    ("low", "high"),
+    [
+        (0.1 + i * 1e-3, 0.1 + i * 1e-3 + 10.0**-exponent)
+        for i in range(5)
+        for exponent in range(16)
+    ],
+)
+def test_ticks_stay_distinct_and_inside_the_domain(low: float, high: float) -> None:
+    (start, end), ticks = nice_axis(low, high)
+    values = [t["value"] for t in ticks]
+    assert 2 <= len(ticks) <= 9
+    assert start <= values[0] and values[-1] <= end
+    assert len({t["label"] for t in ticks}) == len(ticks) == len(set(values))
+
+
+@pytest.mark.parametrize(("low", "high"), [(-1.7e308, 1.7e308), (5e-324, 1e-323)])
+def test_values_no_axis_can_hold_are_refused(low: float, high: float) -> None:
+    with pytest.raises(PreparationError) as error:
+        nice_axis(low, high)
+    assert error.value.code == "chart-axis-range"
 
 
 @pytest.mark.parametrize(

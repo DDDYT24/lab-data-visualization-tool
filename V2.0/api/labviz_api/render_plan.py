@@ -10,11 +10,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import sys
 from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
 from .research_contract import Digest, ResearchModel
+from .research_preparation import PreparationError
 from .research_styles import COLORS
 
 CONTRACT = "render-plan-v1"
@@ -22,6 +24,10 @@ AXIS_NICE_RULE = "nice-1-2-5-v1"
 # Matplotlib's default data margin, kept so new plans frame data as rc.2 charts did.
 AXIS_MARGIN = 0.05
 AXIS_MAX_TICKS = 9
+# Below this span, relative to the values, ticks cannot be told apart: treat them as one value.
+AXIS_MIN_RELATIVE_SPAN = 1e-12
+# Labels stay in plain digits for these powers of ten, where Matplotlib also leaves them plain.
+AXIS_PLAIN_EXPONENTS = range(-4, 6)
 DENSE_POINT_THRESHOLD = 20_000
 
 Color = Annotated[str, Field(pattern=r"^#[0-9a-f]{6}$")]
@@ -145,13 +151,32 @@ def rasterize_points(mode: str, count: int) -> bool:
     return mode == "raster" or (mode == "auto" and count > DENSE_POINT_THRESHOLD)
 
 
+def tick_labels(values: list[float], step: float) -> list[str]:
+    """Labels that stand alone; very large or small values carry their own exponent."""
+    top = math.floor(math.log10(max(abs(value) for value in values)))
+    if top in AXIS_PLAIN_EXPONENTS:
+        digits = max(0, -math.floor(math.log10(step)))
+        labels = [f"{value:.{digits}f}" for value in values]
+    else:
+        digits = max(0, top - math.floor(math.log10(step)))
+        parts = [f"{value:.{digits}e}".split("e") for value in values]
+        labels = [
+            f"{mantissa}e{int(power)}" if value else "0"
+            for value, (mantissa, power) in zip(values, parts, strict=True)
+        ]
+    # U+2212 is the minus sign Matplotlib prints, rather than a hyphen.
+    return [label.replace("-", "\u2212") for label in labels]
+
+
 def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[str, Any]]]:
-    """Pad the data by AXIS_MARGIN; tick at the smallest 1/2/5 x 10^k step that fits."""
-    if low == high:
-        pad = abs(low) * 0.1 or 1.0
-        low, high = low - pad, high + pad
+    """Frame the data as Matplotlib does; tick at the smallest 1/2/5 x 10^k step that fits."""
+    if high - low <= max(abs(low), abs(high)) * AXIS_MIN_RELATIVE_SPAN:
+        low -= abs(low) * AXIS_MARGIN or AXIS_MARGIN
+        high += abs(high) * AXIS_MARGIN or AXIS_MARGIN
     margin = (high - low) * AXIS_MARGIN
     low, high = low - margin, high + margin
+    if not sys.float_info.min <= high - low < math.inf:
+        raise PreparationError("chart-axis-range", "These values are too extreme to plot.")
     magnitude = 10.0 ** math.floor(math.log10((high - low) / AXIS_MAX_TICKS))
     # A 10x step always fits: the span is under AXIS_MAX_TICKS of them.
     for multiple in (1, 2, 5, 10):
@@ -163,8 +188,7 @@ def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[s
     digits = max(0, -math.floor(math.log10(step)))
     # Integer multiples avoid accumulated floating error; rounding removes representation noise.
     values = [round(i * step, digits) + 0.0 for i in range(start, end + 1)]
-    # Labels use U+2212, the minus sign Matplotlib prints, rather than a hyphen.
-    labels = [f"{value:.{digits}f}".replace("-", "\u2212") for value in values]
+    labels = tick_labels(values, step)
     ticks = [{"value": value, "label": label} for value, label in zip(values, labels, strict=True)]
     return (low, high), ticks
 
