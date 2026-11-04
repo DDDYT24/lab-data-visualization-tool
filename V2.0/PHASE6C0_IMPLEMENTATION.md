@@ -3,7 +3,7 @@
 **Status:** Implementation is tracked on `main`; live bootstrap apply and Phase 6C acceptance
 remain pending.
 
-**Current backlog and completion status:** [`TODO.md`](TODO.md)
+**Current backlog and completion status:** the maintainer's local backlog
 
 ## Git boundary
 

@@ -1,3 +1,4 @@
+default_install_hook_types: [pre-commit, commit-msg]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -24,3 +25,18 @@ repos:
         exclude: ^desktop/
       - id: ruff-format
         exclude: ^desktop/
+  - repo: local
+    hooks:
+      # The restricted term list stays outside the repository; see CONTRIBUTING.md.
+      - id: public-text-changes
+        name: restricted terms in staged changes
+        entry: python .github/scripts/check_public_text.py --staged
+        language: python
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: public-text-message
+        name: restricted terms in the commit message and branch name
+        entry: python .github/scripts/check_public_text.py --message
+        language: python
+        stages: [commit-msg]

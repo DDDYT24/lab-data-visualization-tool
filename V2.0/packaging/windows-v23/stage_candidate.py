@@ -91,19 +91,26 @@ def receipt(path: Path) -> None:
 
 
 def copy_tree(source: Path, destination: Path, *, skip: set[str] | None = None) -> None:
+    """Copy a tree, leaving out entries whose name or source-relative path is in skip."""
     source = checked(source)
+    skip = skip or set()
     for directory, folders, files in os.walk(source, followlinks=False):
+        relative = Path(directory).relative_to(source)
         for entry in folders + files:
             member = Path(directory) / entry
             if member.is_symlink() or member.is_junction():
                 raise ValueError("Package trees cannot contain links or junctions.")
         folders[:] = [
-            n for n in folders if n not in (skip or set()) and n != "__pycache__"
+            n
+            for n in folders
+            if n not in skip
+            and (relative / n).as_posix() not in skip
+            and n != "__pycache__"
         ]
-        target = destination / Path(directory).relative_to(source)
+        target = destination / relative
         target.mkdir(parents=True, exist_ok=True)
         for name in files:
-            if name.endswith((".pyc", ".pyo")) or name in (skip or set()):
+            if name.endswith((".pyc", ".pyo")) or name in skip:
                 continue
             shutil.copyfile(Path(directory) / name, target / name)
 
@@ -231,6 +238,11 @@ def main() -> None:
         p.name
         for p in args.site_packages.iterdir()
         if p.name == "pip" or p.name.startswith("pip-")
+    }
+    # pyparsing ships an optional guidance subpackage that nothing imports at runtime.
+    exclusions |= {
+        p.parent.relative_to(args.site_packages).as_posix()
+        for p in args.site_packages.glob("pyparsing/*/best_practices.md")
     }
     copy_tree(
         args.site_packages, output / "runtime/python/Lib/site-packages", skip=exclusions

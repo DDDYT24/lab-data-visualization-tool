@@ -11,7 +11,7 @@
 
 </div>
 
-I'm LabViz, a scientific plotting tool that runs on your own computer. Hand me a CSV or Excel file and I check it first: missing values, duplicate rows and outliers are flagged, and you decide what stays. Then I turn it into figures you can put in a paper.
+LabViz, a scientific plotting tool that runs on your own computer. Hand me a CSV or Excel file and I check it first: missing values, duplicate rows and outliers are flagged, and you decide what stays. Then I turn it into figures you can put in a paper.
 
 ## Where I am
 

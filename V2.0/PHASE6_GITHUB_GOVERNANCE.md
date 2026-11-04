@@ -5,7 +5,7 @@
 
 **Last reviewed:** 2026-09-10
 
-**Current backlog and completion status:** [`TODO.md`](TODO.md)
+**Current backlog and completion status:** the maintainer's local backlog
 
 The desired configuration is versioned in
 [`contracts/phase6-github-governance-v1.json`](contracts/phase6-github-governance-v1.json). It keeps
@@ -16,7 +16,8 @@ or secret material.
 
 - Repository: `DDDYT24/lab-data-visualization-tool`, public, default branch `main`.
 - The last authenticated settings audit on 2026-08-25 recorded `main` as unprotected and the
-  only existing deployment environment as `copilot`; re-run the read-only commands below before
+  only existing deployment environment as one an integration created automatically, with no
+  deployments and no protection rules; re-run the read-only commands below before
   applying any governance change.
 - The Phase 6 workflow definitions are now present on remote `main`.
 - The generic CI and Phase 6C infrastructure static workflow have run successfully. The foundation
