@@ -19,10 +19,33 @@ from time import perf_counter
 from typing import Any, cast
 
 from .models import ChartSpec
-from .processing import _cjk_font_info, _contains_cjk
+from .plan_classic import SERIES_KINDS, build_classic_plan
+from .processing import _cjk_font_info, _contains_cjk, series_rows
 from .processing import render_chart as legacy_render
-from .research_chart_render import _RENDER_LOCK, COLORS, rasterize_points, render_chart
+from .render_plan import build_research_plan, merge_axis, plan_bytes, plan_hash
+from .research_chart_render import _RENDER_LOCK, COLORS, draw_plan, rasterize_points
 from .research_preparation import PreparationError
+
+
+def frame_rows(panel: dict[str, Any], chart: ChartSpec, frame: Any) -> Any:
+    """Every row of a captured panel, or None when its frozen frame cannot supply them.
+
+    The frozen frame stores dates as numbers and floats to ten places. A panel whose frame no
+    longer holds the x values it was captured with keeps its frozen reduced points.
+    """
+    if chart.type not in SERIES_KINDS:
+        return None
+
+    def key(x: Any) -> Any:
+        return round(x, 9) if isinstance(x, float) else x
+
+    rows = series_rows(frame, chart)
+    analyses = panel["analysis"]["series"]
+    matches = len(rows) == len(analyses) and all(
+        {key(p["x"]) for p in analysis["points"]} <= {key(p["x"]) for p in series}
+        for analysis, series in zip(analyses, rows, strict=False)
+    )
+    return rows if matches else None
 
 
 def render_board(
@@ -52,16 +75,20 @@ def render_board(
             key=lambda x: (x is not None, x or ""),
         )
         colors = {label: palette[i % len(palette)] for i, label in enumerate(labels)}
+        # Correlation panels have no plan yet.
+        plans: list[dict[str, Any] | None] = [None] * count
+        # Text x values sit at numeric positions, so hit targets need the same mapping.
+        x_positions: list[dict[str, float]] = [{} for _ in range(count)]
         for i, (panel, ax) in enumerate(zip(sources, axes, strict=True)):
             if "scientific" in panel:
-                render_chart(
+                planned = build_research_plan(
                     panel["scientific"],
-                    target_figure=figure,
-                    target_axis=ax,
                     group_colors=colors,
-                    grayscale=spec.palette == "grayscale",
+                    use_grayscale=spec.palette == "grayscale",
                     point_rendering=spec.point_rendering,
                 )
+                plans[i] = planned
+                draw_plan(planned, target_figure=figure, target_axis=ax)
             else:
                 chart = ChartSpec.model_validate(panel["legacySpec"])
                 chart.export_settings.font_size = spec.font_size
@@ -69,15 +96,39 @@ def render_board(
                 for j, series in enumerate(chart.series):
                     series.color = palette[j % len(palette)]
                 frame = pd.DataFrame(**panel["frame"])
+                series_colors = None if spec.palette == "grayscale" else panel.get("seriesColors")
+                planned_rows = frame_rows(panel, chart, frame)
+                # The board stores the reduced plan; its exports draw every row.
+                stored = build_classic_plan(
+                    chart,
+                    panel["analysis"],
+                    rows=planned_rows,
+                    detail="preview",
+                    series_colors=series_colors,
+                )
+                full = build_classic_plan(
+                    chart, panel["analysis"], rows=planned_rows, series_colors=series_colors
+                )
+                if stored is not None and full is not None:
+                    stored["rendering"] = full["rendering"] = {
+                        "pointRendering": spec.point_rendering,
+                        "rasterizePoints": rasterize_points(
+                            spec.point_rendering, len(panel["rows"])
+                        ),
+                    }
+                plans[i] = stored
+                if stored is not None and stored["panels"][0]["axes"]["x"]["scale"] == "category":
+                    points = planned_rows or [a["points"] for a in panel["analysis"]["series"]]
+                    names = [str(p["x"]) for row in points for p in row if p["x"] is not None]
+                    x_positions[i] = {x: float(n) for n, x in enumerate(dict.fromkeys(names))}
                 legacy_render(
                     frame,
                     chart,
                     _target_figure=figure,
                     _target_axes=[ax],
                     _frozen_analysis=panel["analysis"],
-                    _series_colors=None
-                    if spec.palette == "grayscale"
-                    else panel.get("seriesColors"),
+                    _series_colors=series_colors,
+                    _plan=full,
                 )
                 # Dense legacy line/scatter data artists share the same 300 dpi policy.
                 if panel["kind"] in {"line", "scatter"} and rasterize_points(
@@ -91,7 +142,8 @@ def render_board(
                 or panel["title"]
                 or panel["kind"]
             )
-            ax.set_title(f"{'ABCD'[i]} · {title}", fontsize=spec.font_size + 1)
+            heading = f"{'ABCD'[i]} · {title}"
+            ax.set_title(heading, fontsize=spec.font_size + 1)
             ax.tick_params(labelsize=spec.font_size)
             ax.xaxis.label.set_fontsize(spec.font_size)
             ax.yaxis.label.set_fontsize(spec.font_size)
@@ -125,6 +177,12 @@ def render_board(
                     )
                 if legacy_spec["uncertainty"]["mode"] != "none":
                     footer += f"\nUncertainty: {legacy_spec['uncertainty']['mode']}"
+            plan = plans[i]
+            if plan is not None:
+                plan["panels"][0] |= {"id": "ABCD"[i], "title": heading}
+                plan["disclosures"] = footer.split("\n")
+                for name in ("x", "y"):
+                    plan["panels"][0]["axes"][name]["grid"] = spec.grid_visible
             legend = ax.get_legend()
             if legend:
                 for text in legend.get_texts():
@@ -152,7 +210,14 @@ def render_board(
             # Heatmaps use reversed y limits; preserve orientation as well as the domain.
             low, high = min(min(v) for v in limits), max(max(v) for v in limits)
             reverse = limits[0][0] > limits[0][1]
-            for ax in axes:
+            for ax, plan in zip(axes, plans, strict=True):
+                if plan is not None:
+                    axis = merge_axis(plan, dimension, low, high)
+                    if axis["scale"] == "linear":
+                        getattr(ax, f"set_{dimension}ticks")(
+                            [tick["value"] for tick in axis["ticks"]],
+                            [tick["label"] for tick in axis["ticks"]],
+                        )
                 getattr(ax, setter)((high, low) if reverse else (low, high))
         figure.suptitle(spec.title, fontsize=spec.font_size + 3)
         figure.subplots_adjust(
@@ -177,8 +242,13 @@ def render_board(
         FigureCanvasAgg(figure)
         # Resolve transforms/text geometry without painting the full dense data twice.
         figure.draw_without_rendering()
+        artifacts: dict[str, bytes] = {}
+        for label, plan in zip("ABCD", plans, strict=False):
+            if plan is not None:
+                plan["planHash"] = plan_hash(plan)
+                artifacts["plan:" + label] = plan_bytes(plan)
         scene: dict[str, Any] = {
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "panels": [],
             "marks": [],
             "rowSets": {},
@@ -209,6 +279,8 @@ def render_board(
                     "yLimits": list(ax.get_ylim()),
                     "xSignature": panel["xSignature"],
                     "ySignature": panel["ySignature"],
+                    "planHash": (plans[i] or {}).get("planHash"),
+                    "observations": len(panel["rows"]),
                 }
             )
             row_key = (
@@ -227,7 +299,8 @@ def render_board(
             for j, mark in enumerate(raw):
                 if mark["kind"] == "point" and j not in shown:
                     continue
-                x = cast(Any, ax).convert_xunits(mark["x"])
+                x = x_positions[i].get(str(mark["x"]), mark["x"])
+                x = cast(Any, ax).convert_xunits(x)
                 y = cast(Any, ax).convert_yunits(mark["y"])
                 pixel = ax.transData.transform(
                     (float(np.asarray(x).item()), float(np.asarray(y).item()))
@@ -244,7 +317,6 @@ def render_board(
                 )
         if timings is not None:
             timings["geometry"] = (perf_counter() - started) * 1000
-        artifacts = {}
         for kind in ["png", "svg", "pdf"]:
             format_started = perf_counter()
             if kind == "svg":

@@ -22,7 +22,8 @@ from uuid import uuid4
 from pydantic_core import from_json, to_json
 
 from .models import ChartSpec
-from .processing import _json_value, _sample_positions, analyze_chart, serialize_dataframe
+from .plan_classic import envelope_positions
+from .processing import _json_value, analyze_chart, serialize_dataframe
 from .research_panel_headers import remember_header, source_header
 from .research_preparation import PreparationError, stable_id
 
@@ -105,7 +106,9 @@ def legacy_snapshot(
             complete = subset[fields].dropna()
             numeric = pd.to_numeric(complete[series["field"]], errors="coerce")
             complete = complete[numeric.notna()]
-            complete = complete.iloc[_sample_positions(len(complete))]
+            # The same positions the analysis picked its points from.
+            values = numeric[numeric.notna()].to_numpy(dtype=float)
+            complete = complete.iloc[envelope_positions(values)]
             valid = complete[np.isfinite(pd.to_numeric(complete[series["field"]]).to_numpy())]
             for point, index in zip(series["points"], valid.index, strict=True):
                 marks.append(

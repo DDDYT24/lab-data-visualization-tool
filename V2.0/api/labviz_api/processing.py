@@ -34,17 +34,14 @@ from zipfile import BadZipFile, ZipFile
 
 from .cleaning_recipe import EXCLUDING_ACTIONS, FrozenRows
 from .models import ChartSpec, JsonScalar
+from .plan_classic import SERIES_KINDS, axis_label, build_classic_plan, envelope_positions
 from .render_contract import (
-    CONFIDENCE_BAND_OPACITY,
     CORRELATION_PALETTE,
-    GRID_COLOR,
-    HISTOGRAM_AXIS_PADDING,
-    HISTOGRAM_FILL_OPACITY,
+    GEOMETRY,
     SURFACE_GRAYSCALE_PALETTE,
     SURFACE_PALETTE,
-    chart_series_color,
-    matplotlib_line_style,
 )
+from .render_plan_draw import draw_panel
 
 if os.environ.get("LABVIZ_DESKTOP_MODE") == "1":
     os.environ["MPLBACKEND"] = "Agg"
@@ -55,7 +52,7 @@ SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".txt", ".json", ".xlsx"}
 MAX_PREVIEW_ROWS = 200
 MAX_PREVIEW_CELLS = 15_000
 MAX_FINDING_ROW_IDS = 100
-MAX_ANALYSIS_POINTS = 250
+MAX_ANALYSIS_POINTS = GEOMETRY["decimation"]["maxPoints"]
 BOOTSTRAP_RESAMPLES = 400
 MAX_XLSX_ENTRIES = 5_000
 MAX_XLSX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
@@ -1242,35 +1239,6 @@ def _sample_positions(length: int, limit: int = MAX_ANALYSIS_POINTS) -> np.ndarr
     return np.linspace(0, length - 1, num=limit, dtype=int)
 
 
-def _envelope_positions(
-    values: np.ndarray[Any, Any], limit: int = MAX_ANALYSIS_POINTS
-) -> np.ndarray[Any, Any]:
-    """Keep every bucket's extremes so a decimated preview still shows real peaks.
-
-    Evenly spaced positions drop narrow peaks and troughs that the full-data
-    export still draws, which reads as an export defect rather than a preview
-    limit. Selecting each bucket's minimum and maximum preserves the visible
-    envelope. It never changes the analysed data or the reported sample size.
-    """
-    length = len(values)
-    if length <= limit:
-        return np.arange(length)
-    buckets = max(1, (limit - 2) // 2)
-    edges = np.linspace(0, length, num=buckets + 1, dtype=int)
-    keep = {0, length - 1}
-    for start, end in zip(edges[:-1], edges[1:], strict=True):
-        window = np.asarray(values[start:end], dtype=float)
-        if window.size == 0:
-            continue
-        if not np.isfinite(window).any():
-            keep.add(int(start))
-            continue
-        masked = np.where(np.isfinite(window), window, np.nan)
-        keep.add(int(start) + int(np.nanargmin(masked)))
-        keep.add(int(start) + int(np.nanargmax(masked)))
-    return np.array(sorted(keep), dtype=int)
-
-
 def _fit_equation(model: str, coefficients: np.ndarray[Any, Any]) -> str:
     if model == "exponential":
         return f"y = {math.exp(float(coefficients[1])):.5g}·e^({coefficients[0]:.5g}x)"
@@ -2040,23 +2008,24 @@ def _default_analysis_disclosures(
     ]
 
 
+def _grouped_frames(frame: pd.DataFrame, chart: ChartSpec) -> list[tuple[Any, pd.DataFrame]]:
+    if not chart.group_field:
+        return [(None, frame)]
+    complete_groups = frame[chart.group_field].dropna()
+    group_values = sorted(complete_groups.unique().tolist(), key=lambda value: str(value))
+    if len(group_values) > 12:
+        raise ProcessingError(
+            "The selected grouping field has more than 12 groups. Filter or combine groups first.",
+            "too-many-groups",
+        )
+    return [(value, frame[frame[chart.group_field] == value]) for value in group_values]
+
+
 def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
     validate_chart_fields(frame, chart)
     x_field = chart.x_axis.field
     analyses = []
-    grouped_frames: list[tuple[Any, pd.DataFrame]] = [(None, frame)]
-    if chart.group_field:
-        grouped_frames = []
-        complete_groups = frame[chart.group_field].dropna()
-        group_values = sorted(complete_groups.unique().tolist(), key=lambda value: str(value))
-        if len(group_values) > 12:
-            raise ProcessingError(
-                "The selected grouping field has more than 12 groups. "
-                "Filter or combine groups first.",
-                "too-many-groups",
-            )
-        for group_value in group_values:
-            grouped_frames.append((group_value, frame[frame[chart.group_field] == group_value]))
+    grouped_frames = _grouped_frames(frame, chart)
     for series in chart.series:
         for group_value, series_frame in grouped_frames:
             fit: dict[str, Any] | None = None
@@ -2098,7 +2067,7 @@ def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
                     ),
                     "panel": series.panel,
                     "group": _json_value(group_value),
-                    "points": _series_preview_points(series_frame, x_field, series.field),
+                    "points": _series_points(series_frame, x_field, series.field, reduce=True),
                     "fit": fit,
                     "uncertainty": uncertainty,
                     "residualDiagnostic": residual_diagnostic,
@@ -2113,27 +2082,53 @@ def analyze_chart(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
     }
 
 
-def _series_preview_points(frame: pd.DataFrame, x_field: str, y_field: str) -> list[dict[str, Any]]:
+def _series_points(
+    frame: pd.DataFrame, x_field: str, y_field: str, *, reduce: bool = False
+) -> list[dict[str, Any]]:
     if x_field not in frame.columns or y_field not in frame.columns:
         return []
     if x_field == y_field:
         numeric = pd.to_numeric(frame[y_field], errors="coerce").dropna()
-        numeric = numeric.iloc[_envelope_positions(numeric.to_numpy(dtype=float))]
+        if reduce:
+            numeric = numeric.iloc[envelope_positions(numeric.to_numpy(dtype=float))]
         return [
             {"x": _json_value(value), "y": float(value)}
-            for value in numeric
+            for value in numeric.tolist()
             if math.isfinite(float(value))
         ]
     complete = frame[[x_field, y_field]].dropna()
     numeric_y = pd.to_numeric(complete[y_field], errors="coerce")
     complete = complete[numeric_y.notna()].copy()
     complete[y_field] = numeric_y[numeric_y.notna()]
-    complete = complete.iloc[_envelope_positions(complete[y_field].to_numpy(dtype=float))]
+    if reduce:
+        complete = complete.iloc[envelope_positions(complete[y_field].to_numpy(dtype=float))]
     return [
-        {"x": _json_value(row[x_field]), "y": float(row[y_field])}
-        for _, row in complete.iterrows()
-        if math.isfinite(float(row[y_field]))
+        {"x": _json_value(x), "y": float(y)}
+        for x, y in zip(complete[x_field].tolist(), complete[y_field].tolist(), strict=True)
+        if math.isfinite(float(y))
     ]
+
+
+def series_rows(frame: pd.DataFrame, chart: ChartSpec) -> list[list[dict[str, Any]]]:
+    """Every row of each analysis series, in the order ``analyze_chart`` lists them."""
+    groups = _grouped_frames(frame, chart)
+    return [
+        _series_points(group_frame, chart.x_axis.field, series.field)
+        for series in chart.series
+        for _, group_frame in groups
+    ]
+
+
+def classic_plan(
+    frame: pd.DataFrame,
+    chart: ChartSpec,
+    derived: dict[str, Any],
+    *,
+    detail: Literal["export", "preview"] = "export",
+    series_colors: dict[str, str] | None = None,
+) -> dict[str, Any] | None:
+    rows = series_rows(frame, chart) if chart.type in SERIES_KINDS else None
+    return build_classic_plan(chart, derived, rows=rows, detail=detail, series_colors=series_colors)
 
 
 def _surface_diagnostic(
@@ -2258,7 +2253,7 @@ def _derived_chart_preview(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, A
             values = values[np.isfinite(values)]
             if not len(values):
                 raise ProcessingError("A histogram needs at least one value.", "empty-chart-data")
-            counts, edges = np.histogram(values, bins="auto")
+            counts, edges = np.histogram(values, bins=GEOMETRY["histogram"]["numpyBins"])
             histograms.append(
                 {
                     "field": item.field,
@@ -2280,9 +2275,11 @@ def _derived_chart_preview(frame: pd.DataFrame, chart: ChartSpec) -> dict[str, A
             values = np.sort(values[np.isfinite(values)])
             if not len(values):
                 raise ProcessingError("Each box needs at least one value.", "empty-chart-data")
-            q1, median, q3 = np.quantile(values, [0.25, 0.5, 0.75])
-            spread = q3 - q1
-            included = values[(values >= q1 - 1.5 * spread) & (values <= q3 + 1.5 * spread)]
+            q1, median, q3 = np.quantile(
+                values, [0.25, 0.5, 0.75], method=GEOMETRY["quantile"]["numpyMethod"]
+            )
+            spread = (q3 - q1) * GEOMETRY["quantile"]["whiskerIqr"]
+            included = values[(values >= q1 - spread) & (values <= q3 + spread)]
             outliers = values[(values < included[0]) | (values > included[-1])]
             boxes.append(
                 {
@@ -2399,6 +2396,7 @@ def render_chart(
     _target_axes: Any = None,
     _frozen_analysis: dict[str, Any] | None = None,
     _series_colors: dict[str, str] | None = None,
+    _plan: dict[str, Any] | None = None,
 ) -> bytes:
     from matplotlib import font_manager
     from matplotlib.colors import LinearSegmentedColormap
@@ -2448,19 +2446,10 @@ def render_chart(
         )
         for index in range(chart.panel_count)
     ]
-    colors = [
-        chart_series_color(
-            configured_color=item.color,
-            grayscale=export.grayscale_preview,
-            grouped=False,
-            index=index,
-        )
-        for index, item in enumerate(chart.series)
-    ]
-    x_field = chart.x_axis.field
     derived = _frozen_analysis or analyze_chart(frame, chart)
     analyses = derived["series"]
     preview = derived["preview"]
+    plan = _plan or classic_plan(frame, chart, derived, series_colors=_series_colors)
     if chart.type == "surface3d":
         invalid_diagnostics = [
             diagnostic
@@ -2487,168 +2476,13 @@ def render_chart(
         ):
             secondary_axis = axis.twinx()
 
-        if chart.type in {"line", "scatter", "bar"}:
-            if x_field not in frame.columns:
-                raise ProcessingError(f"Chart field is missing: {x_field}", "invalid-chart-fields")
-            panel_analyses = [
-                (analysis_index, analysis)
-                for analysis_index, analysis in enumerate(analyses)
-                if analysis["panel"] == panel_index
-            ]
-            for order, (analysis_index, analysis) in enumerate(panel_analyses):
-                item = next(
-                    series for _, series in panel_series if series.field == analysis["field"]
-                )
-                points = analysis["points"]
-                if not points:
-                    continue
-                target_axis = (
-                    secondary_axis
-                    if secondary_axis is not None and item.y_axis == "secondary"
-                    else axis
-                )
-                color = chart_series_color(
-                    configured_color=item.color,
-                    grayscale=export.grayscale_preview,
-                    grouped=bool(chart.group_field),
-                    index=analysis_index,
-                )
-                color = (_series_colors or {}).get(analysis["label"], color)
-                label = analysis["label"]
-                style = matplotlib_line_style(item.line_style)
-                x_values = [point["x"] for point in points]
-                y_values = [point["y"] for point in points]
-                if chart.type == "line":
-                    target_axis.plot(
-                        x_values,
-                        y_values,
-                        label=label,
-                        color=color,
-                        linestyle=style,
-                        linewidth=export.line_width,
-                        marker="o",
-                        markersize=export.marker_size,
-                    )
-                elif chart.type == "scatter":
-                    target_axis.scatter(
-                        x_values,
-                        y_values,
-                        label=label,
-                        color=color,
-                        alpha=0.8,
-                        s=export.marker_size**2,
-                    )
-                else:
-                    target_axis.bar(
-                        x_values,
-                        y_values,
-                        label=label,
-                        color=color,
-                        alpha=max(0.45, 0.85 - order * 0.08),
-                        linewidth=export.line_width,
-                    )
-
-                uncertainty = analysis["uncertainty"]
-                if uncertainty:
-                    points = uncertainty["points"]
-                    target_axis.errorbar(
-                        [point["x"] for point in points],
-                        [point["y"] for point in points],
-                        yerr=[point["error"] for point in points],
-                        fmt="none",
-                        ecolor=color,
-                        elinewidth=export.line_width,
-                        capsize=max(2, export.marker_size / 2),
-                        alpha=0.9,
-                    )
-                fit = analysis["fit"]
-                if fit:
-                    fit_label = f"{label} fit"
-                    if chart.fitting.show_equation:
-                        fit_label += f" · {fit['equation']}"
-                    if chart.fitting.show_r_squared:
-                        fit_label += f" · R²={fit['rSquared']:.4f}"
-                    points = fit["points"]
-                    target_axis.plot(
-                        [point["x"] for point in points],
-                        [point["y"] for point in points],
-                        color=color,
-                        linestyle="--",
-                        linewidth=max(export.line_width, 1),
-                        label=fit_label,
-                    )
-                    if chart.fitting.confidence_band:
-                        band = [
-                            point
-                            for point in points
-                            if point["lower"] is not None and point["upper"] is not None
-                        ]
-                        if band:
-                            target_axis.fill_between(
-                                [point["x"] for point in band],
-                                [point["lower"] for point in band],
-                                [point["upper"] for point in band],
-                                color=color,
-                                alpha=CONFIDENCE_BAND_OPACITY,
-                            )
-            axis.set_xlabel(_axis_label(chart.x_axis.title, chart.x_axis.unit))
-            axis.set_ylabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
-            if secondary_axis is not None:
-                secondary_axis.set_ylabel(
-                    _axis_label(
-                        chart.secondary_y_axis.title,
-                        chart.secondary_y_axis.unit,
-                    )
-                )
-        elif chart.type == "histogram":
-            panel_bins: list[dict[str, Any]] = []
-            for series_index, item in panel_series:
-                histogram = next(
-                    value
-                    for value in preview["histograms"]
-                    if value["field"] == item.field and value["label"] == item.label
-                )
-                bins = histogram["bins"]
-                panel_bins.extend(bins)
-                axis.stairs(
-                    [value["count"] for value in bins],
-                    [bins[0]["start"], *[value["end"] for value in bins]],
-                    fill=True,
-                    alpha=HISTOGRAM_FILL_OPACITY,
-                    label=item.label,
-                    color=colors[series_index],
-                    linewidth=export.line_width,
-                )
-            if panel_bins:
-                minimum = min(value["start"] for value in panel_bins)
-                maximum = max(value["end"] for value in panel_bins)
-                padding = (maximum - minimum) * HISTOGRAM_AXIS_PADDING
-                axis.set_xlim(minimum - padding, maximum + padding)
-                frequency_max = max(value["count"] for value in panel_bins)
-                axis.set_ylim(0, max(1, frequency_max * (1 + HISTOGRAM_AXIS_PADDING)))
-            axis.set_xlabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
-            axis.set_ylabel("Frequency")
-        elif chart.type == "box":
-            stats = []
-            for _, item in panel_series:
-                box = next(
-                    value
-                    for value in preview["boxes"]
-                    if value["field"] == item.field and value["label"] == item.label
-                )
-                stats.append(
-                    {
-                        "label": item.label,
-                        "whislo": box["minimum"],
-                        "q1": box["q1"],
-                        "med": box["median"],
-                        "q3": box["q3"],
-                        "whishi": box["maximum"],
-                        "fliers": box["outliers"],
-                    }
-                )
-            axis.bxp(stats)
-            axis.set_ylabel(_axis_label(chart.y_axis.title, chart.y_axis.unit))
+        if plan is not None:
+            draw_panel(
+                axis,
+                next(p for p in plan["panels"] if p["id"] == str(panel_index)),
+                secondary=secondary_axis,
+                dense=plan["rendering"]["rasterizePoints"],
+            )
         elif chart.type == "heatmap":
             heatmap = next(value for value in preview["heatmaps"] if value["panel"] == panel_index)
             correlations = np.array(
@@ -2701,7 +2535,7 @@ def render_chart(
                 raise ProcessingError(
                     "The selected 3D points do not span a surface.", "invalid-chart-fields"
                 ) from exc
-            axis.set_xlabel(_axis_label(chart.x_axis.title, chart.x_axis.unit))
+            axis.set_xlabel(axis_label(chart.x_axis.title, chart.x_axis.unit))
             axis.set_ylabel(panel_series[0][1].label)
             cast(Any, axis).set_zlabel(panel_series[1][1].label)
             figure.colorbar(surface, ax=axis, shrink=0.65, pad=0.1)
@@ -2710,11 +2544,6 @@ def render_chart(
             axis.set_title(f"{chart.title}\n{chart.subtitle}" if chart.subtitle else chart.title)
         else:
             axis.set_title(f"Panel {panel_index}")
-        if chart.type not in {"box", "heatmap", "surface3d"}:
-            if export.grid_visible:
-                axis.grid(True, color=GRID_COLOR, linewidth=0.7, alpha=0.8)
-            else:
-                axis.grid(False)
         _configure_legend(axis, export.legend_position)
         if secondary_axis is not None:
             _configure_legend(secondary_axis, export.legend_position)
@@ -2815,10 +2644,6 @@ def _configure_legend(axis: Any, position: str) -> None:
         "right": "center right",
     }
     axis.legend(handles, labels, loc=locations[position])
-
-
-def _axis_label(title: str, unit: str) -> str:
-    return f"{title} ({unit})" if unit else title
 
 
 def sample_csv_bytes() -> bytes:

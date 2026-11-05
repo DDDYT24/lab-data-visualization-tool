@@ -2,7 +2,7 @@
 
 import { Box, Button, Skeleton, Stack, Typography, useTheme } from "@mui/material";
 import dynamic from "next/dynamic";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
 import type {
@@ -41,6 +41,7 @@ export function ChartCanvas({
   findings = [],
 }: ChartCanvasProps) {
   const t = useTranslations("common");
+  const zh = useLocale().startsWith("zh");
   const theme = useTheme();
   const [surfaceSupport, setSurfaceSupport] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -84,6 +85,7 @@ export function ChartCanvas({
         showLegend,
         surfacePointLimit: lowCostFallback ? 800 : undefined,
         surfaceView: isSurface ? surfaceView : undefined,
+        zh,
       }) : {},
     [
       active,
@@ -98,6 +100,7 @@ export function ChartCanvas({
       spec,
       surfaceView,
       theme.palette.mode,
+      zh,
     ],
   );
   const optionRecord = option as Record<string, unknown>;

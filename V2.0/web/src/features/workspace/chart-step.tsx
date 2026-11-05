@@ -33,7 +33,7 @@ import type { ChartAnalysis } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
-import { analysisCacheKey } from "./analysis-cache-key";
+import { analysisCacheKey, planAppearanceKey } from "./analysis-cache-key";
 import { StepLayout } from "./step-layout";
 import { useWorkspaceStore } from "./workspace-store";
 
@@ -91,11 +91,13 @@ export function ChartStep({
     .map(([findingId]) => findingId);
   const analysisKey = analysisCacheKey(chartSpec, issueActions);
   const analysisQuery = useQuery({
-    queryKey: ["chart-analysis", projectId, analysisKey],
+    queryKey: ["chart-analysis", projectId, analysisKey, planAppearanceKey(chartSpec)],
     queryFn: ({ signal }) => {
       if (!projectId) throw new Error("No project is open.");
       return labvizApi.analyzeChart(projectId, chartSpec, signal);
     },
+    // Restyling keeps the chart on screen until its new plan arrives.
+    placeholderData: (previous, query) => (query?.queryKey[2] === analysisKey ? previous : undefined),
     enabled: active && Boolean(projectId) && !surfaceNeedsAnotherField,
     retry: 1,
     staleTime: 30_000,

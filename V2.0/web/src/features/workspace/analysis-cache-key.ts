@@ -31,3 +31,23 @@ export function analysisCacheKey(
     xAxis: spec.xAxis.field,
   });
 }
+
+/**
+ * What the analysis response's RenderPlan draws, for charts that have one.
+ *
+ * Restyling refetches only a plan: the API keeps the finished analysis, so no
+ * fit or resample runs again. Heatmaps and surfaces read their appearance from
+ * the spec and stay out.
+ */
+export function planAppearanceKey(spec: ChartSpec): string {
+  if (spec.type === "heatmap" || spec.type === "surface3d") return "";
+  return JSON.stringify({
+    colors: spec.series.map((series) => [series.color, series.lineStyle]),
+    grayscale: spec.export.grayscalePreview,
+    grid: spec.export.gridVisible,
+    lineWidth: spec.export.lineWidth,
+    markerSize: spec.export.markerSize,
+    xAxis: [spec.xAxis.title, spec.xAxis.unit],
+    yAxis: [spec.yAxis.title, spec.yAxis.unit],
+  });
+}

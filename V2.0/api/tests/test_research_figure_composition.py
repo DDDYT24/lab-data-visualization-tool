@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -13,7 +14,9 @@ from test_research_api import project, settings, unlock
 from test_research_charts import prepared_csv
 from test_research_figure_board import charts
 
+from labviz_api.artifacts import local_artifact_store, sweep
 from labviz_api.main import create_app
+from labviz_api.render_plan import RenderPlan, plan_hash
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
 from labviz_api.research_figure_board import FigureBoardSpec, interaction, scene_row_references
 from labviz_api.research_figure_render import render_board
@@ -117,6 +120,16 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
         assert artifacts["png"][1:4] == b"PNG"
         assert artifacts["pdf"][:4] == b"%PDF"
         view = client.get(url + "/interaction").json()
+        # Captured panels have plans; correlation panels do not yet.
+        panel_plan = client.get(url + "/plans/B")
+        assert panel_plan.json()["planHash"] == view["panels"][1]["planHash"]
+        if kind != "heatmap":
+            captured_plan = RenderPlan.model_validate_json(client.get(url + "/plans/A").content)
+            assert captured_plan.plan_hash == view["panels"][0]["planHash"]
+            assert captured_plan.panels[0].id == "A"
+        else:
+            assert view["panels"][0]["planHash"] is None
+            assert client.get(url + "/plans/A").json()["code"] == "figure-plan-missing"
         a_marks = [m for m in view["marks"] if m["panel"] == "A"]
         assert a_marks
         selected = client.get(url + "/interaction", params={"mark": a_marks[0]["id"]}).json()
@@ -140,6 +153,14 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
             client.get(copied_base + "/" + copied_id + "/interaction").json()["rows"]
             == view["rows"]
         )
+        sweep(config.database_path, local_artifact_store(config.database_path))
+        copied_url = copied_base + "/" + copied_id
+        assert client.get(copied_url + "/plans/B").content == panel_plan.content
+        # A board saved before plans existed keeps working from its frozen scene.
+        with sqlite3.connect(config.database_path) as connection:
+            connection.execute("DELETE FROM research_figure_panel_plans")
+        assert client.get(copied_url + "/plans/B").status_code == 404
+        assert client.get(copied_url + "/interaction").json()["rows"] == view["rows"]
 
 
 def test_shared_axes_geometry_and_formats_use_one_frozen_figure(
@@ -152,15 +173,33 @@ def test_shared_axes_geometry_and_formats_use_one_frozen_figure(
     recorded = []
 
     def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
-        recorded.append([(a.get_xlim(), a.get_ylim(), a.get_title()) for a in figure.axes])
+        recorded.append(
+            [
+                (a.get_xlim(), a.get_ylim(), a.get_title(), [float(v) for v in a.get_yticks()])
+                for a in figure.axes
+            ]
+        )
         return original(figure, *args, **kwargs)
 
     monkeypatch.setattr(Figure, "savefig", capture)
     artifacts, scene = render_board(
         panels, FigureBoardSpec(panel_chart_ids=["a", "b"], axis_mode="shared_xy")
     )
-    assert set(artifacts) == {"svg", "png", "pdf"}
+    assert set(artifacts) == {"svg", "png", "pdf", "plan:A", "plan:B"}
     assert recorded[0] == recorded[1] == recorded[2]
+    assert scene["schemaVersion"] == 3
+    # Each export drew exactly the axes its panel plan states, after the panels merged them.
+    for label, drawn, stated in zip("AB", recorded[0], scene["panels"], strict=True):
+        plan = json.loads(artifacts["plan:" + label])
+        RenderPlan.model_validate_json(artifacts["plan:" + label])
+        assert plan["planHash"] == stated["planHash"] == plan_hash(plan)
+        panel = plan["panels"][0]
+        assert (panel["id"], panel["title"]) == (label, drawn[2])
+        assert tuple(panel["axes"]["x"]["domain"]) == drawn[0]
+        assert tuple(panel["axes"]["y"]["domain"]) == drawn[1]
+        assert [tick["value"] for tick in panel["axes"]["y"]["ticks"]] == drawn[3]
+        assert plan["disclosures"][0].startswith("Input rows=")
+    assert recorded[0][0][1] == recorded[0][1][1]
     assert scene["panels"][0]["xLimits"] == scene["panels"][1]["xLimits"]
     assert scene["panels"][0]["yLimits"] == scene["panels"][1]["yLimits"]
     assert all(0 < m["cx"] < 1 and 0 < m["cy"] < 1 for m in scene["marks"])
@@ -168,6 +207,105 @@ def test_shared_axes_geometry_and_formats_use_one_frozen_figure(
     selected = interaction(scene, density["id"], None, 0, "", False)
     assert selected["selectedInputs"] == 3
     assert selected["selectedKind"] == "density"
+
+
+def captured_box(values: list[float], kind: str = "box") -> dict[str, Any]:
+    import pandas as pd
+
+    from labviz_api.processing import default_chart_spec
+    from labviz_api.research_figure_sources import legacy_snapshot
+
+    frame = pd.DataFrame({"x": [float(i) for i in range(len(values))], "v": values})
+    chart = default_chart_spec(frame)
+    chart["type"] = kind
+    chart["xAxis"]["field"] = "x"
+    chart["yAxis"].update(field="v", title="Signal", unit="mV")
+    chart["series"] = [{**chart["series"][0], "field": "v", "label": "v", "panel": 1}]
+
+    class Repository:
+        def get_workspace(self, _: str) -> dict[str, Any]:
+            return {"chart": chart, "decisions": [], "quality": {}, "preview": {}}
+
+        def load_chart_dataframe(self, _: str) -> Any:
+            return frame
+
+        def load_quality_dataframe(self, _: str) -> Any:
+            return frame
+
+    return legacy_snapshot(Repository(), "id", 1)
+
+
+def test_shared_axis_ticks_cover_the_whole_axis_on_captured_panels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panels = [captured_box([1.0, 2.0, 3.0, 4.0]), captured_box([10.0, 20.0, 30.0, 400.0])]
+    original = Figure.savefig
+    drawn: list[list[Any]] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        drawn.extend([a.get_ylim(), [float(v) for v in a.get_yticks()]] for a in figure.axes)
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    artifacts, scene = render_board(
+        panels, FigureBoardSpec(panel_chart_ids=["a", "b"], axis_mode="shared_y", grid_visible=True)
+    )
+    assert set(artifacts) >= {"plan:A", "plan:B"}
+    for label, (limits, ticks) in zip("AB", drawn[:2], strict=True):
+        plan = json.loads(artifacts["plan:" + label])
+        y_axis = plan["panels"][0]["axes"]["y"]
+        assert ticks == [tick["value"] for tick in y_axis["ticks"]]
+        assert y_axis["domain"] == list(limits)
+        assert ticks[-1] > 300
+        assert (plan["panels"][0]["axes"]["x"]["grid"], y_axis["grid"]) == (True, True)
+    assert all(panel["planHash"] for panel in scene["panels"])
+
+
+def test_long_captures_link_marks_to_their_rows_and_export_every_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = [float(i % 97) for i in range(4000)]
+    panel = captured_box(values, "line")
+    for mark in panel["marks"]:
+        row = int(mark["rowIds"][0].rsplit(":", 1)[1])
+        assert (float(row), values[row]) == (mark["x"], mark["y"])
+    original = Figure.savefig
+    drawn: list[int] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        drawn.extend(len(line.get_xdata()) for line in figure.axes[0].get_lines())
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    artifacts, _ = render_board([panel], FigureBoardSpec(panel_chart_ids=["a"]))
+    assert set(drawn) == {4000}
+    stored = json.loads(artifacts["plan:A"])["panels"][0]["marks"][0]
+    assert stored["decimation"]["input"] == 4000 and len(stored["y"]) <= 250
+
+
+def test_capture_with_dates_keeps_its_frozen_points() -> None:
+    import pandas as pd
+
+    panel = captured_box([1.0, 2.0, 3.0, 4.0], "line")
+    dates = pd.date_range("2026-01-01", periods=4)
+    for series in panel["analysis"]["series"]:
+        for point, date in zip(series["points"], dates, strict=True):
+            point["x"] = date.isoformat()
+    artifacts, _ = render_board([panel], FigureBoardSpec(panel_chart_ids=["a"]))
+    axis = json.loads(artifacts["plan:A"])["panels"][0]["axes"]["x"]
+    assert [tick["label"] for tick in axis["ticks"]][0] == dates[0].isoformat()
+
+
+@pytest.mark.parametrize("grid_visible", [False, True])
+def test_board_plans_state_the_grid_the_board_draws(grid_visible: bool) -> None:
+    result = compute_chart(prepared_csv("v\n0\n1\n2\n"), ScientificChartSpec())
+    sources = [scientific_source(result, "one"), captured_box([1.0, 2.0, 3.0, 9.0])]
+    artifacts, _ = render_board(
+        sources, FigureBoardSpec(panel_chart_ids=["a", "b"], grid_visible=grid_visible)
+    )
+    for label in "AB":
+        axes = json.loads(artifacts["plan:" + label])["panels"][0]["axes"]
+        assert (axes["x"]["grid"], axes["y"]["grid"]) == (grid_visible, grid_visible)
 
 
 def test_rejected_shared_axis_is_atomic_and_selection_never_changes_counts(tmp_path: Path) -> None:

@@ -153,6 +153,16 @@ test("figure layouts preserve saved panels and recover drafts", async ({ page, e
   expect(hybridSvg).toContain("<image");
   expect(hybridSvg).toContain("Panel-only title");
   await expect.poll(() => composed.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  const scene = await (await page.request.get(svgDownload!.replace(/artifact\/svg.*$/, "interaction"))).json();
+  const planHashes = scene.panels.map((panel: { planHash: string | null }) => panel.planHash).filter(Boolean);
+  expect(planHashes.length).toBeGreaterThan(0);
+  await inspector.getByRole("button", { name: "Interactive panels", exact: true }).click();
+  const panelCharts = inspector.getByTestId("render-plan-chart");
+  await expect(panelCharts).toHaveCount(planHashes.length);
+  await expect(panelCharts.first().locator("canvas").first()).toBeVisible();
+  expect(await panelCharts.evaluateAll((items) => items.map((item) => item.getAttribute("data-plan-hash")))).toEqual(planHashes);
+  await inspector.getByRole("button", { name: "Composed figure", exact: true }).click();
+  await expect(composed).toBeVisible();
   // Choose the uppermost visible point; same-height targets can occlude one another.
   // Keyboard/table paths below cover selecting inputs independently of pointer overlap.
   {
