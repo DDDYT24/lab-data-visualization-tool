@@ -1,8 +1,8 @@
 # 第二部分原生验收清单
 
-2026-10-28已开始原生验收，按用户要求在当前进度暂停。详见[阶段记录与暂停点](PART2_NATIVE_PROGRESS_20261028.md)。后台验证不能代签原生行为；后续继续使用独立合成资料。
+2026-11-05 已按用户要求先完成后台验收，匹配 Setup、PDF／副本辅助检查、实际安装及故障恢复均通过。原生窗口输入按用户要求停止，第二部分整体未完成。最新记录见[后台验收记录](PART2_BACKGROUND_20261105.md)，前次暂停快照见[2026-11-04 记录](PART2_PROGRESS_20261104.md)。后台验证不能代签原生行为；后续继续使用独立合成资料。
 
-当前候选与自动结果以 `D6_PART2_BACKGROUND_20261028.md` 及其 `verification.json` 为准。执行前先核对 bundle、宿主与匹配 Setup 的 SHA256。原生观察应记录候选 ID、Windows/WebView2 版本、资料身份、时间、操作、实际结果及证据文件。
+当前候选与匹配 Setup 身份见最新后台验收记录。下表与 `D6_PART2_BACKGROUND_20261028.md`、`PART2_NATIVE_PROGRESS_20261028.md` 保留的是 2026-10-28 旧执行包的历史状态，不能归为新包通过。执行前先核对 bundle、宿主与匹配 Setup 的 SHA256。原生观察应记录候选 ID、Windows/WebView2 版本、资料身份、时间、操作、实际结果及证据文件。
 
 本轮合成夹具在桌面工作区 `outputs/desktop-part2-20261028/before/fixtures/`：`desktop-small.csv`、`desktop-small.tsv`、`desktop-small.xlsx` 和 `中文 路径/科研数据.csv`。冻结文件的格式、路径、字节数与期望 SHA256 记录在 `outputs/desktop-part2-20261028/workflow-full.json` 的 `exports` 中。新原生运行使用新的合成资料，不覆盖这些原始后台记录。
 
