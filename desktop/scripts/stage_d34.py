@@ -118,7 +118,7 @@ for path in paths:
     source = (payload/'V2.0/api/labviz_api/installed_profile.py').read_text(encoding='utf-8')
     epoch = int(re.search(r'^DATA_EPOCH = (\d+)$', source, re.M).group(1))
     metadata = {'format': 'labviz-desktop-payload-v1', 'appId': stage.APP_ID, 'candidateId': candidate, 'dataEpoch': epoch,
-                'sourceCommit': 'b587db848ba5f1930657d5a316e0160c71864ead', 'scope': BUILD_SCOPE, 'webBuildId': (dist/'BUILD_ID').read_text().strip()}
+                'sourceCommit': provenance.git_identity(ROOT)['head'], 'scope': BUILD_SCOPE, 'webBuildId': (dist/'BUILD_ID').read_text().strip()}
     (payload/'candidate-build.json').write_text(json.dumps(metadata, indent=2))
     (payload/'payload-manifest.json').write_text(json.dumps({'files': files, 'candidateId': candidate}, indent=2))
     host = ROOT/'desktop/prototypes/tauri/target/release/LabViz.exe'
