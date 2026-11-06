@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod downloads;
+mod escape;
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -744,6 +745,7 @@ fn build_main(app: &AppHandle, spec: Spec, value: Value) -> Result<(), String> {
         })
         .build()
         .map_err(|e| e.to_string())?;
+    escape::install(&window, &origin).map_err(|e| e.to_string())?;
     let state = get_state(app);
     *state.phase.lock().unwrap() = "ready".into();
     if let Some(startup) = app.get_webview_window("startup") {
