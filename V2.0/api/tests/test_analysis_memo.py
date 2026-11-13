@@ -8,6 +8,7 @@ import pytest
 from labviz_api import analysis_memo
 from labviz_api.analysis_memo import AnalysisMemo
 from labviz_api.models import ChartSpec
+from labviz_api.processing import analyze_chart
 
 FRAME = pd.DataFrame({"x": [1.0, 2.0, 3.0, 4.0], "a": [1.0, 2.0, 1.5, 3.0]})
 
@@ -35,7 +36,7 @@ def chart(**extra: Any) -> ChartSpec:
 
 @pytest.fixture
 def runs(monkeypatch: pytest.MonkeyPatch) -> list[int]:
-    original = analysis_memo.analyze_chart
+    original = analyze_chart
     calls: list[int] = []
 
     def counted(frame: pd.DataFrame, spec: ChartSpec) -> dict[str, Any]:
