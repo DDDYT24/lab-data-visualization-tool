@@ -94,7 +94,7 @@ def main():
                 survivors.append({'pid': pid, 'name': member.name()})
         except psutil.NoSuchProcess:
             pass
-    result = {'hostExitCode': process.wait(), 'survivingOwnedProcesses': survivors, 'elapsedSeconds': time.time()-started}
+    result = {'hostExitCode': process.wait(), 'runId': config['id'], 'shell': config['shell'], 'survivingOwnedProcesses': survivors, 'elapsedSeconds': time.time()-started}
     write(trial / 'exit.json', result)
     print(json.dumps(result), flush=True)
 

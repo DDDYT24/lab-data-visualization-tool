@@ -5,6 +5,8 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import ctypes
+from ctypes import wintypes
 import secrets
 import threading
 import uuid
@@ -21,6 +23,94 @@ FIELDS = {
     "dpi": {300, 600},
     "grayscalePreview": {True, False},
 }
+CLIPBOARD_BODY_LIMIT = 262144
+CLIPBOARD_TEXT_LIMIT = 131072
+
+
+def clipboard_bytes(text: str) -> bytes:
+    if not isinstance(text, str) or "\0" in text:
+        raise ValueError("Clipboard text is invalid")
+    encoded = text.encode("utf-16-le") + b"\0\0"
+    if len(encoded) > CLIPBOARD_TEXT_LIMIT:
+        raise ValueError("Clipboard text exceeds the supported size")
+    return encoded
+
+
+class WindowsClipboard:
+    def __init__(self):
+        self.user = ctypes.WinDLL("user32", use_last_error=True)
+        self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        for name, arguments, result in (
+            ("CreateWindowExW", [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND,
+                wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID], wintypes.HWND),
+            ("DestroyWindow", [wintypes.HWND], wintypes.BOOL),
+            ("OpenClipboard", [wintypes.HWND], wintypes.BOOL),
+            ("CloseClipboard", [], wintypes.BOOL),
+            ("EmptyClipboard", [], wintypes.BOOL),
+            ("SetClipboardData", [wintypes.UINT, wintypes.HANDLE], wintypes.HANDLE),
+            ("GetClipboardData", [wintypes.UINT], wintypes.HANDLE),
+        ):
+            function = getattr(self.user, name)
+            function.argtypes, function.restype = arguments, result
+        for name, arguments, result in (
+            ("GlobalAlloc", [wintypes.UINT, ctypes.c_size_t], wintypes.HANDLE),
+            ("GlobalLock", [wintypes.HANDLE], ctypes.c_void_p),
+            ("GlobalUnlock", [wintypes.HANDLE], wintypes.BOOL),
+            ("GlobalSize", [wintypes.HANDLE], ctypes.c_size_t),
+            ("GlobalFree", [wintypes.HANDLE], wintypes.HANDLE),
+        ):
+            function = getattr(self.kernel, name)
+            function.argtypes, function.restype = arguments, result
+
+    def write(self, encoded: bytes) -> bool:
+        # A message-only window supplies a real owner without displaying UI.
+        # OpenClipboard(NULL) followed by EmptyClipboard cannot SetClipboardData.
+        owner = self.user.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0,
+            wintypes.HWND(-3), None, None, None)
+        if not owner:
+            return False
+        handle, opened, transferred, copied = None, False, False, False
+        try:
+            handle = self.kernel.GlobalAlloc(0x42, len(encoded))
+            pointer = self.kernel.GlobalLock(handle) if handle else None
+            if not pointer:
+                return False
+            try:
+                ctypes.memmove(pointer, encoded, len(encoded))
+            finally:
+                self.kernel.GlobalUnlock(handle)
+            # Failure to acquire the clipboard must leave its existing data intact.
+            if not self.user.OpenClipboard(owner):
+                return False
+            opened = True
+            if not self.user.EmptyClipboard() or not self.user.SetClipboardData(13, handle):
+                return False
+            transferred = True
+            observed = self.user.GetClipboardData(13)
+            if not observed or self.kernel.GlobalSize(observed) < len(encoded):
+                return False
+            pointer = self.kernel.GlobalLock(observed)
+            if not pointer:
+                return False
+            try:
+                copied = ctypes.string_at(pointer, len(encoded)) == encoded
+            finally:
+                self.kernel.GlobalUnlock(observed)
+        finally:
+            if opened and not self.user.CloseClipboard():
+                copied = False
+            if handle and not transferred:
+                self.kernel.GlobalFree(handle)
+            self.user.DestroyWindow(owner)
+        return copied
+
+
+def write_clipboard_text(text: str) -> bool:
+    encoded = clipboard_bytes(text)
+    if os.name != "nt":
+        return False
+    return WindowsClipboard().write(encoded)
 
 
 def checked(value: dict, profile_id: str) -> dict:
@@ -97,7 +187,7 @@ class Preferences:
                 self.wfile.write(body)
 
             def do_OPTIONS(self) -> None:
-                self.respond(200 if (self.path == "/preferences" or self.path.startswith(('/session/', '/maintenance/'))) and self.headers_for_origin() else 403, {})
+                self.respond(200 if (self.path in ("/preferences", "/clipboard/write") or self.path.startswith(('/session/', '/maintenance/'))) and self.headers_for_origin() else 403, {})
 
             def do_GET(self) -> None:
                 if service.maintenance and self.path.startswith('/maintenance/') and self.headers_for_origin() and hmac.compare_digest(self.headers.get('X-LabViz-Desktop', ''), service.token):
@@ -125,6 +215,35 @@ class Preferences:
                 self.respond(403, {'saved':False})
 
             def do_POST(self) -> None:
+                if self.path == '/clipboard/write':
+                    if not self.headers_for_origin() or not hmac.compare_digest(self.headers.get('X-LabViz-Desktop', ''), service.token):
+                        self.deny_post()
+                        return
+                    self.connection.settimeout(2)
+                    try:
+                        count = int(self.headers.get('Content-Length', '0'))
+                        if not 0 < count <= CLIPBOARD_BODY_LIMIT:
+                            if count > 0:
+                                try:
+                                    self.rfile.read(min(count, CLIPBOARD_BODY_LIMIT * 2))
+                                except OSError:
+                                    pass
+                            self.respond(413, {'copied': False, 'verified': False})
+                            return
+                        if self.headers.get('Content-Type', '').split(';')[0].strip().lower() != 'application/json':
+                            raise ValueError('Clipboard requests require JSON')
+                        body = self.rfile.read(count)
+                        if len(body) != count:
+                            raise ValueError('Incomplete clipboard request')
+                        value = json.loads(body)
+                        if not isinstance(value, dict) or set(value) != {'text'}:
+                            raise ValueError('Unknown clipboard request fields')
+                        clipboard_bytes(value['text'])
+                        copied = write_clipboard_text(value['text'])
+                        self.respond(200 if copied else 409, {'copied': copied, 'verified': copied})
+                    except (ValueError, TypeError, OSError):
+                        self.respond(400, {'copied': False, 'verified': False})
+                    return
                 if service.maintenance and self.path.startswith('/maintenance/') and self.headers_for_origin() and hmac.compare_digest(self.headers.get('X-LabViz-Desktop', ''), service.token):
                     self.session_timeout()
                     service.maintenance.handle(self)
