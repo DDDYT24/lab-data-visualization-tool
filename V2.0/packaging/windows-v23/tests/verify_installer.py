@@ -247,6 +247,13 @@ def main():
             ],
             "uninstall",
         )
+        # unins000.exe hands over to a copy of itself in the temporary folder and returns
+        # before that copy has removed the program folder. A reinstall started in that gap
+        # finds leftover files without installation.json and refuses the folder.
+        deadline = time.monotonic() + 60
+        while program.exists() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        assert not program.exists(), "The uninstaller left the program folder in place."
         assert sha(profile / "data/labviz.db") == data_sha and sha(frozen) == frozen_sha
         assert read(profile / "profile.json")["profileId"] == profile_id
         assert not installed_entry()
