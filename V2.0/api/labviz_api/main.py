@@ -34,6 +34,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from . import __version__
+from .analysis_memo import AnalysisMemo
 from .auth import AuthError, AuthRepository, AuthService, build_auth_service
 from .client_identity import ClientIdentityError, ClientIdentityResolver
 from .config import Settings
@@ -91,6 +92,7 @@ from .processing import (
     analyze_chart,
     build_preview,
     build_quality_report,
+    classic_plan,
     default_chart_spec,
     load_dataframe,
     render_chart,
@@ -535,6 +537,7 @@ def create_app(
             if installed_guard is not None:
                 installed_guard.close()
 
+    analyses = AnalysisMemo()
     app = FastAPI(
         title="LabViz API",
         version=__version__,
@@ -1656,6 +1659,7 @@ def create_app(
                 series=derived["series"],
                 preview=derived["preview"],
                 recommendations=derived["recommendations"],
+                plan=classic_plan(frame, chart, derived, detail="preview"),
             ),
             downloads=downloads,
         )
@@ -1722,7 +1726,8 @@ def create_app(
         prefetch()
         try:
             frame = repository.load_chart_dataframe(project_id)
-            analysis = analyze_chart(frame, body.chart)
+            analysis = analyses.analysis(project_id, frame, body.chart)
+            plan = classic_plan(frame, body.chart, analysis, detail="preview")
         except (ProcessingError, ValidationError) as exc:
             code = exc.code if isinstance(exc, ProcessingError) else "invalid-chart"
             raise ApiProblem(422, code, str(exc)) from exc
@@ -1731,6 +1736,7 @@ def create_app(
             series=analysis["series"],
             preview=analysis["preview"],
             recommendations=analysis["recommendations"],
+            plan=plan,
         )
 
     @app.get(f"{API_PREFIX}/exports/{{export_id}}/download")

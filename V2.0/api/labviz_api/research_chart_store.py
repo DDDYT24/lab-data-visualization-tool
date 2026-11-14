@@ -10,6 +10,7 @@ from uuid import uuid4
 from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
+from .render_plan import plan_bytes
 from .research_panel_headers import install_headers, remember_header, scientific_header
 from .research_preparation import PreparationError
 from .research_store import ResearchStore
@@ -37,12 +38,16 @@ def install_charts(store: ResearchStore) -> None:
         install_headers(connection)
 
 
+CHART_PAGE_ROWS = 100
+
+
 def save_chart(
     store: ResearchStore,
     project_id: str,
     revision: str,
     result: dict[str, Any],
     artifacts: dict[str, bytes],
+    plan: dict[str, Any],
 ) -> str:
     identifier = uuid4().hex
     created_at = datetime.now(UTC).isoformat()
@@ -53,16 +58,20 @@ def save_chart(
             remember(connection, store.artifacts, artifacts[kind], media_type=MEDIA_TYPES[kind])
             for kind in ("svg", "png", "pdf")
         ]
+        plan_digest = remember(
+            connection, store.artifacts, plan_bytes(plan), media_type=MEDIA_TYPES["json"]
+        )
         connection.execute(
             "INSERT INTO research_charts "
-            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,created_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,"
+            "plan_sha256,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 identifier,
                 project_id,
                 revision,
                 to_json(result, ensure_ascii=False, round_trip=True).decode("utf-8"),
                 *digests,
+                plan_digest,
                 created_at,
             ),
         )
@@ -89,7 +98,7 @@ def chart_row(
     if field not in {None, "svg", "png", "pdf", "json"}:
         raise ValueError("Unknown chart artifact")
     columns = (
-        "c.id, c.revision_id, c.created_at, c.result_json"
+        "c.id, c.revision_id, c.created_at, c.plan_sha256, c.result_json"
         if field in {None, "json"}
         else (
             f"c.{field}_sha256 AS {field}, coalesce(json_extract(h.header_json, "
@@ -97,7 +106,7 @@ def chart_row(
         )
     )
     if header_only:
-        columns = "c.id, c.revision_id, c.created_at"
+        columns = "c.id, c.revision_id, c.created_at, c.plan_sha256"
     with store.connect() as connection:
         row = connection.execute(
             f"SELECT {columns} FROM research_charts c LEFT JOIN research_panel_headers h "
@@ -112,13 +121,31 @@ def chart_row(
     return chart
 
 
+def read_chart_plan(store: ResearchStore, project_id: str, chart_id: str) -> bytes:
+    with store.connect() as connection:
+        row = connection.execute(
+            "SELECT plan_sha256 FROM research_charts WHERE id=? AND project_id=?",
+            (chart_id, project_id),
+        ).fetchone()
+    if row is None:
+        raise PreparationError("chart-not-found", "This chart is not available in this project.")
+    if row["plan_sha256"] is None:
+        raise PreparationError("chart-plan-missing", "This chart was saved without a render plan.")
+    return store.artifacts.read(row["plan_sha256"])
+
+
 def read_chart_page(
-    store: ResearchStore, project_id: str, chart_id: str, offset: int = 0
+    store: ResearchStore,
+    project_id: str,
+    chart_id: str,
+    offset: int = 0,
+    observation: str | None = None,
 ) -> dict[str, Any]:
-    if offset == 0:
+    """One page of source rows, or with ``observation`` the page that holds that row."""
+    if offset == 0 and observation is None:
         with store.connect() as connection:
             row = connection.execute(
-                "SELECT c.id,c.revision_id,c.created_at,"
+                "SELECT c.id,c.revision_id,c.created_at,c.plan_sha256,"
                 "json_extract(h.header_json, '$.firstPage') AS first_page "
                 "FROM research_charts c LEFT JOIN research_panel_headers h "
                 "ON h.id=c.id AND h.project_id=c.project_id WHERE c.id=? AND c.project_id=?",
@@ -136,8 +163,20 @@ def read_chart_page(
                 "id": row["id"],
                 "revisionId": row["revision_id"],
                 "createdAt": row["created_at"],
+                "hasPlan": row["plan_sha256"] is not None,
             }
-    return chart_view(chart_row(store, project_id, chart_id), offset)
+    chart = chart_row(store, project_id, chart_id)
+    if observation is None:
+        return chart_view(chart, offset)
+    result = json.loads(chart["result_json"])
+    for index, item in enumerate(chart_observations(result)):
+        if item["id"] == observation:
+            return chart_view(chart, index // CHART_PAGE_ROWS * CHART_PAGE_ROWS, result=result)
+    raise PreparationError("chart-not-found", "This observation is not part of this chart.")
+
+
+def chart_observations(result: dict[str, Any]) -> list[dict[str, Any]]:
+    return [*(p["observation"] for p in result["points"]), *result["excluded"]]
 
 
 def chart_view(
@@ -145,7 +184,7 @@ def chart_view(
 ) -> dict[str, Any]:
     if result is None:
         result = json.loads(row["result_json"])
-    observations = [p["observation"] for p in result["points"]] + result["excluded"]
+    observations = chart_observations(result)
     return {
         "id": row["id"],
         "revisionId": row["revision_id"],
@@ -158,9 +197,10 @@ def chart_view(
         "excluded": len(result["excluded"]),
         "totalRows": len(observations),
         "offset": offset,
-        "rows": observations[offset : offset + 100],
+        "rows": observations[offset : offset + CHART_PAGE_ROWS],
         "pairCount": len(result["pairs"]),
-        "pairs": result["pairs"][offset : offset + 100],
+        "pairs": result["pairs"][offset : offset + CHART_PAGE_ROWS],
+        "hasPlan": row.get("plan_sha256") is not None,
         "densityMethods": [
             {
                 k: v

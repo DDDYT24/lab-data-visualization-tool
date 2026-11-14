@@ -23,7 +23,8 @@ from pydantic import Field, model_validator
 from .artifacts import MEDIA_TYPES, remember
 from .models import ChartSpec
 from .processing import ProcessingError
-from .research_chart_render import COLORS, render_chart
+from .render_plan import build_research_plan, plan_bytes
+from .research_chart_render import COLORS, draw_plan
 from .research_charts import ScientificChartSpec, compute_chart
 from .research_contract import ResearchModel
 from .research_dataset import encode_raw
@@ -457,7 +458,8 @@ def apply_template(
                 )
             )
             parent = revision
-            artifacts = render_chart(result)
+            plan = build_research_plan(result)
+            artifacts = draw_plan(plan)
             charts.append(
                 (
                     key,
@@ -467,6 +469,7 @@ def apply_template(
                     artifacts["svg"],
                     artifacts["png"],
                     artifacts["pdf"],
+                    plan_bytes(plan),
                     timestamp,
                 )
             )
@@ -509,16 +512,18 @@ def apply_template(
                 )
         c.executemany(
             "INSERT INTO research_charts "
-            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,created_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(id,project_id,revision_id,result_json,svg_sha256,png_sha256,pdf_sha256,"
+            "plan_sha256,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
             [
                 (
                     *chart[:4],
                     *(
                         remember(c, store.artifacts, payload, media_type=MEDIA_TYPES[kind])
-                        for kind, payload in zip(("svg", "png", "pdf"), chart[4:7], strict=True)
+                        for kind, payload in zip(
+                            ("svg", "png", "pdf", "json"), chart[4:8], strict=True
+                        )
                     ),
-                    chart[7],
+                    chart[8],
                 )
                 for chart in charts
             ],

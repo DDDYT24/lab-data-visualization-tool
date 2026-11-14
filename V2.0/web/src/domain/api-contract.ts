@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { chartSpecSchema } from "./chart-spec";
+import { renderPlanSchema } from "./render-plan";
 
 export const apiVersionSchema = z.literal("v1");
 export const PROJECT_DESCRIPTION_MAX_UTF8_BYTES = 4_000;
@@ -396,6 +397,7 @@ const analysisDisclosureSchema = z.object({
 export const chartAnalysisSchema = z.object({
   apiVersion: apiVersionSchema,
   projectId: z.string().min(1),
+  plan: renderPlanSchema.nullable().optional(),
   series: z.array(
     z.object({
       field: z.string().min(1),

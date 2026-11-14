@@ -14,6 +14,8 @@ import {
 } from "@/domain/chart-render-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
+import { buildPlanOption, planAxisTooltip, planText } from "./render-plan-option";
+
 type SeriesOptionRecord = Record<string, unknown>;
 
 function axisName(title: string, unit: string) {
@@ -183,6 +185,7 @@ export function buildChartOption({
   showLegend = true,
   surfacePointLimit,
   surfaceView,
+  zh = false,
 }: {
   analysis?: ChartAnalysis;
   colorMode?: ChartColorMode;
@@ -198,6 +201,7 @@ export function buildChartOption({
     beta: number;
     distance: number;
   };
+  zh?: boolean;
 }): EChartsOption {
   const rows = visibleRows(preview, findings, excludedFindingIds);
   const colors = spec.series.map((series, index) =>
@@ -232,6 +236,26 @@ export function buildChartOption({
     },
     tooltip: { trigger: "axis" as const },
   };
+
+  // Excluded findings are a local filter the saved analysis has not applied to row marks yet.
+  const rowMarks = spec.type === "bar" || spec.type === "line" || spec.type === "scatter";
+  if (analysis?.plan && (!rowMarks || excludedFindingIds.length === 0)) {
+    const planned = buildPlanOption({
+      colors: { grid: chartGridColor, text: colorMode === "dark" ? "#ECECEC" : "#172033" },
+      plan: analysis.plan,
+      text: planText(zh),
+    });
+    const shared = spec.type === "line" || spec.type === "scatter";
+    return {
+      ...(planned as EChartsOption), ...common, dataZoom: [],
+      tooltip: (shared
+        ? { trigger: "axis", formatter: planAxisTooltip(analysis.plan) }
+        : planned.tooltip) as EChartsOption["tooltip"],
+      grid: panelGrids(spec.panelCount),
+      // A box plot has no legend in its export; the labels sit on the axis.
+      legend: planned.legend.show ? { ...common.legend, data: planned.legend.data } : { show: false },
+    };
+  }
 
   if (spec.type === "histogram") {
     // Draw the API's complete intervals: a value-axis bar only retains bin centers
