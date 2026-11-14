@@ -96,3 +96,53 @@ test("captured box panels share an axis and open as interactive panels", async (
   expect(await panels.evaluateAll((items) => items.map((item) => item.getAttribute("data-plan-hash")))).toEqual(planHashes);
   await inspector.screenshot({ path: test.info().outputPath("captured-boxes.png") });
 });
+
+test("line and scatter previews are drawn from plans, restyle, and carry a fit", async ({ page }) => {
+  test.setTimeout(180_000);
+  type Mark = { kind: string; color: string; lineStyle?: string };
+  const plans: { type: string; marks: Mark[] }[] = [];
+  page.on("response", async (response) => {
+    if (response.url().endsWith("/chart-analysis") && response.ok()) {
+      const body = await response.json();
+      if (body.plan) plans.push({ type: response.request().postDataJSON().chart.type, marks: body.plan.panels[0].marks });
+    }
+  });
+  const unlocked = page.waitForResponse((r) => r.url().endsWith("/api/v1/local/session") && r.request().method() === "POST");
+  await page.goto(`/#labviz-access=${encodeURIComponent(process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY!)}`);
+  expect((await unlocked).ok()).toBeTruthy();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "live-line-scatter.csv", mimeType: "text/csv",
+    buffer: Buffer.from("time,response\n0,1.1\n1,2.8\n2,5.2\n3,6.9\n4,9.1\n5,10.8\n6,13.2\n7,15.1\n"),
+  });
+  await expect(page.getByRole("heading", { name: "Confirm your data" })).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Review data quality" }).click();
+  const keep = page.getByRole("button", { name: "Keep all remaining as is" });
+  if (await keep.isVisible()) await keep.click();
+  await page.getByRole("button", { name: "Create chart", exact: true }).click();
+  const chart = page.locator('main [role="img"]').first();
+  await expect(chart.locator("svg")).toBeVisible();
+  const latest = (type: string, wanted: (mark: Mark) => boolean) =>
+    expect.poll(() => plans.findLast((plan) => plan.type === type)?.marks.some(wanted) ?? false).toBe(true);
+  const chooseType = async (name: string) => {
+    await page.getByRole("combobox", { name: "Chart type" }).click();
+    await page.getByRole("option", { name, exact: true }).click();
+  };
+
+  await chooseType("Line chart");
+  await latest("line", (mark) => mark.kind === "polyline");
+  await page.getByRole("button", { name: "Series appearance", exact: true }).click();
+  await page.locator('input[type="color"]').first().fill("#dc2626");
+  // The restyle reaches the plan and the drawing, not only the request.
+  await latest("line", (mark) => mark.kind === "polyline" && mark.color.toLowerCase() === "#dc2626");
+  await expect.poll(() => chart.locator('svg path[stroke="#dc2626"]').count()).toBeGreaterThan(0);
+
+  await chooseType("Scatter plot");
+  await latest("scatter", (mark) => mark.kind === "points" && mark.color.toLowerCase() === "#dc2626");
+  await expect.poll(() => chart.locator('svg path[fill="#dc2626"]').count()).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Fitting and uncertainty", exact: true }).click();
+  await page.getByRole("combobox", { name: "Fit model", exact: true }).click();
+  await page.getByRole("option", { name: "Linear", exact: true }).click();
+  await latest("scatter", (mark) => mark.kind === "polyline" && mark.lineStyle === "dashed");
+  await chart.screenshot({ path: test.info().outputPath("scatter-fit-preview.png") });
+});
