@@ -287,7 +287,8 @@ export function WorkspaceScreen({
             }}
           >
             {quickPlotOpened && <Box hidden={researchMode}>{workspaceContent}</Box>}
-            {researchOpened && projectId && <Box hidden={!researchMode}>
+            {/* Research routes answer 409 until the upload job ends; mount after it. */}
+            {researchOpened && projectId && (!job || ["ready", "failed"].includes(job.stage)) && <Box hidden={!researchMode}>
               <ResearchWorkspace onFigureStateChange={setFigureState} onTaskChange={setResearchTask} active={researchMode} initialTask={initialResearchTask} key={projectId} projectId={projectId} />
             </Box>}
           </Box>
