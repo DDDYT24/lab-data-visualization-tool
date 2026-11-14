@@ -6,6 +6,11 @@ from typing import Any
 
 from .render_contract import GRID_COLOR, LINE_STYLES
 
+# A mark with more bars than this is drawn as one collection, and the legend then takes a fixed
+# place (`dense_bars`). A patch per bar, and a legend that tests every bar each time it looks for
+# its best place, cost about 1 ms a bar: 100 s for a 100,000-row export.
+BAR_PATCH_LIMIT = 1000
+
 
 def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
     from matplotlib.collections import LineCollection
@@ -100,6 +105,28 @@ def draw_rects(ax: Any, mark: dict[str, Any], dense: bool) -> None:
     }
     if mark["shape"] == "stairs":
         ax.stairs(mark["y1"], [*mark["x0"], mark["x1"][-1]], fill=True, **style)
+    elif len(mark["x0"]) > BAR_PATCH_LIMIT:
+        import numpy as np
+        from matplotlib.collections import PolyCollection
+
+        corners = [
+            np.asarray(mark[key], dtype=float)
+            for key in ("x0", "y0", "x1", "y0", "x1", "y1", "x0", "y1")
+        ]
+        # One array of all bars: the stubs ask for a sequence, the class takes either.
+        bars: Any = np.stack(corners, axis=1).reshape(-1, 4, 2)
+        # ax.bar gives a coloured bar no edge, so none here keeps the pixels the same.
+        ax.add_collection(
+            PolyCollection(
+                bars,
+                alpha=mark["opacity"],
+                facecolor=mark["color"],
+                edgecolor="none",
+                label=mark["group"],
+                rasterized=dense,
+            ),
+            autolim=False,
+        )
     else:
         ax.bar(
             mark["x0"],
@@ -109,6 +136,16 @@ def draw_rects(ax: Any, mark: dict[str, Any], dense: bool) -> None:
             align="edge",
             **style,
         )
+
+
+def dense_bars(ax: Any) -> bool:
+    """Whether the axis holds a bar mark that was drawn as one collection."""
+    from matplotlib.collections import PolyCollection
+
+    return any(
+        isinstance(collection, PolyCollection) and len(collection.get_paths()) > BAR_PATCH_LIMIT
+        for collection in ax.collections
+    )
 
 
 def draw_box(ax: Any, mark: dict[str, Any]) -> None:

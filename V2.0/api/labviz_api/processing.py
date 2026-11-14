@@ -41,7 +41,7 @@ from .render_contract import (
     SURFACE_GRAYSCALE_PALETTE,
     SURFACE_PALETTE,
 )
-from .render_plan_draw import draw_panel
+from .render_plan_draw import dense_bars, draw_panel
 
 if os.environ.get("LABVIZ_DESKTOP_MODE") == "1":
     os.environ["MPLBACKEND"] = "Agg"
@@ -2643,7 +2643,11 @@ def _configure_legend(axis: Any, position: str) -> None:
         "left": "center left",
         "right": "center right",
     }
-    axis.legend(handles, labels, loc=locations[position])
+    location = locations[position]
+    if location == "best" and dense_bars(axis):
+        # The search for the best place tests every bar; see BAR_PATCH_LIMIT.
+        location = "upper right"
+    axis.legend(handles, labels, loc=location)
 
 
 def sample_csv_bytes() -> bytes:

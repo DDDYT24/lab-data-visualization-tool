@@ -189,7 +189,11 @@ def test_export_draws_every_row_and_preview_keeps_its_axes(
     def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
         axis = figure.axes[0]
         drawn.extend(len(line.get_xdata()) for line in axis.get_lines())
-        drawn.extend(len(container) for container in axis.containers)
+        # 4,000 bars are over BAR_PATCH_LIMIT, so they are one collection.
+        drawn.extend(len(collection.get_paths()) for collection in axis.collections)
+        if kind == "bar":
+            # A fixed place: the search for the best one would test each of the 4,000 bars.
+            assert axis.get_legend()._loc == 1
         return original(figure, *args, **kwargs)
 
     monkeypatch.setattr(Figure, "savefig", capture)
