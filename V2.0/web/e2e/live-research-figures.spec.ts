@@ -44,7 +44,11 @@ test("figure layouts preserve saved panels and recover drafts", async ({ page, e
   await page.getByRole("tab", { name: "Figures", exact: true }).click();
   const board = page.getByTestId("figure-workspace");
   const select = async (label: string, option: string | RegExp) => {
-    await board.getByRole("combobox", { name: label, exact: true }).click();
+    const control = board.getByRole("combobox", { name: label, exact: true });
+    // A click on a disabled selector is ignored, and the layout selector is disabled while the
+    // workspace loads; the option then never appears.
+    await expect(control).toBeEnabled();
+    await control.click();
     await page.getByRole("option", { name: option, exact: typeof option === "string" }).click();
   };
   const save = async (title: string) => {
