@@ -1,7 +1,6 @@
 """Generate and verify 100 deterministic, synthetic LabViz upload fixtures.
 
-Data and reports go only to the ignored outputs directory. XLSX files are
-generated separately by build_chaos_xlsx.mjs from the generated sheet spec.
+Data and reports go only to the ignored outputs directory.
 """
 
 from __future__ import annotations
@@ -13,11 +12,13 @@ import io
 import json
 import math
 import random
-import shutil
 import time
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 
 from labviz_api.models import ChartSpec
 from labviz_api.processing import (
@@ -160,15 +161,30 @@ def _write_text(
     path.write_text(buffer.getvalue(), encoding="utf-8-sig" if bom else "utf-8")
 
 
+def _write_xlsx(path: Path, headers: list[str], rows: list[list[Any]]) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Measurements"
+    sheet.append(headers)
+    for row in rows:
+        sheet.append(row)
+    for cell in sheet[1]:
+        cell.font = Font(name="Arial", size=10, bold=True)
+        cell.fill = PatternFill("solid", fgColor="DBEAFE")
+    sheet.sheet_view.showGridLines = False
+    metadata = workbook.create_sheet("Metadata")
+    metadata.append(["Origin", "Deterministic synthetic LabViz fixture"])
+    metadata.append(["Purpose", "Test import, quality, surface validation and exports"])
+    metadata.sheet_view.showGridLines = False
+    workbook.save(path)
+
+
 def generate(root: Path) -> None:
     if root.exists():
         raise SystemExit(f"Refusing to overwrite an existing fixture directory: {root}")
     data_dir = root / "data"
-    support_dir = root / "support"
     data_dir.mkdir(parents=True)
-    support_dir.mkdir(parents=True)
     cases: list[dict[str, Any]] = []
-    workbooks: list[dict[str, Any]] = []
     for index in range(100):
         case_id = index + 1
         surface = index < 80
@@ -182,7 +198,7 @@ def generate(root: Path) -> None:
         fmt = "xlsx" if case_id in XLSX_IDS else ("csv", "tsv", "json", "txt")[index % 4]
         name = f"{case_id:03d}_{profile}{'_中文' if profile == 'chinese-columns' else ''}.{fmt}"
         if fmt == "xlsx":
-            workbooks.append({"filename": name, "headers": headers, "rows": rows})
+            _write_xlsx(data_dir / name, headers, rows)
         else:
             _write_text(data_dir / name, fmt, headers, rows, bom=profile == "bom-header")
         status = SURFACE_STATUS.get(profile, "valid") if surface else "not-applicable"
@@ -202,12 +218,6 @@ def generate(root: Path) -> None:
                 "sheetName": "Measurements" if fmt == "xlsx" else None,
             }
         )
-    (support_dir / "xlsx-specs.json").write_text(
-        json.dumps(workbooks, ensure_ascii=False), encoding="utf-8"
-    )
-    shutil.copyfile(
-        Path(__file__).with_name("build_chaos_xlsx.mjs"), support_dir / "build_xlsx.mjs"
-    )
     (root / "manifest.json").write_text(
         json.dumps(
             {
@@ -225,7 +235,7 @@ def generate(root: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    print(f"Generated 96 text fixtures and four XLSX specifications in {root}")
+    print(f"Generated 96 text fixtures and four XLSX workbooks in {root}")
 
 
 def _chart(case: dict[str, Any], fmt: str) -> ChartSpec:
