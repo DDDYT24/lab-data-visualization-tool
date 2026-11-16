@@ -123,7 +123,7 @@ def draw_mesh(ax: Any, mark: dict[str, Any]) -> None:
     ]
     xs, ys, zs = (list(values) for values in zip(*points, strict=True))
     surface = ax.plot_trisurf(xs, ys, zs, cmap=colormap, vmin=low, vmax=high)
-    ax.get_figure().colorbar(surface, ax=ax, shrink=0.65, pad=0.1, label=mark["colorTitle"])
+    ax.get_figure().colorbar(surface, ax=ax, shrink=0.65, pad=0.2, label=mark["colorTitle"])
 
 
 def draw_rects(ax: Any, mark: dict[str, Any], dense: bool) -> None:

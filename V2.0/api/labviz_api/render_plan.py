@@ -25,6 +25,8 @@ AXIS_NICE_RULE = GEOMETRY["axis"]["rule"]
 # Matplotlib's default data margin, kept so new plans frame data as rc.2 charts did.
 AXIS_MARGIN = GEOMETRY["axis"]["margin"]
 AXIS_MAX_TICKS = GEOMETRY["axis"]["maxTicks"]
+# The axes of a 3D chart are drawn short and at an angle, so they hold fewer labels.
+AXIS_MAX_TICKS_3D = GEOMETRY["axis"]["maxTicks3d"]
 AXIS_STEP_MULTIPLES = GEOMETRY["axis"]["stepMultiples"]
 # Below this span, relative to the values, ticks cannot be told apart: treat them as one value.
 AXIS_MIN_RELATIVE_SPAN = GEOMETRY["axis"]["minRelativeSpan"]
@@ -322,15 +324,15 @@ def nice_axis(low: float, high: float) -> tuple[tuple[float, float], list[dict[s
     return (low, high), axis_ticks(low, high)
 
 
-def axis_ticks(low: float, high: float) -> list[dict[str, Any]]:
+def axis_ticks(low: float, high: float, limit: int = AXIS_MAX_TICKS) -> list[dict[str, Any]]:
     """Tick a finished domain; a shared axis uses this after panels merge their domains."""
-    magnitude = 10.0 ** math.floor(math.log10((high - low) / AXIS_MAX_TICKS))
-    # A 10x step always fits: the span is under AXIS_MAX_TICKS of them.
+    magnitude = 10.0 ** math.floor(math.log10((high - low) / limit))
+    # A 10x step always fits: the span is under `limit` of them.
     for multiple in AXIS_STEP_MULTIPLES:
         step = multiple * magnitude
         start = math.ceil(low / step - 1e-9)
         end = math.floor(high / step + 1e-9)
-        if end - start + 1 <= AXIS_MAX_TICKS:
+        if end - start + 1 <= limit:
             break
     digits = max(0, -math.floor(math.log10(step)))
     # Integer multiples avoid accumulated floating error; rounding removes representation noise.

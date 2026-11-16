@@ -33,6 +33,8 @@ from .render_contract import (
     chart_series_color,
 )
 from .render_plan import (
+    AXIS_MAX_TICKS,
+    AXIS_MAX_TICKS_3D,
     AXIS_NICE_RULE,
     CONTRACT,
     axis_ticks,
@@ -142,11 +144,11 @@ def reduced_mark(mark: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def value_axis(low: float, high: float, title: str) -> dict[str, Any]:
+def value_axis(low: float, high: float, title: str, limit: int = AXIS_MAX_TICKS) -> dict[str, Any]:
     return {
         "scale": "linear",
         "domain": [low, high],
-        "ticks": axis_ticks(low, high),
+        "ticks": axis_ticks(low, high, limit),
         "title": title,
         "niceRule": AXIS_NICE_RULE,
     }
@@ -572,7 +574,7 @@ def surface_panel(
 
     def axis(values: list[float], title: str) -> dict[str, Any]:
         (low, high), _ = nice_axis(min(values), max(values))
-        return value_axis(low, high, title)
+        return value_axis(low, high, title, AXIS_MAX_TICKS_3D)
 
     gray = chart.export_settings.grayscale_preview
     (y_index, y_item), (z_index, z_item) = items[:2]

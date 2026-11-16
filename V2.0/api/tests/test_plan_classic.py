@@ -362,6 +362,8 @@ def test_surface_export_draws_every_cell_and_preview_keeps_the_full_scale(
     assert preview["panels"][0]["axes"] == full["panels"][0]["axes"]
     z_axis = full["panels"][0]["axes"]["z"]
     assert z_axis["title"] == "Height" and z_axis["domain"][1] >= 999.0
+    # A 3D axis is short: at 9 ticks the labels of a single-column export ran into each other.
+    assert all(len(axis["ticks"]) <= 5 for axis in full["panels"][0]["axes"].values() if axis)
     figure = drawn_figure(monkeypatch, frame, chart)
     axis = figure.axes[0]
     (surface,) = axis.collections

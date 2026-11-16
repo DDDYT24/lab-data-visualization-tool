@@ -39,6 +39,7 @@ def test_python_geometry_reads_the_shared_file() -> None:
     assert contract["contractVersion"] == "chart-render-v2"
     assert contract["axis"]["rule"] == render_plan.AXIS_NICE_RULE
     assert contract["axis"]["maxTicks"] == render_plan.AXIS_MAX_TICKS
+    assert contract["axis"]["maxTicks3d"] == render_plan.AXIS_MAX_TICKS_3D
     assert contract["points"]["denseThreshold"] == render_plan.DENSE_POINT_THRESHOLD
     assert contract["density"] == research_charts.DENSITY
     assert research_strip.StripSpec().jitter_seed == contract["jitter"]["defaultSeed"]

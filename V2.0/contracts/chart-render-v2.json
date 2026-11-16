@@ -5,6 +5,7 @@
     "rule": "nice-1-2-5-v1",
     "margin": 0.05,
     "maxTicks": 9,
+    "maxTicks3d": 5,
     "stepMultiples": [1, 2, 5, 10],
     "minRelativeSpan": 1e-12,
     "plainExponents": [-4, 5]

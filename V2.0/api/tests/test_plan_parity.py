@@ -14,7 +14,7 @@ import pytest
 
 from labviz_api.models import ChartSpec
 from labviz_api.processing import analyze_chart, classic_plan
-from labviz_api.render_plan import AXIS_MAX_TICKS, nice_axis
+from labviz_api.render_plan import AXIS_MAX_TICKS, AXIS_MAX_TICKS_3D, axis_ticks, nice_axis
 from labviz_api.research_preparation import PreparationError
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_v22_matrix.py"
@@ -98,6 +98,9 @@ def test_axis_rule_holds_over_random_ranges() -> None:
         assert all(start <= value <= end for value in values), (low, high)
         assert len(set(values)) == len(values) and len(set(labels)) == len(labels), (low, high)
         assert max(len(label) for label in labels) <= 24, (low, high)
+        short = [tick["value"] for tick in axis_ticks(start, end, AXIS_MAX_TICKS_3D)]
+        assert 2 <= len(short) <= AXIS_MAX_TICKS_3D, (low, high)
+        assert all(start <= value <= end for value in short), (low, high)
 
 
 def test_a_span_outside_the_float_range_is_refused() -> None:
