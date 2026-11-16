@@ -143,8 +143,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      LABVIZ_DATABASE_PATH: ${{ runner.temp }}/live/labviz.db
-      LABVIZ_OBJECT_STORAGE_ROOT: ${{ runner.temp }}/live/objects
       LABVIZ_PERSISTENCE_BACKEND: sqlite
       LABVIZ_OBJECT_STORAGE_BACKEND: local
       LABVIZ_ENVIRONMENT: development
@@ -181,6 +179,8 @@ jobs:
           echo "LABVIZ_LOCAL_ACCESS_KEY=$key" >> "$GITHUB_ENV"
           echo "LABVIZ_E2E_LOCAL_ACCESS_KEY=$key" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/live/objects"
+          export LABVIZ_DATABASE_PATH="$RUNNER_TEMP/live/labviz.db"
+          export LABVIZ_OBJECT_STORAGE_ROOT="$RUNNER_TEMP/live/objects"
           LABVIZ_LOCAL_ACCESS_KEY=$key nohup python -m uvicorn --factory labviz_api.main:create_app \
             --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/live/api.log" 2>&1 &
           for _ in $(seq 60); do
