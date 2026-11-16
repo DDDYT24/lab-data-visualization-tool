@@ -1,0 +1,1976 @@
+{
+  "roundTrip": [
+    {
+      "v1": {
+        "schemaVersion": 1,
+        "pointRendering": "auto",
+        "title": "",
+        "axisMode": "independent",
+        "palette": "blue_teal",
+        "fontSize": 10,
+        "gridVisible": true,
+        "panelTitles": [],
+        "panelChartIds": [
+          "a"
+        ]
+      },
+      "v2": {
+        "schemaVersion": 2,
+        "title": "",
+        "fontSize": 10,
+        "gridVisible": true,
+        "axisMode": "independent",
+        "pointRendering": "auto",
+        "canvas": {
+          "sizePreset": "double_column",
+          "width": null,
+          "height": null,
+          "unit": "mm",
+          "dpi": 300,
+          "background": "#ffffff",
+          "transparent": false,
+          "grayscale": false
+        },
+        "layout": {
+          "kind": "grid",
+          "rows": 1,
+          "cols": 1,
+          "mosaic": null,
+          "gutter": 0.08,
+          "labelStyle": "upper"
+        },
+        "palette": {
+          "categorical": "blue_teal",
+          "sequential": "viridis",
+          "diverging": "blue_red"
+        },
+        "panels": [
+          {
+            "id": "p1",
+            "label": "A",
+            "title": "",
+            "datasetRef": null,
+            "axes": {
+              "x": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              },
+              "y": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              }
+            },
+            "annotations": [],
+            "layers": [
+              {
+                "kind": "chart",
+                "chartId": "a",
+                "encoding": {
+                  "x": null,
+                  "y": null,
+                  "y2": null,
+                  "z": null,
+                  "group": null,
+                  "error": null,
+                  "weight": null,
+                  "sampleId": null
+                },
+                "method": null,
+                "style": {
+                  "color": null,
+                  "colorBy": null,
+                  "marker": null,
+                  "size": null,
+                  "lineStyle": null,
+                  "width": null,
+                  "opacity": 1.0,
+                  "zIndex": 0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "v1": {
+        "schemaVersion": 1,
+        "pointRendering": "raster",
+        "title": "Two",
+        "axisMode": "shared_y",
+        "palette": "grayscale",
+        "fontSize": 12,
+        "gridVisible": false,
+        "panelTitles": [
+          "Left",
+          "Right"
+        ],
+        "panelChartIds": [
+          "a",
+          "b"
+        ]
+      },
+      "v2": {
+        "schemaVersion": 2,
+        "title": "Two",
+        "fontSize": 12,
+        "gridVisible": false,
+        "axisMode": "shared_y",
+        "pointRendering": "raster",
+        "canvas": {
+          "sizePreset": "double_column",
+          "width": null,
+          "height": null,
+          "unit": "mm",
+          "dpi": 300,
+          "background": "#ffffff",
+          "transparent": false,
+          "grayscale": false
+        },
+        "layout": {
+          "kind": "grid",
+          "rows": 1,
+          "cols": 2,
+          "mosaic": null,
+          "gutter": 0.08,
+          "labelStyle": "upper"
+        },
+        "palette": {
+          "categorical": "grayscale",
+          "sequential": "viridis",
+          "diverging": "blue_red"
+        },
+        "panels": [
+          {
+            "id": "p1",
+            "label": "A",
+            "title": "Left",
+            "datasetRef": null,
+            "axes": {
+              "x": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              },
+              "y": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              }
+            },
+            "annotations": [],
+            "layers": [
+              {
+                "kind": "chart",
+                "chartId": "a",
+                "encoding": {
+                  "x": null,
+                  "y": null,
+                  "y2": null,
+                  "z": null,
+                  "group": null,
+                  "error": null,
+                  "weight": null,
+                  "sampleId": null
+                },
+                "method": null,
+                "style": {
+                  "color": null,
+                  "colorBy": null,
+                  "marker": null,
+                  "size": null,
+                  "lineStyle": null,
+                  "width": null,
+                  "opacity": 1.0,
+                  "zIndex": 0
+                }
+              }
+            ]
+          },
+          {
+            "id": "p2",
+            "label": "B",
+            "title": "Right",
+            "datasetRef": null,
+            "axes": {
+              "x": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              },
+              "y": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              }
+            },
+            "annotations": [],
+            "layers": [
+              {
+                "kind": "chart",
+                "chartId": "b",
+                "encoding": {
+                  "x": null,
+                  "y": null,
+                  "y2": null,
+                  "z": null,
+                  "group": null,
+                  "error": null,
+                  "weight": null,
+                  "sampleId": null
+                },
+                "method": null,
+                "style": {
+                  "color": null,
+                  "colorBy": null,
+                  "marker": null,
+                  "size": null,
+                  "lineStyle": null,
+                  "width": null,
+                  "opacity": 1.0,
+                  "zIndex": 0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "v1": {
+        "schemaVersion": 1,
+        "pointRendering": "auto",
+        "title": "",
+        "axisMode": "shared_xy",
+        "palette": "blue_teal",
+        "fontSize": 10,
+        "gridVisible": true,
+        "panelTitles": [
+          "",
+          "B",
+          "",
+          ""
+        ],
+        "panelChartIds": [
+          "a",
+          "b",
+          "a",
+          "c"
+        ]
+      },
+      "v2": {
+        "schemaVersion": 2,
+        "title": "",
+        "fontSize": 10,
+        "gridVisible": true,
+        "axisMode": "shared_xy",
+        "pointRendering": "auto",
+        "canvas": {
+          "sizePreset": "double_column",
+          "width": null,
+          "height": null,
+          "unit": "mm",
+          "dpi": 300,
+          "background": "#ffffff",
+          "transparent": false,
+          "grayscale": false
+        },
+        "layout": {
+          "kind": "grid",
+          "rows": 2,
+          "cols": 2,
+          "mosaic": null,
+          "gutter": 0.08,
+          "labelStyle": "upper"
+        },
+        "palette": {
+          "categorical": "blue_teal",
+          "sequential": "viridis",
+          "diverging": "blue_red"
+        },
+        "panels": [
+          {
+            "id": "p1",
+            "label": "A",
+            "title": "",
+            "datasetRef": null,
+            "axes": {
+              "x": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              },
+              "y": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              }
+            },
+            "annotations": [],
+            "layers": [
+              {
+                "kind": "chart",
+                "chartId": "a",
+                "encoding": {
+                  "x": null,
+                  "y": null,
+                  "y2": null,
+                  "z": null,
+                  "group": null,
+                  "error": null,
+                  "weight": null,
+                  "sampleId": null
+                },
+                "method": null,
+                "style": {
+                  "color": null,
+                  "colorBy": null,
+                  "marker": null,
+                  "size": null,
+                  "lineStyle": null,
+                  "width": null,
+                  "opacity": 1.0,
+                  "zIndex": 0
+                }
+              }
+            ]
+          },
+          {
+            "id": "p2",
+            "label": "B",
+            "title": "B",
+            "datasetRef": null,
+            "axes": {
+              "x": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              },
+              "y": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              }
+            },
+            "annotations": [],
+            "layers": [
+              {
+                "kind": "chart",
+                "chartId": "b",
+                "encoding": {
+                  "x": null,
+                  "y": null,
+                  "y2": null,
+                  "z": null,
+                  "group": null,
+                  "error": null,
+                  "weight": null,
+                  "sampleId": null
+                },
+                "method": null,
+                "style": {
+                  "color": null,
+                  "colorBy": null,
+                  "marker": null,
+                  "size": null,
+                  "lineStyle": null,
+                  "width": null,
+                  "opacity": 1.0,
+                  "zIndex": 0
+                }
+              }
+            ]
+          },
+          {
+            "id": "p3",
+            "label": "C",
+            "title": "",
+            "datasetRef": null,
+            "axes": {
+              "x": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              },
+              "y": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              }
+            },
+            "annotations": [],
+            "layers": [
+              {
+                "kind": "chart",
+                "chartId": "a",
+                "encoding": {
+                  "x": null,
+                  "y": null,
+                  "y2": null,
+                  "z": null,
+                  "group": null,
+                  "error": null,
+                  "weight": null,
+                  "sampleId": null
+                },
+                "method": null,
+                "style": {
+                  "color": null,
+                  "colorBy": null,
+                  "marker": null,
+                  "size": null,
+                  "lineStyle": null,
+                  "width": null,
+                  "opacity": 1.0,
+                  "zIndex": 0
+                }
+              }
+            ]
+          },
+          {
+            "id": "p4",
+            "label": "D",
+            "title": "",
+            "datasetRef": null,
+            "axes": {
+              "x": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              },
+              "y": {
+                "scale": "linear",
+                "domain": null,
+                "ticks": null
+              }
+            },
+            "annotations": [],
+            "layers": [
+              {
+                "kind": "chart",
+                "chartId": "c",
+                "encoding": {
+                  "x": null,
+                  "y": null,
+                  "y2": null,
+                  "z": null,
+                  "group": null,
+                  "error": null,
+                  "weight": null,
+                  "sampleId": null
+                },
+                "method": null,
+                "style": {
+                  "color": null,
+                  "colorBy": null,
+                  "marker": null,
+                  "size": null,
+                  "lineStyle": null,
+                  "width": null,
+                  "opacity": 1.0,
+                  "zIndex": 0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "onlyV2": [
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 3,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "B",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "label": "C",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 2,
+        "cols": 3,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "B",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "label": "C",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "label": "D",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "label": "E",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "label": "F",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "mosaic",
+        "rows": 2,
+        "cols": 2,
+        "mosaic": [
+          "AA",
+          "BC"
+        ],
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "B",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "label": "C",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 1,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "log10",
+              "domain": [
+                1.0,
+                1000.0
+              ],
+              "ticks": [
+                1.0,
+                10.0,
+                100.0,
+                1000.0
+              ]
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 1,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [
+            {
+              "kind": "hline",
+              "value": 0.5,
+              "label": "limit"
+            },
+            {
+              "kind": "text",
+              "x": 1.0,
+              "y": 2.0,
+              "text": "peak"
+            },
+            {
+              "kind": "rect",
+              "x": [
+                0.0,
+                1.0
+              ],
+              "y": [
+                0.0,
+                2.0
+              ],
+              "label": ""
+            },
+            {
+              "kind": "bracket",
+              "x": [
+                0.0,
+                1.0
+              ],
+              "y": 3.0,
+              "label": "p < 0.05"
+            },
+            {
+              "kind": "vline",
+              "value": 2.0,
+              "label": ""
+            }
+          ],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 1,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": {
+            "datasetId": "d1",
+            "versionId": "v1"
+          },
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "scatter",
+              "chartId": null,
+              "encoding": {
+                "x": "time",
+                "y": "signal",
+                "y2": null,
+                "z": null,
+                "group": "batch",
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": "o",
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 0.6,
+                "zIndex": 0
+              }
+            },
+            {
+              "kind": "fit",
+              "chartId": null,
+              "encoding": {
+                "x": "time",
+                "y": "signal",
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": {
+                "id": "linear",
+                "params": {
+                  "robust": false
+                },
+                "seed": "s1"
+              },
+              "style": {
+                "color": "#1f77b4",
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": "dashed",
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "canvas": {
+        "sizePreset": "custom",
+        "width": 120.0,
+        "height": 80.0,
+        "unit": "mm",
+        "dpi": 600,
+        "background": "#ffffff",
+        "transparent": true,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 1,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "okabe_ito",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "panels": []
+    },
+    {
+      "layout": {
+        "rows": 2,
+        "cols": 4
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "B",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "label": "C",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "label": "D",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "label": "E",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "label": "F",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p7",
+          "label": "G",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": {
+        "rows": 1,
+        "cols": 2
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p1",
+          "label": "B",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": {
+        "rows": 1,
+        "cols": 2
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "B",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": {
+        "rows": 2,
+        "cols": 1
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": {
+        "kind": "mosaic",
+        "rows": 2,
+        "cols": 2,
+        "mosaic": [
+          "AB",
+          "BA"
+        ]
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "B",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": {
+        "kind": "mosaic",
+        "rows": 1,
+        "cols": 2,
+        "mosaic": [
+          "AX"
+        ]
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ],
+          "axes": {
+            "y": {
+              "scale": "log10",
+              "domain": [
+                0,
+                10
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ],
+          "axes": {
+            "x": {
+              "domain": [
+                2,
+                1
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ],
+          "axes": {
+            "x": {
+              "ticks": [
+                1,
+                1
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ],
+          "annotations": [
+            {
+              "kind": "arrow",
+              "x": 1,
+              "y": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": []
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "line",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "line",
+              "style": {
+                "color": "#000000",
+                "colorBy": "g"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ],
+      "canvas": {
+        "sizePreset": "custom"
+      }
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ],
+      "canvas": {
+        "width": 10,
+        "height": 10
+      }
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 1
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ],
+      "script": "x"
+    }
+  ]
+}

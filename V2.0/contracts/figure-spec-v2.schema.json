@@ -1,0 +1,916 @@
+{
+  "$defs": {
+    "AxisControl": {
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "default": "linear",
+          "enum": [
+            "linear",
+            "log10",
+            "symlog"
+          ],
+          "title": "Scale",
+          "type": "string"
+        },
+        "domain": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Domain"
+        },
+        "ticks": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 50,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ticks"
+        }
+      },
+      "title": "AxisControl",
+      "type": "object"
+    },
+    "BracketNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "bracket",
+          "default": "bracket",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "label": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "BracketNote",
+      "type": "object"
+    },
+    "Canvas": {
+      "additionalProperties": false,
+      "properties": {
+        "sizePreset": {
+          "default": "double_column",
+          "enum": [
+            "single_column",
+            "double_column",
+            "custom"
+          ],
+          "title": "Sizepreset",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2000,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2000,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "unit": {
+          "default": "mm",
+          "enum": [
+            "mm",
+            "in"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "dpi": {
+          "default": 300,
+          "maximum": 1200,
+          "minimum": 72,
+          "title": "Dpi",
+          "type": "integer"
+        },
+        "background": {
+          "default": "#ffffff",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Background",
+          "type": "string"
+        },
+        "transparent": {
+          "default": false,
+          "title": "Transparent",
+          "type": "boolean"
+        },
+        "grayscale": {
+          "default": false,
+          "title": "Grayscale",
+          "type": "boolean"
+        }
+      },
+      "title": "Canvas",
+      "type": "object"
+    },
+    "DatasetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "datasetId": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Datasetid",
+          "type": "string"
+        },
+        "versionId": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Versionid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "datasetId",
+        "versionId"
+      ],
+      "title": "DatasetRef",
+      "type": "object"
+    },
+    "Encoding": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
+        },
+        "y": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y"
+        },
+        "y2": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y2"
+        },
+        "z": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Z"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weight"
+        },
+        "sampleId": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sampleid"
+        }
+      },
+      "title": "Encoding",
+      "type": "object"
+    },
+    "FigurePanel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "pattern": "^[A-Za-z]$",
+          "title": "Label",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Title",
+          "type": "string"
+        },
+        "datasetRef": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatasetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "axes": {
+          "$ref": "#/$defs/PanelAxes"
+        },
+        "annotations": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "bracket": "#/$defs/BracketNote",
+                "hline": "#/$defs/LineNote",
+                "rect": "#/$defs/RectNote",
+                "text": "#/$defs/TextNote",
+                "vline": "#/$defs/LineNote"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextNote"
+              },
+              {
+                "$ref": "#/$defs/LineNote"
+              },
+              {
+                "$ref": "#/$defs/RectNote"
+              },
+              {
+                "$ref": "#/$defs/BracketNote"
+              }
+            ]
+          },
+          "maxItems": 20,
+          "title": "Annotations",
+          "type": "array"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/Layer"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Layers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "layers"
+      ],
+      "title": "FigurePanel",
+      "type": "object"
+    },
+    "Layer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "chart",
+            "line",
+            "scatter",
+            "bar",
+            "histogram",
+            "box",
+            "violin",
+            "strip",
+            "paired",
+            "heatmap",
+            "contour",
+            "surface3d",
+            "fit",
+            "errorbar",
+            "band",
+            "reference"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "chartId": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chartid"
+        },
+        "encoding": {
+          "$ref": "#/$defs/Encoding"
+        },
+        "method": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Method"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "style": {
+          "$ref": "#/$defs/Style"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Layer",
+      "type": "object"
+    },
+    "Layout": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "default": "grid",
+          "enum": [
+            "grid",
+            "mosaic"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "rows": {
+          "default": 1,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "cols": {
+          "default": 1,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Cols",
+          "type": "integer"
+        },
+        "mosaic": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 6,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 6,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mosaic"
+        },
+        "gutter": {
+          "default": 0.08,
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Gutter",
+          "type": "number"
+        },
+        "labelStyle": {
+          "default": "upper",
+          "enum": [
+            "upper",
+            "lower",
+            "none"
+          ],
+          "title": "Labelstyle",
+          "type": "string"
+        }
+      },
+      "title": "Layout",
+      "type": "object"
+    },
+    "LineNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "hline",
+            "vline"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "label": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "title": "LineNote",
+      "type": "object"
+    },
+    "Method": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxProperties": 32,
+          "propertyNames": {
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "title": "Params",
+          "type": "object"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Method",
+      "type": "object"
+    },
+    "Palette": {
+      "additionalProperties": false,
+      "properties": {
+        "categorical": {
+          "default": "blue_teal",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Categorical",
+          "type": "string"
+        },
+        "sequential": {
+          "default": "viridis",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Sequential",
+          "type": "string"
+        },
+        "diverging": {
+          "default": "blue_red",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Diverging",
+          "type": "string"
+        }
+      },
+      "title": "Palette",
+      "type": "object"
+    },
+    "PanelAxes": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/AxisControl"
+        },
+        "y": {
+          "$ref": "#/$defs/AxisControl"
+        }
+      },
+      "title": "PanelAxes",
+      "type": "object"
+    },
+    "RectNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "rect",
+          "default": "rect",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Y",
+          "type": "array"
+        },
+        "label": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "RectNote",
+      "type": "object"
+    },
+    "Style": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "colorBy": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Colorby"
+        },
+        "marker": {
+          "anyOf": [
+            {
+              "enum": [
+                "o",
+                "s",
+                "^",
+                "D",
+                "v"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Marker"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 40,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        },
+        "lineStyle": {
+          "anyOf": [
+            {
+              "enum": [
+                "solid",
+                "dashed",
+                "dotted"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linestyle"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 10,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "opacity": {
+          "default": 1.0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Opacity",
+          "type": "number"
+        },
+        "zIndex": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": -100,
+          "title": "Zindex",
+          "type": "integer"
+        }
+      },
+      "title": "Style",
+      "type": "object"
+    },
+    "TextNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text",
+          "default": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "text": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "text"
+      ],
+      "title": "TextNote",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "default": 2,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "title": {
+      "default": "",
+      "maxLength": 160,
+      "title": "Title",
+      "type": "string"
+    },
+    "fontSize": {
+      "default": 10,
+      "maximum": 16,
+      "minimum": 8,
+      "title": "Fontsize",
+      "type": "integer"
+    },
+    "gridVisible": {
+      "default": true,
+      "title": "Gridvisible",
+      "type": "boolean"
+    },
+    "axisMode": {
+      "default": "independent",
+      "enum": [
+        "independent",
+        "shared_x",
+        "shared_y",
+        "shared_xy"
+      ],
+      "title": "Axismode",
+      "type": "string"
+    },
+    "pointRendering": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "vector",
+        "raster"
+      ],
+      "title": "Pointrendering",
+      "type": "string"
+    },
+    "canvas": {
+      "$ref": "#/$defs/Canvas"
+    },
+    "layout": {
+      "$ref": "#/$defs/Layout"
+    },
+    "palette": {
+      "$ref": "#/$defs/Palette"
+    },
+    "panels": {
+      "items": {
+        "$ref": "#/$defs/FigurePanel"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Panels",
+      "type": "array"
+    }
+  },
+  "required": [
+    "panels"
+  ],
+  "title": "FigureSpec",
+  "type": "object"
+}
