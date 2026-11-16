@@ -403,7 +403,7 @@ def main():
         stop(restored_process, target, "stop-restored")
         record("restoredProjectReopensWithIndependentCookie")
         source_root = Path(__file__).resolve().parents[4]
-        legacy_commit = "1ca89162f94b13f02c819552f6383be08fc0d51a"
+        legacy_commit = "d393b60893f8ea9b16177e6e72db2904150005dc"
         actual_commit = subprocess.check_output(
             ["git", "rev-parse", "v2.2.0^{commit}"], cwd=source_root, text=True
         ).strip()
