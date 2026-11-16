@@ -2,7 +2,7 @@
 
 An export plan holds every row. A preview plan is the same plan with long marks reduced, so
 the two can differ only in those marks and each reduced mark records what it dropped.
-Heatmaps and 3D surfaces have no plan yet.
+An invalid 3D surface grid has no plan; its export refuses with the grid's error.
 """
 
 from __future__ import annotations
@@ -24,9 +24,12 @@ from typing import Any, Literal
 from .models import ChartSpec
 from .render_contract import (
     CONFIDENCE_BAND_OPACITY,
+    CORRELATION_PALETTE,
     GEOMETRY,
     HISTOGRAM_AXIS_PADDING,
     HISTOGRAM_FILL_OPACITY,
+    SURFACE_GRAYSCALE_PALETTE,
+    SURFACE_PALETTE,
     chart_series_color,
 )
 from .render_plan import (
@@ -49,6 +52,11 @@ ERRORBAR_OPACITY = 0.9
 MAX_POINTS = GEOMETRY["decimation"]["maxPoints"]
 DECIMATION_RULE = GEOMETRY["decimation"]["rule"]
 SERIES_KINDS = {"line", "scatter", "bar"}
+PLANNED_KINDS = {"histogram", "box", "heatmap", "surface3d", *SERIES_KINDS}
+# A preview surface keeps every n-th row and column, and the last ones, to stay within this
+# many cells: the budget the sampled surface points had. The export draws every cell.
+MESH_PREVIEW_CELLS = 2000
+MESH_DECIMATION_RULE = "grid-stride-v1"
 REDUCED_FIELDS = {
     "polyline": ("x", "y"),
     "points": ("x", "y"),
@@ -89,8 +97,39 @@ def axis_label(title: str, unit: str) -> str:
     return f"{title} ({unit})" if unit else title
 
 
+def stride_positions(length: int, stride: int) -> list[int]:
+    return [index for index in range(length) if index % stride == 0 or index == length - 1]
+
+
+def reduced_mesh(mark: dict[str, Any]) -> dict[str, Any]:
+    """Thin a surface to a coarser grid; the colour domain still spans every value."""
+    columns, rows = len(mark["x"]), len(mark["y"])
+    if columns * rows <= MESH_PREVIEW_CELLS:
+        return mark
+    stride = 1
+    while (
+        len(stride_positions(columns, stride)) * len(stride_positions(rows, stride))
+        > MESH_PREVIEW_CELLS
+    ):
+        stride += 1
+    keep_x, keep_y = stride_positions(columns, stride), stride_positions(rows, stride)
+    return {
+        **mark,
+        "x": [mark["x"][i] for i in keep_x],
+        "y": [mark["y"][j] for j in keep_y],
+        "values": [[mark["values"][j][i] for i in keep_x] for j in keep_y],
+        "decimation": {
+            "rule": MESH_DECIMATION_RULE,
+            "input": columns * rows,
+            "drawn": len(keep_x) * len(keep_y),
+        },
+    }
+
+
 def reduced_mark(mark: dict[str, Any]) -> dict[str, Any]:
     """Reduce one long mark for the preview; stairs and fits are short and stay whole."""
+    if mark["kind"] == "mesh":
+        return reduced_mesh(mark)
     fields = REDUCED_FIELDS.get(mark.get("shape", mark["kind"]))
     if fields is None or len(mark[fields[-1]]) <= MAX_POINTS:
         return mark
@@ -177,6 +216,7 @@ def histogram_panel(
             ),
             "y": value_axis(0.0, max(1.0, top * (1 + HISTOGRAM_AXIS_PADDING)), "Frequency"),
             "y2": None,
+            "z": None,
         },
     }
 
@@ -229,6 +269,7 @@ def box_panel(
                 "niceRule": AXIS_NICE_RULE,
             },
             "y2": None,
+            "z": None,
         },
     }
 
@@ -470,6 +511,93 @@ def series_panel(
             )
             if secondary
             else None,
+            "z": None,
+        },
+    }
+
+
+def heatmap_panel(chart: ChartSpec, panel_index: int, preview: dict[str, Any]) -> dict[str, Any]:
+    """A correlation matrix as cells, first row at the top, on the fixed -1..1 scale."""
+    heatmap = next(value for value in preview["heatmaps"] if value["panel"] == panel_index)
+    positions = [float(index) for index in range(len(heatmap["labels"]))]
+    ticks = [
+        {"value": position, "label": label}
+        for position, label in zip(positions, heatmap["labels"], strict=True)
+    ]
+    end = len(positions) - 0.5
+
+    def axis(domain: list[float]) -> dict[str, Any]:
+        return {
+            "scale": "category",
+            "domain": domain,
+            "ticks": ticks,
+            "title": "",
+            "niceRule": None,
+        }
+
+    gray = chart.export_settings.grayscale_preview
+    return {
+        "marks": [
+            {
+                "kind": "mesh",
+                "id": f"heatmap:{panel_index}",
+                "group": "Correlation",
+                "shape": "cells",
+                "x": positions,
+                "y": positions,
+                "values": heatmap["matrix"],
+                "colorDomain": [-1.0, 1.0],
+                "palette": list(SURFACE_GRAYSCALE_PALETTE if gray else CORRELATION_PALETTE),
+                "colorTitle": "Correlation",
+                "decimation": None,
+            }
+        ],
+        "legend": [],
+        "axes": {"x": axis([-0.5, end]), "y": axis([end, -0.5]), "y2": None, "z": None},
+    }
+
+
+def points_grid(points: list[dict[str, Any]]) -> dict[str, Any]:
+    """Place x, y, z points on the grid of their distinct x and y values."""
+    xs = sorted({float(point["x"]) for point in points})
+    ys = sorted({float(point["y"]) for point in points})
+    cells = {(float(point["x"]), float(point["y"])): float(point["z"]) for point in points}
+    return {"x": xs, "y": ys, "values": [[cells.get((x, y)) for x in xs] for y in ys]}
+
+
+def surface_panel(
+    chart: ChartSpec, items: list[tuple[int, Any]], grid: dict[str, Any]
+) -> dict[str, Any]:
+    heights = [value for row in grid["values"] for value in row if value is not None]
+
+    def axis(values: list[float], title: str) -> dict[str, Any]:
+        (low, high), _ = nice_axis(min(values), max(values))
+        return value_axis(low, high, title)
+
+    gray = chart.export_settings.grayscale_preview
+    (y_index, y_item), (z_index, z_item) = items[:2]
+    return {
+        "marks": [
+            {
+                "kind": "mesh",
+                "id": f"surface:{z_index}",
+                "group": z_item.label,
+                "shape": "surface",
+                "x": grid["x"],
+                "y": grid["y"],
+                "values": grid["values"],
+                "colorDomain": [min(heights), max(heights)],
+                "palette": list(SURFACE_GRAYSCALE_PALETTE if gray else SURFACE_PALETTE),
+                "colorTitle": "",
+                "decimation": None,
+            }
+        ],
+        "legend": [],
+        "axes": {
+            "x": axis(grid["x"], axis_label(chart.x_axis.title, chart.x_axis.unit)),
+            "y": axis(grid["y"], y_item.label),
+            "y2": None,
+            "z": axis(heights, z_item.label),
         },
     }
 
@@ -481,31 +609,45 @@ def build_classic_plan(
     rows: list[list[dict[str, Any]]] | None = None,
     detail: Literal["export", "preview"] = "export",
     series_colors: dict[str, str] | None = None,
+    surfaces: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
-    """Plan a classic chart, or return None for kinds not yet on plans.
+    """Plan a classic chart, or return None for a 3D surface whose grid is not valid.
 
     ``rows`` holds every row per analysis series. Without it the analysis's reduced points
     are all there is, which is the case for a capture whose frame lost its value types.
+    ``surfaces`` holds every grid point per surface panel; without it the analysis's sampled
+    surface points stand in, and cells they miss stay empty.
     """
-    if chart.type not in {"histogram", "box", *SERIES_KINDS}:
+    if chart.type not in PLANNED_KINDS:
+        return None
+    preview = derived["preview"]
+    if chart.type == "surface3d" and any(
+        diagnostic["status"] != "valid" for diagnostic in preview["surfaceDiagnostics"]
+    ):
         return None
     analyses = derived["series"]
-    # Box exports have never drawn a grid.
-    grid = chart.export_settings.grid_visible and chart.type != "box"
+    # Box and heatmap exports have never drawn a grid.
+    grid = chart.export_settings.grid_visible and chart.type not in {"box", "heatmap"}
     panels = []
     for panel_index in range(1, chart.panel_count + 1):
         items = [(i, s) for i, s in enumerate(chart.series) if s.panel == panel_index]
         if not items:
             continue
-        panel = (
-            histogram_panel(chart, items, derived["preview"])
-            if chart.type == "histogram"
-            else box_panel(chart, items, derived["preview"])
-            if chart.type == "box"
-            else series_panel(chart, panel_index, analyses, rows, series_colors)
-        )
-        for name in ("x", "y"):
-            panel["axes"][name]["grid"] = grid
+        if chart.type == "histogram":
+            panel = histogram_panel(chart, items, preview)
+        elif chart.type == "box":
+            panel = box_panel(chart, items, preview)
+        elif chart.type == "heatmap":
+            panel = heatmap_panel(chart, panel_index, preview)
+        elif chart.type == "surface3d":
+            points = [p for p in preview["surfacePoints"] if p["panel"] == panel_index]
+            surface = (surfaces or {}).get(panel_index) or points_grid(points)
+            panel = surface_panel(chart, items, surface)
+        else:
+            panel = series_panel(chart, panel_index, analyses, rows, series_colors)
+        for name in ("x", "y", "z"):
+            if panel["axes"][name] is not None:
+                panel["axes"][name]["grid"] = grid
         if panel["axes"]["y2"] is not None:
             panel["axes"]["y2"]["grid"] = False
         title = f"{chart.title}\n{chart.subtitle}" if chart.subtitle else chart.title
@@ -526,7 +668,7 @@ def build_classic_plan(
         for panel in panels:
             panel["marks"] = [reduced_mark(mark) for mark in panel["marks"]]
     source = json.dumps(
-        [chart.model_dump(mode="json"), analyses, derived["preview"]], sort_keys=True, default=str
+        [chart.model_dump(mode="json"), analyses, preview], sort_keys=True, default=str
     )
     plan: dict[str, Any] = {
         "schemaVersion": 1,
@@ -543,7 +685,11 @@ def build_classic_plan(
             "density": None,
             "histogram": GEOMETRY["histogram"]["rule"] if chart.type == "histogram" else None,
             "quantile": GEOMETRY["quantile"]["rule"] if chart.type == "box" else None,
-            "decimation": DECIMATION_RULE if chart.type in SERIES_KINDS else None,
+            "decimation": DECIMATION_RULE
+            if chart.type in SERIES_KINDS
+            else MESH_DECIMATION_RULE
+            if chart.type == "surface3d"
+            else None,
         },
         "rendering": {"pointRendering": "auto", "rasterizePoints": rasterize_points("auto", drawn)},
         "panels": panels,

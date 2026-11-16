@@ -34,13 +34,8 @@ from zipfile import BadZipFile, ZipFile
 
 from .cleaning_recipe import EXCLUDING_ACTIONS, FrozenRows
 from .models import ChartSpec, JsonScalar
-from .plan_classic import SERIES_KINDS, axis_label, build_classic_plan, envelope_positions
-from .render_contract import (
-    CORRELATION_PALETTE,
-    GEOMETRY,
-    SURFACE_GRAYSCALE_PALETTE,
-    SURFACE_PALETTE,
-)
+from .plan_classic import SERIES_KINDS, build_classic_plan, envelope_positions
+from .render_contract import GEOMETRY
 from .render_plan_draw import dense_bars, draw_panel
 
 if os.environ.get("LABVIZ_DESKTOP_MODE") == "1":
@@ -2119,6 +2114,30 @@ def series_rows(frame: pd.DataFrame, chart: ChartSpec) -> list[list[dict[str, An
     ]
 
 
+def surface_grids(
+    frame: pd.DataFrame, chart: ChartSpec, diagnostics: list[dict[str, Any]]
+) -> dict[int, dict[str, Any]]:
+    """Every point of each valid surface panel on its grid; the analysis keeps a sample."""
+    grids: dict[int, dict[str, Any]] = {}
+    for diagnostic in diagnostics:
+        if diagnostic["status"] != "valid":
+            continue
+        fields = [diagnostic["xField"], diagnostic["yField"], diagnostic["zField"]]
+        complete = frame[fields].apply(pd.to_numeric, errors="coerce").dropna()
+        # A valid grid holds one z per x and y pair, so the pivot loses nothing.
+        table = complete.pivot(index=fields[1], columns=fields[0], values=fields[2]).sort_index()
+        table = table.reindex(sorted(table.columns), axis=1)
+        grids[diagnostic["panel"]] = {
+            "x": [float(value) for value in table.columns],
+            "y": [float(value) for value in table.index],
+            "values": [
+                [float(value) if math.isfinite(value) else None for value in row]
+                for row in table.to_numpy(dtype=float)
+            ],
+        }
+    return grids
+
+
 def classic_plan(
     frame: pd.DataFrame,
     chart: ChartSpec,
@@ -2128,7 +2147,14 @@ def classic_plan(
     series_colors: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     rows = series_rows(frame, chart) if chart.type in SERIES_KINDS else None
-    return build_classic_plan(chart, derived, rows=rows, detail=detail, series_colors=series_colors)
+    surfaces = (
+        surface_grids(frame, chart, derived["preview"]["surfaceDiagnostics"])
+        if chart.type == "surface3d"
+        else None
+    )
+    return build_classic_plan(
+        chart, derived, rows=rows, detail=detail, series_colors=series_colors, surfaces=surfaces
+    )
 
 
 def _surface_diagnostic(
@@ -2399,7 +2425,6 @@ def render_chart(
     _plan: dict[str, Any] | None = None,
 ) -> bytes:
     from matplotlib import font_manager
-    from matplotlib.colors import LinearSegmentedColormap
     from matplotlib.figure import Figure
 
     if frame.empty:
@@ -2449,7 +2474,6 @@ def render_chart(
     derived = _frozen_analysis or analyze_chart(frame, chart)
     analyses = derived["series"]
     preview = derived["preview"]
-    plan = _plan or classic_plan(frame, chart, derived, series_colors=_series_colors)
     if chart.type == "surface3d":
         invalid_diagnostics = [
             diagnostic
@@ -2458,6 +2482,11 @@ def render_chart(
         ]
         if invalid_diagnostics:
             raise _surface_diagnostic_error(invalid_diagnostics[0])
+    plan = _plan or classic_plan(frame, chart, derived, series_colors=_series_colors)
+    if plan is None:
+        raise ProcessingError(
+            "The selected 3D points do not span a surface.", "invalid-chart-fields"
+        )
 
     for panel_index, axis in enumerate(axes, start=1):
         panel_series = [
@@ -2476,69 +2505,12 @@ def render_chart(
         ):
             secondary_axis = axis.twinx()
 
-        if plan is not None:
-            draw_panel(
-                axis,
-                next(p for p in plan["panels"] if p["id"] == str(panel_index)),
-                secondary=secondary_axis,
-                dense=plan["rendering"]["rasterizePoints"],
-            )
-        elif chart.type == "heatmap":
-            heatmap = next(value for value in preview["heatmaps"] if value["panel"] == panel_index)
-            correlations = np.array(
-                [
-                    [float("nan") if value is None else value for value in row]
-                    for row in heatmap["matrix"]
-                ],
-                dtype=float,
-            )
-            image = axis.imshow(
-                correlations,
-                cmap=LinearSegmentedColormap.from_list(
-                    "labviz-correlation",
-                    SURFACE_GRAYSCALE_PALETTE if export.grayscale_preview else CORRELATION_PALETTE,
-                ),
-                vmin=-1,
-                vmax=1,
-            )
-            labels = heatmap["labels"]
-            ticks = np.arange(len(labels))
-            axis.set_xticks(ticks, labels, rotation=45, ha="right")
-            axis.set_yticks(ticks, labels)
-            figure.colorbar(image, ax=axis, label="Correlation")
-        else:
-            if len(panel_series) < 2:
-                raise ProcessingError(
-                    "Each 3D surface needs Y and Z series in addition to the X field.",
-                    "invalid-chart-fields",
-                )
-            surface_points = [
-                point for point in preview["surfacePoints"] if point["panel"] == panel_index
-            ]
-            if len(surface_points) < 3:
-                raise ProcessingError(
-                    "A 3D surface needs at least three points.", "empty-chart-data"
-                )
-            try:
-                surface = cast(Any, axis).plot_trisurf(
-                    [point["x"] for point in surface_points],
-                    [point["y"] for point in surface_points],
-                    [point["z"] for point in surface_points],
-                    cmap=LinearSegmentedColormap.from_list(
-                        "labviz-surface",
-                        SURFACE_GRAYSCALE_PALETTE if export.grayscale_preview else SURFACE_PALETTE,
-                    ),
-                    vmin=min(point["z"] for point in surface_points),
-                    vmax=max(point["z"] for point in surface_points),
-                )
-            except (RuntimeError, ValueError) as exc:
-                raise ProcessingError(
-                    "The selected 3D points do not span a surface.", "invalid-chart-fields"
-                ) from exc
-            axis.set_xlabel(axis_label(chart.x_axis.title, chart.x_axis.unit))
-            axis.set_ylabel(panel_series[0][1].label)
-            cast(Any, axis).set_zlabel(panel_series[1][1].label)
-            figure.colorbar(surface, ax=axis, shrink=0.65, pad=0.1)
+        draw_panel(
+            axis,
+            next(p for p in plan["panels"] if p["id"] == str(panel_index)),
+            secondary=secondary_axis,
+            dense=plan["rendering"]["rasterizePoints"],
+        )
 
         if chart.panel_count == 1:
             axis.set_title(f"{chart.title}\n{chart.subtitle}" if chart.subtitle else chart.title)

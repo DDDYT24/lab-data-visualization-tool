@@ -119,9 +119,16 @@ describe("planAppearanceKey", () => {
     }
   });
 
-  it("leaves charts without a plan alone", () => {
-    const heatmap: ChartSpec = { ...defaultChartSpec, type: "heatmap" };
-    const recoloured = { ...heatmap, series: [{ ...heatmap.series[0], color: "#DC2626" }] };
-    expect(planAppearanceKey(recoloured)).toBe(planAppearanceKey(heatmap));
+  it("follows what heatmap and surface plans draw, which is not series colour", () => {
+    for (const type of ["heatmap", "surface3d"] as const) {
+      const spec: ChartSpec = { ...defaultChartSpec, type };
+      const recoloured = { ...spec, series: [{ ...spec.series[0], color: "#DC2626" }] };
+      expect(planAppearanceKey(recoloured)).toBe(planAppearanceKey(spec));
+      for (const variant of [
+        { ...spec, export: { ...spec.export, grayscalePreview: !spec.export.grayscalePreview } },
+        { ...spec, export: { ...spec.export, gridVisible: !spec.export.gridVisible } },
+        { ...spec, xAxis: { ...spec.xAxis, title: "Other title" } },
+      ]) expect(planAppearanceKey(variant)).not.toBe(planAppearanceKey(spec));
+    }
   });
 });

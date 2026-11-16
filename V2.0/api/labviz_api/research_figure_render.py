@@ -75,7 +75,6 @@ def render_board(
             key=lambda x: (x is not None, x or ""),
         )
         colors = {label: palette[i % len(palette)] for i, label in enumerate(labels)}
-        # Correlation panels have no plan yet.
         plans: list[dict[str, Any] | None] = [None] * count
         # Text x values sit at numeric positions, so hit targets need the same mapping.
         x_positions: list[dict[str, float]] = [{} for _ in range(count)]
@@ -213,6 +212,8 @@ def render_board(
             for ax, plan in zip(axes, plans, strict=True):
                 if plan is not None:
                     axis = merge_axis(plan, dimension, low, high)
+                    if reverse:
+                        axis["domain"] = [high, low]
                     if axis["scale"] == "linear":
                         getattr(ax, f"set_{dimension}ticks")(
                             [tick["value"] for tick in axis["ticks"]],

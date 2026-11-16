@@ -50,14 +50,10 @@ describe("chart render contract", () => {
       inRange: { color: grayscalePreview ? chartRenderContract.surfaceGrayscalePalette
         : chartRenderContract.correlationPalette } });
   });
-  it("preserves a rectangular grid, boundary points and full Z scale when reducing a surface", () => {
-    const rows = Array.from({ length: 10201 }, (_, index) => {
-      const x = index % 101;
-      const y = Math.floor(index / 101);
-      return { rowId: index, x, y, z: x === 1 && y === 1 ? 999 : x + y };
-    });
+  it("draws no surface from raw rows before the analysis has checked the grid", () => {
+    const rows = [{ rowId: 1, x: 0, y: 0, z: 1 }, { rowId: 2, x: 1, y: 0, z: 2 }, { rowId: 3, x: 0, y: 1, z: 3 }];
     const option = buildChartOption({
-      analysis: undefined, excludedFindingIds: [], findings: [], surfacePointLimit: 800,
+      analysis: undefined, excludedFindingIds: [], findings: [],
       preview: { apiVersion: "v1", projectId: "grid", columns: [], rows,
         sampled: false, sampleStrategy: "none", totalRows: rows.length },
       spec: { ...defaultChartSpec, type: "surface3d",
@@ -67,13 +63,7 @@ describe("chart render contract", () => {
           { ...defaultChartSpec.series[0], field: "z", label: "Z" },
         ] },
     });
-    const surface = (option.series as Array<{ data: number[][]; dataShape: number[] }>)[0];
-    expect(surface.data.length).toBeLessThanOrEqual(800);
-    expect(surface.data.length).toBe(surface.dataShape[0] * surface.dataShape[1]);
-    expect(surface.data[0]).toEqual([0, 0, 0]);
-    expect(surface.data.at(-1)).toEqual([100, 100, 200]);
-    expect(option.visualMap).toMatchObject({ min: 0, max: 999, dimension: 2,
-      inRange: { color: chartRenderContract.surfacePalette } });
+    expect((option.series as Array<{ data: number[][] }>)[0]!.data).toEqual([]);
   });
   it("keeps shared palettes and line styles versioned", () => {
     expect(chartRenderContract.contractVersion).toBe("chart-render-v1");
@@ -352,7 +342,7 @@ describe("chart render contract", () => {
       geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: null, density: null, histogram: null, quantile: null, decimation: null },
       rendering: { pointRendering: "auto", rasterizePoints: false }, disclosures: [],
       panels: [{
-        id: "1", title: "Chart", legend: [], axes: { x: axis, y: axis, y2: null },
+        id: "1", title: "Chart", legend: [], axes: { x: axis, y: axis, y2: null, z: null },
         marks: [{ kind: "summary", id: "summary:0", group: "A", color: "#1768ac", width: 2, x0: 0, x1: 1, y: 1, statistic: "mean", summaryUnit: "sample", n: 2 }],
       }],
     };

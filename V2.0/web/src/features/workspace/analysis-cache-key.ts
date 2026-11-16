@@ -36,11 +36,16 @@ export function analysisCacheKey(
  * What the analysis response's RenderPlan draws, for charts that have one.
  *
  * Restyling refetches only a plan: the API keeps the finished analysis, so no
- * fit or resample runs again. Heatmaps and surfaces read their appearance from
- * the spec and stay out.
+ * fit or resample runs again. Heatmap and surface plans take no series colour.
  */
 export function planAppearanceKey(spec: ChartSpec): string {
-  if (spec.type === "heatmap" || spec.type === "surface3d") return "";
+  if (spec.type === "heatmap" || spec.type === "surface3d") {
+    return JSON.stringify({
+      grayscale: spec.export.grayscalePreview,
+      grid: spec.export.gridVisible,
+      xAxis: [spec.xAxis.title, spec.xAxis.unit],
+    });
+  }
   return JSON.stringify({
     colors: spec.series.map((series) => [series.color, series.lineStyle]),
     grayscale: spec.export.grayscalePreview,

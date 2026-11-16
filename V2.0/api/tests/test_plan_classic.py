@@ -10,7 +10,7 @@ from matplotlib.patches import Rectangle
 
 from labviz_api.models import ChartSpec
 from labviz_api.plan_classic import build_classic_plan
-from labviz_api.processing import analyze_chart, classic_plan, render_chart
+from labviz_api.processing import ProcessingError, analyze_chart, classic_plan, render_chart
 from labviz_api.render_plan import RenderPlan
 
 
@@ -284,9 +284,106 @@ def test_category_ticks_stay_readable_with_many_rows() -> None:
     assert len(plan["panels"][0]["marks"][0]["y1"]) == 1000
 
 
-def test_correlation_and_surface_have_no_plan_yet() -> None:
+def surface_chart() -> ChartSpec:
+    return spec(
+        "surface3d",
+        yAxis={"field": "z", "title": "Height", "unit": ""},
+        series=[
+            {"field": "y", "label": "Depth", "color": "#2563EB"},
+            {"field": "z", "label": "Height", "color": "#0F766E"},
+        ],
+    )
+
+
+def surface_frame(side: int, peak: float | None = None) -> pd.DataFrame:
+    rows = [
+        {"x": float(i), "y": float(j), "z": float(i + j)} for j in range(side) for i in range(side)
+    ]
+    if peak is not None:
+        rows[side + 1]["z"] = peak
+    return pd.DataFrame(rows)
+
+
+def drawn_figure(monkeypatch: pytest.MonkeyPatch, frame: pd.DataFrame, chart: ChartSpec) -> Any:
+    original = Figure.savefig
+    figures: list[Any] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        figures.append(figure)
+        return original(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    assert render_chart(frame, chart)
+    return figures[0]
+
+
+def test_heatmap_plan_is_the_correlation_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
     chart = spec("heatmap")
-    assert build_classic_plan(chart, analyze_chart(FRAME, chart)) is None
+    analysis = analyze_chart(FRAME, chart)
+    plan = planned(chart)
+    panel = plan["panels"][0]
+    (mark,) = panel["marks"]
+    assert (mark["kind"], mark["shape"]) == ("mesh", "cells")
+    assert mark["values"] == analysis["preview"]["heatmaps"][0]["matrix"]
+    assert (mark["colorDomain"], mark["colorTitle"]) == ([-1.0, 1.0], "Correlation")
+    assert panel["axes"]["y"]["domain"] == [1.5, -0.5], "first row on top"
+    assert [t["label"] for t in panel["axes"]["x"]["ticks"]] == ["Alpha", "Beta"]
+    assert not panel["axes"]["x"]["grid"], "heatmap exports never drew a grid"
+    figure = drawn_figure(monkeypatch, FRAME, chart)
+    axis = figure.axes[0]
+    (image,) = axis.get_images()
+    assert image.get_clim() == (-1.0, 1.0)
+    assert axis.get_ylim() == (1.5, -0.5)
+    assert [label.get_rotation() for label in axis.get_xticklabels()] == [45.0, 45.0]
+    assert figure.axes[1].get_ylabel() == "Correlation"
+
+
+def test_surface_export_draws_every_cell_and_preview_keeps_the_full_scale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The 101 x 101 regression: a peak the preview grid skips still sets the colour scale.
+    frame = surface_frame(101, peak=999.0)
+    chart = surface_chart()
+    analysis = analyze_chart(frame, chart)
+    full = classic_plan(frame, chart, analysis)
+    preview = classic_plan(frame, chart, analysis, detail="preview")
+    assert full and preview
+    for plan in (full, preview):
+        RenderPlan.model_validate_json(json.dumps(plan))
+    (mark,) = full["panels"][0]["marks"]
+    assert (len(mark["x"]), len(mark["y"])) == (101, 101)
+    assert mark["values"][1][1] == 999.0 and mark["decimation"] is None
+    (reduced,) = preview["panels"][0]["marks"]
+    assert reduced["decimation"] == {"rule": "grid-stride-v1", "input": 10201, "drawn": 1225}
+    assert reduced["x"][0] == 0.0 and reduced["x"][-1] == 100.0
+    assert 1.0 not in reduced["x"], "the peak's column is not in the preview grid"
+    assert reduced["colorDomain"] == mark["colorDomain"] == [0.0, 999.0]
+    assert preview["panels"][0]["axes"] == full["panels"][0]["axes"]
+    z_axis = full["panels"][0]["axes"]["z"]
+    assert z_axis["title"] == "Height" and z_axis["domain"][1] >= 999.0
+    figure = drawn_figure(monkeypatch, frame, chart)
+    axis = figure.axes[0]
+    (surface,) = axis.collections
+    assert len(surface.get_array()) == 2 * 100 * 100, "every cell is two triangles"
+    assert surface.get_clim() == (0.0, 999.0)
+    assert axis.get_zlim() == tuple(z_axis["domain"])
+    assert axis.get_zlabel() == "Height"
+
+
+def test_invalid_surface_grid_has_no_plan_and_keeps_its_error() -> None:
+    frame = surface_frame(5).iloc[:-1]
+    chart = surface_chart()
+    assert classic_plan(frame, chart, analyze_chart(frame, chart)) is None
+    with pytest.raises(ProcessingError) as raised:
+        render_chart(frame, chart)
+    assert raised.value.code == "surface-missing-grid"
+
+
+def test_grayscale_surface_and_heatmap_use_the_gray_palette() -> None:
+    for chart, frame in ((spec("heatmap"), FRAME), (surface_chart(), surface_frame(4))):
+        chart.export_settings.grayscale_preview = True
+        plan = classic_plan(frame, chart, analyze_chart(frame, chart))
+        assert plan and plan["panels"][0]["marks"][0]["palette"] == ["#ffffff", "#000000"]
 
 
 def test_panels_follow_their_series() -> None:

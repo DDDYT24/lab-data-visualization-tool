@@ -91,8 +91,39 @@ def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
         )
     elif mark["kind"] == "rects":
         draw_rects(ax, mark, dense)
+    elif mark["kind"] == "mesh":
+        draw_mesh(ax, mark)
     else:
         draw_box(ax, mark)
+
+
+def draw_mesh(ax: Any, mark: dict[str, Any]) -> None:
+    """Heatmap cells as an image, or a surface triangulated through every grid point."""
+    from matplotlib.colors import LinearSegmentedColormap
+
+    colormap = LinearSegmentedColormap.from_list(f"labviz-{mark['shape']}", mark["palette"])
+    low, high = mark["colorDomain"]
+    if mark["shape"] == "cells":
+        import numpy as np
+
+        values = np.array(
+            [[np.nan if value is None else value for value in row] for row in mark["values"]],
+            dtype=float,
+        )
+        # Cells are one unit wide around their positions, as imshow places them by default.
+        extent = (mark["x"][0] - 0.5, mark["x"][-1] + 0.5, mark["y"][-1] + 0.5, mark["y"][0] - 0.5)
+        image = ax.imshow(values, cmap=colormap, vmin=low, vmax=high, extent=extent)
+        ax.get_figure().colorbar(image, ax=ax, label=mark["colorTitle"])
+        return
+    points = [
+        (x, y, value)
+        for y, row in zip(mark["y"], mark["values"], strict=True)
+        for x, value in zip(mark["x"], row, strict=True)
+        if value is not None
+    ]
+    xs, ys, zs = (list(values) for values in zip(*points, strict=True))
+    surface = ax.plot_trisurf(xs, ys, zs, cmap=colormap, vmin=low, vmax=high)
+    ax.get_figure().colorbar(surface, ax=ax, shrink=0.65, pad=0.1, label=mark["colorTitle"])
 
 
 def draw_rects(ax: Any, mark: dict[str, Any], dense: bool) -> None:
@@ -182,16 +213,32 @@ def draw_y_axis(ax: Any, axis: dict[str, Any]) -> None:
 def draw_panel(
     ax: Any, panel: dict[str, Any], *, secondary: Any = None, dense: bool = False
 ) -> None:
-    """Draw one classic panel: its marks, then exactly the axes the plan states."""
+    """Draw one classic panel: its marks, then exactly the axes the plan states.
+
+    A panel with a z axis needs a 3D Matplotlib axis.
+    """
     for mark in panel["marks"]:
         draw_mark(secondary if mark.get("axis") == "y2" else ax, mark, dense)
-    x_axis, y_axis = panel["axes"]["x"], panel["axes"]["y"]
-    ax.set_xticks([t["value"] for t in x_axis["ticks"]], [t["label"] for t in x_axis["ticks"]])
+    x_axis, y_axis, z_axis = panel["axes"]["x"], panel["axes"]["y"], panel["axes"]["z"]
+    # Heatmap column names would overlap if they ran along the axis.
+    cells = any(mark.get("shape") == "cells" for mark in panel["marks"])
+    ax.set_xticks(
+        [t["value"] for t in x_axis["ticks"]],
+        [t["label"] for t in x_axis["ticks"]],
+        **({"rotation": 45, "ha": "right"} if cells else {}),
+    )
     ax.set_xlim(*x_axis["domain"])
     ax.set_xlabel(x_axis["title"])
     draw_y_axis(ax, y_axis)
     if secondary is not None:
         draw_y_axis(secondary, panel["axes"]["y2"])
+    if z_axis is not None:
+        ax.set_zticks([t["value"] for t in z_axis["ticks"]], [t["label"] for t in z_axis["ticks"]])
+        ax.set_zlim(*z_axis["domain"])
+        ax.set_zlabel(z_axis["title"])
+        # A 3D axis has one grid switch for all three planes.
+        ax.grid(x_axis["grid"])
+        return
     for name, axis in (("x", x_axis), ("y", y_axis)):
         if axis["grid"]:
             ax.grid(True, axis=name, color=GRID_COLOR, linewidth=0.7, alpha=0.8)

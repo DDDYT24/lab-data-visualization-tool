@@ -146,3 +146,58 @@ test("line and scatter previews are drawn from plans, restyle, and carry a fit",
   await latest("scatter", (mark) => mark.kind === "polyline" && mark.lineStyle === "dashed");
   await chart.screenshot({ path: test.info().outputPath("scatter-fit-preview.png") });
 });
+
+test("heatmap and surface previews are drawn from mesh plans", async ({ page }) => {
+  test.setTimeout(240_000);
+  type Mesh = { kind: string; shape: string; x: number[]; y: number[]; values: (number | null)[][]; colorDomain: number[] };
+  const meshes: { type: string; mark: Mesh; matrix?: (number | null)[][] }[] = [];
+  page.on("response", async (response) => {
+    if (!response.url().endsWith("/chart-analysis") || !response.ok()) return;
+    const body = await response.json();
+    const mark = body.plan?.panels[0].marks[0];
+    if (mark?.kind === "mesh") {
+      meshes.push({ type: response.request().postDataJSON().chart.type, mark, matrix: body.preview.heatmaps[0]?.matrix });
+    }
+  });
+  const unlocked = page.waitForResponse((r) => r.url().endsWith("/api/v1/local/session") && r.request().method() === "POST");
+  await page.goto(`/#labviz-access=${encodeURIComponent(process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY!)}`);
+  expect((await unlocked).ok()).toBeTruthy();
+  await page.waitForLoadState("networkidle");
+  // The example cards open each sample with the chart and fields it was made for.
+  const open = async (slug: string, type: string) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "View examples" }).click();
+    await page.locator(`[data-example-slug="${slug}"]`).getByRole("button", { name: "Open this example" }).click();
+    await expect(page.getByRole("heading", { name: "Confirm your data" })).toBeVisible({ timeout: 60_000 });
+    await page.getByRole("button", { name: "Review data quality" }).click();
+    const keep = page.getByRole("button", { name: "Keep all remaining as is" });
+    if (await keep.isVisible()) await keep.click();
+    await page.getByRole("button", { name: "Create chart", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Chart type" })).toHaveText(type);
+    return page.locator('main [role="img"]').first();
+  };
+  const latest = (type: string) => expect.poll(() => meshes.findLast((item) => item.type === type), { timeout: 60_000 }).toBeTruthy();
+
+  const heatmap = await open("correlation-heatmap", "Heatmap");
+  await latest("heatmap");
+  const cells = meshes.findLast((item) => item.type === "heatmap")!;
+  expect(cells.mark.shape).toBe("cells");
+  expect(cells.mark.values).toEqual(cells.matrix);
+  expect(cells.mark.colorDomain).toEqual([-1, 1]);
+  const filled = cells.mark.values.flat().filter((value) => value !== null).length;
+  // One rectangle per cell that has a value, coloured from the plan's palette.
+  await expect.poll(() => heatmap.locator("svg path[fill]").count()).toBeGreaterThanOrEqual(filled);
+  await heatmap.screenshot({ path: test.info().outputPath("heatmap-preview.png") });
+
+  const surface = await open("surface-3d", "3D surface");
+  await latest("surface3d");
+  const grid = meshes.findLast((item) => item.type === "surface3d")!.mark;
+  expect(grid.shape).toBe("surface");
+  expect(grid.values.flat().every((value) => value !== null)).toBe(true);
+  await expect(surface).toHaveAttribute("data-surface-point-count", String(grid.x.length * grid.y.length));
+  await expect(surface).toHaveAttribute("data-camera-controls", "true");
+  await expect(surface.locator("canvas").first()).toBeVisible();
+  // WebGL draws on the next frames, after the canvas is attached.
+  await page.waitForTimeout(1500);
+  await surface.screenshot({ path: test.info().outputPath("surface-preview.png") });
+});

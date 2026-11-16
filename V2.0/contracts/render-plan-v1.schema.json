@@ -351,6 +351,115 @@
       "title": "LegendEntry",
       "type": "object"
     },
+    "MeshMark": {
+      "additionalProperties": false,
+      "description": "Values on a grid: heatmap cells, or the heights of a 3D surface.",
+      "properties": {
+        "kind": {
+          "const": "mesh",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "shape": {
+          "enum": [
+            "cells",
+            "surface"
+          ],
+          "title": "Shape",
+          "type": "string"
+        },
+        "x": {
+          "items": {
+            "type": "number"
+          },
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Y",
+          "type": "array"
+        },
+        "values": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "title": "Values",
+          "type": "array"
+        },
+        "colorDomain": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Colordomain",
+          "type": "array"
+        },
+        "palette": {
+          "items": {
+            "pattern": "^#[0-9a-f]{6}$",
+            "type": "string"
+          },
+          "title": "Palette",
+          "type": "array"
+        },
+        "colorTitle": {
+          "title": "Colortitle",
+          "type": "string"
+        },
+        "decimation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Decimation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "group",
+        "shape",
+        "x",
+        "y",
+        "values",
+        "colorDomain",
+        "palette",
+        "colorTitle",
+        "decimation"
+      ],
+      "title": "MeshMark",
+      "type": "object"
+    },
     "Panel": {
       "additionalProperties": false,
       "properties": {
@@ -372,6 +481,7 @@
                 "band": "#/$defs/BandMark",
                 "box": "#/$defs/BoxMark",
                 "errorbar": "#/$defs/ErrorbarMark",
+                "mesh": "#/$defs/MeshMark",
                 "points": "#/$defs/PointsMark",
                 "polyline": "#/$defs/PolylineMark",
                 "rects": "#/$defs/RectsMark",
@@ -408,6 +518,9 @@
               },
               {
                 "$ref": "#/$defs/BoxMark"
+              },
+              {
+                "$ref": "#/$defs/MeshMark"
               }
             ]
           },
@@ -434,6 +547,7 @@
     },
     "PanelAxes": {
       "additionalProperties": false,
+      "description": "A y domain that runs from high to low draws the axis reversed, as heatmaps do.",
       "properties": {
         "x": {
           "$ref": "#/$defs/Axis"
@@ -450,12 +564,23 @@
               "type": "null"
             }
           ]
+        },
+        "z": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Axis"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "x",
         "y",
-        "y2"
+        "y2",
+        "z"
       ],
       "title": "PanelAxes",
       "type": "object"
@@ -576,7 +701,9 @@
             "box",
             "bar",
             "line",
-            "scatter"
+            "scatter",
+            "heatmap",
+            "surface3d"
           ],
           "title": "Kind",
           "type": "string"

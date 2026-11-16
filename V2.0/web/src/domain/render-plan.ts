@@ -18,15 +18,17 @@ export type RenderPlanMark =
   | (MarkBase & { kind: "violin"; opacity: number; position: number; grid: number[]; halfWidths: number[]; bandwidth: number; bandwidthRule: string; scale: "equal_width" | "common_density"; n: number; sourceRefs: string[] })
   | (MarkBase & { kind: "summary"; width: number; x0: number; x1: number; y: number; statistic: "mean" | "median"; summaryUnit: "observation" | "sample" | "experimental_unit"; n: number })
   | (MarkBase & { kind: "rects"; opacity: number; width: number; shape: "stairs" | "bars"; axis: YAxisName; x0: number[]; x1: number[]; y0: number[]; y1: number[]; decimation: Decimation })
-  | (MarkBase & { kind: "box"; medianColor: string; width: number; position: number; halfWidth: number; low: number; q1: number; median: number; q3: number; high: number; outliers: number[] });
+  | (MarkBase & { kind: "box"; medianColor: string; width: number; position: number; halfWidth: number; low: number; q1: number; median: number; q3: number; high: number; outliers: number[] })
+  | { kind: "mesh"; id: string; group: string; shape: "cells" | "surface"; x: number[]; y: number[]; values: (number | null)[][]; colorDomain: [number, number]; palette: string[]; colorTitle: string; decimation: Decimation };
 export type RenderPlanPanel = {
-  id: string; title: string; axes: { x: Axis; y: Axis; y2: Axis | null }; marks: RenderPlanMark[];
+  // A y domain that runs from high to low is drawn reversed, as heatmaps are.
+  id: string; title: string; axes: { x: Axis; y: Axis; y2: Axis | null; z: Axis | null }; marks: RenderPlanMark[];
   legend: { label: string; color: string; symbol: "line" | "marker" | "dashed" }[];
 };
 // The Python RenderPlan model owns this contract; the frontend only draws what it states.
 export type RenderPlan = {
   schemaVersion: 1; contract: "render-plan-v1"; planHash: string;
-  source: { kind: "grouped_strip" | "paired" | "violin" | "histogram" | "box" | "bar" | "line" | "scatter"; resultSha256: string; algorithmVersion: string };
+  source: { kind: "grouped_strip" | "paired" | "violin" | "histogram" | "box" | "bar" | "line" | "scatter" | "heatmap" | "surface3d"; resultSha256: string; algorithmVersion: string };
   geometry: { contract: "chart-render-v2"; axis: string; jitter: string | null; density: string | null; histogram: string | null; quantile: string | null; decimation: string | null };
   rendering: { pointRendering: "auto" | "vector" | "raster"; rasterizePoints: boolean };
   panels: RenderPlanPanel[]; disclosures: string[];

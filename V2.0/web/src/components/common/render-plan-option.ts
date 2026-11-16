@@ -20,8 +20,15 @@ const SYMBOLS = {
 } as const;
 
 type PlanAxis = RenderPlanPanel["axes"]["x"];
+type MeshMark = Extract<RenderPlanMark, { kind: "mesh" }>;
 type Coordinate = [number, number];
-type RenderApi = { coord: (point: number[]) => number[] };
+type RenderApi = {
+  coord: (point: number[]) => number[];
+  value: (dimension: number) => number | string;
+  visual: (key: "color") => string;
+};
+// Heatmap column names run at this angle, as the export draws them.
+const CELL_LABEL_ROTATION = 45;
 export type PlanText = { mean: string; median: string };
 export const planText = (zh: boolean): PlanText =>
   zh ? { mean: "均值", median: "中位数" } : { mean: "Mean", median: "Median" };
@@ -33,8 +40,15 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.ch
 const shown = (value: number) =>
   Number(value.toPrecision(6)).toString().replace(/-/g, "−");
 
+/** Each cell that has a value, as [x, y, value]. */
+const meshCells = (mark: MeshMark) =>
+  mark.values.flatMap((row, j) =>
+    row.flatMap((value, i) => (value === null ? [] : [[mark.x[i]!, mark.y[j]!, value]])));
+
 function tooltipLines(mark: RenderPlanMark, index: number, text: PlanText) {
   switch (mark.kind) {
+    case "mesh":
+      return [mark.colorTitle || mark.group, shown(meshCells(mark)[index]![2]!)];
     case "points":
     case "polyline":
       return [mark.group, shown(mark.y[index]!)];
@@ -164,6 +178,17 @@ function errorbarItem(mark: Extract<RenderPlanMark, { kind: "errorbar" }>, index
 
 function markSeries(mark: RenderPlanMark) {
   switch (mark.kind) {
+    case "mesh":
+      // Colour comes from the panel's visual map, which maps the third value onto the palette.
+      return {
+        id: mark.id, name: mark.colorTitle || mark.group, type: "custom", coordinateSystem: "cartesian2d",
+        clip: true, z: 1, data: meshCells(mark), encode: { x: 0, y: 1, tooltip: 2 },
+        renderItem: (_params: unknown, api: RenderApi) => {
+          const x = Number(api.value(0));
+          const y = Number(api.value(1));
+          return rectItem(api.coord([x - 0.5, y - 0.5]), api.coord([x + 0.5, y + 0.5]), api.visual("color"), 1);
+        },
+      };
     case "polyline":
       return {
         id: mark.id, name: mark.group, type: "line", z: 3, animation: false,
@@ -246,33 +271,106 @@ function markSeries(mark: RenderPlanMark) {
   }
 }
 
-function axisOption(axis: PlanAxis, zoomed: boolean, nameGap: number, gridIndex: number, colors: PlanColors) {
+function axisOption(
+  axis: PlanAxis, zoomed: boolean, nameGap: number, gridIndex: number, colors: PlanColors, rotate?: number,
+) {
   const names = new Map(axis.ticks.map((tick) => [tick.value, tick.label]));
   // Plan ticks hold for the full view. A zoomed value axis has to label what is on screen.
   const customValues = zoomed && axis.scale === "linear"
     ? undefined : axis.ticks.map((tick) => tick.value);
+  const [start, end] = axis.domain;
   return {
-    type: "value", gridIndex, min: axis.domain[0], max: axis.domain[1], name: axis.title,
+    type: "value", gridIndex, min: Math.min(start, end), max: Math.max(start, end), inverse: start > end,
+    name: axis.title,
     nameLocation: "middle", nameGap, nameTextStyle: { color: colors.text },
     axisLine: { onZero: false, show: true, lineStyle: { color: colors.text } },
     axisTick: { show: true, customValues },
     axisLabel: {
       color: colors.text, customValues, showMinLabel: true, showMaxLabel: true,
-      rotate: axis.scale === "category" && axis.ticks.length > LONG_AXIS_TICKS ? 30 : 0,
+      rotate: rotate ?? (axis.scale === "category" && axis.ticks.length > LONG_AXIS_TICKS ? 30 : 0),
       formatter: (value: number) => names.get(value) ?? shown(value),
     },
     splitLine: { show: axis.grid, lineStyle: { color: colors.grid } },
   };
 }
 
+const cellMesh = (panel: RenderPlanPanel) =>
+  panel.marks.find((mark): mark is MeshMark => mark.kind === "mesh" && mark.shape === "cells");
+
 function panelGrid(panel: RenderPlanPanel, index: number, count: number) {
   const widest = Math.max(...panel.axes.y.ticks.map((tick) => tick.label.length));
   const left = widest * LABEL_PIXELS + 36;
-  if (count === 1) return { left, right: 24, top: 64, bottom: 72 };
+  // Room for the colour scale beside a heatmap.
+  if (count === 1) return { left, right: cellMesh(panel) ? 96 : 24, top: 64, bottom: 72 };
   const rows = Math.ceil(count / 2);
   return {
     left: `${5 + (index % 2) * 49}%`, top: `${16 + Math.floor(index / 2) * (76 / rows)}%`,
     width: "42%", height: `${62 / rows}%`, containLabel: true,
+  };
+}
+
+const strided = (length: number, stride: number) =>
+  Array.from({ length }, (_, index) => index).filter((index) => index % stride === 0 || index === length - 1);
+
+export type SurfaceView = { alpha: number; beta: number; distance: number };
+
+/**
+ * A 3D surface plan. Camera, axis and legend toggles and the low-cost point limit are browser
+ * state: the limit keeps every n-th grid line, and the plan's colour domain still spans every value.
+ */
+export function buildSurfacePlanOption({
+  colors = DEFAULT_COLORS, plan, pointLimit, showAxes = true, showLegend = true, view,
+}: {
+  colors?: PlanColors & { axis?: string }; plan: RenderPlan; pointLimit?: number; showAxes?: boolean;
+  showLegend?: boolean; view: SurfaceView;
+}) {
+  const panel = plan.panels[0]!;
+  const mark = panel.marks.find((item): item is MeshMark => item.kind === "mesh")!;
+  const limit = Math.max(4, pointLimit ?? mark.x.length * mark.y.length);
+  let stride = 1;
+  while (strided(mark.x.length, stride).length * strided(mark.y.length, stride).length > limit) stride += 1;
+  const columns = strided(mark.x.length, stride);
+  const rows = strided(mark.y.length, stride);
+  const axisColor = colors.axis ?? colors.text;
+  const axis3D = (axis: PlanAxis) => {
+    // 3D axes take no tick list. They tick at round values as the plan does, and also at the
+    // domain ends, which are not ticks and stay unlabelled.
+    const span = Math.abs(axis.domain[1] - axis.domain[0]);
+    const near = (a: number, b: number) => Math.abs(a - b) <= span * 1e-9;
+    const label = (value: number) =>
+      axis.ticks.find((tick) => near(tick.value, value))?.label
+      ?? (axis.domain.some((end) => near(end, value)) ? "" : shown(value));
+    return {
+      type: "value", min: axis.domain[0], max: axis.domain[1], name: showAxes ? axis.title : "",
+      axisLine: { show: showAxes }, nameTextStyle: { color: colors.text },
+      axisLabel: { show: showAxes, color: axisColor, formatter: label },
+      splitLine: { show: axis.grid, lineStyle: { color: colors.grid } },
+    };
+  };
+  const [low, high] = mark.colorDomain;
+  return {
+    grid3D: {
+      top: 45, height: "70%", boxDepth: 80, boxHeight: 80, boxWidth: 120,
+      axisLabel: { show: showAxes, color: axisColor }, axisPointer: { show: showAxes },
+      axisLine: { show: showAxes, lineStyle: { color: axisColor } },
+      splitLine: { show: panel.axes.x.grid, lineStyle: { color: colors.grid } },
+      viewControl: {
+        alpha: view.alpha, autoRotate: false, beta: view.beta, distance: view.distance, panSensitivity: 1,
+        projection: "perspective", rotateSensitivity: 1, zoomSensitivity: 1,
+      },
+    },
+    visualMap: {
+      show: showLegend, dimension: 2, calculable: false, orient: "horizontal", left: "center", bottom: 0,
+      inRange: { color: mark.palette }, min: low, max: high, text: [shown(high), shown(low)],
+      textStyle: { color: colors.text },
+    },
+    xAxis3D: axis3D(panel.axes.x),
+    yAxis3D: axis3D(panel.axes.y),
+    zAxis3D: axis3D(panel.axes.z!),
+    series: [{
+      type: "surface", shading: "color", dataShape: [rows.length, columns.length],
+      data: rows.flatMap((j) => columns.map((i) => [mark.x[i]!, mark.y[j]!, mark.values[j]![i] ?? null])),
+    }],
   };
 }
 
@@ -303,7 +401,8 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
       formatter: (params: { seriesIndex: number; dataIndex: number }) =>
         planTooltip(plan, params.seriesIndex, params.dataIndex, text),
     },
-    xAxis: panels.map((item, index) => axisOption(item.axes.x, zoomed, 48, index, colors)),
+    xAxis: panels.map((item, index) =>
+      axisOption(item.axes.x, zoomed, 48, index, colors, cellMesh(item) ? CELL_LABEL_ROTATION : undefined)),
     yAxis: panels.flatMap((item, index) => {
       const left = (grid[index] as { left: number | string }).left;
       const primary = axisOption(item.axes.y, zoomed, typeof left === "number" ? left - 20 : 44, index, colors);
@@ -317,6 +416,11 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
       // A plain wheel keeps scrolling the page.
       zoomOnMouseWheel: "ctrl", moveOnMouseWheel: false,
     })),
+    visualMap: seriesIn.flatMap(({ mark }, seriesIndex) => mark.kind === "mesh" ? [{
+      type: "continuous", seriesIndex, dimension: 2, calculable: false, orient: "vertical", right: 8, top: "middle",
+      min: mark.colorDomain[0], max: mark.colorDomain[1], inRange: { color: mark.palette },
+      text: [shown(mark.colorDomain[1]), shown(mark.colorDomain[0])], textStyle: { color: colors.text },
+    }] : []),
     series: [
       ...seriesIn.map(({ mark, index }) => ({ ...markSeries(mark), xAxisIndex: index, yAxisIndex: yAxisIndex(mark, index) })),
       {

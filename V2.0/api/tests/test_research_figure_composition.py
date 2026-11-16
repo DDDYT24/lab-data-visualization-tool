@@ -120,16 +120,16 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
         assert artifacts["png"][1:4] == b"PNG"
         assert artifacts["pdf"][:4] == b"%PDF"
         view = client.get(url + "/interaction").json()
-        # Captured panels have plans; correlation panels do not yet.
+        # Every captured panel has a plan, correlation heatmaps included.
         panel_plan = client.get(url + "/plans/B")
         assert panel_plan.json()["planHash"] == view["panels"][1]["planHash"]
-        if kind != "heatmap":
-            captured_plan = RenderPlan.model_validate_json(client.get(url + "/plans/A").content)
-            assert captured_plan.plan_hash == view["panels"][0]["planHash"]
-            assert captured_plan.panels[0].id == "A"
-        else:
-            assert view["panels"][0]["planHash"] is None
-            assert client.get(url + "/plans/A").json()["code"] == "figure-plan-missing"
+        captured_plan = RenderPlan.model_validate_json(client.get(url + "/plans/A").content)
+        assert captured_plan.plan_hash == view["panels"][0]["planHash"]
+        assert captured_plan.panels[0].id == "A"
+        if kind == "heatmap":
+            (mesh,) = captured_plan.panels[0].marks
+            assert mesh.kind == "mesh" and mesh.palette == ["#ffffff", "#000000"]
+            assert captured_plan.panels[0].axes.y.domain == (1.5, -0.5)
         a_marks = [m for m in view["marks"] if m["panel"] == "A"]
         assert a_marks
         selected = client.get(url + "/interaction", params={"mark": a_marks[0]["id"]}).json()

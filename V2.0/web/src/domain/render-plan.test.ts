@@ -13,7 +13,7 @@ const plan: RenderPlan = {
   rendering: { pointRendering: "auto", rasterizePoints: false },
   panels: [{
     id: "A", title: "Violin distribution", legend: [{ label: "A", color: "#1768ac", symbol: "line" }],
-    axes: { x: axis("category") as RenderPlan["panels"][0]["axes"]["x"], y: axis("linear") as RenderPlan["panels"][0]["axes"]["y"], y2: null },
+    axes: { x: axis("category") as RenderPlan["panels"][0]["axes"]["x"], y: axis("linear") as RenderPlan["panels"][0]["axes"]["y"], y2: null, z: null },
     marks: [
       { kind: "violin", id: "density:0", group: "A", color: "#1768ac", opacity: 0.3, position: 0, grid: [0, 1], halfWidths: [0.1, 0.2], bandwidth: 0.5, bandwidthRule: "scott-sample-sd", scale: "equal_width", n: 3, sourceRefs: ["o1"] },
       { kind: "segments", id: "pairs:0", group: "A", color: "#1768ac", width: 1.2, opacity: 0.65, x0: [0], y0: [1], x1: [1], y1: [2], sourceRefs: [["o1", "o2"]] },
@@ -39,7 +39,7 @@ describe("render plan contract", () => {
     unknownMark.panels[0].marks[0].kind = "bar";
     expect(renderPlanSchema.safeParse(unknownMark).success).toBe(false);
     const namedColor = structuredClone(plan);
-    namedColor.panels[0].marks[2].color = "red";
+    (namedColor.panels[0].marks[2] as { color: string }).color = "red";
     expect(renderPlanSchema.safeParse(namedColor).success).toBe(false);
   });
 });

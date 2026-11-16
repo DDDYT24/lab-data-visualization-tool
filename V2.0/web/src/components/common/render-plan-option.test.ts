@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { RenderPlan, RenderPlanMark } from "@/domain/render-plan";
 
 import { zoomedWindow } from "./render-plan-chart";
-import { buildPlanOption, planAxisTooltip, planSelection, planTooltip } from "./render-plan-option";
+import {
+  buildPlanOption, buildSurfacePlanOption, planAxisTooltip, planSelection, planTooltip,
+} from "./render-plan-option";
 
 const text = { mean: "Mean", median: "Median" };
 const axis = (ticks: [number, string][], scale: "linear" | "category") => ({
@@ -31,6 +33,7 @@ const plan: RenderPlan = {
       x: axis([[0, "A\nobs=2"], [1, "B"]], "category"),
       y: axis([[0, "0"], [2, "2"], [4, "4"]], "linear"),
       y2: null,
+      z: null,
     },
   }],
 };
@@ -116,7 +119,7 @@ describe("render plan adapter", () => {
   it("draws a grid only on the axes whose plan asks for one", () => {
     const [panel] = plan.panels;
     const { x, y } = panel!.axes;
-    const swapped = { ...plan, panels: [{ ...panel!, axes: { x: { ...x, grid: true }, y: { ...y, grid: false }, y2: null } }] };
+    const swapped = { ...plan, panels: [{ ...panel!, axes: { x: { ...x, grid: true }, y: { ...y, grid: false }, y2: null, z: null } }] };
     const { xAxis: [xAxis], yAxis: [yAxis] } = buildPlanOption({ plan: swapped, text }) as Series;
     expect([xAxis.splitLine.show, yAxis.splitLine.show]).toEqual([true, false]);
   });
@@ -213,6 +216,82 @@ describe("render plan adapter", () => {
   it("hides the legend when the plan has none", () => {
     const bare = { ...plan, panels: [{ ...plan.panels[0]!, legend: [] }] };
     expect(buildPlanOption({ plan: bare, text }).legend.show).toBe(false);
+  });
+});
+
+describe("mesh marks", () => {
+  const labels = axis([[0, "A"], [1, "B"]], "category");
+  const cells: RenderPlanMark = {
+    kind: "mesh", id: "heatmap:1", group: "Correlation", shape: "cells", x: [0, 1], y: [0, 1],
+    values: [[1, -0.5], [null, 1]], colorDomain: [-1, 1], palette: ["#3b4cc0", "#dddddd", "#b40426"],
+    colorTitle: "Correlation", decimation: null,
+  };
+  const heatmap: RenderPlan = {
+    ...plan, source: { ...plan.source, kind: "heatmap" },
+    panels: [{
+      ...plan.panels[0]!, legend: [], marks: [cells],
+      axes: { x: { ...labels, domain: [-0.5, 1.5] }, y: { ...labels, domain: [1.5, -0.5] }, y2: null, z: null },
+    }],
+  };
+
+  it("draws heatmap cells with the plan's colour domain and its first row on top", () => {
+    const built = buildPlanOption({ plan: heatmap, text }) as Series;
+    expect(built.series[0].data).toEqual([[0, 0, 1], [1, 0, -0.5], [1, 1, 1]]);
+    expect(built.visualMap).toEqual([expect.objectContaining({
+      seriesIndex: 0, dimension: 2, min: -1, max: 1, inRange: { color: cells.palette }, text: ["1", "−1"],
+    })]);
+    expect(built.yAxis[0]).toMatchObject({ min: -0.5, max: 1.5, inverse: true });
+    expect(built.xAxis[0]).toMatchObject({ inverse: false, axisLabel: { rotate: 45 } });
+    const coord = (point: number[]) => [point[0]! * 10, point[1]! * 10];
+    const value = (dimension: number) => [1, 0, -0.5][dimension]!;
+    const item = built.series[0].renderItem({}, { coord, value, visual: () => "#dddddd" });
+    expect(item).toMatchObject({ shape: { x: 5, y: -5, width: 10, height: 10 }, style: { fill: "#dddddd" } });
+    expect(planTooltip(heatmap, 0, 1, text)).toBe("Correlation<br/>−0.5");
+  });
+
+  // 101 x 101 with a peak at (1, 1) that the low-cost grid leaves out.
+  const side = 101;
+  const grid = Array.from({ length: side }, (_, index) => index);
+  const surface: RenderPlan = {
+    ...plan, source: { ...plan.source, kind: "surface3d" },
+    panels: [{
+      ...plan.panels[0]!, legend: [],
+      marks: [{
+        kind: "mesh", id: "surface:1", group: "Z", shape: "surface", x: grid, y: grid,
+        values: grid.map((y) => grid.map((x) => (x === 1 && y === 1 ? 999 : x + y))),
+        colorDomain: [0, 999], palette: ["#440154", "#fde725"], colorTitle: "", decimation: null,
+      }],
+      axes: {
+        x: axis([[0, "0"], [100, "100"]], "linear"), y: axis([[0, "0"], [100, "100"]], "linear"), y2: null,
+        z: { ...axis([[0, "0"], [1000, "1000"]], "linear"), domain: [-50, 1050], title: "Z" },
+      },
+    }],
+  };
+  const view = { alpha: 25, beta: 40, distance: 200 };
+
+  it("draws every surface point unless the browser asks for fewer", () => {
+    const full = buildSurfacePlanOption({ plan: surface, view }) as Series;
+    expect(full.series[0].data).toHaveLength(side * side);
+    expect(full.series[0].dataShape).toEqual([side, side]);
+    expect(full.zAxis3D).toMatchObject({ min: -50, max: 1050, name: "Z" });
+    expect([0, 1000, -50, 1050].map((value) => full.zAxis3D.axisLabel.formatter(value))).toEqual(["0", "1000", "", ""]);
+    expect(full.grid3D.viewControl).toMatchObject(view);
+  });
+
+  it("keeps a rectangular grid, its edges and the full colour scale on the low-cost limit", () => {
+    const reduced = buildSurfacePlanOption({ plan: surface, pointLimit: 800, view }) as Series;
+    const [{ data, dataShape }] = reduced.series;
+    expect(data.length).toBeLessThanOrEqual(800);
+    expect(data.length).toBe(dataShape[0] * dataShape[1]);
+    expect(data[0]).toEqual([0, 0, 0]);
+    expect(data.at(-1)).toEqual([100, 100, 200]);
+    expect(data.some((point: number[]) => point[2] === 999)).toBe(false);
+    expect(reduced.visualMap).toMatchObject({ min: 0, max: 999, dimension: 2, inRange: { color: ["#440154", "#fde725"] } });
+  });
+
+  it("hides axis names and the colour scale when the viewer turns them off", () => {
+    const bare = buildSurfacePlanOption({ plan: surface, showAxes: false, showLegend: false, view }) as Series;
+    expect([bare.xAxis3D.name, bare.visualMap.show]).toEqual(["", false]);
   });
 });
 

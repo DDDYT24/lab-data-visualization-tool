@@ -14,7 +14,7 @@ import {
 } from "@/domain/chart-render-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
-import { buildPlanOption, planAxisTooltip, planText } from "./render-plan-option";
+import { buildPlanOption, buildSurfacePlanOption, planAxisTooltip, planText } from "./render-plan-option";
 
 type SeriesOptionRecord = Record<string, unknown>;
 
@@ -240,18 +240,26 @@ export function buildChartOption({
   // Excluded findings are a local filter the saved analysis has not applied to row marks yet.
   const rowMarks = spec.type === "bar" || spec.type === "line" || spec.type === "scatter";
   if (analysis?.plan && (!rowMarks || excludedFindingIds.length === 0)) {
-    const planned = buildPlanOption({
-      colors: { grid: chartGridColor, text: colorMode === "dark" ? "#ECECEC" : "#172033" },
-      plan: analysis.plan,
-      text: planText(zh),
-    });
+    const colors = { grid: chartGridColor, text: colorMode === "dark" ? "#ECECEC" : "#172033" };
+    if (spec.type === "surface3d") {
+      return {
+        ...common,
+        ...buildSurfacePlanOption({
+          colors: { ...colors, axis: chartAxisColor }, plan: analysis.plan, pointLimit: surfacePointLimit,
+          showAxes, showLegend, view: surfaceView ?? { alpha: 25, beta: 40, distance: 200 },
+        }),
+      } as EChartsOption;
+    }
+    const planned = buildPlanOption({ colors, plan: analysis.plan, text: planText(zh) });
     const shared = spec.type === "line" || spec.type === "scatter";
     return {
       ...(planned as EChartsOption), ...common, dataZoom: [],
       tooltip: (shared
         ? { trigger: "axis", formatter: planAxisTooltip(analysis.plan) }
         : planned.tooltip) as EChartsOption["tooltip"],
-      grid: panelGrids(spec.panelCount),
+      // A heatmap keeps the plan's room for its colour scale.
+      grid: spec.type === "heatmap" ? planned.grid : panelGrids(spec.panelCount),
+      visualMap: planned.visualMap.map((scale) => ({ ...scale, show: showLegend })) as EChartsOption["visualMap"],
       // A box plot has no legend in its export; the labels sit on the axis.
       legend: planned.legend.show ? { ...common.legend, data: planned.legend.data } : { show: false },
     };
@@ -373,22 +381,11 @@ export function buildChartOption({
   }
 
   if (spec.type === "surface3d") {
-    const yField = spec.series[0]?.field;
-    const zField = spec.series[1]?.field ?? spec.series[0]?.field;
-    const fallbackData = rows.flatMap((row, index) => {
-      const x = row[spec.xAxis.field];
-      const y = yField ? row[yField] : index;
-      const z = zField ? row[zField] : null;
-      return typeof x === "number" && typeof y === "number" && typeof z === "number"
-        ? [[x, y, z]]
-        : [];
-    });
     const surfaceDiagnostic = analysis?.preview.surfaceDiagnostics.find(
       (item) => item.panel === 1,
     );
-    const analysisData = analysis?.preview.surfacePoints.length
-      ? analysis.preview.surfacePoints.map((point) => [point.x, point.y, point.z])
-      : fallbackData;
+    // Until the analysis arrives the surface is empty: raw rows are not a checked grid.
+    const analysisData = (analysis?.preview.surfacePoints ?? []).map((point) => [point.x, point.y, point.z]);
     const fullData = surfaceDiagnostic?.status === "valid" || !surfaceDiagnostic
       ? analysisData
       : [];

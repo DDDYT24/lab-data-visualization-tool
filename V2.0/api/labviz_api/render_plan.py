@@ -54,9 +54,12 @@ class Axis(ResearchModel):
 
 
 class PanelAxes(ResearchModel):
+    """A y domain that runs from high to low draws the axis reversed, as heatmaps do."""
+
     x: Axis
     y: Axis
     y2: Axis | None
+    z: Axis | None
 
 
 class Decimation(ResearchModel):
@@ -197,6 +200,23 @@ class BoxMark(ResearchModel):
     outliers: list[float]
 
 
+class MeshMark(ResearchModel):
+    """Values on a grid: heatmap cells, or the heights of a 3D surface."""
+
+    kind: Literal["mesh"]
+    id: str
+    group: str
+    shape: Literal["cells", "surface"]
+    # Column and row positions; values holds one row per y, one value per x, null where none.
+    x: list[float]
+    y: list[float]
+    values: list[list[float | None]]
+    color_domain: tuple[float, float]
+    palette: list[Color]
+    color_title: str
+    decimation: Decimation | None
+
+
 Mark = Annotated[
     PointsMark
     | PolylineMark
@@ -206,7 +226,8 @@ Mark = Annotated[
     | ViolinMark
     | SummaryMark
     | RectsMark
-    | BoxMark,
+    | BoxMark
+    | MeshMark,
     Field(discriminator="kind"),
 ]
 
@@ -226,7 +247,18 @@ class Panel(ResearchModel):
 
 
 class PlanSource(ResearchModel):
-    kind: Literal["grouped_strip", "paired", "violin", "histogram", "box", "bar", "line", "scatter"]
+    kind: Literal[
+        "grouped_strip",
+        "paired",
+        "violin",
+        "histogram",
+        "box",
+        "bar",
+        "line",
+        "scatter",
+        "heatmap",
+        "surface3d",
+    ]
     result_sha256: Digest
     algorithm_version: str
 
@@ -526,6 +558,7 @@ def build_research_plan(
                         "grid": True,
                     },
                     "y2": None,
+                    "z": None,
                 },
                 "marks": marks,
                 "legend": legend,
