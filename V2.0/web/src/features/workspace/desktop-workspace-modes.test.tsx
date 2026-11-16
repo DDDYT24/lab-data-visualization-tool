@@ -5,7 +5,7 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {WorkspaceScreen} from './workspace-screen';
 import {useWorkspaceStore} from './workspace-store';
 
-const state=vi.hoisted(()=>({research:true,mounts:[] as string[]}));
+const state=vi.hoisted(()=>({research:true,mounts:[] as string[],job:null as {stage:string}|null}));
 vi.mock('next-intl',()=>({useLocale:()=> 'en',useTranslations:()=> (key:string)=>key}));
 vi.mock('next/dynamic',async()=>{
   const React=await import('react');
@@ -14,7 +14,7 @@ vi.mock('next/dynamic',async()=>{
     return function Dynamic(props:object){return <React.Suspense><Component {...props}/></React.Suspense>;};
   }};
 });
-vi.mock('./use-workspace-project',()=>({useWorkspaceProject:()=>({loadStatus:'ready',preview:{},quality:{},uploading:false})}));
+vi.mock('./use-workspace-project',()=>({useWorkspaceProject:()=>({job:state.job,loadStatus:'ready',preview:{},quality:{},uploading:false})}));
 vi.mock('@/components/common/workflow-stepper',()=>({WorkflowStepper:()=>null}));
 vi.mock('./desktop-session',async()=>{
   const React=await import('react');
@@ -38,7 +38,7 @@ vi.mock('./research-workspace',async()=>{
 });
 let root:Root|undefined,container:HTMLDivElement;
 (globalThis as typeof globalThis & {IS_REACT_ACT_ENVIRONMENT:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
-beforeEach(()=>{state.mounts=[];useWorkspaceStore.setState({projectId:'p1',currentRevisionId:'r1',currentStep:'chart'});});
+beforeEach(()=>{state.mounts=[];state.job=null;useWorkspaceStore.setState({projectId:'p1',currentRevisionId:'r1',currentStep:'chart'});});
 afterEach(async()=>{if(root)await act(async()=>root!.unmount());root=undefined;container?.remove();});
 async function render(research:boolean){
   state.research=research;container=document.createElement('div');document.body.append(container);root=createRoot(container);
@@ -54,4 +54,9 @@ it('does not mount parked research during quick plot recovery, but preserves it 
   await render(false);expect(state.mounts).toEqual(['quick']);expect(container.querySelector('[data-testid="research-editor"]')).toBeNull();
   await click('Research workspace');expect(state.mounts).toEqual(['quick','research']);
   await click('Back to quick plot');expect(state.mounts).toEqual(['quick','research']);
+});
+it('mounts research only after the upload job has ended',async()=>{
+  state.job={stage:'parsing'};await render(true);expect(state.mounts).toEqual([]);
+  state.job={stage:'ready'};await act(async()=>{root!.render(<WorkspaceScreen initialProjectId="p1" initialResearchMode/>);});
+  expect(state.mounts).toEqual(['research']);
 });
