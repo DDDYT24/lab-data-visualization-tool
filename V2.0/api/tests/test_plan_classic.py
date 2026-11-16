@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from typing import Any
 
 import pandas as pd
@@ -368,6 +369,12 @@ def test_surface_export_draws_every_cell_and_preview_keeps_the_full_scale(
     assert surface.get_clim() == (0.0, 999.0)
     assert axis.get_zlim() == tuple(z_axis["domain"])
     assert axis.get_zlabel() == "Height"
+
+
+def test_surface_export_lays_out_without_a_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        render_chart(surface_frame(5), surface_chart())
 
 
 def test_invalid_surface_grid_has_no_plan_and_keeps_its_error() -> None:

@@ -2565,6 +2565,10 @@ def render_chart(
             styled_text.set_fontfamily(resolved_font_family)
         if hasattr(styled_text, "get_fontsize") and styled_text.get_fontsize() == 10:
             styled_text.set_fontsize(export.font_size)
+    if chart.type == "surface3d":
+        # A 3D axis places fixed tick labels only when it is drawn; unplaced, they make
+        # tight_layout give up with a warning.
+        figure.draw_without_rendering()
     figure.tight_layout(rect=(0, 0.1, 1, 1) if footer_note else None)
     output = io.BytesIO()
     save_kwargs: dict[str, Any] = {
