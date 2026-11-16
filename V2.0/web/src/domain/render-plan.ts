@@ -1,9 +1,24 @@
 import { z } from "zod";
 import generatedPlan from "../../../contracts/render-plan-v1.schema.json";
+import geometry from "../../../contracts/chart-render-v2.json";
+
+export type AxisScale = "linear" | "category" | "log10" | "symlog";
+const SYMLOG_THRESHOLD = geometry.axis.symlogThreshold;
+/** Where a value sits along an axis, in the units the axis is linear in; the API uses the same rule. */
+export function axisPosition(scale: AxisScale, value: number): number {
+  if (scale === "log10") return Math.log10(value);
+  if (scale === "symlog") return Math.sign(value) * Math.log10(1 + Math.abs(value) / SYMLOG_THRESHOLD);
+  return value;
+}
+export function axisValue(scale: AxisScale, position: number): number {
+  if (scale === "log10") return 10 ** position;
+  if (scale === "symlog") return Math.sign(position) * (10 ** Math.abs(position) - 1) * SYMLOG_THRESHOLD;
+  return position;
+}
 
 type Tick = { value: number; label: string };
 type Axis = {
-  scale: "linear" | "category"; domain: [number, number]; ticks: Tick[]; title: string;
+  scale: AxisScale; domain: [number, number]; ticks: Tick[]; title: string;
   niceRule: "nice-1-2-5-v1" | null; grid: boolean;
 };
 type MarkBase = { id: string; group: string; color: string };

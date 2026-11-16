@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .plan_axes import SYMLOG_THRESHOLD
 from .render_contract import GRID_COLOR, LINE_STYLES
 
 # A mark with more bars than this is drawn as one collection, and the legend then takes a fixed
@@ -204,7 +205,30 @@ def draw_box(ax: Any, mark: dict[str, Any]) -> None:
     )
 
 
+def set_scale(ax: Any, name: str, scale: str) -> None:
+    """Place values along a log or symlog axis exactly as plan_axes.axis_position does."""
+    if scale not in ("log10", "symlog"):
+        return
+    import numpy as np
+
+    def forward(values: Any) -> Any:
+        data = np.asarray(values, dtype=float)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if scale == "log10":
+                return np.log10(data)
+            return np.sign(data) * np.log10(1 + np.abs(data) / SYMLOG_THRESHOLD)
+
+    def inverse(positions: Any) -> Any:
+        data = np.asarray(positions, dtype=float)
+        if scale == "log10":
+            return 10.0**data
+        return np.sign(data) * (10.0 ** np.abs(data) - 1) * SYMLOG_THRESHOLD
+
+    getattr(ax, f"set_{name}scale")("function", functions=(forward, inverse))
+
+
 def draw_y_axis(ax: Any, axis: dict[str, Any]) -> None:
+    set_scale(ax, "y", axis["scale"])
     ax.set_yticks([t["value"] for t in axis["ticks"]], [t["label"] for t in axis["ticks"]])
     ax.set_ylim(*axis["domain"])
     ax.set_ylabel(axis["title"])
@@ -222,6 +246,7 @@ def draw_panel(
     x_axis, y_axis, z_axis = panel["axes"]["x"], panel["axes"]["y"], panel["axes"]["z"]
     # Heatmap column names would overlap if they ran along the axis.
     cells = any(mark.get("shape") == "cells" for mark in panel["marks"])
+    set_scale(ax, "x", x_axis["scale"])
     ax.set_xticks(
         [t["value"] for t in x_axis["ticks"]],
         [t["label"] for t in x_axis["ticks"]],

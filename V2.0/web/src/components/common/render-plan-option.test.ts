@@ -303,3 +303,58 @@ describe("zoom window", () => {
     expect(zoomedWindow({ start: 49, end: 51 }, -25)).toEqual({ start: 49, end: 51 });
   });
 });
+
+describe("log and symlog axes", () => {
+  const scaledAxis = (scale: "log10" | "symlog", domain: [number, number], ticks: number[]) => ({
+    scale, domain, title: "mV", niceRule: null, grid: true, ticks: ticks.map((value) => ({ value, label: String(value) })),
+  });
+  const points: RenderPlanMark = { ...base, kind: "points", id: "points:0", marker: "o", size: 4, opacity: 1, axis: "y", x: [1, 2], y: [1, 1000], sourceRefs: ["o1", "o2"], decimation: null };
+  const error: RenderPlanMark = { ...base, kind: "errorbar", id: "error:0", width: 1, capSize: 2, opacity: 1, axis: "y", x: [1], y: [100], error: [90] };
+  const segments: RenderPlanMark = { ...base, kind: "segments", id: "pairs:0", width: 1, opacity: 1, x0: [1], y0: [10], x1: [2], y1: [100], sourceRefs: [["o1", "o2"]] };
+  const logged = (scale: "log10" | "symlog", list: RenderPlanMark[], domain: [number, number] = [0.1, 10000]): RenderPlan => ({
+    ...plan,
+    panels: [{
+      ...plan.panels[0]!, marks: list,
+      axes: { x: axis([[1, "1"], [2, "2"]], "linear"), y: scaledAxis(scale, domain, [1, 10, 100, 1000]), y2: null, z: null },
+    }],
+  });
+
+  it("states a log axis in decades with the plan's labels", () => {
+    const { yAxis: [yAxis] } = buildPlanOption({ plan: logged("log10", [points]), text, zoomed: true }) as Series;
+    expect(yAxis.type).toBe("value");
+    expect([yAxis.min, yAxis.max]).toEqual([-1, 4]);
+    expect(yAxis.axisLabel.customValues).toEqual([0, 1, 2, 3]);
+    expect(yAxis.axisLabel.formatter(2)).toBe("100");
+    expect(yAxis.axisLabel.formatter(0.5)).toBe("3.16228");
+  });
+
+  it("places points, segments and both error bar ends by the scale", () => {
+    const built = buildPlanOption({ plan: logged("log10", [points, error, segments]), text, selected: ["o2"] });
+    const [dots, bar, lines, selection] = built.series as Series[];
+    expect(dots.data).toEqual([[1, 0], [2, 3]]);
+    expect(lines.data).toEqual([{ coords: [[1, 1], [2, 2]] }]);
+    expect(selection.data).toEqual([[2, 3]]);
+    const { children } = bar.renderItem({ dataIndex: 0 }, { coord: (point: number[]) => point });
+    expect(children[0].shape.y1).toBeCloseTo(Math.log10(190));
+    expect(children[0].shape.y2).toBeCloseTo(1);
+  });
+
+  it("keeps real values in the tooltip", () => {
+    expect(planTooltip(logged("log10", [points]), 0, 1, text)).toContain("1000");
+  });
+
+  it("is linear near zero on a symlog axis and mirrors negatives", () => {
+    const mirrored: RenderPlanMark = { ...points, y: [-9, 9] };
+    const built = buildPlanOption({ plan: logged("symlog", [mirrored], [-99, 99]), text });
+    const [dots] = built.series as Series[];
+    expect(dots.data[0][1]).toBeCloseTo(-1);
+    expect(dots.data[1][1]).toBeCloseTo(1);
+    const { yAxis: [yAxis] } = built as Series;
+    expect(yAxis.min).toBeCloseTo(-2);
+    expect(yAxis.max).toBeCloseTo(2);
+  });
+
+  it("leaves a linear plan's series untouched", () => {
+    expect(series(2).data).toEqual([[0.1, 1], [1.2, 3]]);
+  });
+});

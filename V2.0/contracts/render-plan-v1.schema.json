@@ -6,7 +6,9 @@
         "scale": {
           "enum": [
             "linear",
-            "category"
+            "category",
+            "log10",
+            "symlog"
           ],
           "title": "Scale",
           "type": "string"

@@ -8,7 +8,8 @@
     "maxTicks3d": 5,
     "stepMultiples": [1, 2, 5, 10],
     "minRelativeSpan": 1e-12,
-    "plainExponents": [-4, 5]
+    "plainExponents": [-4, 5],
+    "symlogThreshold": 1
   },
   "jitter": {
     "rule": "sha256-uniform-v1",

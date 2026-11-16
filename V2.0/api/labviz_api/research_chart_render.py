@@ -9,7 +9,7 @@ from typing import Any
 from .processing import _cjk_font_info, _contains_cjk
 from .render_plan import build_research_plan
 from .render_plan import rasterize_points as rasterize_points
-from .render_plan_draw import draw_mark
+from .render_plan_draw import draw_mark, set_scale
 from .research_preparation import PreparationError
 from .research_styles import COLORS as COLORS
 
@@ -41,6 +41,8 @@ def draw_plan(
         for mark in panel["marks"]:
             draw_mark(ax, mark, plan["rendering"]["rasterizePoints"])
         x_axis, y_axis = panel["axes"]["x"], panel["axes"]["y"]
+        set_scale(ax, "x", x_axis["scale"])
+        set_scale(ax, "y", y_axis["scale"])
         ax.set_xticks(
             [tick["value"] for tick in x_axis["ticks"]],
             [tick["label"] for tick in x_axis["ticks"]],

@@ -47,7 +47,8 @@ class Tick(ResearchModel):
 
 
 class Axis(ResearchModel):
-    scale: Literal["linear", "category"]
+    # A log10 or symlog axis places values with plan_axes.axis_position; marks stay in data units.
+    scale: Literal["linear", "category", "log10", "symlog"]
     domain: tuple[float, float]
     ticks: list[Tick]
     title: str

@@ -1,5 +1,5 @@
 import { chartLineType, gridColor } from "@/domain/chart-render-contract";
-import type { RenderPlan, RenderPlanMark, RenderPlanPanel } from "@/domain/render-plan";
+import { axisPosition, axisValue, type RenderPlan, type RenderPlanMark, type RenderPlanPanel } from "@/domain/render-plan";
 
 // The adapter only draws what the plan states: it computes no statistics, axes or geometry.
 const TEXT_COLOR = "#20252d";
@@ -97,13 +97,45 @@ export function planSelection(plan: RenderPlan, seriesIndex: number, index: numb
   return [];
 }
 
+type Place = (point: number[]) => number[];
+const scaled = (axis: PlanAxis) => axis.scale === "log10" || axis.scale === "symlog";
+
+// A log or symlog panel is drawn on linear ECharts axes: every coordinate goes through the plan's scale.
+function placement(panel: RenderPlanPanel, mark: RenderPlanMark): Place | null {
+  const { x } = panel.axes;
+  const y = "axis" in mark && mark.axis === "y2" && panel.axes.y2 ? panel.axes.y2 : panel.axes.y;
+  if (!scaled(x) && !scaled(y)) return null;
+  return (point) => [axisPosition(x.scale, point[0]!), axisPosition(y.scale, point[1]!), ...point.slice(2)];
+}
+
+type PlacedSeries = {
+  data: unknown[];
+  renderItem?: (params: never, api: RenderApi) => unknown;
+};
+function placed<T extends PlacedSeries>(series: T, at: Place | null): T {
+  if (!at) return series;
+  const draw = series.renderItem;
+  return {
+    ...series,
+    data: series.data.map((item) => Array.isArray(item)
+      ? at(item as number[])
+      : { ...(item as object), coords: (item as { coords: number[][] }).coords.map(at) }),
+    ...(draw ? {
+      renderItem: (params: never, api: RenderApi) => draw(params, {
+        coord: (point) => api.coord(at(point)), value: (dimension) => api.value(dimension), visual: (key) => api.visual(key),
+      }),
+    } : {}),
+  };
+}
+
 function selectedCoordinates(plan: RenderPlan, selected: readonly string[]) {
   const wanted = new Set(selected);
-  const found: Coordinate[] = [];
-  for (const mark of planMarks(plan)) {
+  const found: number[][] = [];
+  for (const panel of plan.panels) for (const mark of panel.marks) {
     if (mark.kind !== "points") continue;
+    const at = placement(panel, mark) ?? ((point: number[]) => point);
     mark.sourceRefs.forEach((id, index) => {
-      if (wanted.has(id)) found.push([mark.x[index]!, mark.y[index]!]);
+      if (wanted.has(id)) found.push(at([mark.x[index]!, mark.y[index]!]));
     });
   }
   return found;
@@ -274,11 +306,12 @@ function markSeries(mark: RenderPlanMark) {
 function axisOption(
   axis: PlanAxis, zoomed: boolean, nameGap: number, gridIndex: number, colors: PlanColors, rotate?: number,
 ) {
-  const names = new Map(axis.ticks.map((tick) => [tick.value, tick.label]));
-  // Plan ticks hold for the full view. A zoomed value axis has to label what is on screen.
+  const at = (value: number) => axisPosition(axis.scale, value);
+  const names = new Map(axis.ticks.map((tick) => [at(tick.value), tick.label]));
+  // Plan ticks hold for the full view. A zoomed linear axis has to label what is on screen.
   const customValues = zoomed && axis.scale === "linear"
-    ? undefined : axis.ticks.map((tick) => tick.value);
-  const [start, end] = axis.domain;
+    ? undefined : axis.ticks.map((tick) => at(tick.value));
+  const [start, end] = axis.domain.map(at) as [number, number];
   return {
     type: "value", gridIndex, min: Math.min(start, end), max: Math.max(start, end), inverse: start > end,
     name: axis.title,
@@ -288,7 +321,7 @@ function axisOption(
     axisLabel: {
       color: colors.text, customValues, showMinLabel: true, showMaxLabel: true,
       rotate: rotate ?? (axis.scale === "category" && axis.ticks.length > LONG_AXIS_TICKS ? 30 : 0),
-      formatter: (value: number) => names.get(value) ?? shown(value),
+      formatter: (value: number) => names.get(value) ?? shown(axisValue(axis.scale, value)),
     },
     splitLine: { show: axis.grid, lineStyle: { color: colors.grid } },
   };
@@ -422,7 +455,9 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
       text: [shown(mark.colorDomain[1]), shown(mark.colorDomain[0])], textStyle: { color: colors.text },
     }] : []),
     series: [
-      ...seriesIn.map(({ mark, index }) => ({ ...markSeries(mark), xAxisIndex: index, yAxisIndex: yAxisIndex(mark, index) })),
+      ...seriesIn.map(({ mark, index }) => ({
+        ...placed(markSeries(mark) as PlacedSeries, placement(panels[index]!, mark)), xAxisIndex: index, yAxisIndex: yAxisIndex(mark, index),
+      })),
       {
         id: "selection", type: "scatter", silent: true, symbol: "circle", symbolSize: 16, z: 6,
         data: selectedCoordinates(plan, selected),
