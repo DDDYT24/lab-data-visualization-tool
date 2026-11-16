@@ -41,9 +41,6 @@ export function ExportStep({ onBack, active = true }: { onBack: () => void; acti
   const updateExport = useWorkspaceStore((state) => state.updateExport);
   const chartSpecKey = JSON.stringify(chartSpec);
   const [preparedSpecKey, setPreparedSpecKey] = useState<string | null>(null);
-  const excludedFindingIds = Object.entries(issueActions)
-    .filter(([, action]) => ["exclude", "remove"].includes(action))
-    .map(([findingId]) => findingId);
   const analysisQuery = useQuery({
     queryKey: [
       "chart-analysis",
@@ -109,8 +106,6 @@ export function ExportStep({ onBack, active = true }: { onBack: () => void; acti
           <ChartCanvas
             active={active}
             analysis={analysisQuery.data}
-            excludedFindingIds={excludedFindingIds}
-            findings={quality.findings}
             preview={preview}
             spec={chartSpec}
           />

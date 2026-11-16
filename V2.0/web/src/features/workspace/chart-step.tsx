@@ -86,9 +86,6 @@ export function ChartStep({
         column.field !== chartSpec.xAxis.field &&
         !chartSpec.series.some((series) => series.field === column.field),
     ) ?? [];
-  const excludedFindingIds = Object.entries(issueActions)
-    .filter(([, action]) => ["exclude", "remove"].includes(action))
-    .map(([findingId]) => findingId);
   const analysisKey = analysisCacheKey(chartSpec, issueActions);
   const analysisQuery = useQuery({
     queryKey: ["chart-analysis", projectId, analysisKey, planAppearanceKey(chartSpec)],
@@ -470,8 +467,6 @@ export function ChartStep({
           <ChartCanvas
             active={active}
             analysis={analysisQuery.data}
-            excludedFindingIds={excludedFindingIds}
-            findings={quality.findings}
             preview={preview}
             spec={chartSpec}
           />
