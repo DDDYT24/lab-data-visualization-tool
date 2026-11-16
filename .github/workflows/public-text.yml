@@ -7,9 +7,9 @@ name: Public text
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/**"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "release/**"]
     types: [opened, synchronize, reopened, edited]
 
 permissions:
