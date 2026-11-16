@@ -1,14 +1,25 @@
-"""Run the tracked V2.2 fixture matrix and print a machine-readable JSON report."""
+"""Run the tracked fixture matrix and the RenderPlan parity gate; print a JSON report.
+
+Parity: for every readable fixture and every classic chart kind, the preview plan equals the
+export plan apart from reduced marks, a second build gives the same plan, and the export ends
+on exactly the limits, ticks and labels the plan states. Exit status 1 on any failure.
+"""
 
 from __future__ import annotations
 
 import argparse
 import copy
 import json
+import sys
+import warnings
+from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from matplotlib.figure import Figure
 
 from labviz_api.models import ChartSpec
 from labviz_api.processing import (
@@ -17,15 +28,25 @@ from labviz_api.processing import (
     apply_chart_decisions,
     build_preview,
     build_quality_report,
+    classic_plan,
     load_dataframe,
     render_chart,
     validate_upload,
 )
+from labviz_api.render_plan import RenderPlan
 
 ROOT = Path(__file__).resolve().parents[1] / "samples" / "v22"
 DEFAULT_HISTORICAL_ROOT = (
-    Path(__file__).resolve().parents[3] / "outputs" / "labviz-test-data-20260907"
+    Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "historical-v21"
 )
+DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".json", ".xlsx"}
+SERIES_VARIANTS: dict[str, dict[str, Any]] = {
+    "plain": {},
+    "fit": {"fitting": {"model": "linear", "confidenceBand": True, "showEquation": True}},
+    "error": {"uncertainty": {"mode": "standard-deviation"}},
+}
+# Coordinates a reduced preview mark may hold fewer of than the export.
+REDUCED_FIELDS = {"x", "y", "x0", "x1", "y0", "y1", "values", "decimation"}
 
 
 def _field(entry: dict[str, Any], role: str) -> dict[str, Any] | None:
@@ -347,13 +368,197 @@ def _historical_matrix(root: Path) -> dict[str, Any]:
     }
 
 
+def plan_differences(preview: dict[str, Any], export: dict[str, Any]) -> list[str]:
+    """Where a preview plan departs from its export plan, apart from what reduction may drop."""
+    found = [
+        f"plan {key}"
+        for key in sorted(set(preview) | set(export))
+        if key not in {"panels", "planHash"} and preview.get(key) != export.get(key)
+    ]
+    if len(preview["panels"]) != len(export["panels"]):
+        return [*found, "panel count"]
+    for shown, full in zip(preview["panels"], export["panels"], strict=True):
+        name = f"panel {full['id']}"
+        found += [
+            f"{name} {key}"
+            for key in sorted(set(shown) | set(full))
+            if key != "marks" and shown.get(key) != full.get(key)
+        ]
+        if [m["id"] for m in shown["marks"]] != [m["id"] for m in full["marks"]]:
+            found.append(f"{name} mark ids")
+            continue
+        for small, whole in zip(shown["marks"], full["marks"], strict=True):
+            label = f"{name} mark {whole['id']}"
+            reduced = small.get("decimation")
+            if reduced is None:
+                if small != whole:
+                    found.append(label)
+                continue
+            if any(small.get(k) != whole.get(k) for k in set(whole) - REDUCED_FIELDS):
+                found.append(f"{label} style")
+            if whole.get("decimation") is not None or reduced["drawn"] >= reduced["input"]:
+                found.append(f"{label} decimation")
+    return found
+
+
+@contextmanager
+def drawn_axes() -> Iterator[list[dict[str, Any]]]:
+    """Record the limits, ticks and labels of every axis Matplotlib saves."""
+    original = Figure.savefig
+    drawn: list[dict[str, Any]] = []
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        for axis in figure.axes:
+            if axis.get_label() == "<colorbar>":
+                continue
+            drawn.append(
+                {
+                    "x": axis.get_xlim(),
+                    "y": axis.get_ylim(),
+                    "z": axis.get_zlim() if hasattr(axis, "get_zlim") else None,
+                    "yticks": [float(value) for value in axis.get_yticks()],
+                    "xlabels": [label.get_text() for label in axis.get_xticklabels()],
+                }
+            )
+        return original(figure, *args, **kwargs)
+
+    Figure.savefig = capture  # type: ignore[method-assign,assignment]
+    try:
+        yield drawn
+    finally:
+        Figure.savefig = original  # type: ignore[method-assign]
+
+
+def drawing_differences(drawn: dict[str, Any], panel: dict[str, Any]) -> list[str]:
+    axes = panel["axes"]
+
+    def close(a: float, b: float) -> bool:
+        return abs(a - b) <= 1e-9 * max(1.0, abs(a))
+
+    found = [
+        f"{name} limits"
+        for name in ("x", "y", "z")
+        if axes[name] is not None
+        and not all(close(a, b) for a, b in zip(drawn[name], axes[name]["domain"], strict=True))
+    ]
+    if drawn["yticks"] != [tick["value"] for tick in axes["y"]["ticks"]]:
+        found.append("y ticks")
+    if drawn["xlabels"] != [tick["label"] for tick in axes["x"]["ticks"]]:
+        found.append("x labels")
+    return found
+
+
+def parity_charts(frame: pd.DataFrame, title: str) -> Iterator[tuple[str, ChartSpec]]:
+    numeric = [str(c) for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])]
+    if not numeric:
+        return
+    y = numeric[-1]
+    x = next((str(c) for c in frame.columns if str(c) != y), y)
+
+    def spec(kind: str, x_field: str, y_field: str, series: list[str], **extra: Any) -> ChartSpec:
+        return ChartSpec.model_validate(
+            {
+                "schemaVersion": 1,
+                "type": kind,
+                "title": title,
+                "xAxis": {"field": x_field, "title": x_field, "unit": ""},
+                "yAxis": {"field": y_field, "title": y_field, "unit": ""},
+                "series": [{"field": f, "label": f, "color": "#2563EB"} for f in series],
+                "panelCount": 1,
+                "export": {
+                    "format": "png",
+                    "dpi": 300,
+                    "sizePreset": "single-column",
+                    "grayscalePreview": False,
+                },
+                **extra,
+            }
+        )
+
+    yield "histogram", spec("histogram", x, y, [y])
+    yield "box", spec("box", x, y, [y])
+    for kind in ("bar", "line", "scatter"):
+        for name, extra in SERIES_VARIANTS.items():
+            yield f"{kind}-{name}", spec(kind, x, y, [y], **extra)
+    if len(numeric) >= 2:
+        yield "heatmap", spec("heatmap", numeric[0], numeric[1], numeric[:8])
+    if len(numeric) >= 3:
+        yield "surface3d", spec("surface3d", numeric[0], numeric[2], numeric[1:3])
+
+
+def parity_case(frame: pd.DataFrame, chart: ChartSpec) -> str | list[str]:
+    """ "pass", "refused" for data the chart kind cannot use, or the differences found."""
+    try:
+        derived = analyze_chart(frame, chart)
+        export = classic_plan(frame, chart, derived)
+        preview = classic_plan(frame, chart, derived, detail="preview")
+    except ProcessingError:
+        return "refused"
+    with warnings.catch_warnings(), drawn_axes() as drawn:
+        warnings.simplefilter("ignore")
+        try:
+            render_chart(frame, chart)
+        except ProcessingError:
+            return "refused" if export is None else ["export refused a planned chart"]
+    if export is None or preview is None:
+        return ["export drew a chart that has no plan"]
+    for plan in (export, preview):
+        RenderPlan.model_validate_json(json.dumps(plan))
+    found = plan_differences(preview, export)
+    again = classic_plan(frame, chart, analyze_chart(frame, chart))
+    if again is None or again["planHash"] != export["planHash"]:
+        found.append("second build differs")
+    for axis, panel in zip(drawn, export["panels"], strict=False):
+        found += drawing_differences(axis, panel)
+    return found or "pass"
+
+
+def parity_matrix(historical_root: Path) -> dict[str, Any]:
+    manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+    files = [
+        (ROOT / e["filename"], e.get("sheetName"), e.get("headerRow", 1))
+        for e in manifest["examples"]
+    ]
+    files += [
+        (path, None, 1)
+        for path in sorted(historical_root.rglob("*"))
+        if path.suffix.lower() in DATA_SUFFIXES and not path.name.startswith(("数据", "图表"))
+    ]
+    counts: Counter[str] = Counter()
+    failures = []
+    for path, sheet, header in files:
+        try:
+            frame = load_dataframe(
+                path.read_bytes(), path.name, requested_sheet_name=sheet, header_row=header
+            )[0]
+        except ProcessingError:
+            counts["unreadable"] += 1
+            continue
+        for label, chart in parity_charts(frame, path.stem):
+            outcome = parity_case(frame, chart)
+            if isinstance(outcome, list):
+                counts[f"{label} fail"] += 1
+                failures.append({"file": path.name, "chart": label, "differences": outcome})
+            else:
+                counts[f"{label} {outcome}"] += 1
+    passed = sum(count for key, count in counts.items() if key.endswith(" pass"))
+    return {
+        "status": "pass" if not failures and passed else "fail",
+        "files": len(files),
+        "passed": passed,
+        "failed": len(failures),
+        "counts": dict(sorted(counts.items())),
+        "failures": failures,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--historical-root",
         type=Path,
         default=DEFAULT_HISTORICAL_ROOT,
-        help="Ignored local path containing the synthetic V2.1 23-dataset package.",
+        help="Folder of the synthetic V2.1 23-dataset package (tracked under tests/fixtures).",
     )
     parser.add_argument(
         "--output",
@@ -371,6 +576,7 @@ def main() -> None:
         "public": [_public_case(entry) for entry in public],
         "edge": [_edge_case(entry) for entry in edges],
         "historicalV21": _historical_matrix(args.historical_root.resolve()),
+        "planParity": parity_matrix(args.historical_root.resolve()),
     }
     encoded = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
@@ -378,7 +584,13 @@ def main() -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(f"{encoded}\n", encoding="utf-8")
     print(encoded)
-    if report["historicalV21"]["status"] == "fail":
+    parity = report["planParity"]
+    print(
+        f"plan parity: {parity['passed']} passed, {parity['failed']} failed, "
+        f"{parity['files']} files",
+        file=sys.stderr,
+    )
+    if report["historicalV21"]["status"] != "pass" or parity["status"] != "pass":
         raise SystemExit(1)
 
 

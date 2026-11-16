@@ -1,0 +1,74 @@
+[
+  {
+    "time_min": 0,
+    "response": 1,
+    "enabled": true,
+    "label": "含逗号,双引号\"与换行\n的说明"
+  },
+  {
+    "time_min": 1,
+    "response": 3,
+    "enabled": false,
+    "label": "样本2"
+  },
+  {
+    "time_min": 2,
+    "response": 5,
+    "enabled": true,
+    "label": "样本3"
+  },
+  {
+    "time_min": 3,
+    "response": 7,
+    "enabled": false,
+    "label": "样本4"
+  },
+  {
+    "time_min": 4,
+    "response": 9,
+    "enabled": true,
+    "label": "样本5"
+  },
+  {
+    "time_min": 5,
+    "response": 11,
+    "enabled": false,
+    "label": "样本6"
+  },
+  {
+    "time_min": 6,
+    "response": 13,
+    "enabled": true,
+    "label": "样本7"
+  },
+  {
+    "time_min": 7,
+    "response": 15,
+    "enabled": false,
+    "label": "样本8"
+  },
+  {
+    "time_min": 8,
+    "response": 17,
+    "enabled": true,
+    "label": "样本9"
+  },
+  {
+    "time_min": 9,
+    "response": 19,
+    "enabled": false,
+    "label": "样本10"
+  },
+  {
+    "time_min": 10,
+    "response": 21,
+    "enabled": true,
+    "label": "样本11"
+  },
+  {
+    "time_min": 11,
+    "response": 23,
+    "enabled": false,
+    "label": "样本12"
+  }
+]

@@ -3,3 +3,5 @@ V2.0/packaging/windows/licenses/NODE-LICENSE.txt -whitespace
 # Synthetic example SHA-256 values describe exact bytes on every platform.
 V2.0/api/samples/v22/** -text -whitespace
 V2.0/contracts/fixtures/v23/** -text -whitespace
+# Edge fixtures are broken on purpose (empty, non-UTF-8, corrupt JSON); keep their bytes.
+V2.0/api/tests/fixtures/historical-v21/** -text -whitespace

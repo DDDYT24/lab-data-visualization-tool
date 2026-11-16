@@ -1,0 +1,284 @@
+[
+  {
+    "filePrefix": "01",
+    "chart": {
+      "schemaVersion": 1,
+      "type": "line",
+      "title": "Synthetic line",
+      "xAxis": {
+        "field": "time_min",
+        "title": "time_min",
+        "unit": ""
+      },
+      "yAxis": {
+        "field": "response_A",
+        "title": "response_A",
+        "unit": ""
+      },
+      "series": [
+        {
+          "field": "response_A",
+          "label": "response_A",
+          "color": "#2563EB"
+        },
+        {
+          "field": "response_B",
+          "label": "response_B",
+          "color": "#DC2626"
+        }
+      ],
+      "panelCount": 1,
+      "export": {
+        "format": "pdf",
+        "dpi": 300,
+        "sizePreset": "custom",
+        "grayscalePreview": false,
+        "width": 120,
+        "height": 85,
+        "unit": "mm"
+      }
+    }
+  },
+  {
+    "filePrefix": "04",
+    "chart": {
+      "schemaVersion": 1,
+      "type": "scatter",
+      "title": "Synthetic scatter",
+      "xAxis": {
+        "field": "x",
+        "title": "x",
+        "unit": ""
+      },
+      "yAxis": {
+        "field": "quadratic_y",
+        "title": "quadratic_y",
+        "unit": ""
+      },
+      "series": [
+        {
+          "field": "quadratic_y",
+          "label": "quadratic_y",
+          "color": "#2563EB"
+        }
+      ],
+      "panelCount": 1,
+      "export": {
+        "format": "pdf",
+        "dpi": 300,
+        "sizePreset": "custom",
+        "grayscalePreview": false,
+        "width": 120,
+        "height": 85,
+        "unit": "mm"
+      },
+      "fitting": {
+        "model": "polynomial",
+        "polynomialOrder": 2
+      }
+    }
+  },
+  {
+    "filePrefix": "03",
+    "chart": {
+      "schemaVersion": 1,
+      "type": "bar",
+      "title": "Synthetic bar",
+      "xAxis": {
+        "field": "time_min",
+        "title": "time_min",
+        "unit": ""
+      },
+      "yAxis": {
+        "field": "response",
+        "title": "response",
+        "unit": ""
+      },
+      "series": [
+        {
+          "field": "response",
+          "label": "response",
+          "color": "#2563EB"
+        }
+      ],
+      "panelCount": 1,
+      "export": {
+        "format": "pdf",
+        "dpi": 300,
+        "sizePreset": "custom",
+        "grayscalePreview": false,
+        "width": 120,
+        "height": 85,
+        "unit": "mm"
+      },
+      "uncertainty": {
+        "mode": "standard-deviation"
+      }
+    }
+  },
+  {
+    "filePrefix": "06",
+    "chart": {
+      "schemaVersion": 1,
+      "type": "histogram",
+      "title": "Synthetic histogram",
+      "xAxis": {
+        "field": "sample_id",
+        "title": "sample_id",
+        "unit": ""
+      },
+      "yAxis": {
+        "field": "symmetric",
+        "title": "symmetric",
+        "unit": ""
+      },
+      "series": [
+        {
+          "field": "symmetric",
+          "label": "symmetric",
+          "color": "#2563EB"
+        }
+      ],
+      "panelCount": 1,
+      "export": {
+        "format": "pdf",
+        "dpi": 300,
+        "sizePreset": "custom",
+        "grayscalePreview": false,
+        "width": 120,
+        "height": 85,
+        "unit": "mm"
+      }
+    }
+  },
+  {
+    "filePrefix": "06",
+    "chart": {
+      "schemaVersion": 1,
+      "type": "box",
+      "title": "Synthetic box",
+      "xAxis": {
+        "field": "sample_id",
+        "title": "sample_id",
+        "unit": ""
+      },
+      "yAxis": {
+        "field": "symmetric",
+        "title": "symmetric",
+        "unit": ""
+      },
+      "series": [
+        {
+          "field": "symmetric",
+          "label": "symmetric",
+          "color": "#2563EB"
+        },
+        {
+          "field": "shifted",
+          "label": "shifted",
+          "color": "#DC2626"
+        }
+      ],
+      "panelCount": 1,
+      "export": {
+        "format": "pdf",
+        "dpi": 300,
+        "sizePreset": "custom",
+        "grayscalePreview": false,
+        "width": 120,
+        "height": 85,
+        "unit": "mm"
+      }
+    }
+  },
+  {
+    "filePrefix": "05",
+    "chart": {
+      "schemaVersion": 1,
+      "type": "heatmap",
+      "title": "Synthetic heatmap",
+      "xAxis": {
+        "field": "x",
+        "title": "x",
+        "unit": ""
+      },
+      "yAxis": {
+        "field": "x",
+        "title": "x",
+        "unit": ""
+      },
+      "series": [
+        {
+          "field": "x",
+          "label": "x",
+          "color": "#2563EB"
+        },
+        {
+          "field": "positive",
+          "label": "positive",
+          "color": "#DC2626"
+        },
+        {
+          "field": "negative",
+          "label": "negative",
+          "color": "#16A34A"
+        },
+        {
+          "field": "orthogonal",
+          "label": "orthogonal",
+          "color": "#9333EA"
+        }
+      ],
+      "panelCount": 1,
+      "export": {
+        "format": "pdf",
+        "dpi": 300,
+        "sizePreset": "custom",
+        "grayscalePreview": false,
+        "width": 120,
+        "height": 85,
+        "unit": "mm"
+      }
+    }
+  },
+  {
+    "filePrefix": "07",
+    "chart": {
+      "schemaVersion": 1,
+      "type": "surface3d",
+      "title": "Synthetic surface3d",
+      "xAxis": {
+        "field": "x",
+        "title": "x",
+        "unit": ""
+      },
+      "yAxis": {
+        "field": "y",
+        "title": "y",
+        "unit": ""
+      },
+      "series": [
+        {
+          "field": "y",
+          "label": "y",
+          "color": "#2563EB"
+        },
+        {
+          "field": "z",
+          "label": "z",
+          "color": "#DC2626"
+        }
+      ],
+      "panelCount": 1,
+      "export": {
+        "format": "pdf",
+        "dpi": 300,
+        "sizePreset": "custom",
+        "grayscalePreview": false,
+        "width": 120,
+        "height": 85,
+        "unit": "mm"
+      }
+    }
+  }
+]
