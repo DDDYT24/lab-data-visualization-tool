@@ -197,6 +197,8 @@ def test_legacy_recipe_replacement_and_output(tmp_path: Path, kind: str) -> None
         output = client.post(base + "/outputs/preview", json={"boardId": saved.json()["boardId"]})
         assert output.status_code == 200, output.text
         assert output.json()["manifest"]["panels"][0]["sourceCsvRows"] == 4
+        for chart in client.get(base + "/charts").json()["charts"]:
+            assert client.get(base + f"/charts/{chart['id']}/plan").status_code == 200
 
 
 def test_schema_files_match_models() -> None:

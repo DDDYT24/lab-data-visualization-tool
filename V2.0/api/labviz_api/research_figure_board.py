@@ -275,7 +275,7 @@ def insert_artifacts(
     artifacts: dict[str, bytes],
     scene_json: str,
 ) -> None:
-    """Store a board's three exports and record their digests beside the scene."""
+    """Store a board's exports and panel plans; ``plan:A`` keys carry the plans."""
     digests = [
         remember(connection, store.artifacts, artifacts[kind], media_type=MEDIA_TYPES[kind])
         for kind in ARTIFACT_KINDS
@@ -285,6 +285,17 @@ def insert_artifacts(
         "(board_id,svg_sha256,png_sha256,pdf_sha256,scene_json) VALUES (?,?,?,?,?)",
         (board_id, *digests, scene_json),
     )
+    for key, payload in artifacts.items():
+        if key.startswith("plan:"):
+            connection.execute(
+                "INSERT INTO research_figure_panel_plans (board_id,panel,plan_sha256) "
+                "VALUES (?,?,?)",
+                (
+                    board_id,
+                    key.removeprefix("plan:"),
+                    remember(connection, store.artifacts, payload, media_type=MEDIA_TYPES["json"]),
+                ),
+            )
 
 
 def artifact_row(
@@ -330,6 +341,19 @@ def artifact_row(
     elif field != "scene_json":
         artifact[field] = store.artifacts.read(artifact[field])
     return artifact
+
+
+def read_panel_plan(store: ResearchStore, project_id: str, board_id: str, panel: str) -> bytes:
+    with store.connect() as connection:
+        row = connection.execute(
+            "SELECT p.plan_sha256 FROM research_figure_panel_plans p "
+            "JOIN research_figure_boards b ON b.id=p.board_id "
+            "WHERE b.project_id=? AND b.id=? AND p.panel=?",
+            (project_id, board_id, panel),
+        ).fetchone()
+    if row is None:
+        raise PreparationError("figure-plan-missing", "This panel has no render plan.")
+    return store.artifacts.read(row["plan_sha256"])
 
 
 def scene_row_references(scene: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:

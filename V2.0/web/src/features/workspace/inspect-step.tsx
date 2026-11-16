@@ -31,7 +31,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -90,6 +90,7 @@ export function InspectStep({ onBack, onContinue, active = true }: { onBack: () 
   const selectedAction = selectedFinding
     ? (issueActions[selectedFinding.id] ?? "")
     : "";
+  const queryClient = useQueryClient();
   const decisionMutation = useMutation({
     mutationFn: (actions: Record<string, IssueAction>) => {
       if (!projectId) throw new Error("No project is open.");
@@ -101,6 +102,9 @@ export function InspectStep({ onBack, onContinue, active = true }: { onBack: () 
         })),
       );
     },
+    // The chart's plan is computed from the saved decisions: one fetched before this save landed
+    // would draw rows that are now excluded.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["chart-analysis", projectId] }),
   });
   const rangeMutation = useMutation({
     mutationFn: () => {

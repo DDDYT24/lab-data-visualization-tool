@@ -277,6 +277,13 @@ const quality = {
   ],
 };
 
+const MOCK_SERIES_POINTS = [
+  { x: 0, y: 1 },
+  { x: 1, y: 2.2 },
+  { x: 2, y: 3.1 },
+  { x: 3, y: 4.3 },
+];
+
 const createSurfacePoints = (side: number) => Array.from({ length: side * side }, (_, index) => {
   const x = -5 + (index % side) * 0.5;
   const y = -5 + Math.floor(index / side) * 0.5;
@@ -284,6 +291,112 @@ const createSurfacePoints = (side: number) => Array.from({ length: side * side }
 });
 
 const surfacePoints = createSurfacePoints(21);
+
+// The browser draws only RenderPlans, so the mock API answers with small plans of the same
+// shape the real API sends. The values are made up for the tests, not computed statistics.
+type MockPoint = { x: number; y: number };
+type MockFit = { points: Array<{ x: number; y: number; lower: number | null; upper: number | null }> } | null;
+const MOCK_PALETTES = {
+  correlation: ["#3b4cc0", "#dddddd", "#b40426"],
+  surface: ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"],
+};
+
+function mockAxis(values: number[], title = "") {
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const pad = (high - low || 1) * 0.05;
+  const [start, end] = [low - pad, high + pad];
+  // Round ticks like the real plans, so mock charts look like real ones in screenshots.
+  const unit = 10 ** Math.floor(Math.log10((end - start) / 6));
+  const step = [1, 2, 5, 10].map((m) => m * unit).find((s) => (end - start) / s <= 6) ?? 10 * unit;
+  const first = Math.ceil(start / step);
+  const count = Math.floor(end / step) - first + 1;
+  return {
+    scale: "linear", domain: [start, end], title, niceRule: "nice-1-2-5-v1", grid: true,
+    ticks: Array.from({ length: count }, (_, i) => {
+      const value = Number(((first + i) * step).toPrecision(12));
+      return { value, label: String(value) };
+    }),
+  };
+}
+
+function mockCategoryAxis(labels: string[], domain: [number, number]) {
+  return {
+    scale: "category", domain, title: "", niceRule: null, grid: false,
+    ticks: labels.map((label, index) => ({ value: index, label })),
+  };
+}
+
+export function mockPlan(
+  chart: ObservedChartSpec,
+  points: MockPoint[],
+  fit: MockFit,
+  surface: Array<{ x: number; y: number; z: number }> = [],
+) {
+  const color = (chart.series[0]?.color ?? "#2563EB").toLowerCase();
+  const group = "Sample A";
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const base = { id: `${chart.type}:0`, group, color };
+  let marks: Array<Record<string, unknown>> = [];
+  const titled = (axis: { title?: string; unit?: string } | undefined) =>
+    axis?.unit ? `${axis.title} (${axis.unit})` : axis?.title ?? "";
+  const xTitle = titled(chart.xAxis);
+  const yTitle = titled(chart.yAxis);
+  let axes: Record<string, unknown> = { x: mockAxis(xs, xTitle), y: mockAxis([0, ...ys], yTitle), y2: null, z: null };
+  let symbol = "marker";
+  if (chart.type === "surface3d") {
+    const gridX = [...new Set(surface.map((point) => point.x))].sort((a, b) => a - b);
+    const gridY = [...new Set(surface.map((point) => point.y))].sort((a, b) => a - b);
+    const cells = new Map(surface.map((point) => [`${point.x}:${point.y}`, point.z]));
+    const heights = surface.map((point) => point.z);
+    marks = [{
+      kind: "mesh", id: "surface:1", group: "Z", shape: "surface", x: gridX, y: gridY,
+      values: gridY.map((y) => gridX.map((x) => cells.get(`${x}:${y}`) ?? null)),
+      colorDomain: [Math.min(...heights), Math.max(...heights)], palette: MOCK_PALETTES.surface,
+      colorTitle: "", decimation: null,
+    }];
+    axes = { x: mockAxis(gridX, "X"), y: mockAxis(gridY, "Y"), y2: null, z: mockAxis(heights, "Z") };
+  } else if (chart.type === "heatmap") {
+    const labels = [group, "Sample B"];
+    marks = [{
+      kind: "mesh", id: "heatmap:1", group: "Correlation", shape: "cells", x: [0, 1], y: [0, 1],
+      values: [[1, 0.98], [0.98, 1]], colorDomain: [-1, 1], palette: MOCK_PALETTES.correlation,
+      colorTitle: "Correlation", decimation: null,
+    }];
+    axes = { x: mockCategoryAxis(labels, [-0.5, 1.5]), y: mockCategoryAxis(labels, [1.5, -0.5]), y2: null, z: null };
+  } else if (chart.type === "box") {
+    marks = [{ ...base, color: "#000000", kind: "box", medianColor: "#ff7f0e", width: 1, position: 1, halfWidth: 0.25, low: 1, q1: 2.2, median: 2.65, q3: 3.1, high: 4.3, outliers: [] }];
+    axes = { x: mockCategoryAxis(["", group], [0.5, 1.5]), y: mockAxis(ys, yTitle), y2: null, z: null };
+  } else if (chart.type === "histogram") {
+    marks = [{ ...base, kind: "rects", opacity: 0.55, width: 1.5, shape: "stairs", axis: "y", x0: [1, 2, 3], x1: [2, 3, 4.3], y0: [0, 0, 0], y1: [1, 2, 1], decimation: null }];
+    axes = { x: mockAxis([1, 4.3], yTitle), y: mockAxis([0, 2], "Frequency"), y2: null, z: null };
+  } else if (chart.type === "bar") {
+    marks = [{ ...base, kind: "rects", opacity: 0.85, width: 1.5, shape: "bars", axis: "y", x0: xs.map((x) => x - 0.4), x1: xs.map((x) => x + 0.4), y0: xs.map(() => 0), y1: ys, decimation: null }];
+  } else if (chart.type === "scatter") {
+    marks = [{ ...base, kind: "points", marker: "o", size: 4, opacity: 0.8, axis: "y", x: xs, y: ys, sourceRefs: [], decimation: null }];
+  } else {
+    symbol = "line";
+    marks = [{ ...base, kind: "polyline", width: 1.5, lineStyle: "solid", markerSize: 4, axis: "y", x: xs, y: ys, decimation: null }];
+  }
+  const legend = ["surface3d", "heatmap", "box"].includes(chart.type) ? [] : [{ label: group, color, symbol }];
+  if (fit && legend.length) {
+    marks.push({ ...base, id: "fit:0", group: `${group} fit`, kind: "polyline", width: 1.5, lineStyle: "dashed", markerSize: 0, axis: "y", x: fit.points.map((p) => p.x), y: fit.points.map((p) => p.y), decimation: null });
+    legend.push({ label: `${group} fit`, color, symbol: "dashed" });
+    if (chart.fitting?.confidenceBand) {
+      const banded = fit.points.filter((p) => p.lower !== null && p.upper !== null);
+      marks.push({ ...base, id: "band:0", kind: "band", opacity: 0.15, axis: "y", x: banded.map((p) => p.x), lower: banded.map((p) => p.lower), upper: banded.map((p) => p.upper) });
+    }
+  }
+  return {
+    schemaVersion: 1, contract: "render-plan-v1", planHash: "0".repeat(64),
+    source: { kind: chart.type, resultSha256: "1".repeat(64), algorithmVersion: "classic-charts-v1" },
+    geometry: { contract: "chart-render-v2", axis: "nice-1-2-5-v1", jitter: null, density: null, histogram: null, quantile: null, decimation: null },
+    rendering: { pointRendering: "auto", rasterizePoints: false },
+    panels: [{ id: "1", title: "Chart", axes, marks, legend }],
+    disclosures: [],
+  };
+}
 
 const surfaceChart = {
   ...chart,
@@ -325,8 +438,9 @@ const surfaceQuality = {
 
 export type ObservedChartSpec = {
   type: string;
-  xAxis: { field: string };
-  series: Array<{ field: string }>;
+  xAxis: { field: string; title?: string; unit?: string };
+  yAxis?: { field: string; title?: string; unit?: string };
+  series: Array<{ field: string; color?: string }>;
   fitting?: {
     model?: string;
     fitMethod?: string;
@@ -821,8 +935,15 @@ export async function installMockApi(
             surfacePoints: activeSurfacePoints,
           },
           recommendations: [],
+          plan: activeSurfaceDiagnostic.status === "valid" ? mockPlan(body.chart, [], null, activeSurfacePoints) : null,
         });
       }
+      const mockFit: MockFit = model === "none" ? null : {
+        points: [
+          { x: 0, y: 1, lower: 0.8, upper: 1.2 },
+          { x: 3, y: 4.3, lower: 4.1, upper: 4.5 },
+        ],
+      };
       return json(route, {
         apiVersion: "v1",
         projectId: PROJECT_ID,
@@ -831,12 +952,7 @@ export async function installMockApi(
             field: "response",
             label: "Sample A",
             panel: 1,
-            points: [
-              { x: 0, y: 1 },
-              { x: 1, y: 2.2 },
-              { x: 2, y: 3.1 },
-              { x: 3, y: 4.3 },
-            ],
+            points: MOCK_SERIES_POINTS,
             fit:
               model === "none"
                 ? null
@@ -920,6 +1036,9 @@ export async function installMockApi(
           surfaceDiagnostics: [],
           surfacePoints: [],
         },
+        plan: body.chart.type === "surface3d"
+          ? null
+          : mockPlan(body.chart, MOCK_SERIES_POINTS, mockFit),
         recommendations: options.dataset === "surface"
           ? [
               {
@@ -1084,6 +1203,14 @@ export async function installMockApi(
         updatedAt: UPDATED_AT,
         chart,
         preview,
+        analysis: {
+          apiVersion: "v1",
+          projectId: PROJECT_ID,
+          series: [],
+          preview: { histograms: [], boxes: [], heatmaps: [], surfaceDiagnostics: [], surfacePoints: [] },
+          recommendations: [],
+          plan: mockPlan(chart as ObservedChartSpec, MOCK_SERIES_POINTS, null),
+        },
         downloads: {
           png: PNG_DATA_URL,
           svg: null,

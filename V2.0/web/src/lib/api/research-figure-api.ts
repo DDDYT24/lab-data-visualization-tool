@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   figureInteractionSchema, figureSourceSchema, figureBoardSchema, figureBoardHistorySchema, figureBoardSpecSchema, type FigureBoardSpec,
 } from "@/domain/research-figure-board";
+import { renderPlanSchema } from "@/domain/render-plan";
 import { request } from "./labviz-api";
 
 const path = (id: string) => `/projects/${encodeURIComponent(id)}/research/figure-boards`;
@@ -10,6 +11,7 @@ export const researchFigureApi = {
   capture(id: string, panel: number, sampleField: string) { return request(`/projects/${encodeURIComponent(id)}/research/figure-sources?panel=${panel}${sampleField ? `&sampleField=${encodeURIComponent(sampleField)}` : ""}`, z.object({ id: z.string() }), { method: "POST" }); },
   artifact(id: string, board: string, format: string, download = false, preview = false) { return `/api/v1${path(id)}/${encodeURIComponent(board)}/artifact/${format}?download=${download}&preview=${preview}`; },
   interaction(id: string, board: string, params: URLSearchParams, signal?: AbortSignal) { return request(`${path(id)}/${encodeURIComponent(board)}/interaction?${params}`, figureInteractionSchema, { signal }); },
+  panelPlan(id: string, board: string, panel: string) { return request(`${path(id)}/${encodeURIComponent(board)}/plans/${panel}`, renderPlanSchema); },
   list(id: string) { return request(path(id), figureBoardHistorySchema); },
   get(id: string, boardId: string) {
     return request(path(id) + "/" + encodeURIComponent(boardId), figureBoardSchema);

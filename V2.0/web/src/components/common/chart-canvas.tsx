@@ -2,14 +2,10 @@
 
 import { Box, Button, Skeleton, Stack, Typography, useTheme } from "@mui/material";
 import dynamic from "next/dynamic";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
-import type {
-  ChartAnalysis,
-  DataPreview,
-  QualityFinding,
-} from "@/domain/api-contract";
+import type { ChartAnalysis, DataPreview } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
 import { ApiStatePanel } from "./api-state-panel";
@@ -25,8 +21,6 @@ type ChartCanvasProps = {
   spec: ChartSpec;
   preview: DataPreview;
   analysis?: ChartAnalysis;
-  excludedFindingIds?: string[];
-  findings?: QualityFinding[];
 };
 
 const DEFAULT_SURFACE_VIEW = { alpha: 25, beta: 40, distance: 200 } as const;
@@ -37,10 +31,9 @@ export function ChartCanvas({
   analysis,
   spec,
   preview,
-  excludedFindingIds = [],
-  findings = [],
 }: ChartCanvasProps) {
   const t = useTranslations("common");
+  const zh = useLocale().startsWith("zh");
   const theme = useTheme();
   const [surfaceSupport, setSurfaceSupport] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -76,31 +69,27 @@ export function ChartCanvas({
       buildChartOption({
         analysis,
         colorMode: theme.palette.mode,
-        excludedFindingIds,
-        findings,
-        preview,
         spec,
         showAxes,
         showLegend,
         surfacePointLimit: lowCostFallback ? 800 : undefined,
         surfaceView: isSurface ? surfaceView : undefined,
-      }) : {},
+        zh,
+      }) : null,
     [
       active,
       analysis,
-      excludedFindingIds,
-      findings,
       isSurface,
       lowCostFallback,
-      preview,
       showAxes,
       showLegend,
       spec,
       surfaceView,
       theme.palette.mode,
+      zh,
     ],
   );
-  const optionRecord = option as Record<string, unknown>;
+  const optionRecord = (option ?? {}) as Record<string, unknown>;
   const surfaceComponents = ["grid3D", "xAxis3D", "yAxis3D", "zAxis3D"].filter(
     (component) => component in optionRecord,
   );
@@ -135,10 +124,22 @@ export function ChartCanvas({
   }
 
   if (
-    spec.type === "surface3d" &&
-    (surfaceSupport === "idle" || surfaceSupport === "loading")
+    !analysis ||
+    (spec.type === "surface3d" && (surfaceSupport === "idle" || surfaceSupport === "loading"))
   ) {
     return <Skeleton height={height} variant="rounded" />;
+  }
+
+  // Only the plan is drawn; a chart the API could not plan (an invalid surface grid) shows none.
+  if (!option) {
+    return (
+      <ApiStatePanel
+        compact
+        description={t("noPreviewDescription")}
+        kind="empty"
+        title={t("noPreviewTitle")}
+      />
+    );
   }
 
   return (

@@ -107,6 +107,104 @@ jobs:
         if: always()
         run: docker compose down -v --remove-orphans
 
+  plan-parity:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: "."
+    defaults:
+      run:
+        working-directory: V2.0/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: V2.0/api/requirements.lock.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements.lock.txt
+      - name: Fixture matrix and RenderPlan parity
+        run: python scripts/run_v22_matrix.py --output "$RUNNER_TEMP/matrix-report.json" > /dev/null
+      - name: Chaos matrix
+        run: |
+          python scripts/chaos_100_matrix.py generate --root "$RUNNER_TEMP/chaos"
+          python scripts/chaos_100_matrix.py verify --root "$RUNNER_TEMP/chaos" | tail -n 1
+      - name: Preserve matrix reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-parity-reports
+          path: |
+            ${{ runner.temp }}/matrix-report.json
+            ${{ runner.temp }}/chaos/test-report.json
+          retention-days: 7
+
+  live-charts:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      LABVIZ_PERSISTENCE_BACKEND: sqlite
+      LABVIZ_OBJECT_STORAGE_BACKEND: local
+      LABVIZ_ENVIRONMENT: development
+      LABVIZ_AUTH_MODE: console
+      LABVIZ_API_PROXY_TARGET: http://127.0.0.1:8000
+      LABVIZ_ALLOWED_ORIGINS: http://localhost:3100
+      LABVIZ_PUBLIC_WEB_URL: http://localhost:3100
+      LABVIZ_E2E_LIVE: "1"
+      LABVIZ_E2E_INTERFACE_MODE: classic
+      # The distribution spec reads its exported files back with the API's Python.
+      LABVIZ_E2E_ARTIFACT_PYTHON: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: V2.0/api/requirements.lock.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: V2.0/web/package-lock.json
+      - name: Install dependencies
+        run: |
+          python -m pip install -r V2.0/api/requirements.lock.txt
+          npm ci --prefix V2.0/web
+          npx --prefix V2.0/web playwright install --with-deps chromium
+      - name: Start the local API
+        working-directory: V2.0/api
+        run: |
+          key=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+          echo "::add-mask::$key"
+          echo "LABVIZ_LOCAL_ACCESS_KEY=$key" >> "$GITHUB_ENV"
+          echo "LABVIZ_E2E_LOCAL_ACCESS_KEY=$key" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/live/objects"
+          export LABVIZ_DATABASE_PATH="$RUNNER_TEMP/live/labviz.db"
+          export LABVIZ_OBJECT_STORAGE_ROOT="$RUNNER_TEMP/live/objects"
+          LABVIZ_LOCAL_ACCESS_KEY=$key nohup python -m uvicorn --factory labviz_api.main:create_app \
+            --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/live/api.log" 2>&1 &
+          for _ in $(seq 60); do
+            curl -sf http://127.0.0.1:8000/api/v1/health > /dev/null && exit 0
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/live/api.log"
+          exit 1
+      - name: Live chart specs against the real API
+        working-directory: V2.0/web
+        run: >-
+          npx playwright test --project=chromium --workers=1
+          e2e/live-classic-plans.spec.ts e2e/live-research-charts.spec.ts
+          e2e/live-research-figures.spec.ts e2e/live-distribution-parity.spec.ts
+      - name: Preserve live failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-chart-evidence
+          path: |
+            V2.0/web/test-results/
+            ${{ runner.temp }}/live/api.log
+          retention-days: 7
+
   v2-containers:
     runs-on: ubuntu-latest
     defaults:

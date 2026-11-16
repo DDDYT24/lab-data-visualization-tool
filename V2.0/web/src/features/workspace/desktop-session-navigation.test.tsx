@@ -73,7 +73,7 @@ it('forgets only the explicitly deleted project and allows later checkpointing',
 });
 it('reloads saved chart pagination from the service instead of serializing result rows',async()=>{
  const chartId='chart-offset';
- apiState.get.mockResolvedValue({id:chartId,revisionId:'r1',spec:{kind:'grouped_strip',title:'Saved offset',pairTimes:[],jitterSeed:'test',summary:'none',summaryUnit:'experimental_unit'},observations:300,excluded:0,groups:[],densityMethods:[],rows:[],sources:[],pairs:[],pairCount:0,offset:100,totalRows:300,resultSha256:'0123456789abcdef'});
+ apiState.get.mockResolvedValue({id:chartId,revisionId:'r1',spec:{kind:'grouped_strip',title:'Saved offset',pairTimes:[],jitterSeed:'test',summary:'none',summaryUnit:'experimental_unit'},observations:300,excluded:0,groups:[],densityMethods:[],rows:[],sources:[],pairs:[],hasPlan:false,pairCount:0,offset:100,totalRows:300,resultSha256:'0123456789abcdef'});
  await setup(true,{format:'labviz-desktop-checkpoint-v1',route:'/workspace/p1',checkpointId:'old',entries:{'chart:p1':{version:1,projectId:'p1',base:{research:'r1'},value:{pointRendering:'auto',kind:'grouped_strip',title:'Unsaved offset',seed:'test',summary:'none',summaryUnit:'experimental_unit',first:'before',second:'after',bandwidth:'',scale:'equal_width',points:true,selectedChartId:chartId,selectedChartOffset:100}}}});
  expect(apiState.get).toHaveBeenCalledWith('p1',chartId,100);
  expect(container.querySelector<HTMLInputElement>('input[maxlength="160"]')!.value).toBe('Unsaved offset');

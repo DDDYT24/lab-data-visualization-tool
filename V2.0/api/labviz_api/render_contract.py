@@ -1,9 +1,20 @@
-"""Shared semantic styling contract for browser previews and publication exports."""
+"""Shared styling and geometry contracts for browser previews and publication exports.
+
+Styling keeps its frozen chart-render-v1 values. Geometry rules are read from
+contracts/chart-render-v2.json, the file the frontend imports too.
+"""
 
 from __future__ import annotations
 
-from typing import Literal
+import json
+from pathlib import Path
+from typing import Any, Literal
 
+GEOMETRY: dict[str, Any] = json.loads(
+    (Path(__file__).resolve().parents[2] / "contracts/chart-render-v2.json").read_text(
+        encoding="utf-8"
+    )
+)
 CHART_RENDER_CONTRACT_VERSION = "chart-render-v1"
 GRAYSCALE_PALETTE = ("#20252D", "#5B616B", "#858B94", "#B0B4BA")
 GROUP_PALETTE = (

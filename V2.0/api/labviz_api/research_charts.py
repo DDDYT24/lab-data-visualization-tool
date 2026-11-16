@@ -20,10 +20,13 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 from pydantic_core import to_json
 
+from .render_contract import GEOMETRY
 from .research_contract import ResearchModel
 from .research_preparation import PreparationError
-from .research_strip import StripSpec, build_strip
+from .research_strip import JITTER, StripSpec, build_strip
 from .research_styles import category_style
+
+DENSITY = GEOMETRY["density"]
 
 
 class CategoryStyle(ResearchModel):
@@ -38,8 +41,8 @@ class ScientificChartSpec(ResearchModel):
     kind: Literal["grouped_strip", "paired", "violin"] = "grouped_strip"
     title: str = Field(default="", max_length=160)
     locale: Literal["en", "zh"] = "en"
-    jitter_seed: str = Field(default="labviz-strip-v1", min_length=1, max_length=128)
-    jitter_width: float = Field(default=0.3, ge=0, le=0.45)
+    jitter_seed: str = Field(default=JITTER["defaultSeed"], min_length=1, max_length=128)
+    jitter_width: float = Field(default=JITTER["defaultWidth"], ge=0, le=JITTER["maxWidth"])
     show_points: bool = True
     summary: Literal["none", "mean", "median"] = "none"
     summary_unit: Literal["observation", "sample", "experimental_unit"] = "experimental_unit"
@@ -185,17 +188,24 @@ def _compute_chart(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[
                     "chart-density-degenerate",
                     "Constant data have no violin density; use raw points.",
                 )
-            bandwidth = spec.bandwidth or sigma * len(values) ** (-0.2)
-            low, high = min(values) - 3 * bandwidth, max(values) + 3 * bandwidth
+            bandwidth = spec.bandwidth or sigma * len(values) ** DENSITY["scottExponent"]
+            tail = DENSITY["tailBandwidths"] * bandwidth
+            low, high = min(values) - tail, max(values) + tail
             if not all(math.isfinite(x) for x in (bandwidth, low, high)) or low >= high:
                 reject("chart-density-range", "Rescale these values before density estimation.")
             span_in_bandwidths = (high - low) / bandwidth
-            if not math.isfinite(span_in_bandwidths) or span_in_bandwidths > 512:
+            if (
+                not math.isfinite(span_in_bandwidths)
+                or span_in_bandwidths > DENSITY["maxSpanBandwidths"]
+            ):
                 reject(
                     "chart-density-resolution",
                     "Increase bandwidth to resolve this density reliably.",
                 )
-            grid_size = max(129, math.ceil(span_in_bandwidths * 4) + 1)
+            grid_size = max(
+                DENSITY["minGridPoints"],
+                math.ceil(span_in_bandwidths * DENSITY["gridPointsPerBandwidth"]) + 1,
+            )
             grid = np.linspace(low, high, grid_size)
             density = np.zeros(grid_size)
             # Exact Gaussian sum in bounded chunks; no resampling or hidden data reduction.
@@ -220,8 +230,8 @@ def _compute_chart(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[
                     "bandwidth": bandwidth,
                     "bandwidthRule": "explicit"
                     if spec.bandwidth is not None
-                    else "scott-sample-sd",
-                    "kernel": "gaussian",
+                    else DENSITY["bandwidthRule"],
+                    "kernel": DENSITY["kernel"],
                     "support": [low, high],
                     "grid": grid.tolist(),
                     "density": density.tolist(),
@@ -233,7 +243,9 @@ def _compute_chart(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[
         peak = max(max(item["density"]) for item in result["densities"])
         for item in result["densities"]:
             denominator = max(item["density"]) if spec.density_scale == "equal_width" else peak
-            item["halfWidths"] = [0.4 * value / denominator for value in item["density"]]
+            item["halfWidths"] = [
+                DENSITY["maxHalfWidth"] * value / denominator for value in item["density"]
+            ]
             item["scale"] = spec.density_scale
     # A versioned compact encoding still binds the entire result, including all observations.
     # Old frozen chart hashes/artifacts are never rewritten.

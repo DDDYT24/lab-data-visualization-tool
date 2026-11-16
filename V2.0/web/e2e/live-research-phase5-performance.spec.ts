@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { densePointThreshold } from "../src/domain/chart-render-contract";
 import { sampleBrowserMemory } from "./phase5-memory";
 import { expect, test } from "./fixtures";
 
@@ -139,12 +140,14 @@ for (const [rows, mixed] of [[10000, false], [100000, false], [100000, true]] as
       timings.computeRenderSaveChartHttpMs = requestTiming.responseEnd - requestTiming.requestStart;
       const firstPreview = chartRegion.getByRole("img", { name: "Large raw points", exact: true });
       await expect(firstPreview).toBeVisible();
+      // Charts up to the dense threshold draw from their plan; larger ones keep the PNG.
+      if (rows <= densePointThreshold) await expect(firstPreview.locator("canvas").first()).toBeVisible();
       timings.generateClickToFirstPreviewPaintBrowserMs = await firstPreview.evaluate(async (element) => {
-        const image = element as HTMLImageElement;
-        await image.decode();
+        const drawn = element.querySelector("canvas") ?? (element as HTMLImageElement);
+        if (drawn instanceof HTMLImageElement) await drawn.decode();
         const button = element.closest('[data-testid="research-charts"]')!.querySelector('[data-test-preview-start]')!;
         const started = Number(button.getAttribute("data-test-preview-start"));
-        if (!started || !image.naturalWidth) throw new Error("First preview measurement boundary missing");
+        if (!started || (drawn instanceof HTMLImageElement && !drawn.naturalWidth)) throw new Error("First preview measurement boundary missing");
         return new Promise<number>((resolveTiming) => requestAnimationFrame(() => requestAnimationFrame(() => resolveTiming(Math.round((performance.now() - started) * 100) / 100))));
       });
       serverTiming(generated.headers()["server-timing"], "chart", timings);

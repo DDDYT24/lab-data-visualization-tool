@@ -21,6 +21,7 @@ from .research_figure_board import (
     interaction,
     list_boards,
     read_board,
+    read_panel_plan,
     save_board,
 )
 from .research_figure_jobs import FigureJobs
@@ -311,6 +312,22 @@ def register_figure_routes(
                     f'filename="figure-{board_id}.{format}"'
                 ),
             },
+        )
+
+    @app.get("/api/v1/projects/{project_id}/research/figure-boards/{board_id}/plans/{panel}")
+    def panel_plan(
+        project_id: str,
+        board_id: str,
+        panel: Literal["A", "B", "C", "D"],
+        user: Any = user_dep,
+        guest_token: str | None = Cookie(default=None, alias=guest_cookie),
+        repository: Any = repository_dep,
+    ) -> Response:
+        require_access(repository, project_id, user, guest_token, ready=True)
+        return Response(
+            read_panel_plan(available(), project_id, board_id, panel),
+            media_type="application/json",
+            headers={"Cache-Control": "private, no-store"},
         )
 
     @app.get("/api/v1/projects/{project_id}/research/figure-boards/{board_id}/interaction")

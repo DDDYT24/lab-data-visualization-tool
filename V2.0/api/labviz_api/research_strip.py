@@ -15,15 +15,18 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from .render_contract import GEOMETRY
 from .research_contract import ResearchModel
 from .research_preparation import PreparationError
+
+JITTER = GEOMETRY["jitter"]
 
 
 class StripSpec(ResearchModel):
     schema_version: Literal[1] = 1
     kind: Literal["grouped_strip"] = "grouped_strip"
-    jitter_seed: str = Field(default="labviz-strip-v1", min_length=1, max_length=128)
-    jitter_width: float = Field(default=0.3, ge=0, le=0.45)
+    jitter_seed: str = Field(default=JITTER["defaultSeed"], min_length=1, max_length=128)
+    jitter_width: float = Field(default=JITTER["defaultWidth"], ge=0, le=JITTER["maxWidth"])
 
 
 @lru_cache(maxsize=16)

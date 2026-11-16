@@ -1351,8 +1351,8 @@ class ProjectRepository:
                         connection.execute(
                             "INSERT INTO research_charts "
                             "(id,project_id,revision_id,result_json,"
-                            "svg_sha256,png_sha256,pdf_sha256,created_at) "
-                            "VALUES (?,?,?,?,?,?,?,?)",
+                            "svg_sha256,png_sha256,pdf_sha256,plan_sha256,created_at) "
+                            "VALUES (?,?,?,?,?,?,?,?,?)",
                             (
                                 chart_ids[chart["id"]],
                                 project_id,
@@ -1361,6 +1361,7 @@ class ProjectRepository:
                                 chart["svg_sha256"],
                                 chart["png_sha256"],
                                 chart["pdf_sha256"],
+                                chart["plan_sha256"],
                                 now,
                             ),
                         )
@@ -1431,6 +1432,13 @@ class ProjectRepository:
                                     "(board_id,svg_sha256,png_sha256,pdf_sha256,scene_json) "
                                     "SELECT ?,svg_sha256,png_sha256,pdf_sha256,scene_json "
                                     "FROM research_figure_artifacts WHERE board_id=?",
+                                    (new_board_id, board["id"]),
+                                )
+                                connection.execute(
+                                    "INSERT INTO research_figure_panel_plans "
+                                    "(board_id,panel,plan_sha256) "
+                                    "SELECT ?,panel,plan_sha256 "
+                                    "FROM research_figure_panel_plans WHERE board_id=?",
                                     (new_board_id, board["id"]),
                                 )
 

@@ -1,0 +1,374 @@
+{
+  "synthetic": true,
+  "source": "Deterministic synthetic mathematical fixtures; no real experimental records.",
+  "cases": [
+    {
+      "file": "01_正常与清洗数据/01_curves_dual_axis.csv",
+      "rows": 61,
+      "columns": [
+        "time_min",
+        "response_A",
+        "response_B",
+        "response_C",
+        "pressure_kPa",
+        "error_abs"
+      ],
+      "description": "折线、散点、多系列、双轴、四面板、列误差棒",
+      "settings": "X=time_min；Y=response_A/B/C；双轴使用pressure_kPa；列误差棒=error_abs",
+      "expected": {
+        "linear": "response_A = 2*time_min + 10",
+        "rSquared": 1
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/02_quality_cleaning.csv",
+      "rows": 43,
+      "columns": [
+        "record_id",
+        "time_min",
+        "temperature_C",
+        "signal",
+        "mixed_numeric"
+      ],
+      "description": "缺失、重复、类型冲突、极值、突变和自定义有效范围",
+      "settings": "为temperature_C设置[15,35]；signal设置[0,200]。混合列仅测试类型告警，不作为默认绘图列。",
+      "expected": {
+        "missingValues": 3,
+        "duplicateRows": 3,
+        "v2AfterRemoveDuplicateFinding": 37,
+        "v2AfterRemoveDuplicateAndMissingFindings": 34,
+        "v1AfterDeduplicate": 40,
+        "v1AfterDeduplicateAndDropMissing": 37,
+        "duplicateGroupRows": 6,
+        "anomalies": [
+          {
+            "dataRow": 5,
+            "field": "temperature_C",
+            "value": null
+          },
+          {
+            "dataRow": 10,
+            "field": "signal",
+            "value": null
+          },
+          {
+            "dataRow": 15,
+            "field": "mixed_numeric",
+            "value": null
+          },
+          {
+            "dataRow": 20,
+            "field": "mixed_numeric",
+            "value": "sensor_error"
+          },
+          {
+            "dataRow": 25,
+            "field": "temperature_C",
+            "value": 99
+          },
+          {
+            "dataRow": 30,
+            "field": "signal",
+            "value": -20
+          }
+        ],
+        "validRanges": {
+          "temperature_C": [
+            15,
+            35
+          ],
+          "signal": [
+            0,
+            200
+          ]
+        }
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/03_replicates.tsv",
+      "rows": 33,
+      "columns": [
+        "time_min",
+        "replicate",
+        "response"
+      ],
+      "description": "标准差、标准误、90/95/99%均值置信区间",
+      "settings": "X=time_min；Y=response；不要把replicate加入Y系列。",
+      "expected": {
+        "points": 11,
+        "mean": "10+2*time_min",
+        "sampleSD": 1,
+        "SEM": 0.5773502691896258,
+        "CI95HalfWidth": 2.484137711719546
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/04_exact_fits.csv",
+      "rows": 41,
+      "columns": [
+        "x",
+        "linear_y",
+        "quadratic_y",
+        "exponential_y",
+        "logarithmic_y",
+        "power_y"
+      ],
+      "description": "线性、二次多项式、指数、对数、幂函数拟合",
+      "settings": "每次只选匹配的一个Y列与拟合模型。",
+      "expected": {
+        "equations": {
+          "linear_y": "2*x+3",
+          "quadratic_y": "0.5*x^2-2*x+5",
+          "exponential_y": "3*exp(0.2*x)",
+          "logarithmic_y": "4+2*ln(x)",
+          "power_y": "1.5*x^1.7"
+        },
+        "rSquaredMinimum": 0.999999999
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/12_confidence_band.csv",
+      "rows": 63,
+      "columns": [
+        "x",
+        "response"
+      ],
+      "description": "可见的90/95/99%拟合置信带",
+      "settings": "散点或折线；X=x、Y=response；线性拟合并开启置信带。精确无噪声文件04的置信带接近零，应使用本文件观察带宽。",
+      "expected": {
+        "slope": 2,
+        "intercept": 3,
+        "residualSumSquares": 5.04,
+        "confidenceBandOrder": "99% > 95% > 90% at same X"
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/05_correlation.csv",
+      "rows": 41,
+      "columns": [
+        "x",
+        "positive",
+        "negative",
+        "orthogonal"
+      ],
+      "description": "具有精确答案的相关矩阵",
+      "settings": "热力图选择全部四列；不要启用分组。",
+      "expected": {
+        "correlations": {
+          "x,positive": 1,
+          "x,negative": -1,
+          "x,orthogonal": 0
+        }
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/06_distributions.csv",
+      "rows": 201,
+      "columns": [
+        "sample_id",
+        "symmetric",
+        "shifted",
+        "wave"
+      ],
+      "description": "直方图、箱线图和超过200行的预览",
+      "settings": "选择symmetric/shifted/wave；sample_id仅用作X或索引。",
+      "expected": {
+        "symmetric": {
+          "min": -10,
+          "q1": -5,
+          "median": 0,
+          "q3": 5,
+          "max": 10
+        },
+        "histogramTotal": 201
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/07_surface3d.csv",
+      "rows": 441,
+      "columns": [
+        "x",
+        "y",
+        "z"
+      ],
+      "description": "21×21完整网格的抛物面",
+      "settings": "X=x；系列按y、z的顺序添加，第一列为Y，第二列为Z。",
+      "expected": {
+        "equation": "z=x^2+y^2",
+        "grid": [
+          21,
+          21
+        ],
+        "center": 0,
+        "zMin": 0,
+        "zMax": 50
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/08_chinese_groups.txt",
+      "rows": 63,
+      "columns": [
+        "时间_min",
+        "实验组",
+        "响应值"
+      ],
+      "description": "UTF-8中文、分号TXT导入、分组曲线",
+      "settings": "X=时间_min；Y=响应值；分组=实验组。",
+      "expected": {
+        "groups": 3,
+        "rowsPerGroup": 21
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/09_json_types.json",
+      "rows": 12,
+      "columns": [
+        "time_min",
+        "response",
+        "enabled",
+        "label"
+      ],
+      "description": "JSON对象数组、布尔值和特殊字符",
+      "settings": "X=time_min；Y=response。enabled应保持布尔类型，label为文本。",
+      "expected": {
+        "booleanColumn": "enabled",
+        "specialText": "含逗号,双引号\"与换行\n的说明"
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/10_large_12000.csv",
+      "rows": 12000,
+      "columns": [
+        "sample_id",
+        "time_s",
+        "signal",
+        "reference"
+      ],
+      "description": "预览抽样、缺失定位截断、完整清洗数据导出",
+      "settings": "先保留空值导出CSV，再将missing:signal从清洗副本删除后导出；不要删除其他可疑问题。",
+      "expected": {
+        "missingValues": 124,
+        "previewRows": 200,
+        "fullExportRows": 12000,
+        "afterDropMissing": 11876,
+        "lastSampleId": 11999
+      }
+    },
+    {
+      "file": "01_正常与清洗数据/11_excel_sheets.xlsx",
+      "rows": 21,
+      "columns": [
+        "time_min",
+        "response",
+        "error_abs"
+      ],
+      "description": "Excel工作表切换和表头行重导入",
+      "settings": "默认Standard，表头1；切换HeaderAt3时表头=3；SecondBatch表头=1。",
+      "expected": {
+        "sheets": {
+          "Standard": {
+            "headerRow": 1,
+            "firstResponse": 3
+          },
+          "HeaderAt3": {
+            "headerRow": 3,
+            "firstResponse": 103
+          },
+          "SecondBatch": {
+            "headerRow": 1,
+            "firstResponse": 203
+          }
+        },
+        "rowsPerSheet": 21
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E01_空文件.csv",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "empty-file"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E02_仅表头.csv",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "empty-table"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E03_损坏JSON.json",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "unreadable-file"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E04_超过500列.csv",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "too-many-columns"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E05_去空格后重名.csv",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "duplicate-columns"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E06_伪装Excel.xlsx",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "unreadable-workbook"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E07_不支持的格式.xml",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "unsupported-format"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E08_非UTF8.csv",
+      "description": "预期拒绝导入的负向样例",
+      "expected": {
+        "errorCode": "invalid-text-encoding"
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E09_可导入但拟合不适用.csv",
+      "rows": 4,
+      "description": "可正常导入；选择不合适的拟合应显示警告且fit为空，不能伪造拟合结果",
+      "settings": "constant_x→varying_y线性拟合；或signed_x→constant_y线性拟合。",
+      "expected": {
+        "fit": null,
+        "warningsRequired": true,
+        "importSucceeds": true
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E10_BOM表头兼容性.txt",
+      "rows": 3,
+      "description": "UTF-8 BOM 表头兼容性回归样例",
+      "settings": "首列表头必须规范化为time_min，并保留全部数据行。",
+      "expected": {
+        "firstColumn": "time_min",
+        "importSucceeds": true
+      }
+    },
+    {
+      "file": "02_边界与错误数据/E11_中文文件名.csv",
+      "rows": 3,
+      "description": "Unicode 下载文件名兼容性回归样例",
+      "settings": "正常导入并下载清洗CSV；响应必须为200，Content-Disposition必须包含RFC 5987 UTF-8文件名。",
+      "expected": {
+        "importSucceeds": true,
+        "cleanedDownloadStatus": 200,
+        "rfc5987Filename": true
+      }
+    }
+  ]
+}
