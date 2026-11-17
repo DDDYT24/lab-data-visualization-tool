@@ -232,7 +232,9 @@ def draw_notes(ax: Any, notes: list[dict[str, Any]]) -> None:
     for note in notes:
         kind = note["kind"]
         if kind == "text":
-            ax.text(note["x"], note["y"], note["text"], ha="center", va="center", **words)
+            ax.text(
+                note["x"], note["y"], note["text"], ha="center", va="center", clip_on=True, **words
+            )
         elif kind == "hline":
             ax.axhline(note["value"], linestyle=LINE_STYLES[NOTE["ruleStyle"]], **line)
             label(

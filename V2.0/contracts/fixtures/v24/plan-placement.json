@@ -1,0 +1,288 @@
+{
+  "positions": [
+    {
+      "scale": "linear",
+      "value": -3.5,
+      "position": -3.5
+    },
+    {
+      "scale": "linear",
+      "value": 0.0,
+      "position": 0.0
+    },
+    {
+      "scale": "linear",
+      "value": 42.0,
+      "position": 42.0
+    },
+    {
+      "scale": "log10",
+      "value": 1e-06,
+      "position": -6.0
+    },
+    {
+      "scale": "log10",
+      "value": 0.5,
+      "position": -0.3010299956639812
+    },
+    {
+      "scale": "log10",
+      "value": 1.0,
+      "position": 0.0
+    },
+    {
+      "scale": "log10",
+      "value": 37.0,
+      "position": 1.568201724066995
+    },
+    {
+      "scale": "log10",
+      "value": 1000000000.0,
+      "position": 9.0
+    },
+    {
+      "scale": "symlog",
+      "value": -1000000.0,
+      "position": -6.0000004342942646
+    },
+    {
+      "scale": "symlog",
+      "value": -9.0,
+      "position": -1.0
+    },
+    {
+      "scale": "symlog",
+      "value": -0.25,
+      "position": -0.09691001300805642
+    },
+    {
+      "scale": "symlog",
+      "value": 0.0,
+      "position": 0.0
+    },
+    {
+      "scale": "symlog",
+      "value": 0.25,
+      "position": 0.09691001300805642
+    },
+    {
+      "scale": "symlog",
+      "value": 9.0,
+      "position": 1.0
+    },
+    {
+      "scale": "symlog",
+      "value": 1000000.0,
+      "position": 6.0000004342942646
+    }
+  ],
+  "plan": {
+    "schemaVersion": 1,
+    "contract": "render-plan-v1",
+    "source": {
+      "kind": "scatter",
+      "resultSha256": "5516ea0c3d64ec274a845c28bdee065c6af5419e8985c4b1bfaafdfc179de74b",
+      "algorithmVersion": "classic-charts-v1"
+    },
+    "geometry": {
+      "contract": "chart-render-v2",
+      "axis": "nice-1-2-5-v1",
+      "jitter": null,
+      "density": null,
+      "histogram": null,
+      "quantile": null,
+      "decimation": "min-max-envelope-v1"
+    },
+    "rendering": {
+      "pointRendering": "auto",
+      "rasterizePoints": false
+    },
+    "panels": [
+      {
+        "id": "1",
+        "title": "Placement",
+        "marks": [
+          {
+            "id": "scatter:0",
+            "group": "Y",
+            "color": "#2563eb",
+            "axis": "y",
+            "decimation": null,
+            "kind": "points",
+            "marker": "o",
+            "size": 4,
+            "opacity": 0.8,
+            "x": [
+              1.0,
+              2.0,
+              3.0,
+              4.0
+            ],
+            "y": [
+              1.0,
+              10.0,
+              100.0,
+              1000.0
+            ],
+            "sourceRefs": []
+          }
+        ],
+        "legend": [
+          {
+            "label": "Y",
+            "color": "#2563eb",
+            "symbol": "marker"
+          }
+        ],
+        "axes": {
+          "x": {
+            "scale": "log10",
+            "domain": [
+              0.9330329915368074,
+              4.287093850145173
+            ],
+            "ticks": [
+              {
+                "value": 1.0,
+                "label": "1"
+              },
+              {
+                "value": 2.0,
+                "label": "2"
+              }
+            ],
+            "title": "X",
+            "niceRule": null,
+            "grid": true
+          },
+          "y": {
+            "scale": "log10",
+            "domain": [
+              0.7079457843841379,
+              1412.537544622754
+            ],
+            "ticks": [
+              {
+                "value": 1.0,
+                "label": "1"
+              },
+              {
+                "value": 10.0,
+                "label": "10"
+              },
+              {
+                "value": 100.0,
+                "label": "100"
+              },
+              {
+                "value": 1000.0,
+                "label": "1000"
+              }
+            ],
+            "title": "Y",
+            "niceRule": null,
+            "grid": true
+          },
+          "y2": null,
+          "z": null
+        },
+        "notes": [
+          {
+            "kind": "text",
+            "x": 2.0,
+            "y": 500.0,
+            "text": "peak"
+          },
+          {
+            "kind": "hline",
+            "value": 100.0,
+            "label": "limit"
+          },
+          {
+            "kind": "vline",
+            "value": 3.0,
+            "label": "start"
+          },
+          {
+            "kind": "rect",
+            "x": [
+              1.5,
+              2.5
+            ],
+            "y": [
+              10.0,
+              400.0
+            ],
+            "label": "window",
+            "labelAt": [
+              1.5,
+              400.0
+            ]
+          },
+          {
+            "kind": "bracket",
+            "x": [
+              2.0,
+              4.0
+            ],
+            "y": 800.0,
+            "foot": 687.2108172043171,
+            "label": "p < 0.01",
+            "labelAt": [
+              2.82842712474619,
+              800.0
+            ]
+          }
+        ]
+      }
+    ],
+    "disclosures": [],
+    "planHash": "b1f36f3e3bd0c5b23cb36d46b1a24663b4c515288782153da6e80167546355f7"
+  },
+  "placed": {
+    "points": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.3010299956639812,
+        1.0
+      ],
+      [
+        0.47712125471966244,
+        2.0
+      ],
+      [
+        0.6020599913279624,
+        3.0
+      ]
+    ],
+    "bracket": [
+      [
+        0.3010299956639812,
+        2.837089986991944
+      ],
+      [
+        0.3010299956639812,
+        2.9030899869919438
+      ],
+      [
+        0.6020599913279624,
+        2.9030899869919438
+      ],
+      [
+        0.6020599913279624,
+        2.837089986991944
+      ]
+    ],
+    "bracketLabel": [
+      0.45154499349597177,
+      2.9030899869919438
+    ],
+    "rectLabel": [
+      0.17609125905568124,
+      2.6020599913279625
+    ]
+  }
+}

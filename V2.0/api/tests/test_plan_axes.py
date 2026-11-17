@@ -131,7 +131,7 @@ def test_manual_domain_and_ticks() -> None:
     assert axis["domain"] == [0.0, 4.0] and axis["niceRule"] is None
     assert [(t["value"], t["label"]) for t in axis["ticks"]] == [(0.0, "0"), (2.0, "2"), (4.0, "4")]
     retick = y_axis(apply_axis_controls(built, [{"y": {"domain": [0.0, 4.0]}}]))
-    assert retick["niceRule"] == "nice-1-2-5-v1" and retick["ticks"][0]["value"] == 0.0
+    assert retick["niceRule"] is None and retick["ticks"][0]["value"] == 0.0
 
 
 @pytest.mark.parametrize(
@@ -160,7 +160,47 @@ def test_refused_controls(values: list[float], control: dict[str, Any], code: st
 def test_bars_cannot_take_a_log_axis_because_they_start_at_zero() -> None:
     with pytest.raises(PreparationError) as caught:
         apply_axis_controls(plan([1.0, 2.0, 3.0], "bar"), [{"y": {"scale": "log10"}}])
-    assert caught.value.code == "axis-log-nonpositive"
+    assert caught.value.code == "axis-log-bars"
+
+
+@pytest.mark.parametrize("scale", ["log10", "symlog"])
+@pytest.mark.parametrize(
+    "values",
+    [[1.2, 1.5, 1.8], [3.0, 3.5, 4.0], [110.0, 150.0, 190.0], [0.1, 0.2, 0.5], [5.0, 5.0, 5.0]],
+)
+def test_a_range_without_round_values_still_gets_ticks(scale: str, values: list[float]) -> None:
+    axis = y_axis(apply_axis_controls(plan(values), [{"y": {"scale": scale}}]))
+    low, high = axis["domain"]
+    ticks = [tick["value"] for tick in axis["ticks"]]
+    assert len(ticks) >= 2
+    assert ticks == sorted(set(ticks)) and all(low <= value <= high for value in ticks)
+
+
+def test_thinned_symlog_ticks_stay_mirrored_and_keep_zero() -> None:
+    ticks = decade_ticks("symlog", -1e12, 1e12)
+    assert 0.0 in ticks and len(ticks) <= 9
+    assert ticks == [-value for value in reversed(ticks)]
+
+
+@pytest.mark.parametrize(
+    "control",
+    [
+        {"ticks": [2.0]},
+        {"domain": [2.0, 2.0]},
+        {"domain": [4.0, 0.0]},
+        {"ticks": [3.0, 1.0]},
+        {"ticks": [0.0, 0.0]},
+    ],
+)
+def test_a_malformed_control_is_refused_not_crashed(control: dict[str, Any]) -> None:
+    with pytest.raises(PreparationError) as caught:
+        apply_axis_controls(plan([1.0, 2.0, 3.0]), [{"y": control}])
+    assert caught.value.code == "axis-control-invalid"
+
+
+def test_a_manual_domain_is_not_labelled_as_framed_by_the_nice_rule() -> None:
+    axis = y_axis(apply_axis_controls(plan([0.1, 0.5, 0.9]), [{"y": {"domain": [0.05, 0.95]}}]))
+    assert axis["niceRule"] is None and axis["domain"] == [0.05, 0.95]
 
 
 def test_category_axis_refuses_a_control() -> None:

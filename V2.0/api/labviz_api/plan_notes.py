@@ -27,23 +27,26 @@ def inside(axis: dict[str, Any], *values: float) -> bool:
 def planned_note(note: dict[str, Any], x_axis: dict[str, Any], y_axis: dict[str, Any]) -> Any:
     """The note as the plan states it; refuses a note that leaves the axes."""
     kind = note["kind"]
+    xs: list[float]
+    ys: list[float]
+    # Floats throughout, so 10 and 10.0 give the same plan hash.
     if kind == "text":
-        xs, ys = [note["x"]], [note["y"]]
+        xs, ys = [float(note["x"])], [float(note["y"])]
     elif kind == "hline":
-        xs, ys = [], [note["value"]]
+        xs, ys = [], [float(note["value"])]
     elif kind == "vline":
-        xs, ys = [note["value"]], []
+        xs, ys = [float(note["value"])], []
     elif kind == "rect":
-        xs, ys = list(note["x"]), list(note["y"])
+        xs, ys = [float(v) for v in note["x"]], [float(v) for v in note["y"]]
     else:
-        xs, ys = list(note["x"]), [note["y"]]
+        xs, ys = [float(v) for v in note["x"]], [float(note["y"])]
     if not inside(x_axis, *xs) or not inside(y_axis, *ys):
         raise PreparationError("annotation-outside", "An annotation must lie inside the axes.")
     if kind == "text":
         return {"kind": kind, "x": xs[0], "y": ys[0], "text": note["text"]}
     label = note.get("label", "")
     if kind in ("hline", "vline"):
-        return {"kind": kind, "value": note["value"], "label": label}
+        return {"kind": kind, "value": (ys or xs)[0], "label": label}
     if kind == "rect":
         # The corner nearest the start of the x axis and the end of the y axis: top left.
         left = min(xs, key=lambda value: abs(value - x_axis["domain"][0]))

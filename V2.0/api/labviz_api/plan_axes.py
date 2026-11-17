@@ -101,24 +101,32 @@ def scale_label(value: float) -> str:
     return text.replace("-", "−")
 
 
+def thinned(values: list[float], limit: int = AXIS_MAX_TICKS) -> list[float]:
+    return values[:: max(1, math.ceil(len(values) / limit))]
+
+
 def decade_ticks(scale: str, low: float, high: float) -> list[float]:
-    """Powers of ten inside the domain; 2 and 5 times them when under two decades fit."""
+    """Powers of ten inside the domain; 2 and 5 times them when under two decades fit.
+
+    May return fewer than two values: the caller then falls back to evenly spaced ticks.
+    """
     if scale == "symlog":
+        first = math.ceil(math.log10(SYMLOG_THRESHOLD))
         top = math.ceil(math.log10(max(abs(low), abs(high), SYMLOG_THRESHOLD)))
-        decades = [10.0**power for power in range(0, top + 1)]
-        candidates = [-value for value in reversed(decades)] + [0.0] + decades
-    else:
-        first, last = math.floor(math.log10(low)), math.ceil(math.log10(high))
-        candidates = [10.0**power for power in range(first, last + 1)]
-        if sum(low <= value <= high for value in candidates) < 2:
-            candidates = sorted(
-                multiple * 10.0**power
-                for power in range(first - 1, last + 1)
-                for multiple in (1, 2, 5)
-            )
-    ticks = [value for value in candidates if low <= value <= high]
-    stride = math.ceil(len(ticks) / AXIS_MAX_TICKS)
-    return ticks[::stride]
+        decades = [10.0**power for power in range(first, top + 1)]
+        # Each side is thinned on its own, so the ticks stay mirrored and zero stays.
+        side = (AXIS_MAX_TICKS - 1) // 2
+        below = thinned([value for value in decades if low <= -value <= high], side)
+        above = thinned([value for value in decades if low <= value <= high], side)
+        zero = [0.0] if low <= 0 <= high else []
+        return [-value for value in reversed(below)] + zero + above
+    first, last = math.floor(math.log10(low)), math.ceil(math.log10(high))
+    candidates = [10.0**power for power in range(first, last + 1)]
+    if sum(low <= value <= high for value in candidates) < 2:
+        candidates = sorted(
+            multiple * 10.0**power for power in range(first - 1, last + 1) for multiple in (1, 2, 5)
+        )
+    return thinned([value for value in candidates if low <= value <= high])
 
 
 def controlled_axis(
@@ -128,6 +136,17 @@ def controlled_axis(
     control = {**PLAIN_CONTROL, **control}
     if control == PLAIN_CONTROL:
         return axis
+    limits, chosen_ticks = control["domain"], control["ticks"]
+    if (limits is not None and not limits[0] < limits[1]) or (
+        chosen_ticks is not None
+        and (
+            len(chosen_ticks) < 2
+            or any(a >= b for a, b in zip(chosen_ticks, chosen_ticks[1:], strict=False))
+        )
+    ):
+        raise PreparationError(
+            "axis-control-invalid", "Axis limits and ticks must increase, with at least two ticks."
+        )
     if axis["scale"] == "category":
         raise PreparationError("axis-control-category", "A category axis has no scale or limits.")
     scale = control["scale"]
@@ -157,12 +176,16 @@ def controlled_axis(
         ticks = [{"value": v, "label": label} for v, label in zip(chosen, labels, strict=True)]
         rule = None
     elif scale == "linear":
-        ticks, rule = axis_ticks(low, high), AXIS_NICE_RULE
+        # The rule names how the whole axis was framed; a manual domain was not framed by it.
+        ticks, rule = axis_ticks(low, high), AXIS_NICE_RULE if control["domain"] is None else None
     else:
-        ticks = [
-            {"value": value, "label": scale_label(value)}
-            for value in decade_ticks(scale, low, high)
-        ]
+        decades = decade_ticks(scale, low, high)
+        # A domain that holds under two round values gets evenly spaced ticks instead.
+        ticks = (
+            [{"value": value, "label": scale_label(value)} for value in decades]
+            if len(decades) >= 2
+            else axis_ticks(low, high)
+        )
         rule = None
     return {**axis, "scale": scale, "domain": [low, high], "ticks": ticks, "niceRule": rule}
 
@@ -181,6 +204,15 @@ def apply_axis_controls(
                 continue
             if panel["axes"]["z"] is not None:
                 raise PreparationError("axis-control-3d", "A 3D panel keeps linear axes.")
+            if (
+                dimension == "y"
+                and wanted.get("scale") == "log10"
+                and any(mark["kind"] == "rects" for mark in panel["marks"])
+            ):
+                raise PreparationError(
+                    "axis-log-bars",
+                    "Bars and histograms start at zero, so they keep a linear axis.",
+                )
             values = [
                 value
                 for mark in panel["marks"]

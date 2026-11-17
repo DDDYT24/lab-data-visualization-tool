@@ -76,6 +76,10 @@ function tooltipLines(mark: RenderPlanMark, index: number, text: PlanText) {
   }
 }
 
+const scaled = (axis: PlanAxis) => axis.scale === "log10" || axis.scale === "symlog";
+/** The y axis a mark is measured on; notes and unknown marks use the primary one. */
+const yAxisOf = (panel: RenderPlanPanel, mark?: RenderPlanMark) =>
+  mark && "axis" in mark && mark.axis === "y2" && panel.axes.y2 ? panel.axes.y2 : panel.axes.y;
 const planMarks = (plan: RenderPlan) => plan.panels.flatMap((panel) => panel.marks);
 
 export function planTooltip(plan: RenderPlan, seriesIndex: number, index: number, text: PlanText) {
@@ -86,11 +90,22 @@ export function planTooltip(plan: RenderPlan, seriesIndex: number, index: number
 /** The shared tooltip of line and scatter charts: one x and each series' value there. */
 export function planAxisTooltip(plan: RenderPlan) {
   const names = new Map(plan.panels.flatMap((panel) => panel.axes.x.ticks).map((tick) => [tick.value, tick.label]));
-  return (params: { seriesName: string; value: [number, number] }[]) => {
+  const drawn = plan.panels.flatMap((panel) => panel.marks.map((mark) => ({ panel, mark })));
+  // Series data holds axis positions; the tooltip shows the values they stand for.
+  const real = (item: { seriesIndex?: number; value: [number, number] }) => {
+    const { panel, mark } = drawn[item.seriesIndex ?? 0] ?? { panel: plan.panels[0]!, mark: undefined };
+    const x = panel.axes.x;
+    const y = yAxisOf(panel, mark);
+    return [
+      scaled(x) ? axisValue(x.scale, item.value[0]) : item.value[0],
+      scaled(y) ? axisValue(y.scale, item.value[1]) : item.value[1],
+    ] as const;
+  };
+  return (params: { seriesName: string; seriesIndex?: number; value: [number, number] }[]) => {
     const [first] = params;
     if (!first) return "";
-    const x = first.value[0];
-    return [names.get(x) ?? shown(x), ...params.map((item) => `${item.seriesName}: ${shown(item.value[1])}`)]
+    const x = real(first)[0];
+    return [names.get(x) ?? shown(x), ...params.map((item) => `${item.seriesName}: ${shown(real(item)[1])}`)]
       .map(escapeHtml).join("<br/>");
   };
 }
@@ -104,12 +119,11 @@ export function planSelection(plan: RenderPlan, seriesIndex: number, index: numb
 }
 
 type Place = (point: number[]) => number[];
-const scaled = (axis: PlanAxis) => axis.scale === "log10" || axis.scale === "symlog";
 
 // A log or symlog panel is drawn on linear ECharts axes: every coordinate goes through the plan's scale.
 function placement(panel: RenderPlanPanel, mark?: RenderPlanMark): Place | null {
   const { x } = panel.axes;
-  const y = mark && "axis" in mark && mark.axis === "y2" && panel.axes.y2 ? panel.axes.y2 : panel.axes.y;
+  const y = yAxisOf(panel, mark);
   if (!scaled(x) && !scaled(y)) return null;
   return (point) => [axisPosition(x.scale, point[0]!), axisPosition(y.scale, point[1]!), ...point.slice(2)];
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import placement from "../../../../contracts/fixtures/v24/plan-placement.json";
+import { axisPosition, axisValue } from "@/domain/render-plan";
+
 import type { RenderPlan, RenderPlanMark } from "@/domain/render-plan";
 
 import { zoomedWindow } from "./render-plan-chart";
@@ -343,6 +346,13 @@ describe("log and symlog axes", () => {
     expect(planTooltip(logged("log10", [points]), 0, 1, text)).toContain("1000");
   });
 
+  it("shows real values in the shared tooltip, which is fed the drawn positions", () => {
+    const noted = logged("log10", [points]);
+    const [dots] = buildPlanOption({ plan: noted, text }).series as Series[];
+    const tooltip = planAxisTooltip(noted)([{ seriesName: "A", seriesIndex: 0, value: dots.data[1] }]);
+    expect(tooltip).toBe("2<br/>A: 1000");
+  });
+
   it("is linear near zero on a symlog axis and mirrors negatives", () => {
     const mirrored: RenderPlanMark = { ...points, y: [-9, 9] };
     const built = buildPlanOption({ plan: logged("symlog", [mirrored], [-99, 99]), text });
@@ -431,5 +441,37 @@ describe("annotations", () => {
     expect(series.data).toEqual([[0, 2]]);
     const [line] = series.renderItem({ dataIndex: 0, coordSys: frame }, identity).children;
     expect(line.shape.points).toEqual([[0, 1], [0, 2], [2, 2], [2, 1]]);
+  });
+});
+
+describe("placement fixture shared with the API tests", () => {
+  const fixture = placement as unknown as {
+    positions: { scale: "linear" | "log10" | "symlog"; value: number; position: number }[];
+    plan: RenderPlan;
+    placed: { points: number[][]; bracket: number[][]; bracketLabel: number[]; rectLabel: number[] };
+  };
+  const close = (got: number[][], want: number[][]) => got.forEach((point, i) =>
+    point.forEach((value, j) => expect(value).toBeCloseTo(want[i]![j]!, 9)));
+
+  it("places sample values where the API places them, and back", () => {
+    for (const { scale, value, position } of fixture.positions) {
+      expect(axisPosition(scale, value)).toBeCloseTo(position, 12);
+      expect(axisValue(scale, position)).toBeCloseTo(value, 6 - Math.ceil(Math.log10(Math.abs(value) + 1)));
+    }
+  });
+
+  it("draws the fixture plan's points and notes at the positions the API states", () => {
+    const series = buildPlanOption({ plan: fixture.plan, text }).series as Series[];
+    const dots = series.find((item) => item.type === "scatter" && item.id !== "selection")!;
+    close(dots.data, fixture.placed.points);
+    const notes = series.find((item) => String(item.id).startsWith("notes-") && !String(item.id).startsWith("notes-under"))!;
+    const frame = { x: 0, y: 0, width: 1, height: 1 };
+    const draw = (index: number) => notes.renderItem({ dataIndex: index, coordSys: frame }, { coord: (point: number[]) => point }).children;
+    const [line, label] = draw(4);
+    close(line.shape.points, fixture.placed.bracket);
+    expect(label.style.x).toBeCloseTo(fixture.placed.bracketLabel[0]!, 9);
+    const [window] = draw(3);
+    expect(window.style.x - 4).toBeCloseTo(fixture.placed.rectLabel[0]!, 9);
+    expect(window.style.y - 4).toBeCloseTo(fixture.placed.rectLabel[1]!, 9);
   });
 });

@@ -167,3 +167,33 @@ def test_a_plan_without_notes_draws_as_before() -> None:
     ax = Figure(figsize=(4, 3), dpi=100).subplots()
     draw_panel(ax, plan(VALUES)["panels"][0])
     assert not ax.texts and not ax.patches
+
+
+def test_the_research_drawer_draws_notes_too() -> None:
+    from matplotlib.figure import Figure
+
+    from labviz_api.research_chart_render import draw_plan
+
+    figure = Figure(figsize=(4, 3), dpi=100)
+    ax = figure.subplots()
+    draw_plan(noted(), target_figure=figure, target_axis=ax)
+    assert {item.get_text() for item in ax.texts} == {"peak", "limit", "window", "p < 0.01"}
+    assert len(ax.patches) == 1
+
+
+def test_whole_numbers_and_floats_plan_the_same_note() -> None:
+    whole = noted(notes=[{"kind": "hline", "value": 10, "label": ""}])
+    assert (
+        whole["planHash"]
+        == noted(notes=[{"kind": "hline", "value": 10.0, "label": ""}])["planHash"]
+    )
+
+
+def test_free_text_is_clipped_to_the_panel_as_the_preview_clips_it() -> None:
+    from matplotlib.figure import Figure
+
+    from labviz_api.render_plan_draw import draw_panel
+
+    ax = Figure(figsize=(4, 3), dpi=100).subplots()
+    draw_panel(ax, noted(notes=[NOTES[0]])["panels"][0])
+    assert ax.texts[0].get_clip_on()

@@ -281,7 +281,8 @@ class Panel(ResearchModel):
     axes: PanelAxes
     marks: list[Mark]
     legend: list[LegendEntry]
-    # Absent on a panel without annotations, so plans built before notes keep their hash.
+    # Plans are built and hashed as dicts, and a panel without annotations has no notes key,
+    # so plans built before notes keep their hash. Dumping this model would add an empty list.
     notes: list[Note] = Field(default_factory=list)
 
 
