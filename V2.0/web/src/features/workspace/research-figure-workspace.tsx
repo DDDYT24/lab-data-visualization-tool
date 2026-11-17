@@ -6,16 +6,21 @@ import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Drawer, MenuItem, useMediaQuery, Paper, Stack, Tab, Tabs, TextField, Typography,
 } from "@mui/material";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import { FigureArrangementPicker } from "./figure-arrangement-picker";
 import { FigureStatus } from "./figure-status";
 import { figureFilesReady, figureWorkspaceState, type FigureWorkspaceState } from "./figure-workspace-state";
 import { ResearchFigureInspector } from "./research-figure-inspector";
-import type { FigureBoard, FigureBoardHistory, FigureBoardSpec, FigureSources } from "@/domain/research-figure-board";
+import { ResearchFigurePanelEditor } from "./research-figure-panel-editor";
+import {
+  chartIdsOf, draftFromSpec, duplicatePanel, emptyDraft, figureOf, MAX_PANELS, movePanel, PANEL_LABELS, shares, specFromDraft, storedDraft, withCount,
+  type FigureDraft, type PanelDraft,
+} from "@/domain/figure-draft";
+import type { RenderPlan } from "@/domain/render-plan";
+import type { FigureBoard, FigureBoardHistory, FigureSources } from "@/domain/research-figure-board";
 import { researchChartApi } from "@/lib/api/research-chart-api";
 import { researchFigureApi } from "@/lib/api/research-figure-api";
 import { useInterfaceMode } from "@/components/layout/interface-mode";
 import { useDesktopDraft, desktopDraftBase } from "./desktop-session";
-
-type LayoutDraft = { title: string; axisMode: FigureBoardSpec["axisMode"]; palette: "blue_teal" | "grayscale"; fontSize: number; grid: boolean; pointRendering: "auto" | "vector" | "raster"; count: number; panelTitles: string[]; slots: string[] };
 
 export function ResearchFigureWorkspace({ projectId, active = true, currentRevision, refreshKey, onSaved, onStateChange, onSelectAnalysis }: {
   active?: boolean; projectId: string; currentRevision: string | null; refreshKey: number; onSaved?: () => void; onStateChange?: (state: FigureWorkspaceState) => void; onSelectAnalysis?: () => void;
@@ -31,39 +36,33 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const [readyPreview, setReadyPreview] = useState<FigureBoard | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saved, setSaved] = useState<FigureBoard | null>(null);
-  const [title, setTitle] = useState("");
-  const [axisMode, setAxisMode] = useState<FigureBoardSpec["axisMode"]>("independent");
-  const [palette, setPalette] = useState<"blue_teal" | "grayscale">("blue_teal");
-  const [fontSize, setFontSize] = useState(10);
-  const [grid, setGrid] = useState(true);
-  const [pointRendering, setPointRendering] = useState<"auto" | "vector" | "raster">("auto");
+  const [draft, setDraft] = useState<FigureDraft>(emptyDraft);
   const [captureSample, setCaptureSample] = useState("");
   const [capturePanel, setCapturePanel] = useState(1);
-  const [count, setCount] = useState(1);
-  const [slots, setSlots] = useState(["", "", "", ""]);
-  const [panelTitles, setPanelTitles] = useState(["", "", "", ""]);
   const [selectedPanel, setSelectedPanel] = useState(0);
   const [inspectorSource, setInspectorSource] = useState<"layout" | "preview">("layout");
   const [previewPanel, setPreviewPanel] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [showPanelPreviews, setShowPanelPreviews] = useState(false);
   const [inspectorTab, setInspectorTab] = useState("data");
-  const [undoDrafts, setUndoDrafts] = useState<LayoutDraft[]>([]);
-  const [redoDrafts, setRedoDrafts] = useState<LayoutDraft[]>([]);
+  const [undoDrafts, setUndoDrafts] = useState<FigureDraft[]>([]);
+  const [redoDrafts, setRedoDrafts] = useState<FigureDraft[]>([]);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<"load" | "save" | "capture" | "retry">("load");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Source chart plans by chart id: their axes frame the panel editor's limits and categories.
+  const [sourcePlans, setSourcePlans] = useState<Record<string, RenderPlan | null>>({});
+  const { title, axisMode, palette, fontSize, grid, pointRendering, labelStyle, count, panels } = draft;
   useDesktopDraft(`figure:${projectId}`, projectId, { research: currentRevision, figure: saved?.id ?? null }, {
-    title, axisMode, palette, fontSize, grid, pointRendering, captureSample, capturePanel, count, slots, panelTitles,
-    selectedPanel, inspectorSource, previewPanel, inspectorOpen, showPanelPreviews, inspectorTab,
+    draft, captureSample, capturePanel, selectedPanel, inspectorSource, previewPanel, inspectorOpen, showPanelPreviews, inspectorTab,
     undoDrafts, redoDrafts, dirty, editOpen,
-  }, draft => {
-    restore(draft); setCaptureSample(draft.captureSample); setCapturePanel(draft.capturePanel);
-    setSelectedPanel(draft.selectedPanel); setInspectorSource(draft.inspectorSource); setPreviewPanel(draft.previewPanel);
-    setInspectorOpen(draft.inspectorOpen); setShowPanelPreviews(draft.showPanelPreviews); setInspectorTab(draft.inspectorTab);
-    setUndoDrafts(draft.undoDrafts); setRedoDrafts(draft.redoDrafts); setDirty(draft.dirty); setEditOpen(draft.editOpen);
+  }, stored => {
+    setDraft(storedDraft(stored.draft ?? stored)); setCaptureSample(stored.captureSample); setCapturePanel(stored.capturePanel);
+    setSelectedPanel(stored.selectedPanel); setInspectorSource(stored.inspectorSource); setPreviewPanel(stored.previewPanel);
+    setInspectorOpen(stored.inspectorOpen); setShowPanelPreviews(stored.showPanelPreviews); setInspectorTab(stored.inspectorTab);
+    setUndoDrafts(stored.undoDrafts.map(storedDraft)); setRedoDrafts(stored.redoDrafts.map(storedDraft)); setDirty(stored.dirty); setEditOpen(stored.editOpen);
   }, !loading, busy || loading);
   useEffect(() => {
     let active = true;
@@ -83,11 +82,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       setHistory(result);
       if (board) {
         if (figureFilesReady(board)) setReadyPreview(board);
-        const spec = board.spec as FigureBoardSpec;
-        setSaved(board); setTitle(spec.title); setCount(spec.panelChartIds.length);
-        setPanelTitles([...(spec.panelTitles ?? []), ...Array<string>(4 - (spec.panelTitles?.length ?? 0)).fill("")]);
-        setAxisMode(spec.axisMode); setPalette(spec.palette ?? "blue_teal"); setFontSize(spec.fontSize ?? 10); setGrid(spec.gridVisible ?? true); setPointRendering(spec.pointRendering ?? "auto");
-        setSlots([...spec.panelChartIds, ...Array<string>(4 - spec.panelChartIds.length).fill("")]);
+        setSaved(board); setDraft(draftFromSpec(board.spec));
       }
     }).catch((cause: unknown) => {
       if (active) setError(cause instanceof Error ? cause.message : "Layout load failed");
@@ -127,29 +122,19 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
     timer = setTimeout(poll, 500);
     return () => { disposed = true; clearTimeout(timer); };
   }, [active, projectId, savedIdentifier, artifactState, onSaved]);
-  function draft(): LayoutDraft { return { title, axisMode, palette, fontSize, grid, pointRendering, count, panelTitles: [...panelTitles], slots: [...slots] }; }
-  function edited() { setUndoDrafts((items) => [...items.slice(-49), draft()]); setRedoDrafts([]); setDirty(true); }
-  function restore(value: LayoutDraft) {
-    setTitle(value.title); setAxisMode(value.axisMode); setPalette(value.palette); setFontSize(value.fontSize);
-    setPanelTitles(value.panelTitles); setGrid(value.grid); setPointRendering(value.pointRendering); setCount(value.count); setSlots(value.slots); setSelectedPanel(0); setDirty(true);
-  }
+  /** Every edit goes through here, so undo restores the whole figure as it was. */
+  function update(next: FigureDraft) { setUndoDrafts((items) => [...items.slice(-49), draft]); setRedoDrafts([]); setDirty(true); setDraft(next); }
+  function updatePanel(index: number, panel: PanelDraft) { update({ ...draft, panels: panels.map((item, i) => (i === index ? panel : item)) }); }
+  function restore(value: FigureDraft) { setDraft(value); setSelectedPanel(0); setDirty(true); }
   function duplicate(index: number) {
-    const next = [...slots]; const empty = next.slice(0,count).findIndex((v) => !v);
-    const target = empty >= 0 ? empty : count;
-    if (target >= 4) return;
-    edited(); next[target] = slots[index]; setSlots(next);
-    setPanelTitles((prev) => prev.map((value, i) => i === target ? prev[index] : value));
-    if (target >= count) setCount(count === 1 ? 2 : 4);
-    setSelectedPanel(target);
+    const result = duplicatePanel(draft, index);
+    if (!result) return;
+    update(result.draft); setSelectedPanel(result.target);
   }
   function accept(board: FigureBoard) {
     if (figureFilesReady(board)) setReadyPreview(board);
     setUndoDrafts([]); setRedoDrafts([]);
-    const spec = board.spec as FigureBoardSpec;
-    setSaved(board); setTitle(spec.title); setCount(spec.panelChartIds.length);
-        setPanelTitles([...(spec.panelTitles ?? []), ...Array<string>(4 - (spec.panelTitles?.length ?? 0)).fill("")]);
-        setAxisMode(spec.axisMode); setPalette(spec.palette ?? "blue_teal"); setFontSize(spec.fontSize ?? 10); setGrid(spec.gridVisible ?? true); setPointRendering(spec.pointRendering ?? "auto");
-    setSlots([...spec.panelChartIds, ...Array<string>(4 - spec.panelChartIds.length).fill("")]);
+    setSaved(board); setDraft(draftFromSpec(board.spec));
     setDirty(false); setError(null);
   }
   async function run(action: () => Promise<void>, phase: "load" | "save" | "capture" | "retry" = "load") {
@@ -158,15 +143,8 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
     catch (cause) { setError(cause instanceof Error ? cause.message : "Layout request failed"); }
     finally { setBusy(false); }
   }
-  function move(index: number, delta: number) {
-    const next = [...slots];
-    [next[index], next[index + delta]] = [next[index + delta], next[index]];
-    const titles = [...panelTitles];
-    [titles[index], titles[index + delta]] = [titles[index + delta], titles[index]];
-    setPanelTitles(titles); setSlots(next); edited();
-  }
   const blocked = loading || busy;
-  const selectedIds = slots.slice(0, count);
+  const selectedIds = panels.slice(0, count).map((panel) => panel.chartId);
   const complete = selectedIds.every((id) => catalog.charts.some((chart) => chart.id === id));
   const names: Record<string, string> = {
     line: t("Line", "折线"), scatter: t("Scatter", "散点"), box: t("Box", "箱线"), heatmap: t("Correlation", "相关图"),
@@ -174,26 +152,62 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   };
   const sameRevision = selectedIds.every((id) => catalog.charts.find((chart) => chart.id === id)?.revisionId === currentRevision);
   const inspectingPreview = overview && inspectorSource === "preview" && !!readyPreview;
-  const inspectedIds = inspectingPreview ? (readyPreview.spec as FigureBoardSpec).panelChartIds : selectedIds;
+  const inspectedIds = inspectingPreview ? chartIdsOf(readyPreview.spec) : selectedIds;
   const inspectedIndex = Math.min(inspectingPreview ? previewPanel : selectedPanel, inspectedIds.length - 1);
   const inspected = catalog.charts.find((c) => c.id === inspectedIds[inspectedIndex]);
   const inspectedBoard = inspectingPreview ? readyPreview : saved;
   const inspectedMetadata = inspectedBoard?.panels.find((panel) => panel.chartId === inspected?.id);
+  const editedChart = !inspectingPreview && inspected && !inspected.legacy ? inspected.id : null;
+  useEffect(() => {
+    if (!active || !editedChart || editedChart in sourcePlans) return;
+    let mounted = true;
+    // A chart whose plan cannot be read still takes axis controls and notes, without the hints.
+    researchChartApi.plan(projectId, editedChart).catch(() => null)
+      .then((plan) => { if (mounted) setSourcePlans((plans) => ({ ...plans, [editedChart]: plan })); });
+    return () => { mounted = false; };
+  }, [active, editedChart, projectId, sourcePlans]);
   function inspectIndex(index: number) { if (inspectingPreview) setPreviewPanel(index); else setSelectedPanel(index); }
   const state = useMemo(() => figureWorkspaceState({ saved, preview: readyPreview, loading,
     saving: busy && operation === "save", retrying: busy && operation === "retry", saveFailed: !!error && operation === "save", dirty }),
     [saved, readyPreview, loading, busy, operation, error, dirty]);
   useEffect(() => { onStateChange?.(state); }, [onStateChange, state]);
   const previewBoard = overview ? readyPreview : figureFilesReady(saved) ? saved : null;
+  const inspectorBody = <Stack spacing={2}>
+    <Typography component="h3" variant="h6">{t("Selected panel", "选中面板")} {PANEL_LABELS[inspectedIndex]}</Typography>
+    {overview ? <Tabs value={inspectorTab} onChange={(_, value: string) => setInspectorTab(value)} variant="fullWidth" aria-label={t("Panel inspector sections", "面板设置分区")}>
+      <Tab value="data" aria-label={t("Panel data", "面板数据")} label={t("Data", "数据")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
+      <Tab value="method" aria-label={t("Panel method", "面板方法")} label={t("Method", "方法")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
+      <Tab value="appearance" aria-label={t("Panel appearance", "面板外观")} label={t("Appearance", "外观")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
+    </Tabs> : <TextField select label={t("Inspector section", "设置分区")} value={inspectorTab} onChange={(e) => setInspectorTab(e.target.value)}>
+      <MenuItem value="data">{t("Data", "数据")}</MenuItem><MenuItem value="method">{t("Method", "方法")}</MenuItem><MenuItem value="appearance">{t("Appearance", "外观")}</MenuItem>
+    </TextField>}
+    {inspectorTab === "data" && <>
+      <TextField select label={t("Panel to inspect", "检查面板")} value={inspectedIndex} onChange={(e) => inspectIndex(Number(e.target.value))}>
+        {inspectedIds.map((_, index) => <MenuItem key={index} value={index}>{PANEL_LABELS[index]}</MenuItem>)}
+      </TextField>
+      <Typography variant="caption">{inspectingPreview ? t("Saved preview binding", "已保存预览绑定") : dirty ? t("Draft panel binding", "草稿面板绑定") : t("Saved panel binding", "已保存面板绑定")}</Typography>
+      {inspectingPreview && <Typography variant="caption" sx={{ overflowWrap: "anywhere" }}>{t("Preview revision", "预览修订")}: {inspectedBoard?.id}</Typography>}
+      <Typography sx={{ overflowWrap: "anywhere" }}>{t("Source chart", "来源图表")}: {inspected?.spec.title || (inspected ? names[inspected.spec.kind] : "—")}</Typography>
+      <Typography variant="caption" sx={{ overflowWrap: "anywhere" }}>{inspected?.id}</Typography>
+      {inspectedMetadata && <Typography variant="caption">{t("Observations", "观测")}: {inspectedMetadata.observations} · {t("Independent units", "独立单位")}: {inspectedMetadata.independentUnits ?? t("Undetermined", "未确定")}</Typography>}
+      <Typography sx={{ overflowWrap: "anywhere" }}>{t("Bound revision", "绑定版本")}: {inspected?.revisionId ?? "—"}</Typography><Typography>{t("Changing a binding never modifies the saved source chart.", "调整绑定不会修改已保存的来源图表。")}</Typography></>}
+    {inspectorTab === "method" && <><Typography>{t("Chart method", "图表方法")}: {inspected ? names[inspected.spec.kind] : "—"}. {t("Parameters belong to the saved chart. Create a new chart in Analysis to change them.", "参数属于已保存图表，修改方法请在分析任务中生成新图表。")}</Typography>{onSelectAnalysis && <Button onClick={() => { setInspectorOpen(false); onSelectAnalysis(); }}>{t("Open Analysis to create a new version", "前往分析任务生成新版本")}</Button>}</>}
+    {inspectorTab === "appearance" && (inspectingPreview || !inspected
+      ? <Typography>{t("Palette, font, grid and axis sharing apply to the whole figure. Preview and exports use the saved revision until you save.", "配色、字号、网格与坐标共享作用于整个组合图。保存前，预览及导出仍使用已保存版本。")}</Typography>
+      : <ResearchFigurePanelEditor key={`${inspectedIndex}:${inspected.id}`} panel={panels[inspectedIndex]!} label={PANEL_LABELS[inspectedIndex]!}
+        axes={sourcePlans[inspected.id]?.panels[0]?.axes ?? null} sharedX={shares(axisMode, "x")} sharedY={shares(axisMode, "y")}
+        disabled={blocked} t={t} onChange={(panel) => updatePanel(inspectedIndex, panel)} />)}
+    <Typography variant="caption">{t("Clear removes a panel binding only. Undo restores its previous binding and layout.", "清空只移除面板绑定，撤销可恢复此前绑定和布局。")}</Typography>
+  </Stack>;
   return <Paper variant="outlined" sx={{ p: 2 }} data-testid="figure-workspace">
     <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,1fr)", "@media (min-width:1400px)": { gridTemplateColumns: `minmax(0,1fr) ${overview ? "272px" : "240px"}` }, gap: 2, alignItems: "start" }}>
     <Stack spacing={overview ? 1 : 2} sx={{ minWidth: 0 }}>
       <Typography component="h2" variant="h5">{overview ? t("Saved preview", "已保存预览") : t("Figure layout", "组合图布局")}</Typography>
       {overview && <FigureStatus state={state} />}
-      {overview && saved && <Typography variant="subtitle1">{(saved.spec as FigureBoardSpec).title || t("Untitled layout", "未命名布局")}</Typography>}
+      {overview && saved && <Typography variant="subtitle1">{figureOf(saved.spec).title || t("Untitled layout", "未命名布局")}</Typography>}
       {overview && <Box data-testid="saved-figure-summary" sx={{ display: "flex", gap: 1, flexWrap: "wrap", color: "text.secondary" }}>
         <Typography variant="caption">{t("Saved layout revision", "已保存布局修订")}: {saved?.id.slice(0, 12) ?? t("None", "暂无")}</Typography>
-        <Typography variant="caption">{t("Panels", "面板")}: {(saved?.spec as FigureBoardSpec | undefined)?.panelChartIds.length ?? 0}</Typography>
+        <Typography variant="caption">{t("Panels", "面板")}: {saved ? chartIdsOf(saved.spec).length : 0}</Typography>
         <Typography variant="caption">{t("Counts belong to each panel's source revision.", "计数按各面板来源修订分别列出。")}</Typography>
       </Box>}
       <Alert severity="info" sx={overview ? { display: "none" } : undefined}>{t(
@@ -252,8 +266,8 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
           <Stack spacing={2} sx={{ minWidth: 0 }}>
           {overview && <Alert severity="info">{t("Saving creates a new layout revision. Draft edits do not change the saved preview or exports.", "保存会创建新的布局修订。草稿编辑不会改变已保存预览或导出。")}</Alert>}
       <Stack direction="row" useFlexGap sx={{ flexWrap: "wrap", gap: 1 }}>
-        <Button disabled={blocked || !undoDrafts.length} onClick={() => { const value = undoDrafts.at(-1)!; setRedoDrafts((items) => [...items, draft()]); setUndoDrafts((items) => items.slice(0,-1)); restore(value); }}>{t("Undo layout edit", "撤销布局编辑")}</Button>
-        <Button disabled={blocked || !redoDrafts.length} onClick={() => { const value = redoDrafts.at(-1)!; setUndoDrafts((items) => [...items, draft()]); setRedoDrafts((items) => items.slice(0,-1)); restore(value); }}>{t("Redo layout edit", "重做布局编辑")}</Button>
+        <Button disabled={blocked || !undoDrafts.length} onClick={() => { const value = undoDrafts.at(-1)!; setRedoDrafts((items) => [...items, draft]); setUndoDrafts((items) => items.slice(0,-1)); restore(value); }}>{t("Undo layout edit", "撤销布局编辑")}</Button>
+        <Button disabled={blocked || !redoDrafts.length} onClick={() => { const value = redoDrafts.at(-1)!; setUndoDrafts((items) => [...items, draft]); setRedoDrafts((items) => items.slice(0,-1)); restore(value); }}>{t("Redo layout edit", "重做布局编辑")}</Button>
 
       </Stack>
       {!catalog.charts.length && <Typography>{t(
@@ -279,38 +293,42 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
         onChange={(e) => void run(async () => accept(await researchFigureApi.get(projectId, e.target.value)))}>
         {!saved && <MenuItem value="">{t("New layout", "新布局")}</MenuItem>}
         {history.boards.map((board) => <MenuItem key={board.id} value={board.id}>
-          {(board.spec as FigureBoardSpec).title || t("Untitled layout", "未命名布局")} · {board.id.slice(0, 8)}
+          {figureOf(board.spec).title || t("Untitled layout", "未命名布局")} · {board.id.slice(0, 8)}
         </MenuItem>)}
       </TextField>
       {dirty && saved && <Button disabled={blocked} onClick={() => accept(saved)}>
         {t("Discard draft and restore saved layout", "放弃草稿并恢复已保存布局")}</Button>}
       <TextField label={t("Figure title", "组合图标题")} value={title} disabled={blocked}
-        slotProps={{ htmlInput: { maxLength: 160 } }} onChange={(e) => { setTitle(e.target.value); edited(); }} />
+        slotProps={{ htmlInput: { maxLength: 160 } }} onChange={(e) => update({ ...draft, title: e.target.value })} />
       <TextField select label={t("Panel count", "面板数量")} value={count} disabled={blocked}
-        onChange={(e) => { setCount(Number(e.target.value)); edited(); }}>
-        {[1, 2, 4].map((n) => <MenuItem value={n} key={n}>{n}</MenuItem>)}
+        onChange={(e) => update(withCount(draft, Number(e.target.value)))}>
+        {Array.from({ length: MAX_PANELS }, (_, i) => i + 1).map((n) => <MenuItem value={n} key={n}>{n}</MenuItem>)}
       </TextField>
+      <FigureArrangementPicker count={count} value={draft.layout} disabled={blocked} t={t} onChange={(layout) => update({ ...draft, layout })} />
       <Accordion>
         <AccordionSummary>{t("Figure appearance and shared axes", "组合图外观与共享坐标")}</AccordionSummary>
         <AccordionDetails><Stack spacing={2}>
       <TextField select label={t("Axis sharing", "坐标轴共享")} value={axisMode} disabled={blocked}
-        onChange={(e) => { setAxisMode(e.target.value as FigureBoardSpec["axisMode"]); edited(); }}>
+        onChange={(e) => update({ ...draft, axisMode: e.target.value as FigureDraft["axisMode"] })}>
         {[["independent", t("Independent", "独立")], ["shared_x", t("Shared X", "共享 X")], ["shared_y", t("Shared Y", "共享 Y")], ["shared_xy", t("Shared X and Y", "共享 X 和 Y")]].map(([v, label]) => <MenuItem key={v} value={v}>{label}</MenuItem>)}
       </TextField>
-      <TextField select label={t("Figure palette", "组合图配色")} value={palette} disabled={blocked} onChange={(e) => { setPalette(e.target.value as typeof palette); edited(); }}>
+      <TextField select label={t("Figure palette", "组合图配色")} value={palette} disabled={blocked} onChange={(e) => update({ ...draft, palette: e.target.value as FigureDraft["palette"] })}>
         <MenuItem value="blue_teal">{t("Blue / teal", "蓝／青")}</MenuItem><MenuItem value="grayscale">{t("Grayscale", "灰度")}</MenuItem>
       </TextField>
+      <TextField select label={t("Panel labels", "面板标号")} value={labelStyle} disabled={blocked} onChange={(e) => update({ ...draft, labelStyle: e.target.value as FigureDraft["labelStyle"] })}>
+        <MenuItem value="upper">A, B, C</MenuItem><MenuItem value="lower">a, b, c</MenuItem><MenuItem value="none">{t("None", "无")}</MenuItem>
+      </TextField>
       <TextField select label={t("Point layer export", "点层导出")} value={pointRendering}
-        disabled={blocked} onChange={(e) => { setPointRendering(e.target.value as typeof pointRendering); edited(); }}
+        disabled={blocked} onChange={(e) => update({ ...draft, pointRendering: e.target.value as FigureDraft["pointRendering"] })}
         helperText={t("Auto embeds all points at 300 dpi above 20,000 observations per panel. Text, axes and density stay vector; embedded points are not individually editable. Source data is complete.", "自动模式在每面板超过 20,000 个观测时以 300 dpi 嵌入全部点。文字、坐标轴、密度保留矢量；嵌入点无法逐个编辑，源数据完整保留。")}>
         <MenuItem value="auto">{t("Auto (large data hybrid)", "自动（大数据混合导出）")}</MenuItem>
         <MenuItem value="vector">{t("Force vector (slower for large data)", "强制全矢量（大数据较慢）")}</MenuItem>
         <MenuItem value="raster">{t("300 dpi point layer", "300 dpi 点层")}</MenuItem>
       </TextField>
-      <TextField select label={t("Figure font size", "组合图字号")} value={fontSize} disabled={blocked} onChange={(e) => { setFontSize(Number(e.target.value)); edited(); }}>
+      <TextField select label={t("Figure font size", "组合图字号")} value={fontSize} disabled={blocked} onChange={(e) => update({ ...draft, fontSize: Number(e.target.value) })}>
         {[8, 10, 12, 14, 16].map((size) => <MenuItem key={size} value={size}>{size}</MenuItem>)}
       </TextField>
-      <Button disabled={blocked} onClick={() => { setGrid(!grid); edited(); }}>{grid ? t("Hide figure grid", "隐藏组合图网格") : t("Show figure grid", "显示组合图网格")}</Button>
+      <Button disabled={blocked} onClick={() => update({ ...draft, grid: !grid })}>{grid ? t("Hide figure grid", "隐藏组合图网格") : t("Show figure grid", "显示组合图网格")}</Button>
         </Stack></AccordionDetails>
       </Accordion>
       {saved?.composed && !dirty && <Button aria-pressed={showPanelPreviews} onClick={() => setShowPanelPreviews(!showPanelPreviews)}>
@@ -318,17 +336,19 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       </Button>}
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: count === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
         {selectedIds.map((id, index) => {
-          const label = "ABCD"[index];
+          const label = PANEL_LABELS[index]!;
           const chart = catalog.charts.find((item) => item.id === id);
           const spec = chart?.spec;
           const metadata = saved?.panels.find((panel) => panel.chartId === id);
+          const noted = panels[index]!.notes.length;
+          const scaled = [panels[index]!.axes.x, panels[index]!.axes.y].some((axis) => axis.scale !== "linear" || axis.domain);
           return <Paper component="section" variant="outlined" key={label} sx={{ p: 1.5, minWidth: 0 }}
             aria-label={t(`Panel ${label}`, `面板 ${label}`)} data-testid={`figure-panel-${label}`}>
             <Stack spacing={1}>
               <Typography component="h3" variant="h6">{label}</Typography>
               <Button aria-pressed={selectedPanel === index} onClick={() => { setSelectedPanel(index); setInspectorSource("layout"); setInspectorOpen(!wide); }}>{t(`Inspect panel ${label}`, `检查面板 ${label}`)}</Button>
               <TextField select label={t(`Chart for panel ${label}`, `面板 ${label} 的图表`)} value={id} disabled={blocked}
-                onChange={(e) => { setSlots((previous) => previous.map((value, i) => i === index ? e.target.value : value)); edited(); }}>
+                onChange={(e) => updatePanel(index, { ...panels[index]!, chartId: e.target.value })}>
                 <MenuItem value="">{t("Choose saved chart", "选择已保存图表")}</MenuItem>
                 {catalog.charts.map((item) => {
                   const itemSpec = item.spec;
@@ -336,16 +356,16 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
                 })}
               </TextField>
               <TextField label={t(`Panel ${label} title (figure only)`, `面板 ${label} 标题（仅作用于组合图）`)}
-                value={panelTitles[index]} disabled={blocked} slotProps={{ htmlInput: { maxLength: 160 } }}
+                value={panels[index]!.title} disabled={blocked} slotProps={{ htmlInput: { maxLength: 160 } }}
                 helperText={t("Blank keeps the source title. Saved source values and method stay unchanged.", "留空沿用来源标题，来源图表的数值和方法保持不变。")}
-                onChange={(e) => { edited(); setPanelTitles((prev) => prev.map((value, i) => i === index ? e.target.value : value)); }} />
+                onChange={(e) => updatePanel(index, { ...panels[index]!, title: e.target.value })} />
               <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-                <Button disabled={blocked || index === 0} onClick={() => move(index, -1)}
+                <Button disabled={blocked || index === 0} onClick={() => update(movePanel(draft, index, -1))}
                   aria-label={t(`Move panel ${label} earlier`, `面板 ${label} 前移`)}>{t("Earlier", "前移")}</Button>
-                <Button disabled={blocked || index === count - 1} onClick={() => move(index, 1)}
+                <Button disabled={blocked || index === count - 1} onClick={() => update(movePanel(draft, index, 1))}
                   aria-label={t(`Move panel ${label} later`, `面板 ${label} 后移`)}>{t("Later", "后移")}</Button>
-                <Button disabled={blocked || !id || (count === 4 && selectedIds.every(Boolean))} onClick={() => duplicate(index)}>{t(`Duplicate panel ${label}`, `复制面板 ${label}`)}</Button>
-                <Button disabled={blocked || !id} onClick={() => { edited(); setSlots((prev) => prev.map((v,i) => i === index ? "" : v)); }}>{t(`Clear panel ${label}`, `清空面板 ${label}`)}</Button>
+                <Button disabled={blocked || !id || (count === MAX_PANELS && selectedIds.every(Boolean))} onClick={() => duplicate(index)}>{t(`Duplicate panel ${label}`, `复制面板 ${label}`)}</Button>
+                <Button disabled={blocked || !id} onClick={() => updatePanel(index, { ...panels[index]!, chartId: "" })}>{t(`Clear panel ${label}`, `清空面板 ${label}`)}</Button>
               </Stack>
               {chart && spec && <>
                 {active && !loading && (!saved?.composed || dirty || showPanelPreviews) && !chart.legacy && <Box component="img" src={researchChartApi.artifact(projectId, chart.id, "png", false, true, 480)}
@@ -353,7 +373,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
                   sx={{ width: "100%", height: "auto", bgcolor: "white" }} />}
                 {chart.legacy && <Typography>{t("Captured legacy panel; save to preview composition.", "已捕获旧图表面板；保存后预览组合图。")}</Typography> }
                 <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-                  {t("Independent axes · research revision", "独立坐标轴 · 研究版本")}: {chart.revisionId.slice(0, 8)}
+                  {scaled ? t("Own axis settings", "自定坐标轴") : t("Independent axes", "独立坐标轴")}{noted ? ` · ${noted} ${t(noted === 1 ? "annotation" : "annotations", "个标注")}` : ""} · {t("research revision", "研究版本")}: {chart.revisionId.slice(0, 8)}
                 </Typography>
                 {metadata && <Typography variant="caption">
                   {t("Observations", "观测")}: {metadata.observations} · {t("Independent units", "独立单位")}: {metadata.independentUnits ?? "?"} · {metadata.unit}
@@ -368,9 +388,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
         "部分面板使用历史数据版本；保存时会保留这些图表绑定，不会替换为当前数据。")}</Alert>}
       <Button variant="contained" disabled={blocked || !complete || (!dirty && !!saved && (saved.composed || ["queued", "running", "failed"].includes(saved.artifactState ?? "")))}
         onClick={() => void run(async () => {
-          const board = await researchFigureApi.save(projectId, {
-            schemaVersion: 1, title, axisMode, palette, fontSize, gridVisible: grid, pointRendering, panelTitles: panelTitles.slice(0,count), panelChartIds: selectedIds,
-          });
+          const board = await researchFigureApi.save(projectId, specFromDraft(draft));
           accept(board);
           setHistory((previous) => ({ boards: [board, ...previous.boards] }));
           onSaved?.();
@@ -380,56 +398,12 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       </Accordion>
     </Stack>
     <Paper id="panel-inspector" component="aside" variant="outlined" sx={{ p: 2, display: "none", position: "sticky", top: overview ? 104 : 56, minWidth: 0, "@media (min-width:1400px)": { display: "block" } }} aria-label={t("Selected panel inspector", "选中面板检查器")}>
-      <Stack spacing={2}>
-        <Typography component="h3" variant="h6">{t("Selected panel", "选中面板")} {"ABCD"[inspectedIndex]}</Typography>
-        {overview ? <Tabs value={inspectorTab} onChange={(_, value: string) => setInspectorTab(value)} variant="fullWidth" aria-label={t("Panel inspector sections", "面板设置分区")}>
-          <Tab value="data" aria-label={t("Panel data", "面板数据")} label={t("Data", "数据")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
-          <Tab value="method" aria-label={t("Panel method", "面板方法")} label={t("Method", "方法")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
-          <Tab value="appearance" aria-label={t("Panel appearance", "面板外观")} label={t("Appearance", "外观")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
-        </Tabs> : <TextField select label={t("Inspector section", "设置分区")} value={inspectorTab} onChange={(e) => setInspectorTab(e.target.value)}>
-          <MenuItem value="data">{t("Data", "数据")}</MenuItem><MenuItem value="method">{t("Method", "方法")}</MenuItem><MenuItem value="appearance">{t("Appearance", "外观")}</MenuItem>
-        </TextField>}
-        {inspectorTab === "data" && <>
-          <TextField select label={t("Panel to inspect", "检查面板")} value={inspectedIndex} onChange={(e) => inspectIndex(Number(e.target.value))}>
-            {inspectedIds.map((_, index) => <MenuItem key={index} value={index}>{"ABCD"[index]}</MenuItem>)}
-          </TextField>
-          <Typography variant="caption">{inspectingPreview ? t("Saved preview binding", "已保存预览绑定") : dirty ? t("Draft panel binding", "草稿面板绑定") : t("Saved panel binding", "已保存面板绑定")}</Typography>
-          {inspectingPreview && <Typography variant="caption" sx={{ overflowWrap: "anywhere" }}>{t("Preview revision", "预览修订")}: {inspectedBoard?.id}</Typography>}
-          <Typography sx={{ overflowWrap: "anywhere" }}>{t("Source chart", "来源图表")}: {inspected?.spec.title || (inspected ? names[inspected.spec.kind] : "—")}</Typography>
-          <Typography variant="caption" sx={{ overflowWrap: "anywhere" }}>{inspected?.id}</Typography>
-          {inspectedMetadata && <Typography variant="caption">{t("Observations", "观测")}: {inspectedMetadata.observations} · {t("Independent units", "独立单位")}: {inspectedMetadata.independentUnits ?? t("Undetermined", "未确定")}</Typography>}
-          <Typography sx={{ overflowWrap: "anywhere" }}>{t("Bound revision", "绑定版本")}: {inspected?.revisionId ?? "—"}</Typography><Typography>{t("Changing a binding never modifies the saved source chart.", "调整绑定不会修改已保存的来源图表。")}</Typography></>}
-        {inspectorTab === "method" && <><Typography>{t("Chart method", "图表方法")}: {inspected ? names[inspected.spec.kind] : "—"}. {t("Parameters belong to the saved chart. Create a new chart in Analysis to change them.", "参数属于已保存图表，修改方法请在分析任务中生成新图表。")}</Typography>{onSelectAnalysis && <Button onClick={() => { setInspectorOpen(false); onSelectAnalysis(); }}>{t("Open Analysis to create a new version", "前往分析任务生成新版本")}</Button>}</>}
-        {inspectorTab === "appearance" && <Typography>{t("Palette, font, grid and axis sharing apply to the whole figure. Preview and exports use the saved revision until you save.", "配色、字号、网格与坐标共享作用于整个组合图。保存前，预览及导出仍使用已保存版本。")}</Typography>}
-        <Typography variant="caption">{t("Clear removes a panel binding only. Undo restores its previous binding and layout.", "清空只移除面板绑定，撤销可恢复此前绑定和布局。")}</Typography>
-      </Stack>
+      {wide && inspectorBody}
     </Paper>
     <Drawer slotProps={{ paper: { role: "dialog", "aria-label": t("Selected panel inspector", "选中面板检查器"), "aria-modal": true } }} anchor="right" open={inspectorOpen && !wide} onClose={() => setInspectorOpen(false)} sx={{ "@media (min-width:1400px)": { display: "none" } }}>
       <Stack sx={{ width: { xs: "min(340px, 90vw)", sm: 340 }, p: 2 }} spacing={2}>
         <Button onClick={() => setInspectorOpen(false)}>{t("Return to figure", "返回组合图")}</Button>
-      <Stack spacing={2}>
-        <Typography component="h3" variant="h6">{t("Selected panel", "选中面板")} {"ABCD"[inspectedIndex]}</Typography>
-        {overview ? <Tabs value={inspectorTab} onChange={(_, value: string) => setInspectorTab(value)} variant="fullWidth" aria-label={t("Panel inspector sections", "面板设置分区")}>
-          <Tab value="data" aria-label={t("Panel data", "面板数据")} label={t("Data", "数据")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
-          <Tab value="method" aria-label={t("Panel method", "面板方法")} label={t("Method", "方法")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
-          <Tab value="appearance" aria-label={t("Panel appearance", "面板外观")} label={t("Appearance", "外观")} sx={{ minWidth: 0, px: 0.5, fontSize: 12 }} />
-        </Tabs> : <TextField select label={t("Inspector section", "设置分区")} value={inspectorTab} onChange={(e) => setInspectorTab(e.target.value)}>
-          <MenuItem value="data">{t("Data", "数据")}</MenuItem><MenuItem value="method">{t("Method", "方法")}</MenuItem><MenuItem value="appearance">{t("Appearance", "外观")}</MenuItem>
-        </TextField>}
-        {inspectorTab === "data" && <>
-          <TextField select label={t("Panel to inspect", "检查面板")} value={inspectedIndex} onChange={(e) => inspectIndex(Number(e.target.value))}>
-            {inspectedIds.map((_, index) => <MenuItem key={index} value={index}>{"ABCD"[index]}</MenuItem>)}
-          </TextField>
-          <Typography variant="caption">{inspectingPreview ? t("Saved preview binding", "已保存预览绑定") : dirty ? t("Draft panel binding", "草稿面板绑定") : t("Saved panel binding", "已保存面板绑定")}</Typography>
-          {inspectingPreview && <Typography variant="caption" sx={{ overflowWrap: "anywhere" }}>{t("Preview revision", "预览修订")}: {inspectedBoard?.id}</Typography>}
-          <Typography sx={{ overflowWrap: "anywhere" }}>{t("Source chart", "来源图表")}: {inspected?.spec.title || (inspected ? names[inspected.spec.kind] : "—")}</Typography>
-          <Typography variant="caption" sx={{ overflowWrap: "anywhere" }}>{inspected?.id}</Typography>
-          {inspectedMetadata && <Typography variant="caption">{t("Observations", "观测")}: {inspectedMetadata.observations} · {t("Independent units", "独立单位")}: {inspectedMetadata.independentUnits ?? t("Undetermined", "未确定")}</Typography>}
-          <Typography sx={{ overflowWrap: "anywhere" }}>{t("Bound revision", "绑定版本")}: {inspected?.revisionId ?? "—"}</Typography><Typography>{t("Changing a binding never modifies the saved source chart.", "调整绑定不会修改已保存的来源图表。")}</Typography></>}
-        {inspectorTab === "method" && <><Typography>{t("Chart method", "图表方法")}: {inspected ? names[inspected.spec.kind] : "—"}. {t("Parameters belong to the saved chart. Create a new chart in Analysis to change them.", "参数属于已保存图表，修改方法请在分析任务中生成新图表。")}</Typography>{onSelectAnalysis && <Button onClick={() => { setInspectorOpen(false); onSelectAnalysis(); }}>{t("Open Analysis to create a new version", "前往分析任务生成新版本")}</Button>}</>}
-        {inspectorTab === "appearance" && <Typography>{t("Palette, font, grid and axis sharing apply to the whole figure. Preview and exports use the saved revision until you save.", "配色、字号、网格与坐标共享作用于整个组合图。保存前，预览及导出仍使用已保存版本。")}</Typography>}
-        <Typography variant="caption">{t("Clear removes a panel binding only. Undo restores its previous binding and layout.", "清空只移除面板绑定，撤销可恢复此前绑定和布局。")}</Typography>
-      </Stack>
+        {!wide && inspectorBody}
       </Stack>
     </Drawer>
     </Box>

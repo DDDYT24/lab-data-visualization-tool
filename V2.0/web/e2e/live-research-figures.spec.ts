@@ -283,3 +283,81 @@ test("figure layouts preserve saved panels and recover drafts", async ({ page, e
   await inspector.getByRole("button", { name: "组合图适应屏幕" }).click();
   await board.screenshot({ path: testInfo.outputPath("figure-mobile-zh.png") });
 });
+
+test("a six-panel mosaic with a log axis and a bracket saves, draws and reopens", async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const unlocked = page.waitForResponse((r) => r.url().endsWith("/api/v1/local/session"));
+  await page.goto(`/#labviz-access=${process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY}`);
+  expect((await unlocked).ok()).toBeTruthy();
+  const rows = ["sample,group,value,unit"];
+  for (let s = 1; s <= 8; s++) rows.push(`s${s},${s % 2 ? "Control" : "Treated"},${s * 3},mV`);
+  const source = rows.join("\n") + "\n";
+  const upload = await page.request.post("/api/v1/projects", { multipart: { file: { name: "mosaic.csv", mimeType: "text/csv", buffer: Buffer.from(source) } } });
+  expect(upload.ok()).toBeTruthy();
+  const uploaded = await upload.json();
+  await expect.poll(async () => (await (await page.request.get(`/api/v1/jobs/${uploaded.job.id}`)).json()).stage).toBe("ready");
+  const base = `/api/v1/projects/${uploaded.projectId}/research`;
+  const prepared = await page.request.post(base + "/preview", { multipart: {
+    plan: JSON.stringify({ mapping: { value: "value", sample: "sample", experimentalUnit: "sample", group: "group", unit: "unit" }, analysisUnit: "experimental_unit" }),
+    files: { name: "mosaic.csv", mimeType: "text/csv", buffer: Buffer.from(source) },
+  } });
+  expect(prepared.ok(), await prepared.text()).toBeTruthy();
+  const applied = await page.request.post(base + "/apply", { data: { token: (await prepared.json()).token } });
+  expect(applied.ok()).toBeTruthy();
+  const revisionId = (await applied.json()).revisionId;
+  for (const [kind, title] of [["grouped_strip", "Points"], ["violin", "Spread"]]) {
+    expect((await page.request.post(base + "/charts", { data: { revisionId, spec: { kind, title } } })).ok()).toBeTruthy();
+  }
+  await page.goto(`/workspace/${uploaded.projectId}`);
+  await page.getByRole("button", { name: "Research workspace", exact: true }).click();
+  await page.getByRole("tab", { name: "Figures", exact: true }).click();
+  const board = page.getByTestId("figure-workspace");
+  const select = async (label: string, option: string | RegExp) => {
+    const control = page.getByRole("combobox", { name: label, exact: true });
+    await expect(control).toBeEnabled();
+    await control.click();
+    await page.getByRole("option", { name: option, exact: typeof option === "string" }).click();
+  };
+  await select("Panel count", "6");
+  await board.getByRole("button", { name: "A across 2 columns, C down 2 rows, D down 2 rows", exact: true }).click();
+  for (const [index, label] of [..."ABCDEF"].entries()) await select(`Chart for panel ${label}`, index % 2 ? /Spread/ : /Points/);
+  await board.getByRole("button", { name: "Inspect panel A", exact: true }).click();
+  const inspector = page.getByRole("complementary", { name: "Selected panel inspector" });
+  await select("Inspector section", "Appearance");
+  const editor = inspector.getByTestId("figure-panel-editor");
+  await expect(editor.getByText("Categories", { exact: true })).toBeVisible();
+  await select("Y axis scale", "Log 10");
+  await editor.getByRole("button", { name: "Add annotation to panel A", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Significance bracket", exact: true }).click();
+  const bracket = editor.getByRole("region", { name: "Significance bracket 1" });
+  await expect(bracket.getByRole("combobox", { name: "X from", exact: true })).toHaveText("Control");
+  await bracket.getByRole("textbox", { name: "Height", exact: true }).fill("20");
+  await bracket.getByRole("textbox", { name: "Label", exact: true }).fill("p < 0.01");
+  await expect(board.getByTestId("figure-panel-A")).toContainText("Own axis settings · 1 annotation");
+  const accessibility = await new AxeBuilder({ page }).include('[data-testid="figure-workspace"]').withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("figure-six-panel-editor.png"), fullPage: true });
+  const committed = page.waitForResponse((response) => response.request().method() === "POST"
+    && response.url().endsWith("/research/figure-boards?deferArtifacts=true"));
+  await board.getByRole("button", { name: "Save new layout revision" }).click();
+  const response = await committed;
+  expect(response.status(), await response.text()).toBe(202);
+  const revision = await response.json();
+  expect(revision.spec).toMatchObject({ schemaVersion: 2, layout: { kind: "mosaic", mosaic: ["AAB", "CDE", "CDF"] } });
+  const url = response.url().split("?")[0] + "/" + revision.id;
+  await expect.poll(async () => (await (await page.request.get(url)).json()).artifactState, { timeout: 180_000 }).toBe("ready");
+  const plan = await (await page.request.get(url + "/plans/A")).json();
+  expect(plan.panels[0].axes.y.scale).toBe("log10");
+  expect(plan.panels[0].notes).toEqual([expect.objectContaining({ kind: "bracket", x: [0, 1], y: 20, label: "p < 0.01" })]);
+  const composed = board.getByRole("img", { name: "Saved composed figure", exact: true });
+  await expect.poll(() => composed.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await board.getByRole("button", { name: "Interactive panels", exact: true }).click();
+  await expect(board.getByTestId("render-plan-chart")).toHaveCount(6);
+  await page.screenshot({ path: testInfo.outputPath("figure-six-panel-saved.png"), fullPage: true });
+  await page.reload();
+  await page.getByRole("tab", { name: "Figures", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Panel count", exact: true })).toHaveText("6");
+  await expect(board.getByTestId("figure-panel-F")).toBeVisible();
+  await expect(board.getByTestId("figure-panel-A")).toContainText("Own axis settings · 1 annotation");
+});

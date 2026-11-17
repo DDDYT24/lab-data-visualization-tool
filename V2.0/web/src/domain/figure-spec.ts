@@ -86,7 +86,7 @@ const plainStyle = (): FigureLayer["style"] => ({ color: null, colorBy: null, ma
 type Loose = Record<string, unknown>;
 
 // Fills every default the API fills, in the API's key order, so both sides hold the same object.
-function complete(raw: Loose): FigureSpec {
+export function completeFigure(raw: Loose): FigureSpec {
   const panels = (raw.panels as Loose[]).map((panel) => {
     const axes = (panel.axes ?? {}) as Loose;
     return {
@@ -112,7 +112,7 @@ function complete(raw: Loose): FigureSpec {
 
 const shape = z.fromJSONSchema(generatedSpec as Parameters<typeof z.fromJSONSchema>[0]);
 export const figureSpecSchema = shape.transform((value, context) => {
-  const figure = complete(value as Loose);
+  const figure = completeFigure(value as Loose);
   for (const message of problems(figure)) context.addIssue({ code: "custom", message });
   return figure;
 });
@@ -122,21 +122,15 @@ const GRID: Record<number, [number, number]> = { 1: [1, 1], 2: [1, 2], 4: [2, 2]
 /** The v2 figure that draws exactly what a v1 board draws. */
 export function upgradeBoard(board: FigureBoardSpec): FigureSpec {
   const [rows, cols] = GRID[board.panelChartIds.length];
-  return {
-    schemaVersion: 2, title: board.title, fontSize: board.fontSize ?? 10, gridVisible: board.gridVisible ?? true,
-    axisMode: board.axisMode, pointRendering: board.pointRendering ?? "auto",
-    canvas: { sizePreset: "double_column", width: null, height: null, unit: "mm", dpi: 300, background: "#ffffff", transparent: false, grayscale: false },
-    layout: { kind: "grid", rows, cols, mosaic: null, gutter: 0.08, labelStyle: "upper" },
-    palette: { categorical: board.palette ?? "blue_teal", sequential: "viridis", diverging: "blue_red" },
+  return completeFigure({
+    schemaVersion: 2, title: board.title, fontSize: board.fontSize, gridVisible: board.gridVisible,
+    axisMode: board.axisMode, pointRendering: board.pointRendering,
+    layout: { rows, cols }, palette: { categorical: board.palette ?? "blue_teal" },
     panels: board.panelChartIds.map((chartId, index) => ({
-      id: `p${index + 1}`, label: "ABCD"[index], title: board.panelTitles?.[index] ?? "", datasetRef: null,
-      axes: { x: axis(), y: axis() }, annotations: [],
-      layers: [{
-        kind: "chart", chartId,
-        encoding: emptyEncoding(), method: null, style: plainStyle(),
-      }],
+      id: `p${index + 1}`, label: "ABCD"[index], title: board.panelTitles?.[index] ?? "",
+      layers: [{ kind: "chart", chartId }],
     })),
-  };
+  });
 }
 
 /** The v1 view of a figure, or null when the figure says more than v1 can. */
@@ -149,5 +143,6 @@ export function projectBoard(figure: FigureSpec): FigureBoardSpec | null {
     schemaVersion: 1, pointRendering: figure.pointRendering, title: figure.title, axisMode: figure.axisMode, palette,
     fontSize: figure.fontSize, gridVisible: figure.gridVisible, panelTitles: titles.some(Boolean) ? titles : [], panelChartIds: charts,
   };
-  return JSON.stringify(upgradeBoard(board)) === JSON.stringify(figure) ? board : null;
+  // Both sides are completed, so a figure built in another key order still compares equal.
+  return JSON.stringify(upgradeBoard(board)) === JSON.stringify(completeFigure(figure)) ? board : null;
 }
