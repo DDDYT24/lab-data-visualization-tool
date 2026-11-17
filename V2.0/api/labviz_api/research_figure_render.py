@@ -72,6 +72,20 @@ def controlled(panel: FigurePanel, dimension: str) -> bool:
     return bool(control != PLAIN_CONTROL)
 
 
+def check_figure(spec: FigureSpec) -> None:
+    """Refusals the figure alone decides, run before a revision is stored or drawn."""
+    if spec.palette.categorical not in PALETTES:
+        raise PreparationError("figure-palette-unknown", "Choose a known figure palette.")
+    for dimension in ("x", "y"):
+        if spec.axis_mode in {"shared_" + dimension, "shared_xy"} and any(
+            controlled(panel, dimension) for panel in spec.panels
+        ):
+            raise PreparationError(
+                "figure-shared-axis-control",
+                f"A shared {dimension} axis cannot also take a scale, limits or ticks.",
+            )
+
+
 def adjusted(plan: dict[str, Any] | None, panel: FigurePanel) -> dict[str, Any] | None:
     """The panel's plan with its axis controls and annotations applied."""
     if not (controlled(panel, "x") or controlled(panel, "y") or panel.annotations):
@@ -103,16 +117,7 @@ def render_board(
         started = perf_counter()
         spec = as_figure(board)
         count = len(sources)
-        if spec.palette.categorical not in PALETTES:
-            raise PreparationError("figure-palette-unknown", "Choose a known figure palette.")
-        for dimension in ("x", "y"):
-            if spec.axis_mode in {"shared_" + dimension, "shared_xy"} and any(
-                controlled(panel, dimension) for panel in spec.panels
-            ):
-                raise PreparationError(
-                    "figure-shared-axis-control",
-                    f"A shared {dimension} axis cannot also take a scale, limits or ticks.",
-                )
+        check_figure(spec)
         panel_labels = [panel.label for panel in spec.panels]
         rows, columns = spec.layout.rows, spec.layout.cols
         canvas = spec.canvas

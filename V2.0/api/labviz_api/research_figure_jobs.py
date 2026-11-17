@@ -15,8 +15,14 @@ from uuid import uuid4
 from pydantic_core import to_json
 
 from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, parse_figure
-from .research_figure_board import SceneIndex, insert_artifacts, read_board
-from .research_figure_render import render_board
+from .research_figure_board import (
+    SceneIndex,
+    insert_artifacts,
+    read_board,
+    refusal,
+    refusal_text,
+)
+from .research_figure_render import check_figure, render_board
 from .research_figure_sources import source
 from .research_panel_headers import remember_header, source_header
 from .research_preparation import PreparationError
@@ -89,6 +95,7 @@ class FigureJobs:
 
     def save(self, project_id: str, spec: FigureBoardSpec | FigureSpec) -> dict[str, Any]:
         charts, placed = chart_ids(spec), as_figure(spec).panels
+        check_figure(as_figure(spec))
         self.start()
         if not self.slots.acquire(blocking=False):
             raise PreparationError("research-busy", "One job is running and one is waiting.")
@@ -182,14 +189,18 @@ class FigureJobs:
             with self.store.connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
-                    "SELECT j.state FROM research_figure_jobs j JOIN research_figure_boards b "
-                    "ON b.id=j.board_id WHERE b.id=? AND b.project_id=?",
+                    "SELECT j.state,j.error FROM research_figure_jobs j "
+                    "JOIN research_figure_boards b ON b.id=j.board_id "
+                    "WHERE b.id=? AND b.project_id=?",
                     (identifier, project_id),
                 ).fetchone()
                 if row is None:
                     raise PreparationError(
                         "figure-not-found", "This generated revision is unavailable."
                     )
+                refused = refusal(row["error"])
+                if refused is not None:
+                    raise PreparationError("figure-build-refused", refused["message"])
                 if row["state"] != "failed":
                     raise PreparationError(
                         "figure-build-state", "Only a failed generation can be retried."
@@ -223,6 +234,15 @@ class FigureJobs:
                 try:
                     with self.execution:
                         self._build(identifier)
+                except PreparationError as error:
+                    # The figure cannot be drawn as saved (a note outside its axes, a log
+                    # axis over zero): another attempt would fail the same way.
+                    with self.store.connect() as connection:
+                        connection.execute(
+                            "UPDATE research_figure_jobs SET state='failed', error=? "
+                            "WHERE board_id=? AND state IN ('queued','running')",
+                            (refusal_text(error), identifier),
+                        )
                 except Exception:
                     LOGGER.exception("Figure generation failed for %s", identifier)
                     with self.store.connect() as connection:

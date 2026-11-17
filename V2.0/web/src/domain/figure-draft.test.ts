@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import matrix from "../../../contracts/fixtures/v24/figure-spec.json";
 import {
-  ARRANGEMENTS, draftFromSpec, duplicatePanel, emptyDraft, layoutCells, MAX_PANELS, noteDefaults, specFromDraft, storedDraft, withCount,
+  ARRANGEMENTS, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, layoutCells, MAX_PANELS, noteDefaults, specFromDraft, storedDraft, withCount,
   type FigureDraft,
 } from "./figure-draft";
 import { figureSpecSchema, type FigureSpec } from "./figure-spec";
@@ -93,6 +93,43 @@ describe("figure draft", () => {
     expect(draft.panels.slice(0, 2).map((p) => [p.chartId, p.title])).toEqual([["a", "x"], ["b", ""]]);
     expect(draft.layout).toEqual(ARRANGEMENTS[2]![0]);
     expect(specFromDraft(draft)).toMatchObject({ schemaVersion: 1, panelChartIds: ["a", "b"], axisMode: "shared_x" });
+  });
+
+  it("names what keeps a draft from saving, and skips a shared axis", () => {
+    const draft = six();
+    const axes = (y: object) => ({ x: draft.panels[0]!.axes.x, y: { scale: "linear" as const, domain: null, ticks: null, ...y } });
+    draft.panels[0] = { ...draft.panels[0]!, axes: axes({ domain: [5, null] }) };
+    draft.panels[1] = { ...draft.panels[1]!, axes: axes({ domain: [5, 2] }) };
+    draft.panels[2] = { ...draft.panels[2]!, axes: axes({ scale: "log10", domain: [0, 2] }) };
+    draft.panels[3] = { ...draft.panels[3]!, notes: [{ kind: "text", x: 0, y: 0, text: " " }] };
+    expect(draftProblems(draft)).toEqual([
+      { panel: 0, kind: "limits-half" }, { panel: 1, kind: "limits-order" },
+      { panel: 2, kind: "log-limit" }, { panel: 3, kind: "text-empty" },
+    ]);
+    expect(draftProblems({ ...draft, axisMode: "shared_y" })).toEqual([{ panel: 3, kind: "text-empty" }]);
+  });
+
+  it("keeps settings the editor does not show, and renames other letters to A–F", () => {
+    const spec = specFromDraft(six()) as FigureSpec;
+    const custom = {
+      ...spec,
+      canvas: { ...spec.canvas, sizePreset: "custom" as const, width: 180, height: 120, dpi: 600 },
+      layout: { ...spec.layout, gutter: 0.2, mosaic: ["PPQ", "RST", "RSU"] },
+      palette: { ...spec.palette, sequential: "magma" },
+      panels: spec.panels.map((panel, i) => ({ ...panel, label: "PQRSTU"[i]! })),
+    };
+    const again = specFromDraft(draftFromSpec(custom)) as FigureSpec;
+    expect(again.canvas).toEqual(custom.canvas);
+    expect(again.layout.gutter).toBe(0.2);
+    expect(again.palette.sequential).toBe("magma");
+    expect(again.layout.mosaic).toEqual(MOSAIC);
+    expect(again.panels.map((panel) => panel.label).join("")).toBe("ABCDEF");
+    expect(figureSpecSchema.safeParse(again).success).toBe(true);
+  });
+
+  it("takes only draft fields from an old desktop session", () => {
+    const draft = storedDraft({ title: "Old", count: 1, slots: ["a"], undoDrafts: [{}], editOpen: true });
+    expect(Object.keys(draft).sort()).toEqual(Object.keys(emptyDraft()).sort());
   });
 
   it("starts notes on round values of the source chart's axes", () => {

@@ -23,6 +23,8 @@ export const figureBoardSchema = boardHeader.extend({
   composed: z.boolean().default(false),
   artifactState: z.enum(["queued", "running", "ready", "failed", "unavailable"]).optional(),
   artifactError: z.string().nullable().optional(),
+  // Set when the build refused the figure as saved; retrying it would fail the same way.
+  artifactRefusal: z.string().nullable().optional(),
   panels: z.array(z.object({
     label: z.string().regex(/^[A-Za-z]$/), chartId: z.string(), revisionId: z.string(),
     kind: z.enum(["grouped_strip", "paired", "violin", "line", "scatter", "box", "heatmap"]), title: z.string(), unit: z.string(),

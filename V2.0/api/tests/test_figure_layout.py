@@ -205,6 +205,85 @@ def test_the_deferred_path_builds_a_six_panel_figure(saved: Any) -> None:
     assert client.get(f"{base}/{body['id']}/plans/F").status_code == 200
 
 
+@pytest.mark.parametrize("body", [[], "x", 3, {"schemaVersion": "2"}, {"schemaVersion": 3}])
+def test_a_body_that_is_no_figure_is_a_422(saved: Any, body: Any) -> None:
+    client, base, _ = saved
+    assert client.post(base, json=body).status_code == 422
+
+
+@pytest.mark.parametrize(("style", "first"), [("lower", "a: "), ("none", "Panel 1: ")])
+def test_output_notes_name_panels_as_the_figure_draws_them(
+    saved: Any, style: str, first: str
+) -> None:
+    client, base, ids = saved
+    spec = figure(ids, "AB", layout={"rows": 1, "cols": 2, "labelStyle": style})
+    board = client.post(base, json=spec).json()["id"]
+    project_url = base.rsplit("/", 1)[0]
+    preview = client.post(project_url + "/outputs/preview", json={"boardId": board})
+    assert preview.status_code == 200, preview.text
+    notes = preview.json()["notes"]
+    assert notes["legendEn"].startswith(first) and notes["methodsEn"].startswith(first)
+
+
+def test_the_deferred_save_refuses_what_the_figure_alone_decides(saved: Any) -> None:
+    client, base, ids = saved
+    spec = figure([ids[0]], "AB", layout={"rows": 1, "cols": 2}, axisMode="shared_y")
+    spec["panels"][0]["axes"] = {"y": {"scale": "log10"}}
+    response = client.post(base, params={"deferArtifacts": True}, json=spec)
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "figure-shared-axis-control"
+    assert client.get(base).json()["boards"] == []
+
+
+def test_a_deferred_build_the_plan_refuses_keeps_its_reason_and_is_not_retried(saved: Any) -> None:
+    client, base, ids = saved
+    spec = figure(ids, "A")
+    spec["panels"][0]["annotations"] = [{"kind": "hline", "value": 1e12, "label": "far"}]
+    response = client.post(base, params={"deferArtifacts": True}, json=spec)
+    assert response.status_code == 202, response.text
+    url = base + "/" + response.json()["id"]
+    deadline = perf_counter() + 120
+    while perf_counter() < deadline:
+        view = client.get(url).json()
+        if view["artifactState"] in ("ready", "failed"):
+            break
+    assert view["artifactState"] == "failed", view
+    assert view["artifactRefusal"] == "annotation-outside"
+    assert "Retry" not in view["artifactError"]
+    retried = client.post(url + "/retry")
+    assert retried.status_code == 422, retried.text
+    assert retried.json()["code"] == "figure-build-refused"
+
+
+def test_duplicating_a_project_copies_a_v2_figure_onto_the_copied_charts(saved: Any) -> None:
+    client, base, ids = saved
+    client.post(base, json=figure(ids, "ABC", layout={"rows": 1, "cols": 3}))
+    identifier = base.split("/")[4]
+    response = client.post(f"/api/v1/projects/{identifier}/duplicate")
+    assert response.status_code == 200, response.text
+    copy = response.json()["projectId"]
+    copied_base = base.replace(identifier, copy)
+    (copied,) = client.get(copied_base).json()["boards"]
+    copied_charts = {
+        chart["id"]
+        for chart in client.get(f"/api/v1/projects/{copy}/research/charts").json()["charts"]
+    }
+    layers = [panel["layers"][0]["chartId"] for panel in copied["spec"]["panels"]]
+    assert copied["spec"]["schemaVersion"] == 2 and len(layers) == 3
+    assert set(layers) <= copied_charts and not set(layers) & set(ids)
+    png = client.get(f"{copied_base}/{copied['id']}/artifact/png")
+    assert png.content.startswith(b"\x89PNG")
+
+
+def test_a_v2_figure_that_v1_can_express_makes_a_template(saved: Any) -> None:
+    client, base, ids = saved
+    body = client.post(base, json=figure(ids, "AB", layout={"rows": 1, "cols": 2})).json()
+    assert body["spec"]["schemaVersion"] == 2
+    project_url = base.rsplit("/", 1)[0]
+    response = client.post(project_url + "/templates", json={"boardId": body["id"], "name": "T"})
+    assert response.status_code == 200, response.text
+
+
 def test_a_template_is_refused_for_a_v2_figure(saved: Any) -> None:
     client, base, ids = saved
     body = client.post(base, json=figure(ids, "ABC", layout={"rows": 1, "cols": 3})).json()

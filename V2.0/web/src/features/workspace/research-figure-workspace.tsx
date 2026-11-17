@@ -12,8 +12,8 @@ import { figureFilesReady, figureWorkspaceState, type FigureWorkspaceState } fro
 import { ResearchFigureInspector } from "./research-figure-inspector";
 import { ResearchFigurePanelEditor } from "./research-figure-panel-editor";
 import {
-  chartIdsOf, draftFromSpec, duplicatePanel, emptyDraft, figureOf, MAX_PANELS, movePanel, PANEL_LABELS, shares, specFromDraft, storedDraft, withCount,
-  type FigureDraft, type PanelDraft,
+  chartIdsOf, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, figureOf, MAX_PANELS, movePanel, PANEL_LABELS, shares, specFromDraft, storedDraft, withCount,
+  type DraftProblem, type FigureDraft, type PanelDraft,
 } from "@/domain/figure-draft";
 import type { RenderPlan } from "@/domain/render-plan";
 import type { FigureBoard, FigureBoardHistory, FigureSources } from "@/domain/research-figure-board";
@@ -146,6 +146,13 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const blocked = loading || busy;
   const selectedIds = panels.slice(0, count).map((panel) => panel.chartId);
   const complete = selectedIds.every((id) => catalog.charts.some((chart) => chart.id === id));
+  const problems = draftProblems(draft);
+  const problemText: Record<DraftProblem["kind"], string> = {
+    "limits-half": t("give both axis limits, or clear both", "请填写两个坐标轴界限，或都清空"),
+    "limits-order": t("the lower axis limit must be below the upper", "坐标轴下限须小于上限"),
+    "log-limit": t("a log axis needs limits above zero", "对数轴的界限须大于零"),
+    "text-empty": t("a text annotation needs text", "文字标注不能为空"),
+  };
   const names: Record<string, string> = {
     line: t("Line", "折线"), scatter: t("Scatter", "散点"), box: t("Box", "箱线"), heatmap: t("Correlation", "相关图"),
     grouped_strip: t("Raw points", "原始点图"), paired: t("Paired change", "配对变化图"), violin: t("Violin", "小提琴图"),
@@ -192,7 +199,9 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       {inspectedMetadata && <Typography variant="caption">{t("Observations", "观测")}: {inspectedMetadata.observations} · {t("Independent units", "独立单位")}: {inspectedMetadata.independentUnits ?? t("Undetermined", "未确定")}</Typography>}
       <Typography sx={{ overflowWrap: "anywhere" }}>{t("Bound revision", "绑定版本")}: {inspected?.revisionId ?? "—"}</Typography><Typography>{t("Changing a binding never modifies the saved source chart.", "调整绑定不会修改已保存的来源图表。")}</Typography></>}
     {inspectorTab === "method" && <><Typography>{t("Chart method", "图表方法")}: {inspected ? names[inspected.spec.kind] : "—"}. {t("Parameters belong to the saved chart. Create a new chart in Analysis to change them.", "参数属于已保存图表，修改方法请在分析任务中生成新图表。")}</Typography>{onSelectAnalysis && <Button onClick={() => { setInspectorOpen(false); onSelectAnalysis(); }}>{t("Open Analysis to create a new version", "前往分析任务生成新版本")}</Button>}</>}
-    {inspectorTab === "appearance" && (inspectingPreview || !inspected
+    {inspectorTab === "appearance" && inspected?.legacy && !inspectingPreview
+      && <Typography>{t("Captured panels keep the axes they were captured with.", "捕获的面板保留捕获时的坐标轴。")}</Typography>}
+    {inspectorTab === "appearance" && !inspected?.legacy && (inspectingPreview || !inspected
       ? <Typography>{t("Palette, font, grid and axis sharing apply to the whole figure. Preview and exports use the saved revision until you save.", "配色、字号、网格与坐标共享作用于整个组合图。保存前，预览及导出仍使用已保存版本。")}</Typography>
       : <ResearchFigurePanelEditor key={`${inspectedIndex}:${inspected.id}`} panel={panels[inspectedIndex]!} label={PANEL_LABELS[inspectedIndex]!}
         axes={sourcePlans[inspected.id]?.panels[0]?.axes ?? null} sharedX={shares(axisMode, "x")} sharedY={shares(axisMode, "y")}
@@ -221,7 +230,10 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       <Stack spacing={overview ? 1 : 2} sx={{ order: 1, minWidth: 0 }} data-testid="saved-figure-region">
       {saved?.artifactState === "queued" && <Alert severity="info" role="status">{t("Layout saved locally. Figure generation is queued.", "布局已保存到本地，组合图等待生成。")}</Alert>}
       {saved?.artifactState === "running" && <Alert severity="info" role="status">{t("Layout saved locally. Generating preview and export files…", "布局已保存到本地，正在生成预览和导出文件…")}</Alert>}
-      {(saved?.artifactState === "failed" || saved?.artifactState === "unavailable") && <Alert severity="error">{t("Layout saved locally; figure generation failed. Retry uses the same saved inputs.", "布局已保存到本地，但组合图生成失败。重试将使用同一份已保存输入。")}
+      {saved?.artifactRefusal && <Alert severity="error" data-testid="figure-refused">
+        {t("This revision cannot be drawn: ", "此修订无法绘制：")}{saved.artifactError} {t("Change the draft and save a new revision.", "请修改草稿后保存新的修订。")}
+      </Alert>}
+      {(saved?.artifactState === "failed" || saved?.artifactState === "unavailable") && !saved.artifactRefusal && <Alert severity="error">{t("Layout saved locally; figure generation failed. Retry uses the same saved inputs.", "布局已保存到本地，但组合图生成失败。重试将使用同一份已保存输入。")}
         <Button disabled={blocked} onClick={() => void run(async () => {
           const board = await researchFigureApi.retry(projectId, saved.id);
           setSaved(board);
@@ -341,7 +353,9 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
           const spec = chart?.spec;
           const metadata = saved?.panels.find((panel) => panel.chartId === id);
           const noted = panels[index]!.notes.length;
-          const scaled = [panels[index]!.axes.x, panels[index]!.axes.y].some((axis) => axis.scale !== "linear" || axis.domain);
+          // A control on a shared axis is not sent, so it does not count as the panel's own.
+          const scaled = (["x", "y"] as const).some((dimension) => !shares(axisMode, dimension)
+            && (panels[index]!.axes[dimension].scale !== "linear" || panels[index]!.axes[dimension].domain));
           return <Paper component="section" variant="outlined" key={label} sx={{ p: 1.5, minWidth: 0 }}
             aria-label={t(`Panel ${label}`, `面板 ${label}`)} data-testid={`figure-panel-${label}`}>
             <Stack spacing={1}>
@@ -383,10 +397,13 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
           </Paper>;
         })}
       </Box>
+      {problems.length > 0 && <Alert severity="warning" data-testid="figure-draft-problems">
+        {problems.map(({ panel, kind }) => <Typography key={`${panel}:${kind}`} variant="body2">{t(`Panel ${PANEL_LABELS[panel]}`, `面板 ${PANEL_LABELS[panel]}`)}: {problemText[kind]}</Typography>)}
+      </Alert>}
       {complete && !sameRevision && <Alert severity="info">{t(
         "Some panels use historical data revisions. Saving preserves those exact chart bindings.",
         "部分面板使用历史数据版本；保存时会保留这些图表绑定，不会替换为当前数据。")}</Alert>}
-      <Button variant="contained" disabled={blocked || !complete || (!dirty && !!saved && (saved.composed || ["queued", "running", "failed"].includes(saved.artifactState ?? "")))}
+      <Button variant="contained" disabled={blocked || !complete || problems.length > 0 || (!dirty && !!saved && (saved.composed || ["queued", "running", "failed"].includes(saved.artifactState ?? "")))}
         onClick={() => void run(async () => {
           const board = await researchFigureApi.save(projectId, specFromDraft(draft));
           accept(board);

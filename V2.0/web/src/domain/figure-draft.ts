@@ -13,7 +13,10 @@ export type FigureDraft = {
   title: string; axisMode: FigureBoardSpec["axisMode"]; palette: "blue_teal" | "grayscale"; fontSize: number;
   grid: boolean; pointRendering: "auto" | "vector" | "raster"; labelStyle: FigureSpec["layout"]["labelStyle"];
   count: number; layout: FigureLayout; panels: PanelDraft[];
+  /** Settings the editor does not show (an API client may set them); a re-save keeps them. */
+  kept: { canvas?: FigureSpec["canvas"]; gutter?: number; sequential?: string; diverging?: string };
 };
+const DRAFT_KEYS = ["title", "axisMode", "palette", "fontSize", "grid", "pointRendering", "labelStyle", "count", "layout", "panels", "kept"] as const;
 
 const grid = (rows: number, cols: number): FigureLayout => ({ kind: "grid", rows, cols, mosaic: null });
 const mosaic = (...rows: string[]): FigureLayout => ({ kind: "mosaic", rows: rows.length, cols: rows[0]!.length, mosaic: rows });
@@ -46,7 +49,7 @@ const pad = (panels: PanelDraft[]) => [...panels, ...Array.from({ length: MAX_PA
 export function emptyDraft(): FigureDraft {
   return {
     title: "", axisMode: "independent", palette: "blue_teal", fontSize: 10, grid: true, pointRendering: "auto",
-    labelStyle: "upper", count: 1, layout: ARRANGEMENTS[1]![0]!, panels: pad([]),
+    labelStyle: "upper", count: 1, layout: ARRANGEMENTS[1]![0]!, panels: pad([]), kept: {},
   };
 }
 
@@ -67,13 +70,18 @@ export function chartIdsOf(spec: FigureBoardSpec | FigureSpec): string[] {
 export function draftFromSpec(spec: FigureBoardSpec | FigureSpec): FigureDraft {
   const figure = figureOf(spec);
   const palette = figure.palette.categorical === "grayscale" ? "grayscale" : "blue_teal";
+  // The editor names panels A–F by position; a figure saved with other letters is renamed,
+  // its mosaic with it, so it can be saved again.
+  const rename = new Map(figure.panels.map((panel, index) => [panel.label, PANEL_LABELS[index]!]));
+  const mosaic = figure.layout.mosaic?.map((row) => [...row].map((cell) => rename.get(cell) ?? cell).join("")) ?? null;
   return {
     title: figure.title, axisMode: figure.axisMode, palette, fontSize: figure.fontSize, grid: figure.gridVisible,
     pointRendering: figure.pointRendering, labelStyle: figure.layout.labelStyle, count: figure.panels.length,
-    layout: { kind: figure.layout.kind, rows: figure.layout.rows, cols: figure.layout.cols, mosaic: figure.layout.mosaic },
+    layout: { kind: figure.layout.kind, rows: figure.layout.rows, cols: figure.layout.cols, mosaic },
     panels: pad(figure.panels.map((panel) => ({
       chartId: panel.layers[0]?.chartId ?? "", title: panel.title, axes: panel.axes, notes: panel.annotations,
     }))),
+    kept: { canvas: figure.canvas, gutter: figure.layout.gutter, sequential: figure.palette.sequential, diverging: figure.palette.diverging },
   };
 }
 
@@ -82,8 +90,13 @@ export function specFromDraft(draft: FigureDraft): FigureBoardSpec | FigureSpec 
   const figure = completeFigure({
     schemaVersion: 2, title: draft.title, fontSize: draft.fontSize, gridVisible: draft.grid,
     axisMode: draft.axisMode, pointRendering: draft.pointRendering,
-    layout: { ...draft.layout, labelStyle: draft.labelStyle },
-    palette: { categorical: draft.palette },
+    canvas: draft.kept.canvas,
+    layout: { ...draft.layout, labelStyle: draft.labelStyle, ...(draft.kept.gutter === undefined ? {} : { gutter: draft.kept.gutter }) },
+    palette: {
+      categorical: draft.palette,
+      ...(draft.kept.sequential ? { sequential: draft.kept.sequential } : {}),
+      ...(draft.kept.diverging ? { diverging: draft.kept.diverging } : {}),
+    },
     panels: draft.panels.slice(0, draft.count).map((panel, index) => ({
       id: `p${index + 1}`, label: PANEL_LABELS[index], title: panel.title,
       // A shared axis is framed across the panels, so a panel's own control on it is not sent;
@@ -101,10 +114,12 @@ export function specFromDraft(draft: FigureDraft): FigureBoardSpec | FigureSpec 
 /** Drafts stored by the desktop session before six panels existed held slots and titles. */
 export function storedDraft(value: unknown): FigureDraft {
   const stored = value as Partial<FigureDraft> & { slots?: string[]; panelTitles?: string[] };
-  if (stored.panels) return { ...emptyDraft(), ...stored, panels: pad(stored.panels.slice(0, MAX_PANELS)) };
+  // Only the draft's own fields: an old session object also held its undo stacks and view state.
+  const known = Object.fromEntries(DRAFT_KEYS.flatMap((key) => (stored[key] === undefined ? [] : [[key, stored[key]]]))) as Partial<FigureDraft>;
+  if (stored.panels) return { ...emptyDraft(), ...known, panels: pad(stored.panels.slice(0, MAX_PANELS)) };
   const panels = (stored.slots ?? []).map((chartId, index) => ({ ...emptyPanel(), chartId, title: stored.panelTitles?.[index] ?? "" }));
   const count = stored.count ?? 1;
-  return { ...emptyDraft(), ...stored, count, layout: ARRANGEMENTS[count]?.[0] ?? ARRANGEMENTS[1]![0]!, labelStyle: "upper", panels: pad(panels) };
+  return { ...emptyDraft(), ...known, count, layout: ARRANGEMENTS[count]?.[0] ?? ARRANGEMENTS[1]![0]!, labelStyle: "upper", panels: pad(panels) };
 }
 
 export function movePanel(draft: FigureDraft, index: number, delta: number): FigureDraft {
@@ -145,6 +160,26 @@ export function noteDefaults(kind: FigureAnnotation["kind"], axes: { x: PlanAxis
     // Not the top tick: a log axis is framed by the data and may end below it.
     case "bracket": return { kind, x: [xs[0]!, xs[1] ?? xs[0]! + 1], y: at(ys, 0.75), label: "" };
   }
+}
+
+export type DraftProblem = { panel: number; kind: "limits-half" | "limits-order" | "log-limit" | "text-empty" };
+
+/** What keeps a draft from saving, per used panel; a control on a shared axis is not sent, so not checked. */
+export function draftProblems(draft: FigureDraft): DraftProblem[] {
+  return draft.panels.slice(0, draft.count).flatMap((panel, index) => {
+    const found: DraftProblem["kind"][] = [];
+    for (const dimension of ["x", "y"] as const) {
+      if (shares(draft.axisMode, dimension)) continue;
+      const { scale, domain } = panel.axes[dimension];
+      if (!domain) continue;
+      const [low, high] = domain as [number | null, number | null];
+      if (low === null || high === null) found.push("limits-half");
+      else if (low >= high) found.push("limits-order");
+      else if (scale === "log10" && low <= 0) found.push("log-limit");
+    }
+    if (panel.notes.some((note) => note.kind === "text" && !note.text.trim())) found.push("text-empty");
+    return [...new Set(found)].map((kind) => ({ panel: index, kind }));
+  });
 }
 
 /** The source chart's own limits, when the panel keeps its scale; another scale is framed by the server. */

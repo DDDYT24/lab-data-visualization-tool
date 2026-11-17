@@ -14,16 +14,18 @@ type PlanAxis = PlanAxes["x"];
 const shown = (value: number) => String(Number(value.toPrecision(6)));
 
 /** A number typed freely: the draft changes only when the text parses, and empty means none. */
-function NumberField({ label, value, onChange, placeholder, required = false, disabled }: {
-  label: string; value: number | null; onChange: (value: number | null) => void; placeholder?: string; required?: boolean; disabled?: boolean;
+function NumberField({ label, name, value, onChange, placeholder, required = false, disabled, t }: {
+  t: T; label: string; name?: string; value: number | null; onChange: (value: number | null) => void; placeholder?: string; required?: boolean; disabled?: boolean;
 }) {
   const [text, setText] = useState(value === null ? "" : String(value));
   const [last, setLast] = useState(value);
   if (value !== last) { setLast(value); setText(value === null ? "" : String(value)); }
   const parsed = text.trim() === "" ? null : Number(text);
   const invalid = (parsed === null && required) || (parsed !== null && !Number.isFinite(parsed));
+  // `name` is the accessible name when the visible label is short ("From" under "X axis").
   return <TextField size="small" label={label} value={text} placeholder={placeholder} disabled={disabled} error={invalid}
-    slotProps={{ htmlInput: { inputMode: "decimal" } }} sx={{ minWidth: 0 }}
+    helperText={invalid ? (parsed === null ? t("Required", "必填") : t("Enter a number", "请输入数字")) : undefined}
+    slotProps={{ htmlInput: { inputMode: "decimal", ...(name ? { "aria-label": name } : {}) } }} sx={{ minWidth: 0 }}
     onChange={(event) => {
       setText(event.target.value);
       const next = event.target.value.trim() === "" ? null : Number(event.target.value);
@@ -32,10 +34,10 @@ function NumberField({ label, value, onChange, placeholder, required = false, di
 }
 
 /** A category axis places by group: its fields pick a group instead of taking a number. */
-function PositionField({ label, value, onChange, axis, disabled }: {
-  label: string; value: number; onChange: (value: number) => void; axis: PlanAxis | undefined; disabled?: boolean;
+function PositionField({ label, value, onChange, axis, disabled, t }: {
+  t: T; label: string; value: number; onChange: (value: number) => void; axis: PlanAxis | undefined; disabled?: boolean;
 }) {
-  if (axis?.scale !== "category") return <NumberField label={label} value={value} required disabled={disabled} onChange={(next) => onChange(next!)} />;
+  if (axis?.scale !== "category") return <NumberField t={t} label={label} value={value} required disabled={disabled} onChange={(next) => onChange(next!)} />;
   return <TextField select size="small" label={label} value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))}>
     {axis.ticks.map((tick) => <MenuItem key={tick.value} value={tick.value}>{tick.label.split("\n")[0]}</MenuItem>)}
   </TextField>;
@@ -65,8 +67,8 @@ function AxisControls({ name, axis, control, shared, disabled, onChange, t }: {
         <MenuItem value="log10">{t("Log 10", "对数 10")}</MenuItem>
         <MenuItem value="symlog">{t("Symmetric log", "对称对数")}</MenuItem>
       </TextField>
-      <NumberField label={t("From", "下限")} value={low} disabled={disabled} placeholder={auto ? shown(auto[0]) : t("Auto", "自动")} onChange={(value) => limits([value, high])} />
-      <NumberField label={t("To", "上限")} value={high} disabled={disabled} placeholder={auto ? shown(auto[1]) : t("Auto", "自动")} onChange={(value) => limits([low, value])} />
+      <NumberField t={t} label={t("From", "下限")} name={t(`${name} from`, `${name}下限`)} value={low} disabled={disabled} placeholder={auto ? shown(auto[0]) : t("Auto", "自动")} onChange={(value) => limits([value, high])} />
+      <NumberField t={t} label={t("To", "上限")} name={t(`${name} to`, `${name}上限`)} value={high} disabled={disabled} placeholder={auto ? shown(auto[1]) : t("Auto", "自动")} onChange={(value) => limits([low, value])} />
     </Box>
     {half && <Typography role="alert" variant="caption" color="error">{half}</Typography>}
   </Stack>;
@@ -82,16 +84,16 @@ function NoteFields({ note, axes, disabled, onChange, t }: {
     slotProps={{ htmlInput: { maxLength: 160 } }}
     onChange={(event) => onChange(note.kind === "text" ? { ...note, text: event.target.value } : { ...note, label: event.target.value })} />;
   const pair = (name: string, values: [number, number], axis: PlanAxis | undefined, set: (values: [number, number]) => void) => <>
-    <PositionField label={t(`${name} from`, `${name} 起`)} value={values[0]} axis={axis} disabled={disabled} onChange={(value) => set([value, values[1]])} />
-    <PositionField label={t(`${name} to`, `${name} 止`)} value={values[1]} axis={axis} disabled={disabled} onChange={(value) => set([values[0], value])} />
+    <PositionField t={t} label={t(`${name} from`, `${name} 起`)} value={values[0]} axis={axis} disabled={disabled} onChange={(value) => set([value, values[1]])} />
+    <PositionField t={t} label={t(`${name} to`, `${name} 止`)} value={values[1]} axis={axis} disabled={disabled} onChange={(value) => set([values[0], value])} />
   </>;
   const fields = (() => {
     switch (note.kind) {
       case "text": return <>
-        <PositionField label="X" value={note.x} axis={axes?.x} disabled={disabled} onChange={(x) => onChange({ ...note, x })} />
-        <PositionField label="Y" value={note.y} axis={axes?.y} disabled={disabled} onChange={(y) => onChange({ ...note, y })} />
+        <PositionField t={t} label="X" value={note.x} axis={axes?.x} disabled={disabled} onChange={(x) => onChange({ ...note, x })} />
+        <PositionField t={t} label="Y" value={note.y} axis={axes?.y} disabled={disabled} onChange={(y) => onChange({ ...note, y })} />
       </>;
-      case "hline": case "vline": return <PositionField label={note.kind === "hline" ? "Y" : "X"} value={note.value}
+      case "hline": case "vline": return <PositionField t={t} label={note.kind === "hline" ? "Y" : "X"} value={note.value}
         axis={note.kind === "hline" ? axes?.y : axes?.x} disabled={disabled} onChange={(value) => onChange({ ...note, value })} />;
       case "rect": return <>
         {pair("X", note.x, axes?.x, (x) => onChange({ ...note, x }))}
@@ -99,7 +101,7 @@ function NoteFields({ note, axes, disabled, onChange, t }: {
       </>;
       case "bracket": return <>
         {pair("X", note.x, axes?.x, (x) => onChange({ ...note, x }))}
-        <PositionField label={t("Height", "高度")} value={note.y} axis={axes?.y} disabled={disabled} onChange={(y) => onChange({ ...note, y })} />
+        <PositionField t={t} label={t("Height", "高度")} value={note.y} axis={axes?.y} disabled={disabled} onChange={(y) => onChange({ ...note, y })} />
       </>;
     }
   })();

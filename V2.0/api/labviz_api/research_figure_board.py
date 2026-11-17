@@ -98,6 +98,19 @@ def panel_metadata(
     return panels
 
 
+def refusal_text(error: PreparationError) -> str:
+    """A refused build, stored in the job's error column so it reads back as a refusal."""
+    return json.dumps({"refusal": error.code, "message": str(error)})
+
+
+def refusal(error: str | None) -> dict[str, str] | None:
+    """The refusal a failed build stored, or None for a failure worth retrying."""
+    if not error or not error.startswith('{"refusal"'):
+        return None
+    stored: dict[str, str] = json.loads(error)
+    return stored
+
+
 def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
     spec = parse_figure(row["spec_json"])
     job = connection.execute(
@@ -105,6 +118,7 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
         (row["id"],),
     ).fetchone()
     if job:
+        refused = refusal(job["error"])
         return {
             "id": row["id"],
             "createdAt": row["created_at"],
@@ -112,7 +126,8 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
             "panels": json.loads(job["panels_json"]),
             "composed": job["state"] == "ready",
             "artifactState": job["state"],
-            "artifactError": job["error"],
+            "artifactError": refused["message"] if refused else job["error"],
+            "artifactRefusal": refused["refusal"] if refused else None,
             "artifactTimings": json.loads(job["timings_json"]),
         }
     artifact = connection.execute(
@@ -139,6 +154,7 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
         "panels": panels,
         "artifactState": "ready" if artifact else "unavailable",
         "artifactError": None,
+        "artifactRefusal": None,
     }
 
 
@@ -209,6 +225,7 @@ def save_board(
         view["composed"] = True
         view["artifactState"] = "ready"
         view["artifactError"] = None
+        view["artifactRefusal"] = None
     persisted_end = perf_counter()
     if on_scene is not None:
         on_scene(row["id"], scene)

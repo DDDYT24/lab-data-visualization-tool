@@ -1670,6 +1670,34 @@
       ]
     },
     {
+      "layout": {
+        "rows": 1,
+        "cols": 2
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "label": "a",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "panels": [
         {
           "id": "p1",

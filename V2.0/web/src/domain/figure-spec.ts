@@ -41,8 +41,8 @@ const increasing = (values: number[]) => values.every((value, index) => index ==
 function problems(figure: FigureSpec): string[] {
   const found: string[] = [];
   const labels = figure.panels.map((panel) => panel.label);
-  if (new Set(labels).size !== labels.length || new Set(figure.panels.map((panel) => panel.id)).size !== labels.length)
-    found.push("Panel ids and labels must be unique.");
+  if (new Set(labels.map((label) => label.toUpperCase())).size !== labels.length || new Set(figure.panels.map((panel) => panel.id)).size !== labels.length)
+    found.push("Panel ids and labels must be unique, ignoring case.");
   const { canvas, layout } = figure;
   const sized = canvas.width != null && canvas.height != null;
   if ((canvas.sizePreset === "custom") !== sized || (canvas.width == null) !== (canvas.height == null))

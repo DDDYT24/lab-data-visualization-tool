@@ -110,6 +110,7 @@ INVALID = [
     {"layout": {"rows": 2, "cols": 4}, "panels": [panel(i + 1, "ABCDEFG"[i]) for i in range(7)]},
     {"layout": {"rows": 1, "cols": 2}, "panels": [panel(1, "A"), panel(1, "B")]},
     {"layout": {"rows": 1, "cols": 2}, "panels": [panel(1, "A"), panel(2, "A")]},
+    {"layout": {"rows": 1, "cols": 2}, "panels": [panel(1, "A"), panel(2, "a")]},
     {"panels": [panel(1, "A"), panel(2, "B")]},
     {"layout": {"rows": 2, "cols": 1}, "panels": [panel(1, "A")]},
     {

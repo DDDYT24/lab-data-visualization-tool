@@ -222,10 +222,11 @@ class FigureSpec(ResearchModel):
     @model_validator(mode="after")
     def panels_fit_the_layout(self) -> FigureSpec:
         labels = [panel.label for panel in self.panels]
-        if len({panel.id for panel in self.panels}) != len(labels) or len(set(labels)) != len(
-            labels
-        ):
-            raise ValueError("Panel ids and labels must be unique.")
+        # "a" and "A" draw alike and name the same export file on Windows.
+        if len({panel.id for panel in self.panels}) != len(labels) or len(
+            {label.upper() for label in labels}
+        ) != len(labels):
+            raise ValueError("Panel ids and labels must be unique, ignoring case.")
         layout = self.layout
         if layout.kind == "grid":
             if layout.mosaic is not None:
@@ -304,9 +305,15 @@ def project_board(figure: FigureSpec) -> FigureBoardSpec | None:
     return board if upgrade_board(board) == figure else None
 
 
-def figure_version(value: Any) -> str:
-    version = value.get("schemaVersion", 1) if isinstance(value, dict) else value.schema_version
-    return "v2" if version == 2 else "v1"
+def figure_version(value: Any) -> str | None:
+    """The model a body names; None (a 422) for a body that is no figure or another version."""
+    if isinstance(value, dict):
+        version = value.get("schemaVersion", 1)
+    elif isinstance(value, (FigureBoardSpec, FigureSpec)):
+        version = value.schema_version
+    else:
+        return None
+    return {1: "v1", 2: "v2"}.get(version) if type(version) is int else None
 
 
 # What a client may save: a v1 board, as before, or a v2 figure. Errors name one model only.
@@ -365,8 +372,12 @@ def panel_cells(figure: FigureSpec) -> list[tuple[int, int, int, int]]:
     return cells
 
 
+def styled_label(figure: FigureSpec, index: int) -> str | None:
+    """A panel's label as the figure draws it; None when the figure draws no labels."""
+    label, style = figure.panels[index].label, figure.layout.label_style
+    return None if style == "none" else label.lower() if style == "lower" else label.upper()
+
+
 def panel_heading(figure: FigureSpec, index: int, title: str) -> str:
-    label = figure.panels[index].label
-    if figure.layout.label_style == "none":
-        return title
-    return f"{label.lower() if figure.layout.label_style == 'lower' else label.upper()} · {title}"
+    label = styled_label(figure, index)
+    return title if label is None else f"{label} · {title}"

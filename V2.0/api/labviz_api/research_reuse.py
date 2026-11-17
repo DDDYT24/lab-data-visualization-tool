@@ -21,7 +21,7 @@ from uuid import uuid4
 from pydantic import Field, model_validator
 
 from .artifacts import MEDIA_TYPES, remember
-from .figure_spec import FigureBoardSpec, parse_figure
+from .figure_spec import FigureBoardSpec, parse_figure, project_board
 from .models import ChartSpec
 from .processing import ProcessingError
 from .render_plan import build_research_plan, plan_bytes
@@ -139,11 +139,14 @@ def template_from_board(
         ).fetchone()
         if board is None:
             raise PreparationError("figure-not-found", "Choose a saved figure.")
-        figure = parse_figure(board["spec_json"])
-        if not isinstance(figure, FigureBoardSpec):
+        stored = parse_figure(board["spec_json"])
+        # A v2 figure that says nothing v1 cannot is templated as its v1 board.
+        figure = stored if isinstance(stored, FigureBoardSpec) else project_board(stored)
+        if figure is None:
             raise PreparationError(
                 "reuse-figure-unsupported",
-                "A template can be made from a one-, two- or four-panel figure only.",
+                "A template can be made from a one-, two- or four-panel grid figure without "
+                "axis settings, annotations or panel label styles only.",
             )
         panels = [source(c, project_id, key) for key in figure.panel_chart_ids]
         labels = sorted(
