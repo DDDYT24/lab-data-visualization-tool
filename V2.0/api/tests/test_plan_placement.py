@@ -34,6 +34,45 @@ def test_positions(sample: dict[str, Any]) -> None:
     assert axis_position(sample["scale"], sample["value"]) == sample["position"]
 
 
+def test_a_log_histogram_rises_from_the_axis_floor_and_empty_bins_draw_nothing() -> None:
+    histogram = FIXTURE["logHistogram"]
+    RenderPlan.model_validate_json(json.dumps(histogram["plan"]))
+    panel = histogram["plan"]["panels"][0]
+    floor = axis_position("log10", panel["axes"]["y"]["domain"][0])
+    assert panel["axes"]["y"]["scale"] == "log10"
+    assert all(bin_[1] == floor for bin_ in histogram["placed"])
+    heights = [top - bottom for _, bottom, _, top in histogram["placed"]]
+    assert 0 in heights and all(height >= 0 for height in heights)
+    assert max(heights) == axis_position("log10", 30.0) - floor
+
+
+@pytest.mark.parametrize("drawer", ["classic", "research"])
+def test_matplotlib_draws_the_log_histogram_at_the_fixture_positions(drawer: str) -> None:
+    from matplotlib.figure import Figure
+    from matplotlib.patches import StepPatch
+
+    from labviz_api.render_plan_draw import draw_panel
+    from labviz_api.research_chart_render import draw_plan
+
+    plan = FIXTURE["logHistogram"]["plan"]
+    figure = Figure(figsize=(4, 3), dpi=100)
+    ax = figure.subplots()
+    if drawer == "classic":
+        draw_panel(ax, plan["panels"][0])
+    else:
+        draw_plan(plan, target_figure=figure, target_axis=ax)
+    (patch,) = [item for item in ax.patches if isinstance(item, StepPatch)]
+    data = patch.get_data()
+    placed = FIXTURE["logHistogram"]["placed"]
+    assert list(data.edges) == [*(bin_[0] for bin_ in placed), placed[-1][2]]
+    assert [axis_position("log10", value) for value in data.values] == pytest.approx(
+        [bin_[3] for bin_ in placed], abs=1e-12
+    )
+    assert [axis_position("log10", value) for value in data.baseline] == pytest.approx(
+        [bin_[1] for bin_ in placed], abs=1e-12
+    )
+
+
 @pytest.mark.parametrize("drawer", ["classic", "research"])
 def test_matplotlib_is_linear_in_the_fixture_positions(drawer: str) -> None:
     from matplotlib.figure import Figure

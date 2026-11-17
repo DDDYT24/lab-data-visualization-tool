@@ -1,7 +1,8 @@
 """Generate or check the placement fixture both renderers' tests read.
 
 It holds axis positions for sample values on every scale, one plan with log axes and
-every kind of note, and where that plan's points and bracket land along the axes.
+every kind of note, and where that plan's points and bracket land along the axes; and a
+histogram on a log count axis with where its bins land.
 """
 
 from __future__ import annotations
@@ -33,6 +34,40 @@ NOTES: list[dict[str, Any]] = [
     {"kind": "rect", "x": [1.5, 2.5], "y": [10.0, 400.0], "label": "window"},
     {"kind": "bracket", "x": [2.0, 4.0], "y": 800.0, "label": "p < 0.01"},
 ]
+
+
+def log_histogram() -> dict[str, Any]:
+    """A histogram with empty bins on a log count axis, and where its bins land."""
+    values = [1.0] * 4 + [1.5] * 30 + [2.0] + [4.0] * 2
+    data = pd.DataFrame({"v": values})
+    spec = ChartSpec.model_validate(
+        {
+            "schemaVersion": 1,
+            "type": "histogram",
+            "title": "Log counts",
+            "xAxis": {"field": "v", "title": "V", "unit": ""},
+            "yAxis": {"field": "v", "title": "Count", "unit": ""},
+            "series": [{"field": "v", "label": "V", "color": "#2563EB"}],
+            "panelCount": 1,
+            "export": {
+                "format": "png",
+                "dpi": 300,
+                "sizePreset": "single-column",
+                "grayscalePreview": False,
+            },
+        }
+    )
+    plan = classic_plan(data, spec, analyze_chart(data, spec))
+    assert plan
+    plan = apply_axis_controls(plan, [{"y": {"scale": "log10"}}])
+    bins = next(mark for mark in plan["panels"][0]["marks"] if mark["kind"] == "rects")
+    return {
+        "plan": plan,
+        "placed": [
+            [x0, axis_position("log10", y0), x1, axis_position("log10", y1)]
+            for x0, y0, x1, y1 in zip(bins["x0"], bins["y0"], bins["x1"], bins["y1"], strict=True)
+        ],
+    }
 
 
 def build() -> dict[str, Any]:
@@ -84,6 +119,7 @@ def build() -> dict[str, Any]:
             "bracketLabel": place(*bracket["labelAt"]),
             "rectLabel": place(*panel["notes"][3]["labelAt"]),
         },
+        "logHistogram": log_histogram(),
     }
 
 

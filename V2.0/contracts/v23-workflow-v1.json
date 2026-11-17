@@ -124,7 +124,10 @@
       "reopen": 3000,
       "fourPanelPng300dpi": 8000,
       "fourPanelSvg": 8000,
-      "fourPanelPdf": 8000
+      "fourPanelPdf": 8000,
+      "sixPanelPng300dpi": 10000,
+      "sixPanelSvg": 10000,
+      "sixPanelPdf": 10000
     },
     "memory": {
       "backendPeakMiB": 1024,

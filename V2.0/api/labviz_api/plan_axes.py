@@ -190,6 +190,19 @@ def controlled_axis(
     return {**axis, "scale": scale, "domain": [low, high], "ticks": ticks, "niceRule": rule}
 
 
+def rebase_histograms(panel: dict[str, Any]) -> None:
+    """Histogram bins on a log count axis rise from the axis floor, not from zero.
+
+    A bin at or below the floor, an empty one included, keeps zero height, so it draws
+    nothing and the bins stay one continuous outline.
+    """
+    floor = panel["axes"]["y"]["domain"][0]
+    for mark in panel["marks"]:
+        if mark["kind"] == "rects" and mark.get("axis", "y") == "y":
+            mark["y0"] = [floor] * len(mark["y1"])
+            mark["y1"] = [max(count, floor) for count in mark["y1"]]
+
+
 def apply_axis_controls(
     plan: dict[str, Any], controls: list[dict[str, Any] | None]
 ) -> dict[str, Any]:
@@ -204,21 +217,26 @@ def apply_axis_controls(
                 continue
             if panel["axes"]["z"] is not None:
                 raise PreparationError("axis-control-3d", "A 3D panel keeps linear axes.")
-            if (
-                dimension == "y"
-                and wanted.get("scale") == "log10"
-                and any(mark["kind"] == "rects" for mark in panel["marks"])
+            counts = dimension == "y" and wanted.get("scale") == "log10"
+            if counts and any(
+                mark["kind"] == "rects" and mark["shape"] == "bars" for mark in panel["marks"]
             ):
                 raise PreparationError(
-                    "axis-log-bars",
-                    "Bars and histograms start at zero, so they keep a linear axis.",
+                    "axis-log-bars", "Bars start at zero, so they keep a linear axis."
                 )
             values = [
                 value
                 for mark in panel["marks"]
                 if dimension == "x" or mark.get("axis", "y") == "y"
-                for value in mark_values(mark, dimension)
+                for value in (
+                    # A log count axis is framed by the counts; bases and empty bins have none.
+                    [count for count in mark["y1"] if count > 0]
+                    if counts and mark["kind"] == "rects"
+                    else mark_values(mark, dimension)
+                )
             ]
             panel["axes"][dimension] = controlled_axis(panel["axes"][dimension], wanted, values)
+            if counts:
+                rebase_histograms(panel)
     changed["planHash"] = plan_hash(changed)
     return changed

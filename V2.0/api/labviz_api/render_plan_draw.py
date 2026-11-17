@@ -138,7 +138,10 @@ def draw_rects(ax: Any, mark: dict[str, Any], dense: bool) -> None:
         "rasterized": dense,
     }
     if mark["shape"] == "stairs":
-        ax.stairs(mark["y1"], [*mark["x0"], mark["x1"][-1]], fill=True, **style)
+        # Bins rise from y0: 0 on a linear axis, the axis floor on a log count axis. A list
+        # baseline writes other SVG and PDF bytes than 0, so linear exports pass the number.
+        baseline = mark["y0"] if any(mark["y0"]) else 0
+        ax.stairs(mark["y1"], [*mark["x0"], mark["x1"][-1]], baseline=baseline, fill=True, **style)
     elif len(mark["x0"]) > BAR_PATCH_LIMIT:
         import numpy as np
         from matplotlib.collections import PolyCollection

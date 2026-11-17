@@ -449,9 +449,21 @@ describe("placement fixture shared with the API tests", () => {
     positions: { scale: "linear" | "log10" | "symlog"; value: number; position: number }[];
     plan: RenderPlan;
     placed: { points: number[][]; bracket: number[][]; bracketLabel: number[]; rectLabel: number[] };
+    logHistogram: { plan: RenderPlan; placed: number[][] };
   };
   const close = (got: number[][], want: number[][]) => got.forEach((point, i) =>
     point.forEach((value, j) => expect(value).toBeCloseTo(want[i]![j]!, 9)));
+
+  it("draws a log-count histogram's bins from the axis floor, as the API places them", () => {
+    const { plan: histogram, placed } = fixture.logHistogram;
+    const series = buildPlanOption({ plan: histogram, text }).series as Series[];
+    const bins = series.find((item) => String(item.id).startsWith("histogram:"))!;
+    const drawn = placed.map((_, index) => bins.renderItem(
+      { dataIndex: index }, { coord: (point: number[]) => point },
+    ).shape as { x: number; y: number; width: number; height: number });
+    close(drawn.map((rect) => [rect.x, rect.y, rect.x + rect.width, rect.y + rect.height]), placed);
+    expect(drawn.filter((rect) => rect.height === 0).length).toBeGreaterThan(0);
+  });
 
   it("places sample values where the API places them, and back", () => {
     for (const { scale, value, position } of fixture.positions) {
