@@ -46,3 +46,22 @@ it("aborts a closed preview and ignores a late response without leaking a docume
   await act(async()=>close.click());expect(signal.aborted).toBe(true);
   await act(async()=>resolve(response()));expect(create).not.toHaveBeenCalled();
 });
+it("closes from the native Escape signal after the PDF frame takes focus and restores the entry",async()=>{
+  vi.stubGlobal("fetch",vi.fn(async()=>response()));await mount();
+  const frame=document.querySelector("iframe")!;
+  frame.focus();expect(document.activeElement).toBe(frame);
+  await act(async()=>window.dispatchEvent(new Event("labviz:desktop-escape")));
+  expect(document.querySelector("iframe")).toBeNull();
+  expect(revoke).toHaveBeenCalledWith("blob:http://localhost/validated-pdf");
+  await act(async()=>new Promise(resolve=>setTimeout(resolve,250)));
+  expect(document.activeElement).toBe(container.querySelector("button"));
+  const outside=document.createElement("button");document.body.append(outside);outside.focus();
+  await act(async()=>window.dispatchEvent(new Event("labviz:desktop-escape")));
+  expect(document.activeElement).toBe(outside);outside.remove();
+});
+it("aborts an in-flight source when the native Escape signal closes the preview",async()=>{
+  const fetch=vi.fn(()=>new Promise(()=>{}));vi.stubGlobal("fetch",fetch);await mount();
+  const signal=(fetch.mock.calls[0] as unknown as [URL,RequestInit])[1].signal!;
+  await act(async()=>window.dispatchEvent(new Event("labviz:desktop-escape")));
+  expect(signal.aborted).toBe(true);expect(create).not.toHaveBeenCalled();
+});
