@@ -1,3 +1,12 @@
+# V2.3.0 web dependency follow-up — 2026-11-16
+
+- Next.js and eslint-config-next: 16.4.3 → 16.4.6. Next.js 16.3.0–16.4.4 is affected by
+  information disclosure across root params when a `use cache` function is called through
+  `unstable_cache()` ([GHSA-mfr8-8qww-v76h](https://github.com/advisories/GHSA-mfr8-8qww-v76h),
+  moderate). The production build refuses to finish on the affected version. LabViz does not call
+  `unstable_cache()`. After the update, `npm audit --omit=dev` against the official registry
+  reports no findings.
+
 # V2.3 web dependency follow-up — 2026-11-02
 
 The V2.3 Windows RC pipeline stopped at its production npm audit on PR #7. Advisories
