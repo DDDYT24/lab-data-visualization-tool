@@ -14,7 +14,14 @@ from uuid import uuid4
 
 from pydantic_core import to_json
 
-from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, parse_figure
+from .figure_spec import (
+    FigureBoardSpec,
+    FigureSpec,
+    as_figure,
+    chart_ids,
+    layer_ids,
+    parse_figure,
+)
 from .research_figure_board import (
     SceneIndex,
     insert_artifacts,
@@ -22,7 +29,7 @@ from .research_figure_board import (
     refusal,
     refusal_text,
 )
-from .research_figure_render import check_figure, render_board
+from .research_figure_render import check_figure, check_layers, render_board
 from .research_figure_sources import source
 from .research_panel_headers import remember_header, source_header
 from .research_preparation import PreparationError
@@ -94,7 +101,7 @@ class FigureJobs:
             self.thread = None
 
     def save(self, project_id: str, spec: FigureBoardSpec | FigureSpec) -> dict[str, Any]:
-        charts, placed = chart_ids(spec), as_figure(spec).panels
+        charts, placed, stacks = chart_ids(spec), as_figure(spec).panels, layer_ids(spec)
         check_figure(as_figure(spec))
         self.start()
         if not self.slots.acquire(blocking=False):
@@ -104,7 +111,7 @@ class FigureJobs:
             with self.store.connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 headers = {}
-                for chart_id in dict.fromkeys(charts):
+                for chart_id in dict.fromkeys(charts + [key for stack in stacks for key in stack]):
                     cached = connection.execute(
                         "SELECT header_json FROM research_panel_headers "
                         "WHERE id=? AND project_id=?",
@@ -127,6 +134,7 @@ class FigureJobs:
                         # Older charts are upgraded once, without rewriting their frozen bytes.
                         headers[chart_id] = source_header(source(connection, project_id, chart_id))
                         remember_header(connection, project_id, chart_id, headers[chart_id])
+                check_layers([[headers[key] for key in stack] for stack in stacks])
                 panels = []
                 for index, chart_id in enumerate(charts):
                     header = headers[chart_id]
@@ -280,7 +288,7 @@ class FigureJobs:
         if self.on_start:
             self.on_start()
         spec = parse_figure(row["spec_json"])
-        charts = chart_ids(spec)
+        charts, stacks = chart_ids(spec), layer_ids(spec)
         # One bounded build holds the shared research execution lock. Avoid
         # automatic scans of the large live snapshots while Matplotlib allocates
         # its small objects; collect its cycles once after releasing the sources.
@@ -290,7 +298,8 @@ class FigureJobs:
         try:
             with self.store.connect() as connection:
                 loaded = {
-                    key: source(connection, row["project_id"], key) for key in dict.fromkeys(charts)
+                    key: source(connection, row["project_id"], key)
+                    for key in dict.fromkeys(charts + [key for stack in stacks for key in stack])
                 }
             panels = json.loads(row["panels_json"])
             for panel in panels:
@@ -301,7 +310,12 @@ class FigureJobs:
             load_end = perf_counter()
             # Rendering runs without a SQLite connection or write transaction.
             formats: dict[str, float] = {}
-            artifacts, scene = render_board([loaded[key] for key in charts], spec, timings=formats)
+            artifacts, scene = render_board(
+                [loaded[key] for key in charts],
+                spec,
+                timings=formats,
+                layers=[[loaded[key] for key in stack] for stack in stacks],
+            )
             render_end = perf_counter()
             scene["panelMetadata"] = panels
             del loaded

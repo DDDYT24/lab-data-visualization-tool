@@ -52,5 +52,9 @@
     "fontSize": 9,
     "labelGap": 3,
     "bracketDrop": 0.02
+  },
+  "layers": {
+    "max": 8,
+    "step": 10
   }
 }

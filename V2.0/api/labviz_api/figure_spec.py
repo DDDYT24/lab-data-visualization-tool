@@ -11,11 +11,12 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Discriminator, Field, Tag, model_validator
 
+from .render_contract import GEOMETRY
 from .research_contract import Identifier, ResearchModel
 from .research_preparation import PreparationError
 
 MAX_PANELS = 6
-MAX_LAYERS = 8
+MAX_LAYERS = GEOMETRY["layers"]["max"]
 Text = Annotated[str, Field(max_length=160)]
 FieldName = Annotated[str, Field(min_length=1, max_length=255)]
 Color = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
@@ -333,20 +334,26 @@ def as_figure(spec: FigureBoardSpec | FigureSpec) -> FigureSpec:
     return upgrade_board(spec) if isinstance(spec, FigureBoardSpec) else spec
 
 
+def layer_ids(spec: FigureBoardSpec | FigureSpec) -> list[list[str]]:
+    """The saved charts each panel draws, bottom first: by zIndex, then by place in the list."""
+    if isinstance(spec, FigureBoardSpec):
+        return [[identifier] for identifier in spec.panel_chart_ids]
+    panels = []
+    for panel in spec.panels:
+        # Layers built from an encoding and a method come with the layer registry (V2.5).
+        if any(layer.kind != "chart" or not layer.chart_id for layer in panel.layers):
+            raise PreparationError("figure-layer-unsupported", "Each layer must be a saved chart.")
+        ordered = sorted(enumerate(panel.layers), key=lambda item: (item[1].style.z_index, item[0]))
+        panels.append([str(layer.chart_id) for _, layer in ordered])
+    return panels
+
+
 def chart_ids(spec: FigureBoardSpec | FigureSpec) -> list[str]:
-    """The saved chart each panel draws, in panel order."""
+    """The saved chart that stands for each panel (its first layer), in panel order."""
     if isinstance(spec, FigureBoardSpec):
         return list(spec.panel_chart_ids)
-    found = [
-        panel.layers[0].chart_id
-        for panel in spec.panels
-        if len(panel.layers) == 1 and panel.layers[0].chart_id
-    ]
-    if len(found) != len(spec.panels):
-        raise PreparationError(
-            "figure-layer-unsupported", "Each panel must draw exactly one saved chart."
-        )
-    return found
+    layer_ids(spec)
+    return [str(panel.layers[0].chart_id) for panel in spec.panels]
 
 
 def panel_cells(figure: FigureSpec) -> list[tuple[int, int, int, int]]:

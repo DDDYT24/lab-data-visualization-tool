@@ -16,7 +16,7 @@ from uuid import uuid4
 from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
-from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, parse_figure
+from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, layer_ids, parse_figure
 from .research_figure_render import render_board
 from .research_figure_sources import source
 from .research_panel_headers import install_headers
@@ -184,12 +184,13 @@ def save_board(
             gc.disable()
         try:
             # Resolve each immutable source once, even when it is placed in several panels.
-            charts = chart_ids(spec)
+            charts, stacks = chart_ids(spec), layer_ids(spec)
             loaded = {
                 identifier: source(connection, project_id, identifier)
-                for identifier in dict.fromkeys(charts)
+                for identifier in dict.fromkeys(charts + [key for stack in stacks for key in stack])
             }
             sources = [loaded[identifier] for identifier in charts]
+            layers = [[loaded[key] for key in stack] for stack in stacks]
             view: dict[str, Any] = {
                 "id": row["id"],
                 "createdAt": row["created_at"],
@@ -201,13 +202,13 @@ def save_board(
             if restore_gc:
                 gc.enable()
         rendered_start = perf_counter()
-        artifacts, scene = render_board(sources, spec)
+        artifacts, scene = render_board(sources, spec, layers=layers)
         rendered_end = perf_counter()
         # Small frozen panel summaries allow reopen without decoding complete chart results.
         scene["panelMetadata"] = view["panels"]
         # The scene owns complete source rows. Release render-only snapshots before
         # allocating serialized scene bytes and SQLite's transaction buffers.
-        del loaded, sources
+        del loaded, sources, layers
         if sum(panel["observations"] for panel in view["panels"]) > 20_000:
             gc.collect()
         connection.execute(

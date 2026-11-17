@@ -34,6 +34,27 @@ def test_positions(sample: dict[str, Any]) -> None:
     assert axis_position(sample["scale"], sample["value"]) == sample["position"]
 
 
+def test_a_layered_panel_draws_every_higher_layer_above_and_notes_above_all() -> None:
+    from matplotlib.figure import Figure
+
+    from labviz_api.render_plan_draw import draw_notes, layer_lift
+    from labviz_api.research_chart_render import draw_plan
+
+    layered = FIXTURE["layered"]
+    plan = layered["plan"]
+    RenderPlan.model_validate_json(json.dumps(plan))
+    marks = {mark["id"]: mark for mark in plan["panels"][0]["marks"]}
+    ranks = [marks[identifier].get("layer") or 0 for identifier in layered["drawOrder"]]
+    assert ranks == sorted(ranks) and ranks[-1] == 1
+    figure = Figure()
+    ax = figure.subplots()
+    draw_plan(plan, target_figure=figure, target_axis=ax)
+    marks_top = max(artist.get_zorder() for artist in ax.collections)
+    lift = layer_lift(plan["panels"][0]["marks"])
+    draw_notes(ax, [{"kind": "hline", "value": 5.0, "label": "limit"}], lift)
+    assert ax.lines[-1].get_zorder() > marks_top
+
+
 def test_a_log_histogram_rises_from_the_axis_floor_and_empty_bins_draw_nothing() -> None:
     histogram = FIXTURE["logHistogram"]
     RenderPlan.model_validate_json(json.dumps(histogram["plan"]))

@@ -14,6 +14,9 @@ const LEGEND_ICONS = { line: "roundRect", marker: "circle", dashed: DASHED_LEGEN
 const ERRORBAR_CAP_PIXELS = 1.5;
 // Annotation sizes are in points, as the export draws them.
 const NOTE = geometryContract.annotation;
+const LAYER_STEP = geometryContract.layers.step;
+/** How far a panel's top layer is lifted; notes and the selection go above it. */
+const layerLift = (panel: RenderPlanPanel) => Math.max(0, ...panel.marks.map((mark) => mark.layer ?? 0)) * LAYER_STEP;
 const PIXELS_PER_POINT = 4 / 3;
 const NOTE_GAP = NOTE.labelGap * PIXELS_PER_POINT;
 
@@ -388,7 +391,7 @@ function noteSeries(panel: RenderPlanPanel, color: string) {
       },
     }] : []),
     ...(notes.length ? [{
-      ...base, id: `notes-${panel.id}`, z: 7, data: notes.map((note) => noteAnchor(note, panel)),
+      ...base, id: `notes-${panel.id}`, z: 7 + layerLift(panel), data: notes.map((note) => noteAnchor(note, panel)),
       renderItem: (params: { dataIndex: number; coordSys: Frame }, api: RenderApi) => {
         const note = notes[params.dataIndex]!;
         return noteItem(note, noteAnchor(note, panel), api, params.coordSys, color);
@@ -549,15 +552,17 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
       text: [shown(mark.colorDomain[1]), shown(mark.colorDomain[0])], textStyle: { color: colors.text },
     }] : []),
     series: [
-      ...seriesIn.map(({ mark, index }) => ({
-        ...placed(markSeries(mark) as PlacedSeries, placement(panels[index]!, mark)), xAxisIndex: index, yAxisIndex: yAxisIndex(mark, index),
-      })),
+      ...seriesIn.map(({ mark, index }) => {
+        const series = placed(markSeries(mark) as PlacedSeries, placement(panels[index]!, mark)) as PlacedSeries & { z?: number };
+        // A mark of layer n sits n layer steps above every mark of lower layers, as in the export.
+        return { ...series, ...(mark.layer ? { z: (series.z ?? 0) + mark.layer * LAYER_STEP } : {}), xAxisIndex: index, yAxisIndex: yAxisIndex(mark, index) };
+      }),
       // After every mark, so a mark's series index is still its place in the plan.
       ...panels.flatMap((item, index) => noteSeries(item, colors.text).map((series) => ({
         ...placed(series as PlacedSeries, placement(item)), xAxisIndex: index, yAxisIndex: yAxisStart[index]!,
       }))),
       {
-        id: "selection", type: "scatter", silent: true, symbol: "circle", symbolSize: 16, z: 6,
+        id: "selection", type: "scatter", silent: true, symbol: "circle", symbolSize: 16, z: 6 + Math.max(...panels.map(layerLift)),
         data: selectedCoordinates(plan, selected),
         itemStyle: { color: "transparent", borderColor: colors.text, borderWidth: 2 },
       },

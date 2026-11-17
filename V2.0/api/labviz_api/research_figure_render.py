@@ -16,7 +16,7 @@ else:
 import io
 import json
 from time import perf_counter
-from typing import Any, cast
+from typing import Any, cast, get_args
 
 from .figure_spec import (
     FigureBoardSpec,
@@ -32,8 +32,9 @@ from .plan_classic import SERIES_KINDS, build_classic_plan
 from .plan_notes import apply_notes
 from .processing import _cjk_font_info, _contains_cjk, series_rows
 from .processing import render_chart as legacy_render
-from .render_plan import build_research_plan, merge_axis, plan_bytes, plan_hash
+from .render_plan import build_research_plan, merge_axis, merge_layers, plan_bytes, plan_hash
 from .research_chart_render import _RENDER_LOCK, COLORS, draw_plan, rasterize_points
+from .research_charts import ScientificChartSpec
 from .research_preparation import PreparationError
 
 
@@ -86,6 +87,39 @@ def check_figure(spec: FigureSpec) -> None:
             )
 
 
+RESEARCH_KINDS = frozenset(get_args(ScientificChartSpec.model_fields["kind"].annotation))
+
+
+def check_layers(panels: list[list[dict[str, Any]]]) -> None:
+    """Layers of one panel are research charts of one revision with the same axes.
+
+    Each item is a chart's source or its cached header; both carry these keys.
+    """
+    for layers in panels:
+        if len(layers) == 1:
+            continue
+        first = layers[0]
+        for layer in layers:
+            if layer["kind"] not in RESEARCH_KINDS:
+                raise PreparationError(
+                    "figure-layer-unplanned",
+                    "A captured chart is drawn on its own; it cannot share a panel with layers.",
+                )
+            if layer["revisionId"] != first["revisionId"]:
+                raise PreparationError(
+                    "figure-layer-revision",
+                    "Layers in one panel must show the same research revision.",
+                )
+            if (layer["xSignature"], layer["ySignature"]) != (
+                first["xSignature"],
+                first["ySignature"],
+            ):
+                raise PreparationError(
+                    "figure-layer-axis",
+                    "Layers in one panel need the same axis meanings, units and categories.",
+                )
+
+
 def adjusted(plan: dict[str, Any] | None, panel: FigurePanel) -> dict[str, Any] | None:
     """The panel's plan with its axis controls and annotations applied."""
     if not (controlled(panel, "x") or controlled(panel, "y") or panel.annotations):
@@ -103,7 +137,10 @@ def render_board(
     board: FigureBoardSpec | FigureSpec,
     *,
     timings: dict[str, float] | None = None,
+    layers: list[list[dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, bytes], dict[str, Any]]:
+    """Draw a board. `sources` stand for the panels (their first layer); `layers` holds every
+    layer's source per panel, bottom first, and defaults to the panel's one chart."""
     from matplotlib import font_manager
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.collections import PathCollection
@@ -118,6 +155,8 @@ def render_board(
         spec = as_figure(board)
         count = len(sources)
         check_figure(spec)
+        layered = layers or [[panel] for panel in sources]
+        check_layers(layered)
         panel_labels = [panel.label for panel in spec.panels]
         rows, columns = spec.layout.rows, spec.layout.cols
         canvas = spec.canvas
@@ -144,11 +183,16 @@ def render_board(
         x_positions: list[dict[str, float]] = [{} for _ in range(count)]
         for i, (panel, ax) in enumerate(zip(sources, axes, strict=True)):
             if "scientific" in panel:
-                planned = build_research_plan(
-                    panel["scientific"],
-                    group_colors=colors,
-                    use_grayscale=use_grayscale,
-                    point_rendering=spec.point_rendering,
+                planned = merge_layers(
+                    [
+                        build_research_plan(
+                            layer["scientific"],
+                            group_colors=colors,
+                            use_grayscale=use_grayscale,
+                            point_rendering=spec.point_rendering,
+                        )
+                        for layer in layered[i]
+                    ]
                 )
                 drawn = adjusted(planned, spec.panels[i])
                 assert drawn is not None

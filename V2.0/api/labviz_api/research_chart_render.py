@@ -9,7 +9,7 @@ from typing import Any
 from .processing import _cjk_font_info, _contains_cjk
 from .render_plan import build_research_plan
 from .render_plan import rasterize_points as rasterize_points
-from .render_plan_draw import draw_mark, draw_notes, set_scale
+from .render_plan_draw import draw_mark, draw_notes, layer_lift, set_scale
 from .research_preparation import PreparationError
 from .research_styles import COLORS as COLORS
 
@@ -71,7 +71,7 @@ def draw_plan(
             [tick["label"] for tick in y_axis["ticks"]],
         )
         ax.set_ylim(*y_axis["domain"])
-        draw_notes(ax, panel.get("notes", []))
+        draw_notes(ax, panel.get("notes", []), layer_lift(panel["marks"]))
         if target_axis is not None:
             return {}
         figure.text(0.1, 0.02, "\n".join(plan["disclosures"]), fontsize=8)

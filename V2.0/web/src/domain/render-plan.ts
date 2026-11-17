@@ -21,7 +21,8 @@ type Axis = {
   scale: AxisScale; domain: [number, number]; ticks: Tick[]; title: string;
   niceRule: "nice-1-2-5-v1" | null; grid: boolean;
 };
-type MarkBase = { id: string; group: string; color: string };
+// `layer` is set only on marks of a panel's second and later layers (S4e).
+type MarkBase = { id: string; group: string; color: string; layer?: number };
 type YAxisName = "y" | "y2";
 type Decimation = { rule: string; input: number; drawn: number } | null;
 export type RenderPlanMark =
@@ -34,7 +35,7 @@ export type RenderPlanMark =
   | (MarkBase & { kind: "summary"; width: number; x0: number; x1: number; y: number; statistic: "mean" | "median"; summaryUnit: "observation" | "sample" | "experimental_unit"; n: number })
   | (MarkBase & { kind: "rects"; opacity: number; width: number; shape: "stairs" | "bars"; axis: YAxisName; x0: number[]; x1: number[]; y0: number[]; y1: number[]; decimation: Decimation })
   | (MarkBase & { kind: "box"; medianColor: string; width: number; position: number; halfWidth: number; low: number; q1: number; median: number; q3: number; high: number; outliers: number[] })
-  | { kind: "mesh"; id: string; group: string; shape: "cells" | "surface"; x: number[]; y: number[]; values: (number | null)[][]; colorDomain: [number, number]; palette: string[]; colorTitle: string; decimation: Decimation };
+  | { kind: "mesh"; id: string; group: string; layer?: number; shape: "cells" | "surface"; x: number[]; y: number[]; values: (number | null)[][]; colorDomain: [number, number]; palette: string[]; colorTitle: string; decimation: Decimation };
 export type RenderPlanNote =
   | { kind: "text"; x: number; y: number; text: string }
   | { kind: "hline" | "vline"; value: number; label: string }

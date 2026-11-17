@@ -69,6 +69,19 @@
     "BandMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "band",
           "title": "Kind",
@@ -138,6 +151,19 @@
     "BoxMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "box",
           "title": "Kind",
@@ -307,6 +333,19 @@
     "ErrorbarMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "errorbar",
           "title": "Kind",
@@ -417,6 +456,19 @@
       "additionalProperties": false,
       "description": "Values on a grid: heatmap cells, or the heights of a 3D surface.",
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "mesh",
           "title": "Kind",
@@ -821,6 +873,19 @@
     "PointsMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "points",
           "title": "Kind",
@@ -918,6 +983,19 @@
     "PolylineMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "polyline",
           "title": "Kind",
@@ -1071,6 +1149,19 @@
     "RectsMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "rects",
           "title": "Kind",
@@ -1201,6 +1292,19 @@
     "SegmentsMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "segments",
           "title": "Kind",
@@ -1292,6 +1396,19 @@
     "SummaryMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "summary",
           "title": "Kind",
@@ -1416,6 +1533,19 @@
     "ViolinMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "violin",
           "title": "Kind",

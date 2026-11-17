@@ -450,7 +450,21 @@ describe("placement fixture shared with the API tests", () => {
     plan: RenderPlan;
     placed: { points: number[][]; bracket: number[][]; bracketLabel: number[]; rectLabel: number[] };
     logHistogram: { plan: RenderPlan; placed: number[][] };
+    layered: { plan: RenderPlan; drawOrder: string[] };
   };
+
+  it("draws a layered panel's marks in the order the export draws them, notes above all", () => {
+    const { plan: layeredPlan, drawOrder } = fixture.layered;
+    const marks = layeredPlan.panels[0]!.marks;
+    const series = buildPlanOption({ plan: layeredPlan, text }).series as (Series & { z: number })[];
+    const order = marks.map((mark, index) => ({ id: mark.id, z: series[index]!.z, index }))
+      .sort((a, b) => a.z - b.z || a.index - b.index).map((item) => item.id);
+    expect(order).toEqual(drawOrder);
+    const noted = { ...layeredPlan, panels: [{ ...layeredPlan.panels[0]!, notes: [{ kind: "hline" as const, value: 5, label: "" }] }] };
+    const withNotes = buildPlanOption({ plan: noted, text }).series as (Series & { z: number })[];
+    const top = withNotes.find((item) => item.id === `notes-${layeredPlan.panels[0]!.id}`)!;
+    expect(top.z).toBeGreaterThan(Math.max(...withNotes.slice(0, marks.length).map((item) => item.z)));
+  });
   const close = (got: number[][], want: number[][]) => got.forEach((point, i) =>
     point.forEach((value, j) => expect(value).toBeCloseTo(want[i]![j]!, 9)));
 

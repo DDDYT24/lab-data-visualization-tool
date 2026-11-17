@@ -8,6 +8,7 @@ from .plan_axes import SYMLOG_THRESHOLD
 from .render_contract import GEOMETRY, GRID_COLOR, LINE_STYLES
 
 NOTE = GEOMETRY["annotation"]
+LAYER_STEP: int = GEOMETRY["layers"]["step"]
 
 # A mark with more bars than this is drawn as one collection, and the legend then takes a fixed
 # place (`dense_bars`). A patch per bar, and a legend that tests every bar each time it looks for
@@ -15,7 +16,26 @@ NOTE = GEOMETRY["annotation"]
 BAR_PATCH_LIMIT = 1000
 
 
+def layer_lift(marks: list[dict[str, Any]]) -> float:
+    """How far the panel's top layer is lifted; notes go above it."""
+    top: int = max((mark.get("layer") or 0 for mark in marks), default=0)
+    return float(top * LAYER_STEP)
+
+
 def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
+    """Draw one mark; a mark of layer n sits n layer steps above every mark of lower layers."""
+    layer = mark.get("layer")
+    if not layer:
+        draw_kind(ax, mark, dense)
+        return
+    before = set(ax.get_children())
+    draw_kind(ax, mark, dense)
+    for artist in ax.get_children():
+        if artist not in before:
+            artist.set_zorder(artist.get_zorder() + layer * LAYER_STEP)
+
+
+def draw_kind(ax: Any, mark: dict[str, Any], dense: bool) -> None:
     from matplotlib.collections import LineCollection
 
     if mark["kind"] == "segments":
@@ -210,13 +230,16 @@ def draw_box(ax: Any, mark: dict[str, Any]) -> None:
     )
 
 
-def draw_notes(ax: Any, notes: list[dict[str, Any]]) -> None:
-    """Annotations exactly as the plan states them; labels sit a fixed gap from their anchor."""
+def draw_notes(ax: Any, notes: list[dict[str, Any]], lift: float = 0) -> None:
+    """Annotations exactly as the plan states them; labels sit a fixed gap from their anchor.
+
+    `lift` puts lines and text above a layered panel's top layer; shaded ranges stay under all.
+    """
     from matplotlib.patches import Rectangle
 
     color, gap = NOTE["color"], NOTE["labelGap"]
-    line = {"color": color, "linewidth": NOTE["lineWidth"], "zorder": 6}
-    words = {"color": color, "fontsize": NOTE["fontSize"], "zorder": 7}
+    line = {"color": color, "linewidth": NOTE["lineWidth"], "zorder": 6 + lift}
+    words = {"color": color, "fontsize": NOTE["fontSize"], "zorder": 7 + lift}
 
     def label(
         text: str, anchor: tuple[float, float], frame: Any, offset: Any, **align: str
@@ -343,4 +366,4 @@ def draw_panel(
         else:
             # Off must also override a grid-enabled Matplotlib theme.
             ax.grid(False, axis=name)
-    draw_notes(ax, panel.get("notes", []))
+    draw_notes(ax, panel.get("notes", []), layer_lift(panel["marks"]))

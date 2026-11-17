@@ -70,6 +70,48 @@ def log_histogram() -> dict[str, Any]:
     }
 
 
+def layered() -> dict[str, Any]:
+    """Raw points over a violin of the same data, and the order Matplotlib draws the marks in."""
+    from matplotlib.figure import Figure
+
+    from labviz_api.render_plan import build_research_plan, merge_layers
+    from labviz_api.render_plan_draw import draw_mark
+    from labviz_api.research_charts import ScientificChartSpec, compute_chart
+    from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
+
+    rows = ["sample,group,value,unit"]
+    rows += [f"s{i},{'Control' if i % 2 else 'Treated'},{i * 3},mV" for i in range(1, 9)]
+    plan = PreparationPlan.model_validate(
+        {
+            "mapping": {
+                "value": "value",
+                "sample": "sample",
+                "experimentalUnit": "sample",
+                "group": "group",
+                "unit": "unit",
+            }
+        }
+    )
+    prepared = prepare(parse_sources("fixture", [("layers.csv", "\n".join(rows).encode())]), plan)
+    merged = merge_layers(
+        [
+            build_research_plan(
+                compute_chart(prepared, ScientificChartSpec.model_validate({"kind": kind}))
+            )
+            for kind in ("violin", "grouped_strip")
+        ]
+    )
+    marks = merged["panels"][0]["marks"]
+    ax = Figure().subplots()
+    depth = []
+    for mark in marks:
+        before = set(ax.get_children())
+        draw_mark(ax, mark, False)
+        depth.append(min(a.get_zorder() for a in ax.get_children() if a not in before))
+    order = sorted(range(len(marks)), key=lambda index: (depth[index], index))
+    return {"plan": merged, "drawOrder": [marks[index]["id"] for index in order]}
+
+
 def build() -> dict[str, Any]:
     values = [1.0, 10.0, 100.0, 1000.0]
     data = pd.DataFrame({"x": [float(i + 1) for i in range(len(values))], "y": values})
@@ -120,6 +162,7 @@ def build() -> dict[str, Any]:
             "rectLabel": place(*panel["notes"][3]["labelAt"]),
         },
         "logHistogram": log_histogram(),
+        "layered": layered(),
     }
 
 
