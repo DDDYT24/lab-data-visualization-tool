@@ -35,10 +35,17 @@ export type RenderPlanMark =
   | (MarkBase & { kind: "rects"; opacity: number; width: number; shape: "stairs" | "bars"; axis: YAxisName; x0: number[]; x1: number[]; y0: number[]; y1: number[]; decimation: Decimation })
   | (MarkBase & { kind: "box"; medianColor: string; width: number; position: number; halfWidth: number; low: number; q1: number; median: number; q3: number; high: number; outliers: number[] })
   | { kind: "mesh"; id: string; group: string; shape: "cells" | "surface"; x: number[]; y: number[]; values: (number | null)[][]; colorDomain: [number, number]; palette: string[]; colorTitle: string; decimation: Decimation };
+export type RenderPlanNote =
+  | { kind: "text"; x: number; y: number; text: string }
+  | { kind: "hline" | "vline"; value: number; label: string }
+  | { kind: "rect"; x: [number, number]; y: [number, number]; label: string; labelAt: [number, number] }
+  | { kind: "bracket"; x: [number, number]; y: number; foot: number; label: string; labelAt: [number, number] };
 export type RenderPlanPanel = {
   // A y domain that runs from high to low is drawn reversed, as heatmaps are.
   id: string; title: string; axes: { x: Axis; y: Axis; y2: Axis | null; z: Axis | null }; marks: RenderPlanMark[];
   legend: { label: string; color: string; symbol: "line" | "marker" | "dashed" }[];
+  // Absent on a panel without annotations.
+  notes?: RenderPlanNote[];
 };
 // The Python RenderPlan model owns this contract; the frontend only draws what it states.
 export type RenderPlan = {

@@ -358,3 +358,78 @@ describe("log and symlog axes", () => {
     expect(series(2).data).toEqual([[0.1, 1], [1.2, 3]]);
   });
 });
+
+describe("annotations", () => {
+  const frame = { x: 100, y: 20, width: 400, height: 300 };
+  const identity = { coord: (point: number[]) => point };
+  const notes: NonNullable<RenderPlan["panels"][number]["notes"]> = [
+    { kind: "text", x: 1, y: 2, text: "peak" },
+    { kind: "hline", value: 3, label: "limit" },
+    { kind: "vline", value: 2, label: "" },
+    { kind: "rect", x: [0, 1], y: [1, 3], label: "window", labelAt: [0, 3] },
+    { kind: "bracket", x: [0, 2], y: 4, foot: 3.9, label: "p < 0.01", labelAt: [1, 4] },
+  ];
+  const noted: RenderPlan = { ...plan, panels: [{ ...plan.panels[0]!, notes }] };
+  const built = buildPlanOption({ plan: noted, text }).series as Series[];
+  const under = built.find((series) => series.id === "notes-under-A")!;
+  const over = built.find((series) => series.id === "notes-A")!;
+  const drawn = (index: number) => over.renderItem({ dataIndex: index, coordSys: frame }, identity).children;
+
+  it("adds nothing to a plan without notes", () => {
+    const ids = (buildPlanOption({ plan, text }).series as Series[]).map((series) => series.id);
+    expect(ids.filter((id: string) => id.startsWith("notes"))).toEqual([]);
+  });
+
+  it("keeps every mark at its plan index and stays out of the tooltip", () => {
+    expect(built.map((series) => series.id)).toEqual([...marks.map((mark) => mark.id), "notes-under-A", "notes-A", "selection"]);
+    expect([under.silent, over.silent, under.tooltip.show, over.tooltip.show]).toEqual([true, true, false, false]);
+    expect(under.z).toBeLessThan(Math.min(...built.slice(0, marks.length).map((series) => series.z)));
+    expect(over.z).toBeGreaterThan(Math.max(...built.slice(0, marks.length).map((series) => series.z)));
+  });
+
+  it("draws text centred on its point", () => {
+    const [label] = drawn(0);
+    expect(label.style).toMatchObject({ text: "peak", x: 1, y: 2, align: "center", verticalAlign: "middle", fontSize: 12 });
+  });
+
+  it("runs reference lines across the whole panel", () => {
+    const [across, label] = drawn(1);
+    expect(across.shape).toEqual({ x1: 100, y1: 3, x2: 500, y2: 3 });
+    expect(across.style.lineDash).toBe("dashed");
+    expect(label.style).toMatchObject({ text: "limit", x: 496, y: -1, align: "right", verticalAlign: "bottom" });
+    const up = drawn(2);
+    expect(up).toHaveLength(1);
+    expect(up[0].shape).toEqual({ x1: 2, y1: 20, x2: 2, y2: 320 });
+  });
+
+  it("shades a range under the marks and labels its top left corner", () => {
+    const shade = under.renderItem({ dataIndex: 0 }, identity);
+    expect(shade.shape).toEqual({ x: 0, y: 1, width: 1, height: 2 });
+    expect(shade.style.opacity).toBe(0.12);
+    expect(drawn(3)[0].style).toMatchObject({ text: "window", x: 4, y: 7, align: "left", verticalAlign: "top" });
+  });
+
+  it("draws a bracket down to the planned feet with its label above the middle", () => {
+    const [line, label] = drawn(4);
+    expect(line.shape.points).toEqual([[0, 3.9], [0, 4], [2, 4], [2, 3.9]]);
+    expect(label.style).toMatchObject({ text: "p < 0.01", x: 1, y: 0, align: "center", verticalAlign: "bottom" });
+  });
+
+  it("places notes by the axis scale", () => {
+    const logAxis = {
+      scale: "log10" as const, domain: [1, 1000] as [number, number], title: "mV", niceRule: null, grid: true,
+      ticks: [1, 10, 100, 1000].map((value) => ({ value, label: String(value) })),
+    };
+    const logged: RenderPlan = {
+      ...plan,
+      panels: [{
+        ...plan.panels[0]!, marks: [], axes: { ...plan.panels[0]!.axes, y: logAxis },
+        notes: [{ kind: "bracket", x: [0, 2], y: 100, foot: 10, label: "", labelAt: [1, 100] }],
+      }],
+    };
+    const [series] = buildPlanOption({ plan: logged, text }).series as Series[];
+    expect(series.data).toEqual([[0, 2]]);
+    const [line] = series.renderItem({ dataIndex: 0, coordSys: frame }, identity).children;
+    expect(line.shape.points).toEqual([[0, 1], [0, 2], [2, 2], [2, 1]]);
+  });
+});

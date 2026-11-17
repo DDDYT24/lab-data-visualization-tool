@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from .plan_axes import SYMLOG_THRESHOLD
-from .render_contract import GRID_COLOR, LINE_STYLES
+from .render_contract import GEOMETRY, GRID_COLOR, LINE_STYLES
+
+NOTE = GEOMETRY["annotation"]
 
 # A mark with more bars than this is drawn as one collection, and the legend then takes a fixed
 # place (`dense_bars`). A patch per bar, and a legend that tests every bar each time it looks for
@@ -205,6 +207,72 @@ def draw_box(ax: Any, mark: dict[str, Any]) -> None:
     )
 
 
+def draw_notes(ax: Any, notes: list[dict[str, Any]]) -> None:
+    """Annotations exactly as the plan states them; labels sit a fixed gap from their anchor."""
+    from matplotlib.patches import Rectangle
+
+    color, gap = NOTE["color"], NOTE["labelGap"]
+    line = {"color": color, "linewidth": NOTE["lineWidth"], "zorder": 6}
+    words = {"color": color, "fontsize": NOTE["fontSize"], "zorder": 7}
+
+    def label(
+        text: str, anchor: tuple[float, float], frame: Any, offset: Any, **align: str
+    ) -> None:
+        if text:
+            ax.annotate(
+                text,
+                anchor,
+                xycoords=frame,
+                xytext=offset,
+                textcoords="offset points",
+                **align,
+                **words,
+            )
+
+    for note in notes:
+        kind = note["kind"]
+        if kind == "text":
+            ax.text(note["x"], note["y"], note["text"], ha="center", va="center", **words)
+        elif kind == "hline":
+            ax.axhline(note["value"], linestyle=LINE_STYLES[NOTE["ruleStyle"]], **line)
+            label(
+                note["label"],
+                (1.0, note["value"]),
+                ("axes fraction", "data"),
+                (-gap, gap),
+                ha="right",
+                va="bottom",
+            )
+        elif kind == "vline":
+            ax.axvline(note["value"], linestyle=LINE_STYLES[NOTE["ruleStyle"]], **line)
+            label(
+                note["label"],
+                (note["value"], 1.0),
+                ("data", "axes fraction"),
+                (gap, -gap),
+                ha="left",
+                va="top",
+            )
+        elif kind == "rect":
+            (x0, x1), (y0, y1) = note["x"], note["y"]
+            ax.add_patch(
+                Rectangle(
+                    (x0, y0),
+                    x1 - x0,
+                    y1 - y0,
+                    facecolor=color,
+                    edgecolor="none",
+                    alpha=NOTE["rectOpacity"],
+                    zorder=0.5,
+                )
+            )
+            label(note["label"], tuple(note["labelAt"]), "data", (gap, -gap), ha="left", va="top")
+        else:
+            (x0, x1), y, foot = note["x"], note["y"], note["foot"]
+            ax.plot([x0, x0, x1, x1], [foot, y, y, foot], **line)
+            label(note["label"], tuple(note["labelAt"]), "data", (0, gap), ha="center", va="bottom")
+
+
 def set_scale(ax: Any, name: str, scale: str) -> None:
     """Place values along a log or symlog axis exactly as plan_axes.axis_position does."""
     if scale not in ("log10", "symlog"):
@@ -270,3 +338,4 @@ def draw_panel(
         else:
             # Off must also override a grid-enabled Matplotlib theme.
             ax.grid(False, axis=name)
+    draw_notes(ax, panel.get("notes", []))

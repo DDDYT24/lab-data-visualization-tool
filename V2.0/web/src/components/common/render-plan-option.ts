@@ -1,5 +1,7 @@
-import { chartLineType, gridColor } from "@/domain/chart-render-contract";
-import { axisPosition, axisValue, type RenderPlan, type RenderPlanMark, type RenderPlanPanel } from "@/domain/render-plan";
+import { chartLineType, geometryContract, gridColor } from "@/domain/chart-render-contract";
+import {
+  axisPosition, axisValue, type RenderPlan, type RenderPlanMark, type RenderPlanNote, type RenderPlanPanel,
+} from "@/domain/render-plan";
 
 // The adapter only draws what the plan states: it computes no statistics, axes or geometry.
 const TEXT_COLOR = "#20252d";
@@ -10,6 +12,10 @@ const LONG_AXIS_TICKS = 4;
 const DASHED_LEGEND_ICON = "path://M0 0h6v2H0zM10 0h6v2h-6z";
 const LEGEND_ICONS = { line: "roundRect", marker: "circle", dashed: DASHED_LEGEND_ICON };
 const ERRORBAR_CAP_PIXELS = 1.5;
+// Annotation sizes are in points, as the export draws them.
+const NOTE = geometryContract.annotation;
+const PIXELS_PER_POINT = 4 / 3;
+const NOTE_GAP = NOTE.labelGap * PIXELS_PER_POINT;
 
 const SYMBOLS = {
   o: { symbol: "circle", symbolRotate: 0 },
@@ -101,9 +107,9 @@ type Place = (point: number[]) => number[];
 const scaled = (axis: PlanAxis) => axis.scale === "log10" || axis.scale === "symlog";
 
 // A log or symlog panel is drawn on linear ECharts axes: every coordinate goes through the plan's scale.
-function placement(panel: RenderPlanPanel, mark: RenderPlanMark): Place | null {
+function placement(panel: RenderPlanPanel, mark?: RenderPlanMark): Place | null {
   const { x } = panel.axes;
-  const y = "axis" in mark && mark.axis === "y2" && panel.axes.y2 ? panel.axes.y2 : panel.axes.y;
+  const y = mark && "axis" in mark && mark.axis === "y2" && panel.axes.y2 ? panel.axes.y2 : panel.axes.y;
   if (!scaled(x) && !scaled(y)) return null;
   return (point) => [axisPosition(x.scale, point[0]!), axisPosition(y.scale, point[1]!), ...point.slice(2)];
 }
@@ -303,6 +309,80 @@ function markSeries(mark: RenderPlanMark) {
   }
 }
 
+type Frame = { x: number; y: number; width: number; height: number };
+
+/** The first point each note places, so a note is one item of its series. */
+function noteAnchor(note: RenderPlanNote, panel: RenderPlanPanel): number[] {
+  switch (note.kind) {
+    case "text": return [note.x, note.y];
+    case "hline": return [panel.axes.x.domain[0], note.value];
+    case "vline": return [note.value, panel.axes.y.domain[0]];
+    case "rect": return [note.x[0], note.y[0]];
+    case "bracket": return [note.x[0], note.y];
+  }
+}
+
+function noteLabel(text: string, at: number[], dx: number, dy: number, align: string, verticalAlign: string, color: string) {
+  return text ? [{
+    type: "text",
+    style: { text, x: at[0]! + dx, y: at[1]! + dy, fill: color, fontSize: NOTE.fontSize * PIXELS_PER_POINT, align, verticalAlign },
+  }] : [];
+}
+
+/** A note's lines and label, each placed where the plan says. */
+function noteItem(note: RenderPlanNote, anchor: number[], api: RenderApi, frame: Frame, color: string) {
+  const stroke = { stroke: color, lineWidth: NOTE.lineWidth, fill: "none" };
+  const rule = { ...stroke, lineDash: chartLineType(NOTE.ruleStyle as Parameters<typeof chartLineType>[0]) };
+  const at = api.coord(anchor);
+  switch (note.kind) {
+    case "text":
+      return { type: "group", children: noteLabel(note.text, at, 0, 0, "center", "middle", color) };
+    case "hline":
+      return { type: "group", children: [
+        { type: "line", shape: { x1: frame.x, y1: at[1], x2: frame.x + frame.width, y2: at[1] }, style: rule },
+        ...noteLabel(note.label, [frame.x + frame.width, at[1]!], -NOTE_GAP, -NOTE_GAP, "right", "bottom", color),
+      ] };
+    case "vline":
+      return { type: "group", children: [
+        { type: "line", shape: { x1: at[0], y1: frame.y, x2: at[0], y2: frame.y + frame.height }, style: rule },
+        ...noteLabel(note.label, [at[0]!, frame.y], NOTE_GAP, NOTE_GAP, "left", "top", color),
+      ] };
+    case "rect":
+      return { type: "group", children: noteLabel(note.label, api.coord(note.labelAt), NOTE_GAP, NOTE_GAP, "left", "top", color) };
+    case "bracket":
+      return { type: "group", children: [
+        {
+          type: "polyline", style: stroke,
+          shape: { points: [[note.x[0], note.foot], [note.x[0], note.y], [note.x[1], note.y], [note.x[1], note.foot]].map((point) => api.coord(point)) },
+        },
+        ...noteLabel(note.label, api.coord(note.labelAt), 0, -NOTE_GAP, "center", "bottom", color),
+      ] };
+  }
+}
+
+/** A panel's annotations: shaded ranges under the marks, everything else over them. */
+function noteSeries(panel: RenderPlanPanel, color: string) {
+  const notes = panel.notes ?? [];
+  const rects = notes.filter((note): note is Extract<RenderPlanNote, { kind: "rect" }> => note.kind === "rect");
+  const base = { type: "custom", coordinateSystem: "cartesian2d", clip: true, silent: true, tooltip: { show: false } };
+  return [
+    ...(rects.length ? [{
+      ...base, id: `notes-under-${panel.id}`, z: 0, data: rects.map((note) => [note.x[0], note.y[0]]),
+      renderItem: (params: { dataIndex: number }, api: RenderApi) => {
+        const note = rects[params.dataIndex]!;
+        return rectItem(api.coord([note.x[0], note.y[0]]), api.coord([note.x[1], note.y[1]]), color, NOTE.rectOpacity);
+      },
+    }] : []),
+    ...(notes.length ? [{
+      ...base, id: `notes-${panel.id}`, z: 7, data: notes.map((note) => noteAnchor(note, panel)),
+      renderItem: (params: { dataIndex: number; coordSys: Frame }, api: RenderApi) => {
+        const note = notes[params.dataIndex]!;
+        return noteItem(note, noteAnchor(note, panel), api, params.coordSys, color);
+      },
+    }] : []),
+  ];
+}
+
 function axisOption(
   axis: PlanAxis, zoomed: boolean, nameGap: number, gridIndex: number, colors: PlanColors, rotate?: number,
 ) {
@@ -458,6 +538,10 @@ export function buildPlanOption({ colors = DEFAULT_COLORS, plan, selected = [], 
       ...seriesIn.map(({ mark, index }) => ({
         ...placed(markSeries(mark) as PlacedSeries, placement(panels[index]!, mark)), xAxisIndex: index, yAxisIndex: yAxisIndex(mark, index),
       })),
+      // After every mark, so a mark's series index is still its place in the plan.
+      ...panels.flatMap((item, index) => noteSeries(item, colors.text).map((series) => ({
+        ...placed(series as PlacedSeries, placement(item)), xAxisIndex: index, yAxisIndex: yAxisStart[index]!,
+      }))),
       {
         id: "selection", type: "scatter", silent: true, symbol: "circle", symbolSize: 16, z: 6,
         data: selectedCoordinates(plan, selected),

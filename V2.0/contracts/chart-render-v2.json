@@ -43,5 +43,14 @@
   },
   "points": {
     "denseThreshold": 20000
+  },
+  "annotation": {
+    "color": "#20252D",
+    "lineWidth": 1,
+    "ruleStyle": "dashed",
+    "rectOpacity": 0.12,
+    "fontSize": 9,
+    "labelGap": 3,
+    "bracketDrop": 0.02
   }
 }

@@ -241,12 +241,48 @@ class LegendEntry(ResearchModel):
     symbol: Literal["line", "marker", "dashed"]
 
 
+class TextNote(ResearchModel):
+    kind: Literal["text"]
+    x: float
+    y: float
+    text: str
+
+
+class RuleNote(ResearchModel):
+    kind: Literal["hline", "vline"]
+    value: float
+    label: str
+
+
+class RectNote(ResearchModel):
+    kind: Literal["rect"]
+    x: tuple[float, float]
+    y: tuple[float, float]
+    label: str
+    label_at: tuple[float, float]
+
+
+class BracketNote(ResearchModel):
+    kind: Literal["bracket"]
+    x: tuple[float, float]
+    y: float
+    # The y value the two feet reach down to.
+    foot: float
+    label: str
+    label_at: tuple[float, float]
+
+
+Note = Annotated[TextNote | RuleNote | RectNote | BracketNote, Field(discriminator="kind")]
+
+
 class Panel(ResearchModel):
     id: str
     title: str
     axes: PanelAxes
     marks: list[Mark]
     legend: list[LegendEntry]
+    # Absent on a panel without annotations, so plans built before notes keep their hash.
+    notes: list[Note] = Field(default_factory=list)
 
 
 class PlanSource(ResearchModel):
