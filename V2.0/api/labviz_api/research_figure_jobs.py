@@ -14,7 +14,8 @@ from uuid import uuid4
 
 from pydantic_core import to_json
 
-from .research_figure_board import FigureBoardSpec, SceneIndex, insert_artifacts, read_board
+from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, parse_figure
+from .research_figure_board import SceneIndex, insert_artifacts, read_board
 from .research_figure_render import render_board
 from .research_figure_sources import source
 from .research_panel_headers import remember_header, source_header
@@ -86,7 +87,8 @@ class FigureJobs:
             self.owned.clear()
             self.thread = None
 
-    def save(self, project_id: str, spec: FigureBoardSpec) -> dict[str, Any]:
+    def save(self, project_id: str, spec: FigureBoardSpec | FigureSpec) -> dict[str, Any]:
+        charts, placed = chart_ids(spec), as_figure(spec).panels
         self.start()
         if not self.slots.acquire(blocking=False):
             raise PreparationError("research-busy", "One job is running and one is waiting.")
@@ -95,7 +97,7 @@ class FigureJobs:
             with self.store.connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 headers = {}
-                for chart_id in dict.fromkeys(spec.panel_chart_ids):
+                for chart_id in dict.fromkeys(charts):
                     cached = connection.execute(
                         "SELECT header_json FROM research_panel_headers "
                         "WHERE id=? AND project_id=?",
@@ -119,7 +121,7 @@ class FigureJobs:
                         headers[chart_id] = source_header(source(connection, project_id, chart_id))
                         remember_header(connection, project_id, chart_id, headers[chart_id])
                 panels = []
-                for index, chart_id in enumerate(spec.panel_chart_ids):
+                for index, chart_id in enumerate(charts):
                     header = headers[chart_id]
                     panels.append(
                         {
@@ -128,17 +130,15 @@ class FigureJobs:
                                 for key, value in header.items()
                                 if key not in {"xSignature", "ySignature", "spec", "firstPage"}
                             },
-                            "label": "ABCD"[index],
+                            "label": placed[index].label,
                             "chartId": chart_id,
-                            "title": (spec.panel_titles[index] if spec.panel_titles else "")
-                            or header["title"],
+                            "title": placed[index].title or header["title"],
                         }
                     )
                 for dimension in ("x", "y"):
                     if spec.axis_mode in {"shared_" + dimension, "shared_xy"}:
                         signatures = {
-                            json.dumps(headers[key][dimension + "Signature"])
-                            for key in spec.panel_chart_ids
+                            json.dumps(headers[key][dimension + "Signature"]) for key in charts
                         }
                         if len(signatures) != 1:
                             raise PreparationError(
@@ -259,7 +259,8 @@ class FigureJobs:
             )
         if self.on_start:
             self.on_start()
-        spec = FigureBoardSpec.model_validate_json(row["spec_json"])
+        spec = parse_figure(row["spec_json"])
+        charts = chart_ids(spec)
         # One bounded build holds the shared research execution lock. Avoid
         # automatic scans of the large live snapshots while Matplotlib allocates
         # its small objects; collect its cycles once after releasing the sources.
@@ -269,8 +270,7 @@ class FigureJobs:
         try:
             with self.store.connect() as connection:
                 loaded = {
-                    key: source(connection, row["project_id"], key)
-                    for key in dict.fromkeys(spec.panel_chart_ids)
+                    key: source(connection, row["project_id"], key) for key in dict.fromkeys(charts)
                 }
             panels = json.loads(row["panels_json"])
             for panel in panels:
@@ -281,9 +281,7 @@ class FigureJobs:
             load_end = perf_counter()
             # Rendering runs without a SQLite connection or write transaction.
             formats: dict[str, float] = {}
-            artifacts, scene = render_board(
-                [loaded[key] for key in spec.panel_chart_ids], spec, timings=formats
-            )
+            artifacts, scene = render_board([loaded[key] for key in charts], spec, timings=formats)
             render_end = perf_counter()
             scene["panelMetadata"] = panels
             del loaded

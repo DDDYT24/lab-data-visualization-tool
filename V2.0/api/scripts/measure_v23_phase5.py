@@ -18,8 +18,9 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from labviz_api import research_figure_render
+from labviz_api.figure_spec import FigureBoardSpec
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
-from labviz_api.research_figure_board import FigureBoardSpec, SceneIndex, interaction
+from labviz_api.research_figure_board import SceneIndex, interaction
 from labviz_api.research_figure_render import render_board
 from labviz_api.research_figure_sources import legacy_snapshot, scientific_source
 from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare

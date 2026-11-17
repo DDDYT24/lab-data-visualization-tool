@@ -6,12 +6,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+import json
+from typing import Annotated, Any, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Discriminator, Field, Tag, model_validator
 
 from .research_contract import Identifier, ResearchModel
-from .research_figure_board import FigureBoardSpec
+from .research_preparation import PreparationError
 
 MAX_PANELS = 6
 MAX_LAYERS = 8
@@ -19,6 +20,33 @@ Text = Annotated[str, Field(max_length=160)]
 FieldName = Annotated[str, Field(min_length=1, max_length=255)]
 Color = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
 Scalar = bool | int | float | str | None
+# Two numbers, low then high. A list, not a tuple: request bodies reach the model as
+# parsed JSON, where strict mode turns down a list for a tuple.
+Pair = Annotated[list[float], Field(min_length=2, max_length=2)]
+
+
+class FigureBoardSpec(ResearchModel):
+    schema_version: Literal[1] = 1
+    point_rendering: Literal["auto", "vector", "raster"] = "auto"
+    title: str = Field(default="", max_length=160)
+    axis_mode: Literal["independent", "shared_x", "shared_y", "shared_xy"] = "independent"
+    palette: Literal["blue_teal", "grayscale"] = "blue_teal"
+    font_size: int = Field(default=10, ge=8, le=16)
+    grid_visible: bool = True
+    panel_titles: list[Annotated[str, Field(max_length=160)]] = Field(
+        default_factory=list, max_length=4
+    )
+    panel_chart_ids: list[Identifier] = Field(min_length=1, max_length=4)
+
+    @model_validator(mode="after")
+    def valid_layout(self) -> FigureBoardSpec:
+        if self.panel_titles and len(self.panel_titles) != len(self.panel_chart_ids):
+            raise ValueError("Panel titles must match the visible panel count.")
+        if len(self.panel_chart_ids) not in {1, 2, 4}:
+            raise ValueError("Choose exactly one, two or four panels.")
+        if any(not value.strip() or len(value) > 128 for value in self.panel_chart_ids):
+            raise ValueError("Every panel needs a saved chart identifier.")
+        return self
 
 
 class Canvas(ResearchModel):
@@ -59,7 +87,7 @@ class Palette(ResearchModel):
 
 class AxisControl(ResearchModel):
     scale: Literal["linear", "log10", "symlog"] = "linear"
-    domain: tuple[float, float] | None = None
+    domain: Pair | None = None
     ticks: list[float] | None = Field(default=None, min_length=2, max_length=50)
 
     @model_validator(mode="after")
@@ -95,14 +123,14 @@ class LineNote(ResearchModel):
 
 class RectNote(ResearchModel):
     kind: Literal["rect"] = "rect"
-    x: tuple[float, float]
-    y: tuple[float, float]
+    x: Pair
+    y: Pair
     label: Text = ""
 
 
 class BracketNote(ResearchModel):
     kind: Literal["bracket"] = "bracket"
-    x: tuple[float, float]
+    x: Pair
     y: float
     label: Text = ""
 
@@ -274,3 +302,71 @@ def project_board(figure: FigureSpec) -> FigureBoardSpec | None:
     )
     # Anything v1 cannot carry (axes, notes, canvas, mosaic ...) shows up as a difference here.
     return board if upgrade_board(board) == figure else None
+
+
+def figure_version(value: Any) -> str:
+    version = value.get("schemaVersion", 1) if isinstance(value, dict) else value.schema_version
+    return "v2" if version == 2 else "v1"
+
+
+# What a client may save: a v1 board, as before, or a v2 figure. Errors name one model only.
+AnyFigure = Annotated[
+    Annotated[FigureBoardSpec, Tag("v1")] | Annotated[FigureSpec, Tag("v2")],
+    Discriminator(figure_version),
+]
+
+
+def parse_figure(text: str | bytes) -> FigureBoardSpec | FigureSpec:
+    """A stored figure, read by the model its `schemaVersion` names."""
+    model = FigureSpec if figure_version(json.loads(text)) == "v2" else FigureBoardSpec
+    return model.model_validate_json(text)
+
+
+def as_figure(spec: FigureBoardSpec | FigureSpec) -> FigureSpec:
+    return upgrade_board(spec) if isinstance(spec, FigureBoardSpec) else spec
+
+
+def chart_ids(spec: FigureBoardSpec | FigureSpec) -> list[str]:
+    """The saved chart each panel draws, in panel order."""
+    if isinstance(spec, FigureBoardSpec):
+        return list(spec.panel_chart_ids)
+    found = [
+        panel.layers[0].chart_id
+        for panel in spec.panels
+        if len(panel.layers) == 1 and panel.layers[0].chart_id
+    ]
+    if len(found) != len(spec.panels):
+        raise PreparationError(
+            "figure-layer-unsupported", "Each panel must draw exactly one saved chart."
+        )
+    return found
+
+
+def panel_cells(figure: FigureSpec) -> list[tuple[int, int, int, int]]:
+    """Each panel's place in the layout: row, column, rows spanned, columns spanned."""
+    layout = figure.layout
+    if layout.kind == "grid":
+        return [
+            (index // layout.cols, index % layout.cols, 1, 1) for index in range(len(figure.panels))
+        ]
+    rows = layout.mosaic or []
+    cells = []
+    for panel in figure.panels:
+        held = [
+            (r, c)
+            for r, row in enumerate(rows)
+            for c, cell in enumerate(row)
+            if cell == panel.label
+        ]
+        top, left = min(r for r, _ in held), min(c for _, c in held)
+        cells.append(
+            (top, left, max(r for r, _ in held) - top + 1, max(c for _, c in held) - left + 1)
+        )
+    return cells
+
+
+def panel_heading(figure: FigureSpec, index: int, title: str) -> str:
+    label = figure.panels[index].label
+    if figure.layout.label_style == "none":
+        return title
+    return f"{label.lower() if figure.layout.label_style == 'lower' else label.upper()} · {title}"

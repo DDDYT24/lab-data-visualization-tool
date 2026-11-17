@@ -18,8 +18,18 @@ import json
 from time import perf_counter
 from typing import Any, cast
 
+from .figure_spec import (
+    FigureBoardSpec,
+    FigurePanel,
+    FigureSpec,
+    as_figure,
+    panel_cells,
+    panel_heading,
+)
 from .models import ChartSpec
+from .plan_axes import PLAIN_CONTROL, apply_axis_controls
 from .plan_classic import SERIES_KINDS, build_classic_plan
+from .plan_notes import apply_notes
 from .processing import _cjk_font_info, _contains_cjk, series_rows
 from .processing import render_chart as legacy_render
 from .render_plan import build_research_plan, merge_axis, plan_bytes, plan_hash
@@ -48,8 +58,37 @@ def frame_rows(panel: dict[str, Any], chart: ChartSpec, frame: Any) -> Any:
     return rows if matches else None
 
 
+# A v1 board is 7 by 5.5 inches a cell with these gaps; the v2 gutter scales the gaps.
+CELL_INCHES = (7.0, 5.5)
+PLAIN_GUTTER = 0.08
+GAPS = (0.45, 0.9)
+BOTTOM = {1: 0.26, 2: 0.13}
+PALETTES = ("blue_teal", "grayscale")
+MILLIMETRES_PER_INCH = 25.4
+
+
+def controlled(panel: FigurePanel, dimension: str) -> bool:
+    control = getattr(panel.axes, dimension).model_dump(by_alias=True)
+    return bool(control != PLAIN_CONTROL)
+
+
+def adjusted(plan: dict[str, Any] | None, panel: FigurePanel) -> dict[str, Any] | None:
+    """The panel's plan with its axis controls and annotations applied."""
+    if not (controlled(panel, "x") or controlled(panel, "y") or panel.annotations):
+        return plan
+    if plan is None:
+        raise PreparationError(
+            "figure-panel-unplanned", "This panel cannot take axis controls or annotations."
+        )
+    plan = apply_axis_controls(plan, [panel.axes.model_dump(by_alias=True)])
+    return apply_notes(plan, [[note.model_dump(by_alias=True) for note in panel.annotations]])
+
+
 def render_board(
-    sources: list[dict[str, Any]], spec: Any, *, timings: dict[str, float] | None = None
+    sources: list[dict[str, Any]],
+    board: FigureBoardSpec | FigureSpec,
+    *,
+    timings: dict[str, float] | None = None,
 ) -> tuple[dict[str, bytes], dict[str, Any]]:
     from matplotlib import font_manager
     from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -62,14 +101,34 @@ def render_board(
 
     with _RENDER_LOCK:
         started = perf_counter()
+        spec = as_figure(board)
         count = len(sources)
-        columns = 1 if count == 1 else 2
-        rows = 2 if count == 4 else 1
-        figure = Figure(figsize=(7 * columns, 5.5 * rows), dpi=300)
-        axes = [figure.add_subplot(rows, columns, i + 1) for i in range(count)]
-        palette = (
-            COLORS if spec.palette == "blue_teal" else ["#20252d", "#5b616b", "#858b94", "#b0b4ba"]
-        )
+        if spec.palette.categorical not in PALETTES:
+            raise PreparationError("figure-palette-unknown", "Choose a known figure palette.")
+        for dimension in ("x", "y"):
+            if spec.axis_mode in {"shared_" + dimension, "shared_xy"} and any(
+                controlled(panel, dimension) for panel in spec.panels
+            ):
+                raise PreparationError(
+                    "figure-shared-axis-control",
+                    f"A shared {dimension} axis cannot also take a scale, limits or ticks.",
+                )
+        panel_labels = [panel.label for panel in spec.panels]
+        rows, columns = spec.layout.rows, spec.layout.cols
+        canvas = spec.canvas
+        if canvas.width is not None and canvas.height is not None:
+            per_inch = MILLIMETRES_PER_INCH if canvas.unit == "mm" else 1.0
+            size = (canvas.width / per_inch, canvas.height / per_inch)
+        else:
+            size = (CELL_INCHES[0] * columns, CELL_INCHES[1] * rows)
+        figure = Figure(figsize=size, dpi=canvas.dpi)
+        grid = figure.add_gridspec(rows, columns)
+        axes = [
+            figure.add_subplot(grid[row : row + tall, column : column + wide])
+            for row, column, tall, wide in panel_cells(spec)
+        ]
+        use_grayscale = canvas.grayscale or spec.palette.categorical == "grayscale"
+        palette = ["#20252d", "#5b616b", "#858b94", "#b0b4ba"] if use_grayscale else COLORS
         labels = sorted(
             {g["label"] for s in sources if "scientific" in s for g in s["scientific"]["groups"]},
             key=lambda x: (x is not None, x or ""),
@@ -83,19 +142,21 @@ def render_board(
                 planned = build_research_plan(
                     panel["scientific"],
                     group_colors=colors,
-                    use_grayscale=spec.palette == "grayscale",
+                    use_grayscale=use_grayscale,
                     point_rendering=spec.point_rendering,
                 )
-                plans[i] = planned
-                draw_plan(planned, target_figure=figure, target_axis=ax)
+                drawn = adjusted(planned, spec.panels[i])
+                assert drawn is not None
+                plans[i] = drawn
+                draw_plan(drawn, target_figure=figure, target_axis=ax)
             else:
                 chart = ChartSpec.model_validate(panel["legacySpec"])
                 chart.export_settings.font_size = spec.font_size
-                chart.export_settings.grayscale_preview = spec.palette == "grayscale"
+                chart.export_settings.grayscale_preview = use_grayscale
                 for j, series in enumerate(chart.series):
                     series.color = palette[j % len(palette)]
                 frame = pd.DataFrame(**panel["frame"])
-                series_colors = None if spec.palette == "grayscale" else panel.get("seriesColors")
+                series_colors = None if use_grayscale else panel.get("seriesColors")
                 planned_rows = frame_rows(panel, chart, frame)
                 # The board stores the reduced plan; its exports draw every row.
                 stored = build_classic_plan(
@@ -115,6 +176,7 @@ def render_board(
                             spec.point_rendering, len(panel["rows"])
                         ),
                     }
+                stored, full = adjusted(stored, spec.panels[i]), adjusted(full, spec.panels[i])
                 plans[i] = stored
                 if stored is not None and stored["panels"][0]["axes"]["x"]["scale"] == "category":
                     points = planned_rows or [a["points"] for a in panel["analysis"]["series"]]
@@ -136,12 +198,8 @@ def render_board(
                     for artist in ax.get_children():
                         if isinstance(artist, (Line2D, PathCollection)):
                             artist.set_rasterized(True)
-            title = (
-                (spec.panel_titles[i] if spec.panel_titles else "")
-                or panel["title"]
-                or panel["kind"]
-            )
-            heading = f"{'ABCD'[i]} · {title}"
+            title = spec.panels[i].title or panel["title"] or panel["kind"]
+            heading = panel_heading(spec, i, title)
             ax.set_title(heading, fontsize=spec.font_size + 1)
             ax.tick_params(labelsize=spec.font_size)
             ax.xaxis.label.set_fontsize(spec.font_size)
@@ -178,7 +236,7 @@ def render_board(
                     footer += f"\nUncertainty: {legacy_spec['uncertainty']['mode']}"
             plan = plans[i]
             if plan is not None:
-                plan["panels"][0] |= {"id": "ABCD"[i], "title": heading}
+                plan["panels"][0] |= {"id": panel_labels[i], "title": heading}
                 plan["disclosures"] = footer.split("\n")
                 for name in ("x", "y"):
                     plan["panels"][0]["axes"][name]["grid"] = spec.grid_visible
@@ -225,9 +283,9 @@ def render_board(
             left=0.10,
             right=0.94,
             top=0.88,
-            bottom=0.26 if rows == 1 else 0.13,
-            wspace=0.45,
-            hspace=0.9,
+            bottom=BOTTOM.get(rows, 0.09),
+            wspace=GAPS[0] * (spec.layout.gutter / PLAIN_GUTTER),
+            hspace=GAPS[1] * (spec.layout.gutter / PLAIN_GUTTER),
         )
         texts = figure.findobj(Text)
         info = _cjk_font_info() if any(_contains_cjk(t.get_text()) for t in texts) else None
@@ -244,7 +302,7 @@ def render_board(
         # Resolve transforms/text geometry without painting the full dense data twice.
         figure.draw_without_rendering()
         artifacts: dict[str, bytes] = {}
-        for label, plan in zip("ABCD", plans, strict=False):
+        for label, plan in zip(panel_labels, plans, strict=True):
             if plan is not None:
                 plan["planHash"] = plan_hash(plan)
                 artifacts["plan:" + label] = plan_bytes(plan)
@@ -258,7 +316,7 @@ def render_board(
                 "thresholdObservations": 20_000,
                 "imageDpi": 300,
                 "rasterPanels": [
-                    "ABCD"[i]
+                    panel_labels[i]
                     for i, panel in enumerate(sources)
                     if rasterize_points(spec.point_rendering, len(panel["rows"]))
                     and (
@@ -272,7 +330,7 @@ def render_board(
             "sampled": False,
         }
         for i, (panel, ax) in enumerate(zip(sources, axes, strict=True)):
-            label = "ABCD"[i]
+            label = panel_labels[i]
             scene["panels"].append(
                 {
                     "label": label,
@@ -332,7 +390,8 @@ def render_board(
                 stream,
                 format=kind,
                 backend="module://labviz_api.research_svg_backend" if kind == "svg" else None,
-                facecolor="white",
+                facecolor=canvas.background,
+                transparent=canvas.transparent,
             )
             artifacts[kind] = (
                 stream.getvalue().encode("utf-8") if kind == "svg" else stream.getvalue()

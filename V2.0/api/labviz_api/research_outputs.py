@@ -77,8 +77,8 @@ def materialize(
             "坐标轴、文字和密度轮廓保留矢量。嵌入点无法逐个编辑，保留完整源数据 CSV。"
         )
     with store.connect() as c:
-        for i, chart_id in enumerate(board["spec"]["panelChartIds"]):
-            label = "ABCD"[i]
+        for i, placed in enumerate(board["panels"]):
+            chart_id, label = placed["chartId"], placed["label"]
             panel = source(c, project_id, chart_id)
             panel["title"] = board["panels"][i]["title"]
             science = panel.get("scientific")

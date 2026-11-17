@@ -12,9 +12,10 @@ from pydantic import ValidationError
 from test_research_api import SOURCE, project, settings, unlock
 from test_research_chart_api import applied
 
+from labviz_api.figure_spec import FigureBoardSpec
 from labviz_api.main import create_app
 from labviz_api.repository import ProjectRepository
-from labviz_api.research_figure_board import FigureBoardSpec, install_boards
+from labviz_api.research_figure_board import install_boards
 from labviz_api.research_store import ResearchStore
 
 

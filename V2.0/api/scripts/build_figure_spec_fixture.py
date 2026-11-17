@@ -5,8 +5,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from labviz_api.figure_spec import FigureSpec, project_board, upgrade_board
-from labviz_api.research_figure_board import FigureBoardSpec
+from labviz_api.figure_spec import FigureBoardSpec, FigureSpec, project_board, upgrade_board
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
 

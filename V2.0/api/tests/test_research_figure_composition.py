@@ -15,10 +15,11 @@ from test_research_charts import prepared_csv
 from test_research_figure_board import charts
 
 from labviz_api.artifacts import local_artifact_store, sweep
+from labviz_api.figure_spec import FigureBoardSpec
 from labviz_api.main import create_app
 from labviz_api.render_plan import RenderPlan, plan_hash
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
-from labviz_api.research_figure_board import FigureBoardSpec, interaction, scene_row_references
+from labviz_api.research_figure_board import interaction, scene_row_references
 from labviz_api.research_figure_render import render_board
 from labviz_api.research_figure_sources import scientific_source
 
