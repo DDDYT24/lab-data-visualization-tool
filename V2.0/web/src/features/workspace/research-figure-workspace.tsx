@@ -12,7 +12,7 @@ import { figureFilesReady, figureWorkspaceState, type FigureWorkspaceState } fro
 import { ResearchFigureInspector } from "./research-figure-inspector";
 import { ResearchFigurePanelEditor } from "./research-figure-panel-editor";
 import {
-  chartIdsOf, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, figureOf, MAX_PANELS, movePanel, PANEL_LABELS, shares, specFromDraft, storedDraft, withCount,
+  chartIdsOf, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, figureOf, MAX_PANELS, movePanel, PANEL_LABELS, panelLayers, shares, specFromDraft, storedDraft, withChart, withCount,
   type DraftProblem, type FigureDraft, type PanelDraft,
 } from "@/domain/figure-draft";
 import type { RenderPlan } from "@/domain/render-plan";
@@ -145,7 +145,8 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   }
   const blocked = loading || busy;
   const selectedIds = panels.slice(0, count).map((panel) => panel.chartId);
-  const complete = selectedIds.every((id) => catalog.charts.some((chart) => chart.id === id));
+  const chartOf = (id: string) => catalog.charts.find((chart) => chart.id === id);
+  const complete = panels.slice(0, count).every((panel) => panel.chartId && panelLayers(panel).every((id) => chartOf(id)));
   const problems = draftProblems(draft);
   const problemText: Record<DraftProblem["kind"], string> = {
     "limits-half": t("give both axis limits, or clear both", "请填写两个坐标轴界限，或都清空"),
@@ -156,6 +157,16 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const names: Record<string, string> = {
     line: t("Line", "折线"), scatter: t("Scatter", "散点"), box: t("Box", "箱线"), heatmap: t("Correlation", "相关图"),
     grouped_strip: t("Raw points", "原始点图"), paired: t("Paired change", "配对变化图"), violin: t("Violin", "小提琴图"),
+  };
+  const chartTitle = (id: string) => {
+    const chart = chartOf(id);
+    return chart ? chart.spec.title || names[chart.spec.kind] || chart.spec.kind : id.slice(0, 8);
+  };
+  const chartName = (id: string) => `${chartTitle(id)} · ${id.slice(0, 8)}`;
+  // A panel's layers are research charts of its own chart's research revision.
+  const fitsWith = (own: string) => (id: string) => {
+    const chart = chartOf(id), base = chartOf(own);
+    return !!chart && !!base && !chart.legacy && !base.legacy && chart.revisionId === base.revisionId;
   };
   const sameRevision = selectedIds.every((id) => catalog.charts.find((chart) => chart.id === id)?.revisionId === currentRevision);
   const inspectingPreview = overview && inspectorSource === "preview" && !!readyPreview;
@@ -205,6 +216,8 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       ? <Typography>{t("Palette, font, grid and axis sharing apply to the whole figure. Preview and exports use the saved revision until you save.", "配色、字号、网格与坐标共享作用于整个组合图。保存前，预览及导出仍使用已保存版本。")}</Typography>
       : <ResearchFigurePanelEditor key={`${inspectedIndex}:${inspected.id}`} panel={panels[inspectedIndex]!} label={PANEL_LABELS[inspectedIndex]!}
         axes={sourcePlans[inspected.id]?.panels[0]?.axes ?? null} sharedX={shares(axisMode, "x")} sharedY={shares(axisMode, "y")}
+        candidates={catalog.charts.filter((chart) => fitsWith(inspected.id)(chart.id) && !panelLayers(panels[inspectedIndex]!).includes(chart.id)).map((chart) => chart.id)}
+        chartName={chartName} chartTitle={chartTitle}
         disabled={blocked} t={t} onChange={(panel) => updatePanel(inspectedIndex, panel)} />)}
     <Typography variant="caption">{t("Clear removes a panel binding only. Undo restores its previous binding and layout.", "清空只移除面板绑定，撤销可恢复此前绑定和布局。")}</Typography>
   </Stack>;
@@ -352,7 +365,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
           const chart = catalog.charts.find((item) => item.id === id);
           const spec = chart?.spec;
           const metadata = saved?.panels.find((panel) => panel.chartId === id);
-          const noted = panels[index]!.notes.length;
+          const noted = panels[index]!.notes.length, layered = panels[index]!.layers.length;
           // A control on a shared axis is not sent, so it does not count as the panel's own.
           const scaled = (["x", "y"] as const).some((dimension) => !shares(axisMode, dimension)
             && (panels[index]!.axes[dimension].scale !== "linear" || panels[index]!.axes[dimension].domain));
@@ -362,7 +375,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
               <Typography component="h3" variant="h6">{label}</Typography>
               <Button aria-pressed={selectedPanel === index} onClick={() => { setSelectedPanel(index); setInspectorSource("layout"); setInspectorOpen(!wide); }}>{t(`Inspect panel ${label}`, `检查面板 ${label}`)}</Button>
               <TextField select label={t(`Chart for panel ${label}`, `面板 ${label} 的图表`)} value={id} disabled={blocked}
-                onChange={(e) => updatePanel(index, { ...panels[index]!, chartId: e.target.value })}>
+                onChange={(e) => updatePanel(index, withChart(panels[index]!, e.target.value, fitsWith(e.target.value)))}>
                 <MenuItem value="">{t("Choose saved chart", "选择已保存图表")}</MenuItem>
                 {catalog.charts.map((item) => {
                   const itemSpec = item.spec;
@@ -379,7 +392,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
                 <Button disabled={blocked || index === count - 1} onClick={() => update(movePanel(draft, index, 1))}
                   aria-label={t(`Move panel ${label} later`, `面板 ${label} 后移`)}>{t("Later", "后移")}</Button>
                 <Button disabled={blocked || !id || (count === MAX_PANELS && selectedIds.every(Boolean))} onClick={() => duplicate(index)}>{t(`Duplicate panel ${label}`, `复制面板 ${label}`)}</Button>
-                <Button disabled={blocked || !id} onClick={() => updatePanel(index, { ...panels[index]!, chartId: "" })}>{t(`Clear panel ${label}`, `清空面板 ${label}`)}</Button>
+                <Button disabled={blocked || !id} onClick={() => updatePanel(index, withChart(panels[index]!, "", () => false))}>{t(`Clear panel ${label}`, `清空面板 ${label}`)}</Button>
               </Stack>
               {chart && spec && <>
                 {active && !loading && (!saved?.composed || dirty || showPanelPreviews) && !chart.legacy && <Box component="img" src={researchChartApi.artifact(projectId, chart.id, "png", false, true, 480)}
@@ -387,7 +400,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
                   sx={{ width: "100%", height: "auto", bgcolor: "white" }} />}
                 {chart.legacy && <Typography>{t("Captured legacy panel; save to preview composition.", "已捕获旧图表面板；保存后预览组合图。")}</Typography> }
                 <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-                  {scaled ? t("Own axis settings", "自定坐标轴") : t("Independent axes", "独立坐标轴")}{noted ? ` · ${noted} ${t(noted === 1 ? "annotation" : "annotations", "个标注")}` : ""} · {t("research revision", "研究版本")}: {chart.revisionId.slice(0, 8)}
+                  {scaled ? t("Own axis settings", "自定坐标轴") : t("Independent axes", "独立坐标轴")}{layered ? ` · ${layered} ${t("layers", "个图层")}` : ""}{noted ? ` · ${noted} ${t(noted === 1 ? "annotation" : "annotations", "个标注")}` : ""} · {t("research revision", "研究版本")}: {chart.revisionId.slice(0, 8)}
                 </Typography>
                 {metadata && <Typography variant="caption">
                   {t("Observations", "观测")}: {metadata.observations} · {t("Independent units", "独立单位")}: {metadata.independentUnits ?? "?"} · {metadata.unit}

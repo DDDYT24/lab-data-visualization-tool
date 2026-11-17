@@ -1,9 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 
 test.skip(!process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY, "Requires isolated local API.");
 
 test("figure layouts preserve saved panels and recover drafts", async ({ page, expectConsoleError }, testInfo) => {
+  // Five widths, two languages and accessibility scans: about a minute here, more on a busy computer.
+  test.setTimeout(180_000);
   const unlocked = page.waitForResponse((r) => r.url().endsWith("/api/v1/local/session"));
   await page.goto(`/#labviz-access=${process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY}`);
   expect((await unlocked).ok()).toBeTruthy();
@@ -284,41 +287,50 @@ test("figure layouts preserve saved panels and recover drafts", async ({ page, e
   await board.screenshot({ path: testInfo.outputPath("figure-mobile-zh.png") });
 });
 
-test("a six-panel mosaic with a log axis and a bracket saves, draws and reopens", async ({ page }, testInfo) => {
-  test.setTimeout(300_000);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+/** A project with an applied research revision, a raw-points chart and a violin, open on the Figures tab. */
+async function openFigures(page: Page) {
   const unlocked = page.waitForResponse((r) => r.url().endsWith("/api/v1/local/session"));
   await page.goto(`/#labviz-access=${process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY}`);
   expect((await unlocked).ok()).toBeTruthy();
   const rows = ["sample,group,value,unit"];
   for (let s = 1; s <= 8; s++) rows.push(`s${s},${s % 2 ? "Control" : "Treated"},${s * 3},mV`);
   const source = rows.join("\n") + "\n";
-  const upload = await page.request.post("/api/v1/projects", { multipart: { file: { name: "mosaic.csv", mimeType: "text/csv", buffer: Buffer.from(source) } } });
+  const upload = await page.request.post("/api/v1/projects", { multipart: { file: { name: "figure.csv", mimeType: "text/csv", buffer: Buffer.from(source) } } });
   expect(upload.ok()).toBeTruthy();
   const uploaded = await upload.json();
   await expect.poll(async () => (await (await page.request.get(`/api/v1/jobs/${uploaded.job.id}`)).json()).stage).toBe("ready");
   const base = `/api/v1/projects/${uploaded.projectId}/research`;
   const prepared = await page.request.post(base + "/preview", { multipart: {
     plan: JSON.stringify({ mapping: { value: "value", sample: "sample", experimentalUnit: "sample", group: "group", unit: "unit" }, analysisUnit: "experimental_unit" }),
-    files: { name: "mosaic.csv", mimeType: "text/csv", buffer: Buffer.from(source) },
+    files: { name: "figure.csv", mimeType: "text/csv", buffer: Buffer.from(source) },
   } });
   expect(prepared.ok(), await prepared.text()).toBeTruthy();
   const applied = await page.request.post(base + "/apply", { data: { token: (await prepared.json()).token } });
   expect(applied.ok()).toBeTruthy();
   const revisionId = (await applied.json()).revisionId;
+  const charts: Record<string, string> = {};
   for (const [kind, title] of [["grouped_strip", "Points"], ["violin", "Spread"]]) {
-    expect((await page.request.post(base + "/charts", { data: { revisionId, spec: { kind, title } } })).ok()).toBeTruthy();
+    const created = await page.request.post(base + "/charts", { data: { revisionId, spec: { kind, title } } });
+    expect(created.ok()).toBeTruthy();
+    charts[title!] = (await created.json()).id;
   }
   await page.goto(`/workspace/${uploaded.projectId}`);
   await page.getByRole("button", { name: "Research workspace", exact: true }).click();
   await page.getByRole("tab", { name: "Figures", exact: true }).click();
-  const board = page.getByTestId("figure-workspace");
   const select = async (label: string, option: string | RegExp) => {
     const control = page.getByRole("combobox", { name: label, exact: true });
     await expect(control).toBeEnabled();
     await control.click();
     await page.getByRole("option", { name: option, exact: typeof option === "string" }).click();
   };
+  return { charts, select };
+}
+
+test("a six-panel mosaic with a log axis and a bracket saves, draws and reopens", async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { select } = await openFigures(page);
+  const board = page.getByTestId("figure-workspace");
   await select("Panel count", "6");
   await board.getByRole("button", { name: "A across 2 columns, C down 2 rows, D down 2 rows", exact: true }).click();
   for (const [index, label] of [..."ABCDEF"].entries()) await select(`Chart for panel ${label}`, index % 2 ? /Spread/ : /Points/);
@@ -360,4 +372,55 @@ test("a six-panel mosaic with a log axis and a bracket saves, draws and reopens"
   await expect(page.getByRole("combobox", { name: "Panel count", exact: true })).toHaveText("6");
   await expect(board.getByTestId("figure-panel-F")).toBeVisible();
   await expect(board.getByTestId("figure-panel-A")).toContainText("Own axis settings · 1 annotation");
+});
+
+test("a violin added under raw points saves as two layers in order and reopens", async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { charts, select } = await openFigures(page);
+  const board = page.getByTestId("figure-workspace");
+  await select("Chart for panel A", /Points/);
+  await board.getByRole("button", { name: "Inspect panel A", exact: true }).click();
+  const inspector = page.getByRole("complementary", { name: "Selected panel inspector" });
+  await select("Inspector section", "Appearance");
+  const layers = inspector.getByRole("list", { name: "Layers of panel A", exact: true });
+  await expect(layers.getByRole("listitem")).toHaveText([/Points/]);
+  await inspector.getByRole("button", { name: "Add layer to panel A", exact: true }).click();
+  await page.getByRole("menuitem", { name: /Spread/ }).click();
+  // Listed top first: a new layer goes on top, then moves under the points.
+  await expect(layers.getByRole("listitem")).toHaveText([/Spread/, /Points/]);
+  await layers.getByRole("button", { name: /^Move Spread .* down$/ }).click();
+  await expect(layers.getByRole("listitem")).toHaveText([/Points/, /Spread/]);
+  await expect(inspector.getByRole("button", { name: /^Remove layer Points/ })).toHaveCount(0);
+  await expect(board.getByTestId("figure-panel-A")).toContainText("2 layers");
+  const accessibility = await new AxeBuilder({ page }).include('[data-testid="figure-workspace"]').withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("figure-layers-editor.png"), fullPage: true });
+  const committed = page.waitForResponse((response) => response.request().method() === "POST"
+    && response.url().endsWith("/research/figure-boards?deferArtifacts=true"));
+  await board.getByRole("button", { name: "Save new layout revision" }).click();
+  const response = await committed;
+  expect(response.status(), await response.text()).toBe(202);
+  const revision = await response.json();
+  // The panel's own chart is listed first; zIndex holds the drawing order.
+  expect(revision.spec.panels[0].layers.map((layer: { chartId: string; style: { zIndex: number } }) => [layer.chartId, layer.style.zIndex]))
+    .toEqual([[charts.Points, 1], [charts.Spread, 0]]);
+  const url = response.url().split("?")[0] + "/" + revision.id;
+  await expect.poll(async () => (await (await page.request.get(url)).json()).artifactState, { timeout: 180_000 }).toBe("ready");
+  const marks: { kind: string; id: string; layer?: number }[] = (await (await page.request.get(url + "/plans/A")).json()).panels[0].marks;
+  expect(marks[0]!.kind).toBe("violin");
+  const top = marks.findIndex((mark) => mark.layer === 1);
+  expect(top).toBeGreaterThan(0);
+  expect(marks.slice(0, top).every((mark) => mark.layer === undefined)).toBe(true);
+  expect(marks.slice(top).every((mark) => mark.layer === 1 && mark.id.startsWith("L1:"))).toBe(true);
+  expect(marks.slice(top).some((mark) => mark.kind === "points")).toBe(true);
+  await board.getByRole("button", { name: "Interactive panels", exact: true }).click();
+  await expect(board.getByTestId("render-plan-chart")).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath("figure-layers-saved.png"), fullPage: true });
+  await page.reload();
+  await page.getByRole("tab", { name: "Figures", exact: true }).click();
+  await expect(board.getByTestId("figure-panel-A")).toContainText("2 layers");
+  await board.getByRole("button", { name: "Inspect panel A", exact: true }).click();
+  await select("Inspector section", "Appearance");
+  await expect(inspector.getByRole("list", { name: "Layers of panel A", exact: true }).getByRole("listitem")).toHaveText([/Points/, /Spread/]);
 });

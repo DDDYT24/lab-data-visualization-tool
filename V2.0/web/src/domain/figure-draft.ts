@@ -1,13 +1,20 @@
 import type { RenderPlan } from "./render-plan";
 import { completeFigure, projectBoard, upgradeBoard, type FigureAnnotation, type FigurePanel, type FigureSpec } from "./figure-spec";
 import type { FigureBoardSpec } from "./research-figure-board";
+import geometry from "../../../contracts/chart-render-v2.json";
 
 export const MAX_PANELS = 6;
 export const PANEL_LABELS = "ABCDEF";
+export const MAX_LAYERS = geometry.layers.max;
 
 export type FigureLayout = Pick<FigureSpec["layout"], "kind" | "rows" | "cols" | "mosaic">;
 export type AxisDraft = FigurePanel["axes"]["x"];
-export type PanelDraft = { chartId: string; title: string; axes: { x: AxisDraft; y: AxisDraft }; notes: FigureAnnotation[] };
+/**
+ * `chartId` is the panel's own chart: it names the panel and is listed first in the saved spec.
+ * `layers` holds every chart the panel draws, bottom first, once it draws more than its own; it is
+ * empty otherwise.
+ */
+export type PanelDraft = { chartId: string; title: string; axes: { x: AxisDraft; y: AxisDraft }; notes: FigureAnnotation[]; layers: string[] };
 /** What the figure editor holds: always six panel slots, of which the first `count` are used. */
 export type FigureDraft = {
   title: string; axisMode: FigureBoardSpec["axisMode"]; palette: "blue_teal" | "grayscale"; fontSize: number;
@@ -43,7 +50,7 @@ export function layoutCells(layout: FigureLayout, count: number): [number, numbe
 
 const linear = (): AxisDraft => ({ scale: "linear", domain: null, ticks: null });
 export const shares = (mode: FigureDraft["axisMode"], dimension: "x" | "y") => mode === "shared_xy" || mode === `shared_${dimension}`;
-const emptyPanel = (): PanelDraft => ({ chartId: "", title: "", axes: { x: linear(), y: linear() }, notes: [] });
+const emptyPanel = (): PanelDraft => ({ chartId: "", title: "", axes: { x: linear(), y: linear() }, notes: [], layers: [] });
 const pad = (panels: PanelDraft[]) => [...panels, ...Array.from({ length: MAX_PANELS - panels.length }, emptyPanel)];
 
 export function emptyDraft(): FigureDraft {
@@ -78,9 +85,16 @@ export function draftFromSpec(spec: FigureBoardSpec | FigureSpec): FigureDraft {
     title: figure.title, axisMode: figure.axisMode, palette, fontSize: figure.fontSize, grid: figure.gridVisible,
     pointRendering: figure.pointRendering, labelStyle: figure.layout.labelStyle, count: figure.panels.length,
     layout: { kind: figure.layout.kind, rows: figure.layout.rows, cols: figure.layout.cols, mosaic },
-    panels: pad(figure.panels.map((panel) => ({
-      chartId: panel.layers[0]?.chartId ?? "", title: panel.title, axes: panel.axes, notes: panel.annotations,
-    }))),
+    panels: pad(figure.panels.map((panel) => {
+      // Drawn by zIndex, then by place in the list, as the API orders them.
+      const drawn = panel.layers.map((layer, index) => ({ layer, index }))
+        .sort((a, b) => a.layer.style.zIndex - b.layer.style.zIndex || a.index - b.index)
+        .map(({ layer }) => layer.chartId ?? "");
+      return {
+        chartId: panel.layers[0]?.chartId ?? "", title: panel.title, axes: panel.axes, notes: panel.annotations,
+        layers: drawn.length > 1 ? drawn : [],
+      };
+    })),
     kept: { canvas: figure.canvas, gutter: figure.layout.gutter, sequential: figure.palette.sequential, diverging: figure.palette.diverging },
   };
 }
@@ -105,10 +119,48 @@ export function specFromDraft(draft: FigureDraft): FigureBoardSpec | FigureSpec 
         x: shares(draft.axisMode, "x") ? linear() : panel.axes.x,
         y: shares(draft.axisMode, "y") ? linear() : panel.axes.y,
       },
-      annotations: panel.notes, layers: [{ kind: "chart", chartId: panel.chartId }],
+      annotations: panel.notes, layers: savedLayers(panel),
     })),
   });
   return projectBoard(figure) ?? figure;
+}
+
+/** The panel's own chart first, as it names the panel; each zIndex is its place in the drawing order. */
+function savedLayers(panel: PanelDraft) {
+  if (!panel.layers.length) return [{ kind: "chart", chartId: panel.chartId }];
+  const others = panel.layers.filter((id) => id !== panel.chartId);
+  return [panel.chartId, ...others].map((chartId) => ({ kind: "chart", chartId, style: { zIndex: panel.layers.indexOf(chartId) } }));
+}
+
+/** The charts a panel draws, bottom first. */
+export const panelLayers = (panel: PanelDraft): string[] => panel.layers.length ? panel.layers : panel.chartId ? [panel.chartId] : [];
+const stacked = (panel: PanelDraft, layers: string[]): PanelDraft => ({ ...panel, layers: layers.length > 1 ? layers : [] });
+
+/** A new layer goes on top. */
+export function addLayer(panel: PanelDraft, chartId: string): PanelDraft {
+  const layers = panelLayers(panel);
+  return layers.includes(chartId) || layers.length >= MAX_LAYERS ? panel : stacked(panel, [...layers, chartId]);
+}
+
+/** Moves a layer one step up (towards the top, +1) or down in the drawing order. */
+export function moveLayer(panel: PanelDraft, chartId: string, delta: 1 | -1): PanelDraft {
+  const layers = [...panelLayers(panel)];
+  const index = layers.indexOf(chartId), other = index + delta;
+  if (index < 0 || other < 0 || other >= layers.length) return panel;
+  [layers[index], layers[other]] = [layers[other]!, layers[index]!];
+  return stacked(panel, layers);
+}
+
+/** Removes an added layer; the panel's own chart is changed or cleared on the panel card. */
+export function removeLayer(panel: PanelDraft, chartId: string): PanelDraft {
+  return chartId === panel.chartId ? panel : stacked(panel, panelLayers(panel).filter((id) => id !== chartId));
+}
+
+/** A new chart for the panel takes the old one's place among the layers; `keeps` says which added layers still fit it. */
+export function withChart(panel: PanelDraft, chartId: string, keeps: (layer: string) => boolean): PanelDraft {
+  if (!chartId) return { ...panel, chartId, layers: [] };
+  const layers = panelLayers(panel).flatMap((id) => (id === panel.chartId ? [chartId] : id !== chartId && keeps(id) ? [id] : []));
+  return stacked({ ...panel, chartId }, layers);
 }
 
 /** Drafts stored by the desktop session before six panels existed held slots and titles. */
@@ -116,7 +168,8 @@ export function storedDraft(value: unknown): FigureDraft {
   const stored = value as Partial<FigureDraft> & { slots?: string[]; panelTitles?: string[] };
   // Only the draft's own fields: an old session object also held its undo stacks and view state.
   const known = Object.fromEntries(DRAFT_KEYS.flatMap((key) => (stored[key] === undefined ? [] : [[key, stored[key]]]))) as Partial<FigureDraft>;
-  if (stored.panels) return { ...emptyDraft(), ...known, panels: pad(stored.panels.slice(0, MAX_PANELS)) };
+  // Panels stored before layers existed have no `layers`.
+  if (stored.panels) return { ...emptyDraft(), ...known, panels: pad(stored.panels.slice(0, MAX_PANELS).map((panel) => ({ ...emptyPanel(), ...panel }))) };
   const panels = (stored.slots ?? []).map((chartId, index) => ({ ...emptyPanel(), chartId, title: stored.panelTitles?.[index] ?? "" }));
   const count = stored.count ?? 1;
   return { ...emptyDraft(), ...known, count, layout: ARRANGEMENTS[count]?.[0] ?? ARRANGEMENTS[1]![0]!, labelStyle: "upper", panels: pad(panels) };

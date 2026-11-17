@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { Box, Button, IconButton, Menu, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import ArrowDownwardRoundedIcon from "@mui/icons-material/ArrowDownwardRounded";
+import ArrowUpwardRoundedIcon from "@mui/icons-material/ArrowUpwardRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import { autoLimits, noteDefaults, type AxisDraft, type PanelDraft } from "@/domain/figure-draft";
+import {
+  addLayer, autoLimits, MAX_LAYERS, moveLayer, noteDefaults, panelLayers, removeLayer, type AxisDraft, type PanelDraft,
+} from "@/domain/figure-draft";
 import type { FigureAnnotation } from "@/domain/figure-spec";
 import type { RenderPlan } from "@/domain/render-plan";
 
@@ -109,9 +113,51 @@ function NoteFields({ note, axes, disabled, onChange, t }: {
   return <Stack spacing={1}>{label}{fields}</Stack>;
 }
 
-/** The selected panel's own axes and annotations. */
-export function ResearchFigurePanelEditor({ panel, label, axes, sharedX, sharedY, disabled, onChange, t }: {
-  panel: PanelDraft; label: string; axes: PlanAxes | null; sharedX: boolean; sharedY: boolean; disabled: boolean;
+/** The charts the panel draws, top first as they stack; added charts come from the same research revision. */
+function LayerList({ panel, label, candidates, chartName, chartTitle, disabled, onChange, t }: {
+  panel: PanelDraft; label: string; candidates: string[]; chartName: (id: string) => string; chartTitle: (id: string) => string; disabled: boolean;
+  onChange: (panel: PanelDraft) => void; t: T;
+}) {
+  const [menu, setMenu] = useState<HTMLElement | null>(null);
+  const layers = panelLayers(panel);
+  return <Stack spacing={1}>
+    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+      <Typography variant="subtitle2">{t("Layers", "图层")}</Typography>
+      <Button size="small" disabled={disabled || !candidates.length || layers.length >= MAX_LAYERS} aria-haspopup="menu"
+        onClick={(event) => setMenu(event.currentTarget)} aria-label={t(`Add layer to panel ${label}`, `添加图层到面板 ${label}`)}>
+        {t("Add", "添加")}
+      </Button>
+      <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)}>
+        {candidates.map((id) => <MenuItem key={id} onClick={() => { setMenu(null); onChange(addLayer(panel, id)); }}>{chartName(id)}</MenuItem>)}
+      </Menu>
+    </Stack>
+    <Stack component="ol" spacing={0.5} aria-label={t(`Layers of panel ${label}`, `面板 ${label} 的图层`)} sx={{ m: 0, p: 0, listStyle: "none" }}>
+      {[...layers].reverse().map((id, place) => {
+        // The list is narrow: it shows the chart's title; the name with its id is the tooltip and accessible name.
+        const name = chartName(id), own = id === panel.chartId;
+        return <Box component="li" key={id} sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+          <Typography variant="body2" sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: own ? 600 : undefined }}
+            title={own ? `${name} · ${t("the panel's chart, changed on its card", "面板的图表，在面板卡片上更换")}` : name}>{chartTitle(id)}</Typography>
+          {layers.length > 1 && <>
+            <IconButton size="small" disabled={disabled || place === 0} aria-label={t(`Move ${name} up`, `上移 ${name}`)}
+              onClick={() => onChange(moveLayer(panel, id, 1))}><ArrowUpwardRoundedIcon fontSize="small" /></IconButton>
+            <IconButton size="small" disabled={disabled || place === layers.length - 1} aria-label={t(`Move ${name} down`, `下移 ${name}`)}
+              onClick={() => onChange(moveLayer(panel, id, -1))}><ArrowDownwardRoundedIcon fontSize="small" /></IconButton>
+          </>}
+          {/* The panel's own chart is changed or cleared on its card; its row keeps the column so the arrows line up. */}
+          {own ? layers.length > 1 && <Box aria-hidden sx={{ width: 30, flexShrink: 0 }} />
+            : <IconButton size="small" disabled={disabled} aria-label={t(`Remove layer ${name}`, `删除图层 ${name}`)}
+              onClick={() => onChange(removeLayer(panel, id))}><DeleteOutlineRoundedIcon fontSize="small" /></IconButton>}
+        </Box>;
+      })}
+    </Stack>
+  </Stack>;
+}
+
+/** The selected panel's layers, own axes and annotations. */
+export function ResearchFigurePanelEditor({ panel, label, axes, sharedX, sharedY, candidates, chartName, chartTitle, disabled, onChange, t }: {
+  panel: PanelDraft; label: string; axes: PlanAxes | null; sharedX: boolean; sharedY: boolean;
+  candidates: string[]; chartName: (id: string) => string; chartTitle: (id: string) => string; disabled: boolean;
   onChange: (panel: PanelDraft) => void; t: T;
 }) {
   const [menu, setMenu] = useState<HTMLElement | null>(null);
@@ -123,6 +169,7 @@ export function ResearchFigurePanelEditor({ panel, label, axes, sharedX, sharedY
     ...panel, notes: note ? panel.notes.map((item, i) => (i === index ? note : item)) : panel.notes.filter((_, i) => i !== index),
   });
   return <Stack spacing={2} data-testid="figure-panel-editor">
+    <LayerList panel={panel} label={label} candidates={candidates} chartName={chartName} chartTitle={chartTitle} disabled={disabled} onChange={onChange} t={t} />
     <AxisControls name={t("X axis", "X 轴")} axis={axes?.x} control={panel.axes.x} shared={sharedX} disabled={disabled} t={t}
       onChange={(x) => onChange({ ...panel, axes: { ...panel.axes, x } })} />
     <AxisControls name={t("Y axis", "Y 轴")} axis={axes?.y} control={panel.axes.y} shared={sharedY} disabled={disabled} t={t}

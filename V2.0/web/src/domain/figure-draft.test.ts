@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import matrix from "../../../contracts/fixtures/v24/figure-spec.json";
 import {
-  ARRANGEMENTS, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, layoutCells, MAX_PANELS, noteDefaults, specFromDraft, storedDraft, withCount,
-  type FigureDraft,
+  addLayer, ARRANGEMENTS, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, layoutCells, MAX_LAYERS, MAX_PANELS, moveLayer, noteDefaults,
+  panelLayers, removeLayer, specFromDraft, storedDraft, withChart, withCount, type FigureDraft,
 } from "./figure-draft";
 import { figureSpecSchema, type FigureSpec } from "./figure-spec";
 import type { FigureBoardSpec } from "./research-figure-board";
@@ -125,6 +125,52 @@ describe("figure draft", () => {
     expect(again.layout.mosaic).toEqual(MOSAIC);
     expect(again.panels.map((panel) => panel.label).join("")).toBe("ABCDEF");
     expect(figureSpecSchema.safeParse(again).success).toBe(true);
+  });
+
+  it("saves a layered panel with its own chart first and the drawing order in zIndex, and reopens it", () => {
+    const draft = withCount(emptyDraft(), 2);
+    const points = { ...draft.panels[0]!, chartId: "points" };
+    // A violin added on top, then moved under the raw points.
+    const layered = moveLayer(addLayer(points, "violin"), "violin", -1);
+    expect(panelLayers(layered)).toEqual(["violin", "points"]);
+    draft.panels = draft.panels.map((panel, i) => (i === 0 ? layered : i === 1 ? { ...panel, chartId: "other" } : panel));
+    const spec = specFromDraft(draft) as FigureSpec;
+    expect(spec.schemaVersion).toBe(2);
+    expect(figureSpecSchema.safeParse(spec).success).toBe(true);
+    expect(spec.panels[0]!.layers.map((layer) => [layer.chartId, layer.style.zIndex])).toEqual([["points", 1], ["violin", 0]]);
+    expect(spec.panels[1]!.layers.map((layer) => [layer.chartId, layer.style.zIndex])).toEqual([["other", 0]]);
+    const reopened = draftFromSpec(spec);
+    expect(reopened.panels[0]).toMatchObject({ chartId: "points", layers: ["violin", "points"] });
+    expect(reopened.panels[1]!.layers).toEqual([]);
+    expect(specFromDraft(reopened)).toEqual(spec);
+    // Back to one layer, the figure is a v1 board again.
+    expect(specFromDraft({ ...draft, panels: draft.panels.map((p, i) => (i ? p : removeLayer(p, "violin"))) }).schemaVersion).toBe(1);
+  });
+
+  it("edits a panel's layers within the cap and keeps its own chart", () => {
+    let panel = { ...emptyDraft().panels[0]!, chartId: "own" };
+    expect(panelLayers(panel)).toEqual(["own"]);
+    expect(panelLayers({ ...panel, chartId: "" })).toEqual([]);
+    expect(addLayer(addLayer(panel, "a"), "a").layers).toEqual(["own", "a"]);
+    for (let i = 1; i < MAX_LAYERS + 2; i += 1) panel = addLayer(panel, `l${i}`);
+    expect(panelLayers(panel)).toHaveLength(MAX_LAYERS);
+    expect(removeLayer(panel, "own")).toBe(panel);
+    expect(moveLayer(panel, "own", -1)).toBe(panel);
+    expect(moveLayer(panel, "own", 1).layers.slice(0, 2)).toEqual(["l1", "own"]);
+    // A new own chart takes the old one's place; added layers stay only if they fit it.
+    const two = addLayer({ ...emptyDraft().panels[0]!, chartId: "own" }, "a");
+    expect(withChart(two, "new", () => true).layers).toEqual(["new", "a"]);
+    expect(withChart(two, "new", () => false)).toMatchObject({ chartId: "new", layers: [] });
+    expect(withChart(two, "a", () => true)).toMatchObject({ chartId: "a", layers: [] });
+    expect(withChart(two, "", () => true)).toMatchObject({ chartId: "", layers: [] });
+  });
+
+  it("gives panels stored before layers existed no layers", () => {
+    const old: Record<string, unknown> = { ...emptyDraft().panels[0]!, chartId: "a" };
+    delete old.layers;
+    const draft = storedDraft({ ...emptyDraft(), panels: [old] });
+    expect(draft.panels[0]).toMatchObject({ chartId: "a", layers: [] });
+    expect(specFromDraft(draft)).toMatchObject({ schemaVersion: 1, panelChartIds: ["a"] });
   });
 
   it("takes only draft fields from an old desktop session", () => {
