@@ -56,7 +56,7 @@ def saved_board(client: Any, base: str, spec: dict[str, Any], deferred: bool) ->
     """Saves a figure on either path and waits until its files are drawn."""
     response = client.post(base, params={"deferArtifacts": deferred}, json=spec)
     assert response.status_code == (202 if deferred else 200), response.text
-    url = base + "/" + response.json()["id"]
+    url = base + "/" + str(response.json()["id"])
     deadline = perf_counter() + 120
     while deferred and perf_counter() < deadline:
         if client.get(url).json()["artifactState"] in ("ready", "failed"):

@@ -83,7 +83,8 @@ def test_matplotlib_draws_the_log_histogram_at_the_fixture_positions(drawer: str
     else:
         draw_plan(plan, target_figure=figure, target_axis=ax)
     (patch,) = [item for item in ax.patches if isinstance(item, StepPatch)]
-    data = patch.get_data()
+    # A `StairData` namedtuple at run time; Matplotlib's stub types it as a bare tuple.
+    data: Any = patch.get_data()
     placed = FIXTURE["logHistogram"]["placed"]
     assert list(data.edges) == [*(bin_[0] for bin_ in placed), placed[-1][2]]
     assert [axis_position("log10", value) for value in data.values] == pytest.approx(
