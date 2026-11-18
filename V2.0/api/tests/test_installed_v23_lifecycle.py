@@ -290,3 +290,37 @@ print('installed API identity, cookie isolation, tools, and lock release passed'
         timeout=90,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_failed_migration_leaves_the_data_epoch_unchanged(
+    profile: InstalledProfile, tmp_path: Path
+) -> None:
+    profile.data.mkdir()
+    (profile.data / "objects").mkdir()
+    (profile.data / "labviz.db").write_bytes(b"not a database, so preparation fails")
+    profile.set_epoch(DATA_EPOCH - 1)
+    env = {
+        **os.environ,
+        "LABVIZ_INSTALL_LINE": "2.3",
+        "LABVIZ_PROFILE_ROOT": str(profile.root),
+        "LABVIZ_PROFILE_ID": profile.identifier,
+        "LABVIZ_DATABASE_PATH": str(profile.data / "labviz.db"),
+        "LABVIZ_OBJECT_STORAGE_ROOT": str(profile.data / "objects"),
+        "LABVIZ_LOCAL_ACCESS_KEY": "synthetic-installed-launch-key-" + "x" * 32,
+        "LABVIZ_PERSISTENCE_BACKEND": "sqlite",
+        "LABVIZ_OBJECT_STORAGE_BACKEND": "local",
+        "LABVIZ_ENVIRONMENT": "development",
+        "LABVIZ_AUTH_MODE": "console",
+        "PYTHONIOENCODING": "utf-8",
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", "from labviz_api.main import create_app; create_app()"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=90,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert profile.epoch() == DATA_EPOCH - 1

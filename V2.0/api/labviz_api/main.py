@@ -474,7 +474,6 @@ def create_app(
         if installed.epoch() > DATA_EPOCH:
             installed_guard.close()
             raise ValueError("Newer data requires a compatible runtime or a verified older backup.")
-        installed.set_epoch(DATA_EPOCH)
     resolved_repository = repository or ProjectRepository(
         resolved_settings.database_path, resolved_settings.project_ttl_seconds
     )
@@ -486,6 +485,10 @@ def create_app(
             resolved_repository.database_path,
             project_ttl_seconds=resolved_settings.project_ttl_seconds,
         )
+        if installed:
+            # Claim this runtime's epoch only once every migration has run: a profile left
+            # half-migrated must stay readable by the release that wrote it.
+            installed.set_epoch(DATA_EPOCH)
     resolved_project_store = project_store or build_project_store(
         resolved_settings, resolved_repository
     )
