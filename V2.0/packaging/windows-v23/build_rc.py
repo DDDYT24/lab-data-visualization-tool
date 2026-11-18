@@ -54,6 +54,43 @@ REVIEWED_DEVELOPMENT_SEVERITIES = frozenset({"info", "low", "moderate"})
 REVIEWED_PRODUCTION_ADVISORY = "https://github.com/advisories/GHSA-fc5q-39xc-vjpf"
 REVIEWED_PRODUCTION_PATH = "node_modules/@parcel/watcher"
 
+# Reviewed 2026-11-18, owner approved: the same picomatch advisory reaches the development tree
+# through the test and lint tools (vitest, vite, tinyglobby, fdir, micromatch, fast-glob and the
+# ESLint plugins). They run only in development and CI, are not shipped, and match only globs
+# from the project's own configuration. A development finding passes on this review only when
+# every advisory it traces to is that picomatch advisory or the reviewed minimatch one above
+# (and then only on the reviewed packages); anything else, or a chain that cannot be traced,
+# still stops the build. Remove with the production exception once picomatch is fixed.
+REVIEWED_MINIMATCH_ADVISORY = "https://github.com/advisories/GHSA-g3hv-75wg-m249"
+
+
+def root_advisories(
+    audit: dict, name: str, seen: frozenset[str] = frozenset()
+) -> set[str]:
+    """The advisory URLs a finding traces to through the vulnerable packages it depends on."""
+    findings = audit.get("vulnerabilities", {})
+    roots: set[str] = set()
+    for source in findings.get(name, {}).get("via", []):
+        if isinstance(source, dict):
+            roots.add(str(source.get("url")))
+        elif source not in findings:
+            roots.add("untraced:" + str(source))
+        elif source not in seen:
+            roots |= root_advisories(audit, source, seen | {name})
+    return roots
+
+
+def reviewed_picomatch_development_finding(audit: dict, name: str) -> bool:
+    roots = root_advisories(audit, name)
+    return (
+        REVIEWED_PRODUCTION_ADVISORY in roots
+        and roots <= {REVIEWED_PRODUCTION_ADVISORY, REVIEWED_MINIMATCH_ADVISORY}
+        and (
+            REVIEWED_MINIMATCH_ADVISORY not in roots
+            or name in REVIEWED_DEVELOPMENT_PACKAGES
+        )
+    )
+
 
 def reviewed_production_finding(finding: dict) -> bool:
     nodes = finding.get("nodes", [])
@@ -86,7 +123,8 @@ def unreviewed_development_findings(audit: dict) -> list[str]:
     """Return every development audit finding that the reviews above do not cover."""
     unreviewed = []
     for name, finding in sorted(audit.get("vulnerabilities", {}).items()):
-        if reviewed_production_finding(finding):
+        picomatch_only = reviewed_picomatch_development_finding(audit, name)
+        if reviewed_production_finding(finding) or picomatch_only:
             continue
         advisories = {
             source.get("name")
