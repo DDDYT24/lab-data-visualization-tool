@@ -376,8 +376,11 @@ export function ChartStep({
           <Typography sx={{ fontWeight: 700 }}>{t("dataTableTitle")}</Typography>
         </AccordionSummary>
         <AccordionDetails>
+          <Typography color="text.secondary" sx={{ display: "block", mb: 1 }} variant="caption">
+            {t("dataTableLegend")}
+          </Typography>
           <DataPreviewTable
-        active={active}
+            active={active}
             findings={quality.findings}
             emphasizeIssues
             preview={preview}
@@ -485,17 +488,17 @@ export function ChartStep({
           </Tabs>
           <div aria-labelledby={`chart-tab-${section}`} id={`chart-section-${section}`} role="tabpanel">
             {section === "data" ? (
-              <ChartDataPanel
-                numericColumns={numericColumns}
-                surfaceDiagnosticMessage={surfaceDiagnosticMessage}
-              />
+              <ChartDataPanel numericColumns={numericColumns} />
             ) : section === "method" ? (
               <ChartMethodPanel numericColumns={numericColumns} />
             ) : (
               <ChartAppearancePanel />
             )}
           </div>
-
+          {/* Shown on every tab: it is why Continue is disabled. */}
+          {surfaceDiagnosticMessage ? (
+            <Alert severity="warning">{surfaceDiagnosticMessage}</Alert>
+          ) : null}
           <Stack direction="row" spacing={1}>
             <Button onClick={onBack} startIcon={<ArrowBackRoundedIcon />} variant="outlined">
               {t("back")}

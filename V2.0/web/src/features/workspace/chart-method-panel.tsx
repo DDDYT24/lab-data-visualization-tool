@@ -12,12 +12,13 @@ import {
 } from "@mui/material";
 import { useTranslations } from "next-intl";
 
+import type { PreviewColumn } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
 import { useWorkspaceStore } from "./workspace-store";
 
 /** How the chart is computed: the fit, its interval and the error bars. */
-export function ChartMethodPanel({ numericColumns }: { numericColumns: Column[] }) {
+export function ChartMethodPanel({ numericColumns }: { numericColumns: PreviewColumn[] }) {
   const t = useTranslations("chart");
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
   const updateChart = useWorkspaceStore((state) => state.updateChart);
@@ -268,5 +269,3 @@ export function ChartMethodPanel({ numericColumns }: { numericColumns: Column[] 
     </Stack>
   );
 }
-
-type Column = NonNullable<ReturnType<typeof useWorkspaceStore.getState>["preview"]>["columns"][number];

@@ -15,6 +15,7 @@ import {
 import type { SelectChangeEvent } from "@mui/material/Select";
 import { useTranslations } from "next-intl";
 
+import type { PreviewColumn } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
 
 import { useWorkspaceStore } from "./workspace-store";
@@ -42,13 +43,7 @@ export function surfaceSetup(chartSpec: ChartSpec) {
 }
 
 /** What the chart is computed from: its kind, fields, grouping, panels and second axis. */
-export function ChartDataPanel({
-  numericColumns,
-  surfaceDiagnosticMessage,
-}: {
-  numericColumns: Column[];
-  surfaceDiagnosticMessage: string | null;
-}) {
+export function ChartDataPanel({ numericColumns }: { numericColumns: PreviewColumn[] }) {
   const t = useTranslations("chart");
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
   const preview = useWorkspaceStore((state) => state.preview);
@@ -168,56 +163,58 @@ export function ChartDataPanel({
       {numericColumns.length === 1 ? (
         <Alert severity="info">{t("singleValueHelp")}</Alert>
       ) : null}
-      {distributionChart ? null : <FormControl fullWidth size="small">
-        <InputLabel id="chart-x-field-label">{t("xField")}</InputLabel>
-        <Select
-          label={t("xField")}
-          labelId="chart-x-field-label"
-          onChange={(event) => {
-            const column = numericColumns.find(
-              (item) => item.field === event.target.value,
-            );
-            if (column) {
-              const previousXColumn = numericColumns.find(
-                (item) => item.field === chartSpec.xAxis.field,
+      {distributionChart ? null : (
+        <FormControl fullWidth size="small">
+          <InputLabel id="chart-x-field-label">{t("xField")}</InputLabel>
+          <Select
+            label={t("xField")}
+            labelId="chart-x-field-label"
+            onChange={(event) => {
+              const column = numericColumns.find(
+                (item) => item.field === event.target.value,
               );
-              const nextSeries = chartSpec.series.map((series) =>
-                series.field === column.field && previousXColumn
-                  ? {
-                      ...series,
-                      field: previousXColumn.field,
-                      label: previousXColumn.label,
-                    }
-                  : series,
-              );
-              updateChart({
-                xAxis: {
-                  field: column.field,
-                  title: column.label,
-                  unit: column.unit ?? "",
-                },
-                series: nextSeries,
-                yAxis: {
-                  ...chartSpec.yAxis,
-                  field: nextSeries[0].field,
-                  title: nextSeries[0].label,
-                  unit:
-                    numericColumns.find(
-                      (item) => item.field === nextSeries[0].field,
-                    )?.unit ?? "",
-                },
-              });
-            }
-          }}
-          value={chartSpec.xAxis.field}
-        >
-          {numericColumns.map((column) => (
-            <MenuItem key={column.field} value={column.field}>
-              {column.label}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>}
+              if (column) {
+                const previousXColumn = numericColumns.find(
+                  (item) => item.field === chartSpec.xAxis.field,
+                );
+                const nextSeries = chartSpec.series.map((series) =>
+                  series.field === column.field && previousXColumn
+                    ? {
+                        ...series,
+                        field: previousXColumn.field,
+                        label: previousXColumn.label,
+                      }
+                    : series,
+                );
+                updateChart({
+                  xAxis: {
+                    field: column.field,
+                    title: column.label,
+                    unit: column.unit ?? "",
+                  },
+                  series: nextSeries,
+                  yAxis: {
+                    ...chartSpec.yAxis,
+                    field: nextSeries[0].field,
+                    title: nextSeries[0].label,
+                    unit:
+                      numericColumns.find(
+                        (item) => item.field === nextSeries[0].field,
+                      )?.unit ?? "",
+                  },
+                });
+              }
+            }}
+            value={chartSpec.xAxis.field}
+          >
+            {numericColumns.map((column) => (
+              <MenuItem key={column.field} value={column.field}>
+                {column.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
       {chartSpec.type === "surface3d" ? (
         <Stack spacing={1.5}>
           <FormControl fullWidth size="small">
@@ -320,8 +317,10 @@ export function ChartDataPanel({
           ))}
         </Select>
       </FormControl>
-      {surfaceDiagnosticMessage ? (
-        <Alert severity="warning">{surfaceDiagnosticMessage}</Alert>
+      {distributionChart ? (
+        <Typography color="text.secondary" variant="caption">
+          {t("distributionPooled")}
+        </Typography>
       ) : null}
       <FormControl fullWidth size="small">
         <InputLabel id="panel-count-label">{t("panelCount")}</InputLabel>
@@ -425,5 +424,3 @@ export function ChartDataPanel({
     </Stack>
   );
 }
-
-type Column = NonNullable<ReturnType<typeof useWorkspaceStore.getState>["preview"]>["columns"][number];

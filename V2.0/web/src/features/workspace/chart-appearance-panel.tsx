@@ -161,8 +161,8 @@ export function ChartAppearancePanel() {
           </FormControl>
         </Stack>
       ))}
-      {/* The fit labels only matter once a fit is drawn. */}
-      {chartSpec.fitting.model !== "none" ? (
+      {/* The fit labels only matter where a fit is drawn (the Fit model rule). */}
+      {chartSpec.fitting.model !== "none" && !["heatmap", "surface3d"].includes(chartSpec.type) ? (
         <>
           <FormControlLabel
             control={

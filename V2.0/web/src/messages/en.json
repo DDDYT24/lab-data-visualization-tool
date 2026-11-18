@@ -413,7 +413,9 @@
       "data": "Data",
       "method": "Method",
       "appearance": "Appearance"
-    }
+    },
+    "distributionPooled": "Values are pooled; grouping does not apply to this chart.",
+    "dataTableLegend": "Highlighted cells are quality findings."
   },
   "export": {
     "title": "Prepare publication export",

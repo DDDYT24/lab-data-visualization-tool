@@ -413,7 +413,9 @@
       "data": "数据",
       "method": "方法",
       "appearance": "外观"
-    }
+    },
+    "distributionPooled": "数值合并统计，此图表不使用分组。",
+    "dataTableLegend": "高亮单元格为质量问题。"
   },
   "export": {
     "title": "准备论文图导出",
