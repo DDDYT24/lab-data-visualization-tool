@@ -615,7 +615,6 @@ export function InspectStep({ onBack, onContinue, active = true }: { onBack: () 
   return (
     <StepLayout
       canvas={canvas}
-      description={t("description")}
       inspector={inspector}
       title={t("title")}
     />

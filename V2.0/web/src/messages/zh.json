@@ -134,7 +134,6 @@
   },
   "importData": {
     "title": "确认数据",
-    "description": "在质量检查前确认识别出的工作表、表头、字段和单位。",
     "file": "所选文件",
     "sampleFile": "LabViz 示例数据集",
     "rows": "数据预览",
@@ -153,13 +152,11 @@
     "xUnit": "X 轴单位",
     "yUnit": "Y 轴单位",
     "noNumericColumns": "未检测到数值列。请切换工作表或表头行，或先修正源文件，再创建图表。",
-    "contextualTip": "如果预览不符合预期，可以在继续前更换工作表或调整表头行。",
     "unit": "Y 轴单位",
     "review": "检查数据质量"
   },
   "inspect": {
     "title": "检查数据质量",
-    "description": "LabViz 会标出潜在问题并解释原因，不会自动修改任何数据。",
     "missing": "缺失值",
     "missingBody": "一项测量为空。将它排除在图表外不会改变源文件。",
     "suspicious": "可疑点",
@@ -420,7 +417,6 @@
   },
   "export": {
     "title": "准备论文图导出",
-    "description": "选择格式和输出尺寸，最终论文文件将由 Python API 渲染。",
     "loadingTitle": "正在准备导出",
     "loadingDescription": "处理服务返回项目数据后即可使用导出功能。",
     "requestFailed": "无法创建导出任务。",

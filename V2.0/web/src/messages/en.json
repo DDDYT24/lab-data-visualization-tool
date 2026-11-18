@@ -134,7 +134,6 @@
   },
   "importData": {
     "title": "Confirm your data",
-    "description": "Check the detected sheet, header, columns, and units before quality inspection.",
     "file": "Selected file",
     "sampleFile": "LabViz sample dataset",
     "rows": "Data preview",
@@ -153,13 +152,11 @@
     "xUnit": "X-axis unit",
     "yUnit": "Y-axis unit",
     "noNumericColumns": "No numeric columns were detected. Choose a different sheet or header row, or correct the source file before creating a chart.",
-    "contextualTip": "If the preview looks wrong, try a different worksheet or move the header row before continuing.",
     "unit": "Y-axis unit",
     "review": "Review data quality"
   },
   "inspect": {
     "title": "Review data quality",
-    "description": "LabViz highlights possible issues and explains them. Nothing is changed automatically.",
     "missing": "Missing value",
     "missingBody": "One measurement is empty. Excluding it from this chart preserves the source file.",
     "suspicious": "Suspicious point",
@@ -420,7 +417,6 @@
   },
   "export": {
     "title": "Prepare publication export",
-    "description": "Choose a format and output size. The Python API will render the final publication file.",
     "loadingTitle": "Preparing export",
     "loadingDescription": "Export becomes available after the processing service returns project data.",
     "requestFailed": "The export request could not be created.",
