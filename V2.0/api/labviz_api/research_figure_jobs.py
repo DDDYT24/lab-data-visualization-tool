@@ -38,6 +38,10 @@ from .research_store import ResearchStore
 LOGGER = logging.getLogger(__name__)
 
 
+# Preparation errors that depend on the machine or the moment, not on the saved figure.
+RETRYABLE_CODES = frozenset({"chart-cjk-font", "research-busy"})
+
+
 class FigureJobs:
     """One source API process, one executing job, at most one waiting job.
 
@@ -244,12 +248,15 @@ class FigureJobs:
                         self._build(identifier)
                 except PreparationError as error:
                     # The figure cannot be drawn as saved (a note outside its axes, a log
-                    # axis over zero): another attempt would fail the same way.
+                    # axis over zero): another attempt would fail the same way. A missing
+                    # font or a busy service belongs to this machine and moment instead, so
+                    # that failure stays retryable.
+                    stored = str(error) if error.code in RETRYABLE_CODES else refusal_text(error)
                     with self.store.connect() as connection:
                         connection.execute(
                             "UPDATE research_figure_jobs SET state='failed', error=? "
                             "WHERE board_id=? AND state IN ('queued','running')",
-                            (refusal_text(error), identifier),
+                            (stored, identifier),
                         )
                 except Exception:
                     LOGGER.exception("Figure generation failed for %s", identifier)

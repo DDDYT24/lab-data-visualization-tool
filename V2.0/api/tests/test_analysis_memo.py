@@ -82,6 +82,16 @@ def test_anything_the_analysis_reads_runs_it_again(runs: list[int], changed: Cha
     assert len(runs) == 2
 
 
+def test_renamed_columns_run_it_again(runs: list[int]) -> None:
+    memo = AnalysisMemo()
+    both = FRAME.assign(b=FRAME["a"] * 2)
+    # Same values in the same places, but "a" and "b" trade names: different data to a chart.
+    swapped = both.rename(columns={"a": "b", "b": "a"})
+    memo.analysis("p", both, chart())
+    memo.analysis("p", swapped, chart())
+    assert len(runs) == 2
+
+
 def test_new_data_and_other_projects_run_it_again(runs: list[int]) -> None:
     memo = AnalysisMemo()
     memo.analysis("p", FRAME, chart())
