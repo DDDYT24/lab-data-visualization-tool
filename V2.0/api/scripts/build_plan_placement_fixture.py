@@ -2,7 +2,8 @@
 
 It holds axis positions for sample values on every scale, one plan with log axes and
 every kind of note, and where that plan's points and bracket land along the axes; and a
-histogram on a log count axis with where its bins land.
+histogram on a log count axis with where its bins land; and raw points over a violin with the
+order their marks are drawn in.
 """
 
 from __future__ import annotations
@@ -74,7 +75,7 @@ def layered() -> dict[str, Any]:
     """Raw points over a violin of the same data, and the order Matplotlib draws the marks in."""
     from matplotlib.figure import Figure
 
-    from labviz_api.render_plan import build_research_plan, merge_layers
+    from labviz_api.render_plan import build_research_plan, merge_layers, plan_hash
     from labviz_api.render_plan_draw import draw_mark
     from labviz_api.research_charts import ScientificChartSpec, compute_chart
     from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
@@ -109,7 +110,24 @@ def layered() -> dict[str, Any]:
         draw_mark(ax, mark, False)
         depth.append(min(a.get_zorder() for a in ax.get_children() if a not in before))
     order = sorted(range(len(marks)), key=lambda index: (depth[index], index))
-    return {"plan": merged, "drawOrder": [marks[index]["id"] for index in order]}
+    # Density values differ in their last bits between CPUs (numpy/scipy vector paths), and so do
+    # the result and plan hashes built from them. Twelve significant digits keep the fixture the
+    # same on every machine; the plan hash is recomputed from what is stored, and the result hash,
+    # which only the API can compute, is a placeholder as in the web tests.
+    stored = rounded(merged)
+    stored["source"]["resultSha256"] = "1" * 64
+    stored["planHash"] = plan_hash(stored)
+    return {"plan": stored, "drawOrder": [marks[index]["id"] for index in order]}
+
+
+def rounded(value: Any) -> Any:
+    if isinstance(value, float):
+        return float(f"{value:.12g}")
+    if isinstance(value, dict):
+        return {key: rounded(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [rounded(item) for item in value]
+    return value
 
 
 def build() -> dict[str, Any]:
