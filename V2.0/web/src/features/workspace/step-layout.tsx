@@ -3,29 +3,19 @@ import type { ReactNode } from "react";
 
 type StepLayoutProps = {
   title: string;
-  description: string;
   canvas: ReactNode;
   inspector: ReactNode;
 };
 
-export function StepLayout({ title, description, canvas, inspector }: StepLayoutProps) {
+export function StepLayout({ title, canvas, inspector }: StepLayoutProps) {
   return (
     <Stack spacing={2.5}>
-      <Box>
-        <Typography
-          component="h1"
-          sx={{ fontSize: { xs: 23, md: 26 }, fontWeight: 750 }}
-        >
-          {title}
-        </Typography>
-        <Typography
-          color="text.secondary"
-          sx={{ maxWidth: 760, mt: 0.75 }}
-          variant="body2"
-        >
-          {description}
-        </Typography>
-      </Box>
+      <Typography
+        component="h1"
+        sx={{ fontSize: { xs: 23, md: 26 }, fontWeight: 750 }}
+      >
+        {title}
+      </Typography>
       <Box
         sx={{
           alignItems: "start",

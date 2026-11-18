@@ -126,6 +126,7 @@ test("keeps chart editing readable at the mobile breakpoint", async ({ page }) =
 
   await expect(page.getByRole("heading", { name: "Create your chart" })).toBeVisible();
   await expectNoHorizontalPageOverflow(page);
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   const figureSubtitle = page.getByLabel("Figure subtitle");
   const subtitleControl = figureSubtitle.locator(
     "xpath=ancestor::*[contains(@class, 'MuiFormControl-root')]",

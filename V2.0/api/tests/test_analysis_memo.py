@@ -59,6 +59,14 @@ def test_restyling_reuses_the_analysis(runs: list[int]) -> None:
     assert len(runs) == 1
 
 
+def test_fit_label_switches_reuse_the_analysis(runs: list[int]) -> None:
+    memo = AnalysisMemo()
+    first = memo.analysis("p", FRAME, chart(fitting={"model": "linear"}))
+    labelled = chart(fitting={"model": "linear", "showEquation": False, "showRSquared": False})
+    assert memo.analysis("p", FRAME, labelled) is first
+    assert len(runs) == 1
+
+
 @pytest.mark.parametrize(
     "changed",
     [

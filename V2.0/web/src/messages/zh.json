@@ -134,7 +134,6 @@
   },
   "importData": {
     "title": "确认数据",
-    "description": "在质量检查前确认识别出的工作表、表头、字段和单位。",
     "file": "所选文件",
     "sampleFile": "LabViz 示例数据集",
     "rows": "数据预览",
@@ -153,13 +152,11 @@
     "xUnit": "X 轴单位",
     "yUnit": "Y 轴单位",
     "noNumericColumns": "未检测到数值列。请切换工作表或表头行，或先修正源文件，再创建图表。",
-    "contextualTip": "如果预览不符合预期，可以在继续前更换工作表或调整表头行。",
     "unit": "Y 轴单位",
     "review": "检查数据质量"
   },
   "inspect": {
     "title": "检查数据质量",
-    "description": "LabViz 会标出潜在问题并解释原因，不会自动修改任何数据。",
     "missing": "缺失值",
     "missingBody": "一项测量为空。将它排除在图表外不会改变源文件。",
     "suspicious": "可疑点",
@@ -256,13 +253,11 @@
   },
   "chart": {
     "title": "创建图表",
-    "description": "选择实验所需的图表、分析、坐标轴和布局；科研计算由 Python 服务完成。",
     "settings": "图表设置",
     "loadingTitle": "正在准备图表数据",
     "loadingBody": "API 返回验证后的预览后即可绘制图表。",
     "chartType": "图表类型",
     "singleValueHelp": "这份数据只有一个数值字段，请使用直方图或箱线图展示其分布。",
-    "distributionAxisHelp": "在下方选择响应字段；分布图不需要独立的 X 字段。当前合并测量值展示，不支持按分类字段分组。",
     "line": "折线图",
     "types": {
       "line": "折线图",
@@ -301,9 +296,7 @@
     "saveFailed": "无法保存图表设置。",
     "surfaceSetupTitle": "请选择曲面的三个维度",
     "surfaceSetupDescription": "用 X 和 Y 表示两个网格坐标，再用 Z 表示测量结果。三个字段互不相同时才会显示预览。",
-    "surfaceAxisHelp": "X 和 Y 用于定位网格点，Z 是测量值，决定曲面的高度和颜色。",
     "dataTableTitle": "以表格查看图表数据",
-    "dataTableDescription": "表格可以作为图表的非视觉替代方式；当前预览中与质量问题对应的单元格会被突出显示。",
     "surfaceDiagnostics": {
       "invalidValues": "曲面包含 {count} 个非有限点，请修正或删除这些行。",
       "insufficientPoints": "曲面至少需要 3 个完整点，以及至少 2 个不同的 X 值和 Y 值。",
@@ -319,16 +312,11 @@
       "surfaceGrid": "检测到完整的 {xCount} × {yCount} 网格，共 {pointCount} 个点。3D 曲面可以展示 {zField} 随 {xField} 和 {yField} 的变化。",
       "scatterGrid": "这些坐标存在缺失、重复或不规则间距。建议使用散点图查看单个 {zField} 测量值，避免误示为完整曲面。"
     },
-    "seriesAppearance": "数据系列外观",
     "seriesLabel": "系列 {index} 标签",
     "seriesColor": "{label} 颜色",
     "groupColorHelp": "启用分组时，图表会按分组自动配色；如需使用自定义颜色，请将分组字段设为“无”。",
     "grayscaleColorHelp": "灰度预览会覆盖数据系列颜色；关闭灰度预览后才能使用自定义颜色。",
     "valueColorHelp": "曲面和热力图使用色标表示数值，不使用单独的数据系列颜色；预览和导出使用相同色标。",
-    "analysis": "拟合与不确定度",
-    "analysisHelp": "拟合用于估计所选数据点的趋势；不确定性用于显示测量离散程度或指定误差列。请只选择实验设计能够支持的选项。",
-    "contextualTip": "先从数值字段中选择 X 和 Y；绘制曲面时要使用不同的 X、Y、Z 字段，并保持网格完整。",
-    "groupHelp": "分组会按类别或重复条件绘制独立系列，不会修改测量数据。",
     "fitModel": "拟合模型",
     "fitMethod": "拟合方法",
     "fitMethods": {
@@ -414,17 +402,23 @@
       "residualRequiresFit": "残差诊断需要成功拟合的曲线。",
       "fitUnavailable": "当前分析无法计算所选拟合。"
     },
-    "layout": "坐标轴与多子图",
     "panelCount": "子图数量",
     "singlePanelType": "该图表类型使用一个论文子图；如需多子图，请选择折线、散点、柱状、直方或箱线图。",
     "seriesPanel": "{label} 所在子图",
     "secondaryAxis": "使用第二 Y 轴",
     "secondaryField": "第二坐标轴系列",
-    "continueOnDesktop": "手机端支持查看和简单编辑；拟合、双坐标轴和多子图建议在桌面端继续。"
+    "continueOnDesktop": "手机端支持查看和简单编辑；拟合、双坐标轴和多子图建议在桌面端继续。",
+    "sections": {
+      "label": "图表设置分区",
+      "data": "数据",
+      "method": "方法",
+      "appearance": "外观"
+    },
+    "distributionPooled": "数值合并统计，此图表不使用分组。",
+    "dataTableLegend": "高亮单元格为质量问题。"
   },
   "export": {
     "title": "准备论文图导出",
-    "description": "选择格式和输出尺寸，最终论文文件将由 Python API 渲染。",
     "loadingTitle": "正在准备导出",
     "loadingDescription": "处理服务返回项目数据后即可使用导出功能。",
     "requestFailed": "无法创建导出任务。",

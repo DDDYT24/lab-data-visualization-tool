@@ -134,7 +134,6 @@
   },
   "importData": {
     "title": "Confirm your data",
-    "description": "Check the detected sheet, header, columns, and units before quality inspection.",
     "file": "Selected file",
     "sampleFile": "LabViz sample dataset",
     "rows": "Data preview",
@@ -153,13 +152,11 @@
     "xUnit": "X-axis unit",
     "yUnit": "Y-axis unit",
     "noNumericColumns": "No numeric columns were detected. Choose a different sheet or header row, or correct the source file before creating a chart.",
-    "contextualTip": "If the preview looks wrong, try a different worksheet or move the header row before continuing.",
     "unit": "Y-axis unit",
     "review": "Review data quality"
   },
   "inspect": {
     "title": "Review data quality",
-    "description": "LabViz highlights possible issues and explains them. Nothing is changed automatically.",
     "missing": "Missing value",
     "missingBody": "One measurement is empty. Excluding it from this chart preserves the source file.",
     "suspicious": "Suspicious point",
@@ -256,13 +253,11 @@
   },
   "chart": {
     "title": "Create your chart",
-    "description": "Choose the chart, analysis, axes, and layout the experiment needs. Scientific calculations come from the Python service.",
     "settings": "Chart settings",
     "loadingTitle": "Preparing chart data",
     "loadingBody": "The chart will render after the API returns a validated preview.",
     "chartType": "Chart type",
     "singleValueHelp": "This dataset has one numeric field. Use a histogram or box plot to show its distribution.",
-    "distributionAxisHelp": "Select the measured response below. Distribution plots do not require a separate X field. Values are pooled; categorical grouping is not supported here.",
     "line": "Line chart",
     "types": {
       "line": "Line chart",
@@ -301,9 +296,7 @@
     "saveFailed": "The chart settings could not be saved.",
     "surfaceSetupTitle": "Choose the three surface dimensions",
     "surfaceSetupDescription": "Select X and Y as the two grid coordinates, then select Z as the measured response. The preview will appear after all three fields are different.",
-    "surfaceAxisHelp": "X and Y locate each point on the grid. Z is the measured value whose height and color form the surface.",
     "dataTableTitle": "View the chart data as a table",
-    "dataTableDescription": "Use the table as a non-visual alternative to the chart. Highlighted cells correspond to quality findings in the current preview.",
     "surfaceDiagnostics": {
       "invalidValues": "The surface has {count} non-finite point(s). Fix or remove those rows.",
       "insufficientPoints": "A surface needs at least three complete points and two unique X and Y values.",
@@ -319,16 +312,11 @@
       "surfaceGrid": "A complete {xCount} × {yCount} grid with {pointCount} points was detected. A 3D surface can show {zField} over {xField} and {yField}.",
       "scatterGrid": "These coordinates are incomplete, duplicated, or irregular. Use a scatter plot to inspect individual {zField} measurements without implying a complete surface."
     },
-    "seriesAppearance": "Series appearance",
     "seriesLabel": "Series {index} label",
     "seriesColor": "{label} color",
     "groupColorHelp": "Grouped charts use an automatic palette. Select No grouping to use a custom color.",
     "grayscaleColorHelp": "Grayscale preview overrides series colors. Turn it off to use a custom color.",
     "valueColorHelp": "Surface and heatmap colors represent values on the color scale. Individual series colors do not apply; preview and export use the same scale.",
-    "analysis": "Fitting and uncertainty",
-    "analysisHelp": "Fitting estimates a trend from the selected points. Uncertainty shows measurement spread or a supplied error column; choose only options supported by your experiment design.",
-    "contextualTip": "Choose X and Y from the numeric fields first. For a surface, use separate X, Y, and Z fields and keep the grid complete.",
-    "groupHelp": "Grouping draws separate series for categories or repeated conditions without changing the measurements.",
     "fitModel": "Fit model",
     "fitMethod": "Fit method",
     "fitMethods": {
@@ -414,17 +402,23 @@
       "residualRequiresFit": "Residual diagnostics require a successfully fitted curve.",
       "fitUnavailable": "The selected fit could not be calculated for this analysis."
     },
-    "layout": "Axes and panels",
     "panelCount": "Number of panels",
     "singlePanelType": "This chart type uses one publication panel. Choose line, scatter, bar, histogram, or box plot for multi-panel figures.",
     "seriesPanel": "{label} panel",
     "secondaryAxis": "Use a secondary Y axis",
     "secondaryField": "Secondary-axis series",
-    "continueOnDesktop": "Mobile supports review and simple edits. Continue on a desktop for fitting, dual axes, and multi-panel layout."
+    "continueOnDesktop": "Mobile supports review and simple edits. Continue on a desktop for fitting, dual axes, and multi-panel layout.",
+    "sections": {
+      "label": "Chart settings sections",
+      "data": "Data",
+      "method": "Method",
+      "appearance": "Appearance"
+    },
+    "distributionPooled": "Values are pooled; grouping does not apply to this chart.",
+    "dataTableLegend": "Highlighted cells are quality findings."
   },
   "export": {
     "title": "Prepare publication export",
-    "description": "Choose a format and output size. The Python API will render the final publication file.",
     "loadingTitle": "Preparing export",
     "loadingDescription": "Export becomes available after the processing service returns project data.",
     "requestFailed": "The export request could not be created.",

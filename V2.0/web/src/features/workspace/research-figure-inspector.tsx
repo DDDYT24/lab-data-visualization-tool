@@ -77,7 +77,6 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
   return <Stack spacing={overview ? 1 : 2} data-testid="figure-inspector">
     <Typography component="h3" variant="h6" sx={overview ? { position: "absolute", width: "1px", height: "1px", clipPath: "inset(50%)", overflow: "hidden" } : undefined}>{t("Saved figure and linked observations", "已保存组合图与观测联动")}</Typography>
     {error && <Alert severity="error" action={<Button onClick={() => { setLoading(true); setRetryKey((value) => value + 1); }}>{t("Retry source lookup", "重试来源查询")}</Button>}>{error}</Alert>}
-    <Typography variant="caption" sx={overview ? { display: "none" } : undefined}>{t("Screen preview. Enlarge loads the original; downloads retain the complete 300 dpi figure.", "屏幕预览；放大后加载原图，下载保留完整 300 dpi 组合图。")}</Typography>
     <Button title={t("Screen preview; downloads retain the complete 300 dpi figure.", "屏幕预览；下载保留完整 300 dpi 组合图。")} sx={overview ? { alignSelf: "flex-start" } : undefined} onClick={() => setEnlarged(!enlarged)}>{enlarged ? t("Fit figure to screen", "组合图适应屏幕") : t("Enlarge figure for reading", "放大组合图阅读")}</Button>
     {!!planned.length && <Button sx={{ alignSelf: "flex-start" }} onClick={() => setPanelView(!panelView)}>{panelView ? t("Composed figure", "组合图") : t("Interactive panels", "交互面板")}</Button>}
     {panelView && !!planned.length && <ResearchFigurePanels boardId={boardId} labels={planned} onSelect={selectPanelRow}
@@ -115,7 +114,6 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
         {t("Linked source rows", "关联来源行")} · {t("Selected inputs", "所选输入")}: {view?.selectedInputs ?? 0}
       </AccordionSummary>
       <AccordionDetails id="figure-source-details" sx={{ p: overview ? 2 : 0 }}><Stack spacing={2} sx={{ minWidth: 0 }}>
-    <Alert severity="info">{t("Selection only highlights data. Search filters this table only. Exclude observations in Research preparation with a reason, then create new chart and figure revisions.", "点选仅高亮数据。搜索仅筛选此表。排除数据需回到研究数据准备中填写理由，再生成新的图表和布局版本。")}</Alert>
     <Autocomplete options={geometry}
       value={geometry.find((mark) => mark.id === selection.mark) ?? null}
       getOptionLabel={(mark) => `${mark.panel}: ${mark.kind} · ${mark.label} (${mark.inputCount})`}
@@ -127,14 +125,12 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
       onChange={(_, mark) => choose(mark ? { mark: mark.id } : {})}
       clearText={t("Clear mark", "清除标记")} openText={t("Open mark search", "打开标记搜索")}
       closeText={t("Close mark search", "关闭标记搜索")} noOptionsText={t("No matching mark", "没有匹配标记")}
-      renderInput={(params) => <TextField {...params} label={t("Select a mark (keyboard)", "选择标记（键盘）")}
-        helperText={t("Search any displayed mark; up to 100 suggestions are shown. The paginated source table contains all inputs.", "可搜索任何已显示标记，每次最多展示 100 个建议。分页来源表包含全部输入。")}/>} />
+      renderInput={(params) => <TextField {...params} label={t("Select a mark (keyboard)", "选择标记（键盘）")} />} />
 
     {view?.selectedKind && view.selectedKind !== "point" && view.selectedKind !== "row" && <Alert severity="info">{t("This aggregate/density mark represents the contributing input subset, not an additional observation.", "此汇总／密度标记代表贡献数据集合，不是额外观测。")}</Alert>}
     {view?.sampled && <Alert severity="info">{t("Point hit targets or legacy previews are sampled. The paginated table retains all input rows; selection never changes n or saved exports.", "点选目标或旧图表预览经过抽样。分页表仍保留完整输入数据；点选不会改变 n 或已保存导出。")}</Alert>}
     <TextField label={t("Filter source table", "筛选来源表")} value={queryInput} onChange={(e) => setQueryInput(e.target.value)} />
     <Button onClick={() => { setLoading(true); setDescending(!descending); setOffset(0); }}>{t("Reverse source order", "反转来源排序")}</Button>
-    <Typography variant="caption">{t("On narrow screens, scroll the source table horizontally to read all columns.", "窄屏下可横向滚动来源表，查看完整列。")}</Typography>
     <TableContainer sx={{ maxHeight: 420, overflowX: "auto" }}><Table size="small" sx={{ minWidth: 640 }} aria-label={t("Figure source observations", "组合图来源观测")}>
       <TableHead><TableRow>{[t("Panel", "面板"), t("Sample / row", "样本／数据行"), t("Value", "数值"), t("Source", "来源")].map((name) => <TableCell key={name}>{name}</TableCell>)}</TableRow></TableHead>
       {view && <SourceRows rows={view.rows} selected={view.selectedInputs > 0} choose={choose} />}

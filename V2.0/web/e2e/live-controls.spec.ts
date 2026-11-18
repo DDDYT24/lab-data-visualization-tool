@@ -25,7 +25,7 @@ test("real API scientific controls persist into the downloaded figure", async ({
   if (await keep.isVisible()) await keep.click();
   await page.getByRole("button", { name: "Create chart", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Create your chart" })).toBeVisible();
-  await page.getByRole("button", { name: "Fitting and uncertainty", exact: true }).click();
+  await page.getByRole("tab", { name: "Method", exact: true }).click();
   const choose = async (label: string, option: string) => {
     await page.getByRole("combobox", { name: label, exact: true }).click();
     await page.getByRole("option", { name: option, exact: true }).click();
@@ -49,8 +49,8 @@ test("real API scientific controls persist into the downloaded figure", async ({
   await analyze(() => choose("Interval meaning", "Prediction interval for one response"), { intervalKind: "prediction" });
   await analyze(() => choose("Interval meaning", "Working-Hotelling simultaneous mean band"), { intervalKind: "simultaneous" });
   await expect(page.getByText("Displayed interval: Working-Hotelling simultaneous mean band.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   await page.getByRole("textbox", { name: "Figure title", exact: true }).fill("Live controls verified");
-  await page.getByRole("button", { name: "Series appearance", exact: true }).click();
   await page.locator('input[type="color"]').first().fill("#dc2626");
   await page.getByRole("button", { name: "Customize export", exact: true }).click();
   await choose("Format", "SVG");
@@ -72,8 +72,9 @@ test("real API scientific controls persist into the downloaded figure", async ({
   await download.saveAs(test.info().outputPath("controls.svg"));
   const workspace = new URL(page.url()).pathname;
   await page.goto(`${workspace}?step=chart`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Fitting and uncertainty", exact: true }).click();
+  await page.getByRole("tab", { name: "Method", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Interval meaning" })).toHaveText("Working-Hotelling simultaneous mean band");
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Figure title", exact: true })).toHaveValue("Live controls verified");
 });
 

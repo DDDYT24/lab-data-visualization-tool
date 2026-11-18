@@ -24,9 +24,12 @@ ANALYSES_KEPT = 8
 
 
 def analysis_inputs(chart: ChartSpec) -> dict[str, Any]:
-    """What ``analyze_chart`` reads. Colours, titles and export settings are not in it."""
+    """What ``analyze_chart`` reads. Colours, titles, export settings and the fit label switches
+    (equation, R²), which only the plan's legend reads, are not in it."""
     return {
-        "fitting": chart.fitting.model_dump(mode="json"),
+        "fitting": chart.fitting.model_dump(
+            mode="json", exclude={"show_equation", "show_r_squared"}
+        ),
         "groupField": chart.group_field,
         "panelCount": chart.panel_count,
         "secondaryYAxis": chart.secondary_y_axis.model_dump(mode="json"),

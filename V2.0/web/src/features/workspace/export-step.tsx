@@ -354,7 +354,6 @@ export function ExportStep({ onBack, active = true }: { onBack: () => void; acti
   return (
     <StepLayout
       canvas={canvas}
-      description={t("description")}
       inspector={inspector}
       title={t("title")}
     />

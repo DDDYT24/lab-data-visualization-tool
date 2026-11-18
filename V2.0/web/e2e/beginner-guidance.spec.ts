@@ -35,10 +35,12 @@ test("guides a first-time user from a surface CSV to export without developer te
 
   const surface = page.locator('main [role="img"][data-surface-support="ready"]');
   await expect(surface).toHaveAttribute("data-surface-point-count", "441");
-  await expect(page.getByText(/X and Y locate each point on the grid/)).toBeVisible();
-  await expect(page.getByText(/Grouping draws separate series/)).toBeVisible();
-  await page.getByRole("button", { name: "Fitting and uncertainty" }).click();
-  await expect(page.getByText(/Fitting estimates a trend/)).toBeVisible();
+  // The labelled controls explain the surface setup; no teaching paragraphs sit beside them.
+  await expect(page.getByRole("combobox", { name: "Surface Y field" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Surface Z field" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Grouping field" })).toBeVisible();
+  await page.getByRole("tab", { name: "Method", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Fit model" })).toBeVisible();
 
   const accessibility = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -51,8 +53,8 @@ test("guides a first-time user from a surface CSV to export without developer te
 
   await page.getByLabel("Language").click();
   await page.getByRole("option", { name: "中文" }).click();
-  await expect(page.getByText(/X 和 Y 用于定位网格点/)).toBeVisible();
-  await expect(page.getByText(/拟合用于估计所选数据点的趋势/)).toBeVisible();
+  await expect(page.getByRole("tab", { name: "数据", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "拟合模型" })).toBeVisible();
   await page.getByLabel("语言").click();
   await page.getByRole("option", { name: "English" }).click();
 

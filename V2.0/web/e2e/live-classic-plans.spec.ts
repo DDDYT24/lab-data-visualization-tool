@@ -26,7 +26,7 @@ async function openChartStep(page: import("@playwright/test").Page) {
 test("planned previews follow appearance edits and the grid setting", async ({ page }) => {
   test.setTimeout(120_000);
   const chart = await openChartStep(page);
-  await page.getByRole("button", { name: "Series appearance", exact: true }).click();
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   await chart.locator("svg").evaluate((svg) => { (svg as SVGElement & { marker?: boolean }).marker = true; });
   await page.locator('input[type="color"]').first().fill("#dc2626");
   await expect.poll(() => chart.locator('path[fill="#dc2626"]').count()).toBeGreaterThan(0);
@@ -124,13 +124,14 @@ test("line and scatter previews are drawn from plans, restyle, and carry a fit",
   const latest = (type: string, wanted: (mark: Mark) => boolean) =>
     expect.poll(() => plans.findLast((plan) => plan.type === type)?.marks.some(wanted) ?? false).toBe(true);
   const chooseType = async (name: string) => {
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
     await page.getByRole("combobox", { name: "Chart type" }).click();
     await page.getByRole("option", { name, exact: true }).click();
   };
 
   await chooseType("Line chart");
   await latest("line", (mark) => mark.kind === "polyline");
-  await page.getByRole("button", { name: "Series appearance", exact: true }).click();
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   await page.locator('input[type="color"]').first().fill("#dc2626");
   // The restyle reaches the plan and the drawing, not only the request.
   await latest("line", (mark) => mark.kind === "polyline" && mark.color.toLowerCase() === "#dc2626");
@@ -140,7 +141,7 @@ test("line and scatter previews are drawn from plans, restyle, and carry a fit",
   await latest("scatter", (mark) => mark.kind === "points" && mark.color.toLowerCase() === "#dc2626");
   await expect.poll(() => chart.locator('svg path[fill="#dc2626"]').count()).toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: "Fitting and uncertainty", exact: true }).click();
+  await page.getByRole("tab", { name: "Method", exact: true }).click();
   await page.getByRole("combobox", { name: "Fit model", exact: true }).click();
   await page.getByRole("option", { name: "Linear", exact: true }).click();
   await latest("scatter", (mark) => mark.kind === "polyline" && mark.lineStyle === "dashed");

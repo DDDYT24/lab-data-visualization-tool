@@ -48,6 +48,13 @@ describe("analysisCacheKey", () => {
     );
   });
 
+  it("ignores the equation and R² switches, which only label the fit in the plan", () => {
+    const fitted: ChartSpec = { ...defaultChartSpec, fitting: { ...defaultChartSpec.fitting, model: "linear" } };
+    const unlabelled = { ...fitted, fitting: { ...fitted.fitting, showEquation: false, showRSquared: false } };
+    expect(analysisCacheKey(unlabelled, noDecisions)).toBe(analysisCacheKey(fitted, noDecisions));
+    expect(planAppearanceKey(unlabelled)).not.toBe(planAppearanceKey(fitted));
+  });
+
   it("separates every input the API actually reads", () => {
     const base = analysisCacheKey(defaultChartSpec, noDecisions);
     const variants: ChartSpec[] = [

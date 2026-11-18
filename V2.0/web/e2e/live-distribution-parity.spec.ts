@@ -39,7 +39,7 @@ for (const filename of ["04_group_comparison.txt", "05_distribution.json"]) {
     await expect(page.getByRole("combobox", { name: "Chart type" })).toHaveText("Histogram");
     await expect(page.getByRole("combobox", { name: "X field", exact: true })).toHaveCount(0);
     // A distinctive color allows checking the actual SVG geometry, not only chart options.
-    await page.getByRole("button", { name: "Series appearance", exact: true }).click();
+    await page.getByRole("tab", { name: "Appearance", exact: true }).click();
     await page.locator('input[type="color"]').first().fill("#dc2626");
     await page.getByRole("textbox", { name: "Figure title" }).fill(`Parity ${filename}`);
     await page.getByRole("button", { name: "Customize export" }).click();
