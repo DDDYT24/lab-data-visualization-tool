@@ -8,14 +8,17 @@ import type { IssueAction } from "./workspace-store";
  * Appearance is deliberately excluded. Series colour and line style reach the
  * browser renderer and the Matplotlib export, never `analyze_chart`, so
  * including them re-ran every fit, interval and bootstrap resample whenever an
- * appearance control moved. Series label stays because the response echoes it.
+ * appearance control moved. The equation and R² switches only label the fit in
+ * the plan, so they are left out too. Series label stays because the response
+ * echoes it.
  */
 export function analysisCacheKey(
   spec: ChartSpec,
   issueActions: Record<string, IssueAction>,
 ): string {
   return JSON.stringify({
-    fitting: spec.fitting,
+    // undefined fields drop out of the JSON.
+    fitting: { ...spec.fitting, showEquation: undefined, showRSquared: undefined },
     groupField: spec.groupField,
     issueActions,
     panelCount: spec.panelCount,
@@ -48,6 +51,7 @@ export function planAppearanceKey(spec: ChartSpec): string {
   }
   return JSON.stringify({
     colors: spec.series.map((series) => [series.color, series.lineStyle]),
+    fitLabel: [spec.fitting.showEquation, spec.fitting.showRSquared],
     grayscale: spec.export.grayscalePreview,
     grid: spec.export.gridVisible,
     lineWidth: spec.export.lineWidth,
