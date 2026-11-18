@@ -137,7 +137,10 @@ function LayerList({ panel, label, candidates, chartName, chartTitle, disabled, 
         const name = chartName(id), own = id === panel.chartId;
         return <Box component="li" key={id} sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
           <Typography variant="body2" sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: own ? 600 : undefined }}
-            title={own ? `${name} · ${t("the panel's chart, changed on its card", "面板的图表，在面板卡片上更换")}` : name}>{chartTitle(id)}</Typography>
+            title={own ? `${name} · ${t("the panel's chart, changed on its card", "面板的图表，在面板卡片上更换")}` : name}>
+            {chartTitle(id)}
+            {own && <Box component="span" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)" }}>{t(" (panel's chart)", "（面板的图表）")}</Box>}
+          </Typography>
           {layers.length > 1 && <>
             <IconButton size="small" disabled={disabled || place === 0} aria-label={t(`Move ${name} up`, `上移 ${name}`)}
               onClick={() => onChange(moveLayer(panel, id, 1))}><ArrowUpwardRoundedIcon fontSize="small" /></IconButton>

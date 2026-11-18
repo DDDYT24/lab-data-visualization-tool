@@ -263,13 +263,17 @@ def render_board(
                 units = {r.get("experimentalUnit") for r in panel["rows"]}
                 count_text = "?" if None in units else str(len(units))
                 footer += f"\nIndependent units={count_text}; excluded={len(data['excluded'])}"
-                if data["spec"]["kind"] == "violin":
-                    footer += "\nGaussian KDE of observations; density is not extra data."
-                if data["spec"]["summary"] != "none":
-                    footer += (
-                        f"\n{data['spec']['summary']} of {data['spec']['summaryUnit']}; "
-                        "declared repeat means."
-                    )
+                # Every layer's method is disclosed, the panel's own chart first.
+                methods: list[str] = []
+                for layer in [panel, *layered[i]]:
+                    chart = layer["scientific"]["spec"]
+                    if chart["kind"] == "violin":
+                        methods.append("Gaussian KDE of observations; density is not extra data.")
+                    if chart["summary"] != "none":
+                        methods.append(
+                            f"{chart['summary']} of {chart['summaryUnit']}; declared repeat means."
+                        )
+                footer += "".join("\n" + line for line in dict.fromkeys(methods))
             else:
                 legacy_spec = panel["legacySpec"]
                 if legacy_spec["fitting"]["model"] != "none":
@@ -368,9 +372,10 @@ def render_board(
                     panel_labels[i]
                     for i, panel in enumerate(sources)
                     if rasterize_points(spec.point_rendering, len(panel["rows"]))
-                    and (
-                        panel["kind"] in {"line", "scatter", "paired"}
-                        or ("scientific" in panel and panel["scientific"]["spec"]["showPoints"])
+                    and any(
+                        layer["kind"] in {"line", "scatter", "paired"}
+                        or ("scientific" in layer and layer["scientific"]["spec"]["showPoints"])
+                        for layer in layered[i]
                     )
                 ],
                 "fullSourceDataRetained": True,

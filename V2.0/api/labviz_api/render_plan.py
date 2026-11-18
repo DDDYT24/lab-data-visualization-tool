@@ -425,6 +425,8 @@ def merge_layers(plans: list[dict[str, Any]]) -> dict[str, Any]:
     """One panel drawn from several plans of the same data, bottom layer first.
 
     Marks keep their geometry; those of layer n >= 1 carry `layer: n` and an `Ln:` id prefix.
+    Geometry rules are unioned; `source` stays the bottom layer's (each layer's result is listed
+    in the output manifest).
     A value axis spans every layer's domain with the plan's tick rule; a category axis must be
     the same in every layer. A single plan is returned unchanged, so its hash holds.
     """
@@ -456,6 +458,10 @@ def merge_layers(plans: list[dict[str, Any]]) -> dict[str, Any]:
             {**mark, "id": f"L{rank}:{mark['id']}", "layer": rank} for mark in other["marks"]
         )
         panel["legend"].extend(entry for entry in other["legend"] if entry not in panel["legend"])
+        # Each rule names how some marks were made: a violin layer brings its density rule.
+        for rule, value in plan["geometry"].items():
+            if merged["geometry"][rule] is None:
+                merged["geometry"][rule] = value
         merged["disclosures"].extend(
             line for line in plan["disclosures"] if line not in merged["disclosures"]
         )

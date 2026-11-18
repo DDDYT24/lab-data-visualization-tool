@@ -50,7 +50,7 @@ def draw_plan(
         )
         ax.set_xlim(*x_axis["domain"])
         if panel["legend"]:
-            ax.legend(
+            legend = ax.legend(
                 handles=[
                     Line2D([0], [0], color=entry["color"], label=entry["label"])
                     for entry in panel["legend"]
@@ -58,6 +58,8 @@ def draw_plan(
                 fontsize=8,
                 loc="best",
             )
+            # Above the top layer, as the notes are.
+            legend.set_zorder(legend.get_zorder() + layer_lift(panel["marks"]))
         ax.set_title(panel["title"], pad=14, wrap=True)
         ax.set_ylabel(y_axis["title"])
         for name in ("x", "y"):

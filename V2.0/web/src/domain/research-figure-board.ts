@@ -11,7 +11,8 @@ export const figureBoardSpecSchema = z.fromJSONSchema(
   "Choose one, two or four panels");
 export const figureSourceSchema = z.object({ charts: z.array(z.object({
   id: z.string(), revisionId: z.string(), createdAt: z.string(), legacy: z.boolean(),
-  spec: z.object({ kind: z.string(), title: z.string() }),
+  // `pairTimes` tells which research charts can share a panel's axes.
+  spec: z.object({ kind: z.string(), title: z.string(), pairTimes: z.array(z.string()).optional() }),
 })) });
 export type FigureSources = z.infer<typeof figureSourceSchema>;
 // A board stores either version; the API reads it by schemaVersion and returns it as stored.

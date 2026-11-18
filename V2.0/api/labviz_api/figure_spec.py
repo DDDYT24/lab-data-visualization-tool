@@ -343,6 +343,8 @@ def layer_ids(spec: FigureBoardSpec | FigureSpec) -> list[list[str]]:
         # Layers built from an encoding and a method come with the layer registry (V2.5).
         if any(layer.kind != "chart" or not layer.chart_id for layer in panel.layers):
             raise PreparationError("figure-layer-unsupported", "Each layer must be a saved chart.")
+        if len({layer.chart_id for layer in panel.layers}) < len(panel.layers):
+            raise PreparationError("figure-layer-repeated", "Each chart is drawn once in a panel.")
         ordered = sorted(enumerate(panel.layers), key=lambda item: (item[1].style.z_index, item[0]))
         panels.append([str(layer.chart_id) for _, layer in ordered])
     return panels
