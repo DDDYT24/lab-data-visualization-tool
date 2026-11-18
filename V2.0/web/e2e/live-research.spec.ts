@@ -53,6 +53,22 @@ test("research preview, sample counts, exclusions and revision history survive r
   await expect(research.getByTestId("research-counts")).toContainText("Excluded: 0");
   await research.getByRole("button", { name: "Redo", exact: true }).click();
   await expect(research.getByTestId("research-counts")).toContainText("Excluded: 1");
+  // A mapping change is a research revision too, so the same history undoes and redoes it.
+  await page.getByRole("tab", { name: "Data", exact: true }).click();
+  const repeat = research.getByRole("combobox", { name: "Technical repeat", exact: true });
+  await repeat.fill("");
+  await repeat.press("Tab");
+  await research.getByRole("button", { name: "Preview preparation", exact: true }).click();
+  await research.getByRole("button", { name: "Apply preview and save revision" }).click();
+  await expect(research.getByText("Saved state", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Data", exact: true }).click();
+  await expect(repeat).toHaveValue("");
+  await research.getByRole("button", { name: "Undo research change", exact: true }).click();
+  await expect(repeat).toHaveValue("repeat");
+  await research.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(repeat).toHaveValue("");
+  await research.getByRole("button", { name: "Undo research change", exact: true }).click();
+  await expect(repeat).toHaveValue("repeat");
   await page.reload();
   await expect(page.getByRole("button", { name: "Back to quick plot", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Quality", exact: true }).click();

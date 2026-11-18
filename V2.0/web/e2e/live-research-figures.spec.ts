@@ -391,6 +391,16 @@ test("a violin added under raw points saves as two layers in order and reopens",
   await expect(layers.getByRole("listitem")).toHaveText([/Spread/, /Points/]);
   await layers.getByRole("button", { name: /^Move Spread .* down$/ }).click();
   await expect(layers.getByRole("listitem")).toHaveText([/Points/, /Spread/]);
+  // Layer edits are figure edits: undo and redo step through the order and the added layer.
+  const undo = board.getByRole("button", { name: "Undo layout edit", exact: true });
+  const redo = board.getByRole("button", { name: "Redo layout edit", exact: true });
+  await undo.click();
+  await expect(layers.getByRole("listitem")).toHaveText([/Spread/, /Points/]);
+  await undo.click();
+  await expect(layers.getByRole("listitem")).toHaveText([/Points/]);
+  await redo.click();
+  await redo.click();
+  await expect(layers.getByRole("listitem")).toHaveText([/Points/, /Spread/]);
   await expect(inspector.getByRole("button", { name: /^Remove layer Points/ })).toHaveCount(0);
   await expect(board.getByTestId("figure-panel-A")).toContainText("2 layers");
   const accessibility = await new AxeBuilder({ page }).include('[data-testid="figure-workspace"]').withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
