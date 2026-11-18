@@ -39,7 +39,7 @@ test("guides a first-time user from a surface CSV to export without developer te
   await expect(page.getByRole("combobox", { name: "Surface Y field" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Surface Z field" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Grouping field" })).toBeVisible();
-  await page.getByRole("button", { name: "Fitting and uncertainty" }).click();
+  await page.getByRole("tab", { name: "Method", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Fit model" })).toBeVisible();
 
   const accessibility = await new AxeBuilder({ page })
@@ -53,7 +53,7 @@ test("guides a first-time user from a surface CSV to export without developer te
 
   await page.getByLabel("Language").click();
   await page.getByRole("option", { name: "中文" }).click();
-  await expect(page.getByRole("combobox", { name: "曲面 Y 字段" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "数据", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "拟合模型" })).toBeVisible();
   await page.getByLabel("语言").click();
   await page.getByRole("option", { name: "English" }).click();

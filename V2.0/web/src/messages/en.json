@@ -315,13 +315,11 @@
       "surfaceGrid": "A complete {xCount} × {yCount} grid with {pointCount} points was detected. A 3D surface can show {zField} over {xField} and {yField}.",
       "scatterGrid": "These coordinates are incomplete, duplicated, or irregular. Use a scatter plot to inspect individual {zField} measurements without implying a complete surface."
     },
-    "seriesAppearance": "Series appearance",
     "seriesLabel": "Series {index} label",
     "seriesColor": "{label} color",
     "groupColorHelp": "Grouped charts use an automatic palette. Select No grouping to use a custom color.",
     "grayscaleColorHelp": "Grayscale preview overrides series colors. Turn it off to use a custom color.",
     "valueColorHelp": "Surface and heatmap colors represent values on the color scale. Individual series colors do not apply; preview and export use the same scale.",
-    "analysis": "Fitting and uncertainty",
     "fitModel": "Fit model",
     "fitMethod": "Fit method",
     "fitMethods": {
@@ -407,13 +405,18 @@
       "residualRequiresFit": "Residual diagnostics require a successfully fitted curve.",
       "fitUnavailable": "The selected fit could not be calculated for this analysis."
     },
-    "layout": "Axes and panels",
     "panelCount": "Number of panels",
     "singlePanelType": "This chart type uses one publication panel. Choose line, scatter, bar, histogram, or box plot for multi-panel figures.",
     "seriesPanel": "{label} panel",
     "secondaryAxis": "Use a secondary Y axis",
     "secondaryField": "Secondary-axis series",
-    "continueOnDesktop": "Mobile supports review and simple edits. Continue on a desktop for fitting, dual axes, and multi-panel layout."
+    "continueOnDesktop": "Mobile supports review and simple edits. Continue on a desktop for fitting, dual axes, and multi-panel layout.",
+    "sections": {
+      "label": "Chart settings sections",
+      "data": "Data",
+      "method": "Method",
+      "appearance": "Appearance"
+    }
   },
   "export": {
     "title": "Prepare publication export",

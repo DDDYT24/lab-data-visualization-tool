@@ -315,13 +315,11 @@
       "surfaceGrid": "检测到完整的 {xCount} × {yCount} 网格，共 {pointCount} 个点。3D 曲面可以展示 {zField} 随 {xField} 和 {yField} 的变化。",
       "scatterGrid": "这些坐标存在缺失、重复或不规则间距。建议使用散点图查看单个 {zField} 测量值，避免误示为完整曲面。"
     },
-    "seriesAppearance": "数据系列外观",
     "seriesLabel": "系列 {index} 标签",
     "seriesColor": "{label} 颜色",
     "groupColorHelp": "启用分组时，图表会按分组自动配色；如需使用自定义颜色，请将分组字段设为“无”。",
     "grayscaleColorHelp": "灰度预览会覆盖数据系列颜色；关闭灰度预览后才能使用自定义颜色。",
     "valueColorHelp": "曲面和热力图使用色标表示数值，不使用单独的数据系列颜色；预览和导出使用相同色标。",
-    "analysis": "拟合与不确定度",
     "fitModel": "拟合模型",
     "fitMethod": "拟合方法",
     "fitMethods": {
@@ -407,13 +405,18 @@
       "residualRequiresFit": "残差诊断需要成功拟合的曲线。",
       "fitUnavailable": "当前分析无法计算所选拟合。"
     },
-    "layout": "坐标轴与多子图",
     "panelCount": "子图数量",
     "singlePanelType": "该图表类型使用一个论文子图；如需多子图，请选择折线、散点、柱状、直方或箱线图。",
     "seriesPanel": "{label} 所在子图",
     "secondaryAxis": "使用第二 Y 轴",
     "secondaryField": "第二坐标轴系列",
-    "continueOnDesktop": "手机端支持查看和简单编辑；拟合、双坐标轴和多子图建议在桌面端继续。"
+    "continueOnDesktop": "手机端支持查看和简单编辑；拟合、双坐标轴和多子图建议在桌面端继续。",
+    "sections": {
+      "label": "图表设置分区",
+      "data": "数据",
+      "method": "方法",
+      "appearance": "外观"
+    }
   },
   "export": {
     "title": "准备论文图导出",

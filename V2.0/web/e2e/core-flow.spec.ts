@@ -49,8 +49,9 @@ test("uploads a 1.87 MB CSV and completes inspect, chart, export, and download",
   await page.getByRole("combobox", { name: "X field" }).click();
   await page.getByRole("option", { name: "Time" }).click();
   await expect(page.getByLabel("Response fields")).toContainText("Response");
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   await page.getByLabel("Figure title").fill("Publication figure");
-  await page.getByRole("button", { name: "Fitting and uncertainty" }).click();
+  await page.getByRole("tab", { name: "Method", exact: true }).click();
   await page.getByLabel("Fit model").click();
   await page.getByRole("option", { name: "Linear" }).click();
   await page.getByRole("switch", { name: "Show confidence band" }).check();

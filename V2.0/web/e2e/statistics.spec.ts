@@ -8,7 +8,7 @@ test("keeps advanced interval and robust-fit choices explicit in the chart reque
   const observations = await installMockApi(page);
   await page.goto("/workspace/project-e2e?step=chart");
 
-  await page.getByRole("button", { name: "Fitting and uncertainty" }).click();
+  await page.getByRole("tab", { name: "Method", exact: true }).click();
   await page.getByRole("combobox", { name: "Fit model" }).click();
   await page.getByRole("option", { name: "Linear", exact: true }).click();
 

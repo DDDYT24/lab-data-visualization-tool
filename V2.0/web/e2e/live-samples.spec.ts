@@ -96,6 +96,7 @@ test("runs every bundled example through the real API and all exports", async ({
     expect(chartMs).toBeLessThanOrEqual(budgets.browser.first_chart_ms);
     const interactionStarted = performance.now();
     // A title edit is presentation-only: it deliberately does not rerun analysis.
+    await page.getByRole("tab", { name: "Appearance", exact: true }).click();
     await page.getByRole("textbox", { name: "Figure title" }).fill(`Verified ${slug}`);
     await expect(page.locator('main [role="img"]').first()).toHaveAttribute(
       "aria-label", new RegExp(`Verified ${slug}`),
