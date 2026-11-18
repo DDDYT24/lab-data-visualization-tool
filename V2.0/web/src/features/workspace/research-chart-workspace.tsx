@@ -19,6 +19,7 @@ import { DesktopPdfPreview } from "./desktop-pdf-preview";
 function ChartPreview({ alt, chart, onSelect, projectId, selected }: {
   alt: string; chart: ScientificChart; onSelect: (ids: string[]) => void; projectId: string; selected: string[];
 }) {
+  const zh = useLocale().startsWith("zh");
   const interactive = chart.hasPlan && chart.observations <= densePointThreshold;
   const [loaded, setLoaded] = useState<{ chartId: string; plan: RenderPlan | null } | null>(null);
   useEffect(() => {
@@ -33,8 +34,13 @@ function ChartPreview({ alt, chart, onSelect, projectId, selected }: {
   const current = loaded?.chartId === chart.id ? loaded : null;
   if (interactive && !current) return <Skeleton height={440} variant="rounded" />;
   if (interactive && current?.plan) return <RenderPlanChart key={current.plan.planHash} label={alt} onSelect={onSelect} plan={current.plan} selected={selected} />;
-  return <Box component="img" src={researchChartApi.artifact(projectId, chart.id, "png", false, true)}
+  const image = <Box component="img" src={researchChartApi.artifact(projectId, chart.id, "png", false, true)}
     alt={alt} sx={{ width: "100%", height: "auto", bgcolor: "white" }} />;
+  if (!interactive) return image;
+  return <Stack spacing={1}>
+    <Alert severity="warning" role="status">{zh ? "交互视图暂不可用，显示已保存的图片。" : "Interactive view unavailable; showing the saved image."}</Alert>
+    {image}
+  </Stack>;
 }
 
 export function ResearchChartWorkspace({ projectId, revisionId, active = true, pending, onSaved, refreshKey = 0, mapping }: {
@@ -101,7 +107,10 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
     if (!chart) return;
     setSelection({ chartId: chart.id, ids });
     if (chart.rows.some((row) => row.id === ids[0])) return;
-    researchChartApi.getWithObservation(projectId, chart.id, ids[0]!).then(setChart, (cause: unknown) => {
+    const chartId = chart.id;
+    researchChartApi.getWithObservation(projectId, chartId, ids[0]!).then((next) => {
+      setChart((current) => (current?.id === chartId ? next : current));
+    }, (cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "Chart failed");
     });
   }
