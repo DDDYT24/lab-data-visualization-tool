@@ -7,6 +7,7 @@ recomputing statistics or choosing their own axis limits.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -35,6 +36,9 @@ AXIS_PLAIN_EXPONENTS = range(
     GEOMETRY["axis"]["plainExponents"][0], GEOMETRY["axis"]["plainExponents"][1] + 1
 )
 DENSE_POINT_THRESHOLD = GEOMETRY["points"]["denseThreshold"]
+# Layers of one panel: how many, and how far each higher one is lifted in draw depth.
+LAYERS_MAX = GEOMETRY["layers"]["max"]
+LAYER_STEP = GEOMETRY["layers"]["step"]
 
 Color = Annotated[str, Field(pattern=r"^#[0-9a-f]{6}$")]
 Marker = Literal["o", "s", "^", "D", "v"]
@@ -47,7 +51,8 @@ class Tick(ResearchModel):
 
 
 class Axis(ResearchModel):
-    scale: Literal["linear", "category"]
+    # A log10 or symlog axis places values with plan_axes.axis_position; marks stay in data units.
+    scale: Literal["linear", "category", "log10", "symlog"]
     domain: tuple[float, float]
     ticks: list[Tick]
     title: str
@@ -70,7 +75,21 @@ class Decimation(ResearchModel):
     drawn: int
 
 
-class PointsMark(ResearchModel):
+def absent_when_unset(schema: dict[str, Any]) -> None:
+    """A field plans leave out rather than set to null, so a schema reader adds no default."""
+    schema.pop("default", None)
+
+
+class LayeredMark(ResearchModel):
+    """Every mark. `layer` is set only on marks of a panel's second and later layers."""
+
+    # A layered panel draws each higher layer above the lower ones (contract `layers.step`).
+    layer: int | None = Field(
+        default=None, ge=1, le=LAYERS_MAX - 1, json_schema_extra=absent_when_unset
+    )
+
+
+class PointsMark(LayeredMark):
     kind: Literal["points"]
     id: str
     group: str
@@ -85,7 +104,7 @@ class PointsMark(ResearchModel):
     decimation: Decimation | None
 
 
-class PolylineMark(ResearchModel):
+class PolylineMark(LayeredMark):
     kind: Literal["polyline"]
     id: str
     group: str
@@ -99,7 +118,7 @@ class PolylineMark(ResearchModel):
     decimation: Decimation | None
 
 
-class BandMark(ResearchModel):
+class BandMark(LayeredMark):
     kind: Literal["band"]
     id: str
     group: str
@@ -111,7 +130,7 @@ class BandMark(ResearchModel):
     upper: list[float]
 
 
-class ErrorbarMark(ResearchModel):
+class ErrorbarMark(LayeredMark):
     kind: Literal["errorbar"]
     id: str
     group: str
@@ -125,7 +144,7 @@ class ErrorbarMark(ResearchModel):
     error: list[float]
 
 
-class SegmentsMark(ResearchModel):
+class SegmentsMark(LayeredMark):
     kind: Literal["segments"]
     id: str
     group: str
@@ -139,7 +158,7 @@ class SegmentsMark(ResearchModel):
     source_refs: list[tuple[str, str]]
 
 
-class ViolinMark(ResearchModel):
+class ViolinMark(LayeredMark):
     kind: Literal["violin"]
     id: str
     group: str
@@ -155,7 +174,7 @@ class ViolinMark(ResearchModel):
     source_refs: list[str]
 
 
-class SummaryMark(ResearchModel):
+class SummaryMark(LayeredMark):
     kind: Literal["summary"]
     id: str
     group: str
@@ -169,7 +188,7 @@ class SummaryMark(ResearchModel):
     n: int
 
 
-class RectsMark(ResearchModel):
+class RectsMark(LayeredMark):
     kind: Literal["rects"]
     id: str
     group: str
@@ -185,7 +204,7 @@ class RectsMark(ResearchModel):
     decimation: Decimation | None
 
 
-class BoxMark(ResearchModel):
+class BoxMark(LayeredMark):
     kind: Literal["box"]
     id: str
     group: str
@@ -202,7 +221,7 @@ class BoxMark(ResearchModel):
     outliers: list[float]
 
 
-class MeshMark(ResearchModel):
+class MeshMark(LayeredMark):
     """Values on a grid: heatmap cells, or the heights of a 3D surface."""
 
     kind: Literal["mesh"]
@@ -240,12 +259,49 @@ class LegendEntry(ResearchModel):
     symbol: Literal["line", "marker", "dashed"]
 
 
+class TextNote(ResearchModel):
+    kind: Literal["text"]
+    x: float
+    y: float
+    text: str
+
+
+class RuleNote(ResearchModel):
+    kind: Literal["hline", "vline"]
+    value: float
+    label: str
+
+
+class RectNote(ResearchModel):
+    kind: Literal["rect"]
+    x: tuple[float, float]
+    y: tuple[float, float]
+    label: str
+    label_at: tuple[float, float]
+
+
+class BracketNote(ResearchModel):
+    kind: Literal["bracket"]
+    x: tuple[float, float]
+    y: float
+    # The y value the two feet reach down to.
+    foot: float
+    label: str
+    label_at: tuple[float, float]
+
+
+Note = Annotated[TextNote | RuleNote | RectNote | BracketNote, Field(discriminator="kind")]
+
+
 class Panel(ResearchModel):
     id: str
     title: str
     axes: PanelAxes
     marks: list[Mark]
     legend: list[LegendEntry]
+    # Plans are built and hashed as dicts, and a panel without annotations has no notes key,
+    # so plans built before notes keep their hash. Dumping this model would add an empty list.
+    notes: list[Note] = Field(default_factory=list)
 
 
 class PlanSource(ResearchModel):
@@ -363,6 +419,59 @@ def merge_axis(plan: dict[str, Any], dimension: str, low: float, high: float) ->
     if axis["scale"] == "linear":
         axis["ticks"] = axis_ticks(low, high)
     return axis
+
+
+def merge_layers(plans: list[dict[str, Any]]) -> dict[str, Any]:
+    """One panel drawn from several plans of the same data, bottom layer first.
+
+    Marks keep their geometry; those of layer n >= 1 carry `layer: n` and an `Ln:` id prefix.
+    Geometry rules are unioned; `source` stays the bottom layer's (each layer's result is listed
+    in the output manifest).
+    A value axis spans every layer's domain with the plan's tick rule; a category axis must be
+    the same in every layer. A single plan is returned unchanged, so its hash holds.
+    """
+    if len(plans) == 1:
+        return plans[0]
+    merged = copy.deepcopy(plans[0])
+    panel = merged["panels"][0]
+    spans = {name: list(panel["axes"][name]["domain"]) for name in ("x", "y")}
+    for rank, plan in enumerate(plans[1:], start=1):
+        other = plan["panels"][0]
+        if other["axes"]["y2"] is not None or other["axes"]["z"] is not None:
+            raise PreparationError(
+                "figure-layer-axis", "Layers share one x and one y axis; this chart has more."
+            )
+        for name in ("x", "y"):
+            axis, more = panel["axes"][name], other["axes"][name]
+            if axis["scale"] != more["scale"] or (
+                axis["scale"] == "category" and axis["ticks"] != more["ticks"]
+            ):
+                raise PreparationError(
+                    "figure-layer-axis",
+                    "Layers in one panel need the same axis meanings, units and categories.",
+                )
+            spans[name] = [
+                min(spans[name][0], more["domain"][0]),
+                max(spans[name][1], more["domain"][1]),
+            ]
+        panel["marks"].extend(
+            {**mark, "id": f"L{rank}:{mark['id']}", "layer": rank} for mark in other["marks"]
+        )
+        panel["legend"].extend(entry for entry in other["legend"] if entry not in panel["legend"])
+        # Each rule names how some marks were made: a violin layer brings its density rule.
+        for rule, value in plan["geometry"].items():
+            if merged["geometry"][rule] is None:
+                merged["geometry"][rule] = value
+        merged["disclosures"].extend(
+            line for line in plan["disclosures"] if line not in merged["disclosures"]
+        )
+    for name, (low, high) in spans.items():
+        if panel["axes"][name]["scale"] != "category" and [low, high] != list(
+            panel["axes"][name]["domain"]
+        ):
+            merge_axis(merged, name, low, high)
+    merged["planHash"] = plan_hash(merged)
+    return merged
 
 
 def plan_hash(plan: dict[str, Any]) -> str:

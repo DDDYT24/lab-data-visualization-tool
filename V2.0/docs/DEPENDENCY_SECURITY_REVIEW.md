@@ -1,3 +1,24 @@
+# V2.4 web dependency review: picomatch — 2026-11-17 and 2026-11-18
+
+picomatch is affected by a ReDoS through single-branch repeated extglobs
+([GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), high) in every
+release up to 4.0.7. No fixed release exists on 2026-11-18, so no update can clear it.
+
+- **Production tree (2026-11-17):** it appears only as `@parcel/watcher`'s own picomatch.
+  next-intl loads `@parcel/watcher` only in its message extractor, which LabViz does not use, so
+  no glob reaches it. The production-audit gate in `packaging/windows-v23/build_rc.py` passes
+  that advisory inside `node_modules/@parcel/watcher` only.
+- **Development tree (2026-11-18):** the same advisory reaches the test and lint tools: vitest,
+  vite, tinyglobby, fdir, micromatch, fast-glob and the ESLint plugins. They run only in
+  development and CI, are not shipped in the installer, and match only globs from the project's
+  own configuration. The development-audit gate passes a finding only when every advisory it
+  traces to through the audit's dependency chain is this one or the reviewed `minimatch`
+  advisory below (the latter only on the packages already reviewed for it). A new advisory, a
+  chain that cannot be traced, or `minimatch` on another package still stops the build.
+
+Disposition, accepted by the owner: both exceptions are removed once a fixed picomatch is
+released and installed; check at each release.
+
 # V2.3.0 web dependency follow-up — 2026-11-16
 
 - Next.js and eslint-config-next: 16.4.3 → 16.4.6. Next.js 16.3.0–16.4.4 is affected by

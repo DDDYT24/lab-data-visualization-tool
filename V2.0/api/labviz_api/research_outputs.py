@@ -14,6 +14,7 @@ from uuid import uuid4
 from pydantic import Field
 
 from .artifacts import MEDIA_TYPES, remember
+from .figure_spec import as_figure, layer_ids, parse_figure, styled_label
 from .research_contract import ResearchModel
 from .research_dataset import version_sources
 from .research_figure_board import artifact_row, read_board
@@ -57,6 +58,30 @@ def csv_bytes(rows: list[dict[str, Any]], headers: list[str]) -> bytes:
     return stream.getvalue().encode("utf-8-sig")
 
 
+def chart_method(science: dict[str, Any]) -> dict[str, Any]:
+    """How a research chart was computed; density grids stay in the analysis file."""
+    return {
+        "chart": science["spec"],
+        "algorithmVersion": science["algorithmVersion"],
+        "densityMethods": [
+            {
+                k: v
+                for k, v in d.items()
+                if k not in {"grid", "density", "halfWidths", "observationIds"}
+            }
+            for d in science["densities"]
+        ],
+    }
+
+
+def method_detail(chart: dict[str, Any]) -> str:
+    return (
+        f"summary={chart['summary']}; summaryUnit={chart['summaryUnit']}; "
+        f"pairTimes={chart['pairTimes']}; bandwidth={chart['bandwidth']}; "
+        f"densityScale={chart['densityScale']}"
+    )
+
+
 def materialize(
     store: ResearchStore, project_id: str, board_id: str
 ) -> tuple[dict[str, Any], OutputNotes, dict[str, bytes]]:
@@ -76,9 +101,15 @@ def materialize(
             f"面板 {labels}：SVG/PDF 中完整密集数据层以 300 dpi 嵌入；"
             "坐标轴、文字和密度轮廓保留矢量。嵌入点无法逐个编辑，保留完整源数据 CSV。"
         )
+    # Legends and methods name a panel as the figure draws it; files and CSV use its label.
+    figure = as_figure(parse_figure(json.dumps(board["spec"])))
+    names = [styled_label(figure, i) for i in range(len(figure.panels))]
+    names_en = [name or f"Panel {i + 1}" for i, name in enumerate(names)]
+    names_zh = [name or f"面板 {i + 1}" for i, name in enumerate(names)]
+    drawn = layer_ids(figure)
     with store.connect() as c:
-        for i, chart_id in enumerate(board["spec"]["panelChartIds"]):
-            label = "ABCD"[i]
+        for i, placed in enumerate(board["panels"]):
+            chart_id, label = placed["chartId"], placed["label"]
             panel = source(c, project_id, chart_id)
             panel["title"] = board["panels"][i]["title"]
             science = panel.get("scientific")
@@ -126,19 +157,13 @@ def materialize(
                     "sources": version_sources(c, version_id),
                 }
                 plan, history = prepared["plan"], prepared["history"]
+                computed = chart_method(science)
                 method = {
-                    "chart": science["spec"],
-                    "algorithmVersion": science["algorithmVersion"],
+                    "chart": computed["chart"],
+                    "algorithmVersion": computed["algorithmVersion"],
                     "preparation": plan,
                     "processingHistory": history,
-                    "densityMethods": [
-                        {
-                            k: v
-                            for k, v in d.items()
-                            if k not in {"grid", "density", "halfWidths", "observationIds"}
-                        }
-                        for d in science["densities"]
-                    ],
+                    "densityMethods": computed["densityMethods"],
                 }
                 analysis = science
                 reported_role = (
@@ -190,6 +215,20 @@ def materialize(
                 )
                 count, excluded, independent = len(observations), None, None
                 dataset = None
+            # Charts drawn with the panel's own one (S4e): same rows, their own result and method.
+            added = []
+            for identifier in drawn[i]:
+                if identifier == chart_id:
+                    continue
+                layer = source(c, project_id, identifier)
+                added.append(
+                    {
+                        "chartId": identifier,
+                        "kind": layer["kind"],
+                        "resultSha256": layer["resultSha256"],
+                        "method": chart_method(layer["scientific"]),
+                    }
+                )
             files[f"panels/{label}-source.csv"] = csv_bytes(csv_rows, headers)
             files[f"panels/{label}-analysis.json"] = encoded(analysis)
             panels.append(
@@ -208,20 +247,22 @@ def materialize(
                     "dataset": dataset,
                     "csvColumns": headers,
                     "sourceCsvRows": len(csv_rows),
+                    **({"layers": added} if added else {}),
                 }
             )
             legends_en.append(
-                f"{label}: {panel['title'] or panel['kind']}; observations/input rows={count}; "
+                f"{names_en[i]}: {panel['title'] or panel['kind']}; "
+                f"observations/input rows={count}; "
                 f"independent units={independent if independent is not None else 'unknown'}; "
                 f"unit={panel['unit']}. Panel counts may overlap."
             )
             legends_zh.append(
-                f"{label}：{panel['title'] or panel['kind']}；观测／输入行={count}；"
+                f"{names_zh[i]}：{panel['title'] or panel['kind']}；观测／输入行={count}；"
                 f"独立实验单位={independent if independent is not None else '未知'}；"
                 f"单位={panel['unit']}。面板样本可能重复。"
             )
     # Notes describe executed operations; exact parameters remain inspectable in the manifest.
-    for p in panels:
+    for p, en, zh in zip(panels, names_en, names_zh, strict=True):
         method = p["method"]
         if "preparation" in method:
             plan = method["preparation"]
@@ -232,35 +273,32 @@ def materialize(
                 )
                 or "none"
             )
-            chart = method["chart"]
-            detail = (
-                f"summary={chart['summary']}; summaryUnit={chart['summaryUnit']}; "
-                f"pairTimes={chart['pairTimes']}; bandwidth={chart['bandwidth']}; "
-                f"densityScale={chart['densityScale']}"
-            )
+            detail = method_detail(method["chart"])
             methods_en.append(
-                f"{p['label']}: {p['kind']}; preparation steps={steps}; "
+                f"{en}: {p['kind']}; preparation steps={steps}; "
                 f"excluded observations={p['excluded']}; {detail}. "
                 "Full parameters and source references: manifest.json."
             )
             methods_zh.append(
-                f"{p['label']}：{p['kind']}；准备步骤={steps}；"
+                f"{zh}：{p['kind']}；准备步骤={steps}；"
                 f"排除观测={p['excluded']}；{detail}。"
                 "完整参数及来源见 manifest.json。"
             )
         else:
             methods_en.append(
-                f"{p['label']}: {p['kind']}; frozen legacy chart input and mappings; "
+                f"{en}: {p['kind']}; frozen legacy chart input and mappings; "
                 "prior cleaning records are not reconstructed."
             )
             methods_zh.append(
-                f"{p['label']}：{p['kind']}；使用冻结的旧图表输入与映射，不重建此前清洗记录。"
+                f"{zh}：{p['kind']}；使用冻结的旧图表输入与映射，不重建此前清洗记录。"
             )
-        if p["kind"] == "violin":
-            methods_en.append(
-                f"{p['label']}: Gaussian KDE; density is not additional observations."
-            )
-            methods_zh.append(f"{p['label']}：高斯核密度不是额外观测。")
+        for layer in p.get("layers", []):
+            detail = method_detail(layer["method"]["chart"])
+            methods_en.append(f"{en}, layer {layer['kind']}: {detail}.")
+            methods_zh.append(f"{zh}，图层 {layer['kind']}：{detail}。")
+        if "violin" in {p["kind"], *(layer["kind"] for layer in p.get("layers", []))}:
+            methods_en.append(f"{en}: Gaussian KDE; density is not additional observations.")
+            methods_zh.append(f"{zh}：高斯核密度不是额外观测。")
     notes = OutputNotes(
         legend_en="\n".join(legends_en),
         legend_zh="\n".join(legends_zh),

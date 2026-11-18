@@ -14,8 +14,22 @@ from uuid import uuid4
 
 from pydantic_core import to_json
 
-from .research_figure_board import FigureBoardSpec, SceneIndex, insert_artifacts, read_board
-from .research_figure_render import render_board
+from .figure_spec import (
+    FigureBoardSpec,
+    FigureSpec,
+    as_figure,
+    chart_ids,
+    layer_ids,
+    parse_figure,
+)
+from .research_figure_board import (
+    SceneIndex,
+    insert_artifacts,
+    read_board,
+    refusal,
+    refusal_text,
+)
+from .research_figure_render import check_figure, check_layers, render_board
 from .research_figure_sources import source
 from .research_panel_headers import remember_header, source_header
 from .research_preparation import PreparationError
@@ -86,7 +100,9 @@ class FigureJobs:
             self.owned.clear()
             self.thread = None
 
-    def save(self, project_id: str, spec: FigureBoardSpec) -> dict[str, Any]:
+    def save(self, project_id: str, spec: FigureBoardSpec | FigureSpec) -> dict[str, Any]:
+        charts, placed, stacks = chart_ids(spec), as_figure(spec).panels, layer_ids(spec)
+        check_figure(as_figure(spec))
         self.start()
         if not self.slots.acquire(blocking=False):
             raise PreparationError("research-busy", "One job is running and one is waiting.")
@@ -95,7 +111,7 @@ class FigureJobs:
             with self.store.connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 headers = {}
-                for chart_id in dict.fromkeys(spec.panel_chart_ids):
+                for chart_id in dict.fromkeys(charts + [key for stack in stacks for key in stack]):
                     cached = connection.execute(
                         "SELECT header_json FROM research_panel_headers "
                         "WHERE id=? AND project_id=?",
@@ -118,8 +134,9 @@ class FigureJobs:
                         # Older charts are upgraded once, without rewriting their frozen bytes.
                         headers[chart_id] = source_header(source(connection, project_id, chart_id))
                         remember_header(connection, project_id, chart_id, headers[chart_id])
+                check_layers([[headers[key] for key in stack] for stack in stacks])
                 panels = []
-                for index, chart_id in enumerate(spec.panel_chart_ids):
+                for index, chart_id in enumerate(charts):
                     header = headers[chart_id]
                     panels.append(
                         {
@@ -128,17 +145,15 @@ class FigureJobs:
                                 for key, value in header.items()
                                 if key not in {"xSignature", "ySignature", "spec", "firstPage"}
                             },
-                            "label": "ABCD"[index],
+                            "label": placed[index].label,
                             "chartId": chart_id,
-                            "title": (spec.panel_titles[index] if spec.panel_titles else "")
-                            or header["title"],
+                            "title": placed[index].title or header["title"],
                         }
                     )
                 for dimension in ("x", "y"):
                     if spec.axis_mode in {"shared_" + dimension, "shared_xy"}:
                         signatures = {
-                            json.dumps(headers[key][dimension + "Signature"])
-                            for key in spec.panel_chart_ids
+                            json.dumps(headers[key][dimension + "Signature"]) for key in charts
                         }
                         if len(signatures) != 1:
                             raise PreparationError(
@@ -182,14 +197,18 @@ class FigureJobs:
             with self.store.connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
-                    "SELECT j.state FROM research_figure_jobs j JOIN research_figure_boards b "
-                    "ON b.id=j.board_id WHERE b.id=? AND b.project_id=?",
+                    "SELECT j.state,j.error FROM research_figure_jobs j "
+                    "JOIN research_figure_boards b ON b.id=j.board_id "
+                    "WHERE b.id=? AND b.project_id=?",
                     (identifier, project_id),
                 ).fetchone()
                 if row is None:
                     raise PreparationError(
                         "figure-not-found", "This generated revision is unavailable."
                     )
+                refused = refusal(row["error"])
+                if refused is not None:
+                    raise PreparationError("figure-build-refused", refused["message"])
                 if row["state"] != "failed":
                     raise PreparationError(
                         "figure-build-state", "Only a failed generation can be retried."
@@ -223,6 +242,15 @@ class FigureJobs:
                 try:
                     with self.execution:
                         self._build(identifier)
+                except PreparationError as error:
+                    # The figure cannot be drawn as saved (a note outside its axes, a log
+                    # axis over zero): another attempt would fail the same way.
+                    with self.store.connect() as connection:
+                        connection.execute(
+                            "UPDATE research_figure_jobs SET state='failed', error=? "
+                            "WHERE board_id=? AND state IN ('queued','running')",
+                            (refusal_text(error), identifier),
+                        )
                 except Exception:
                     LOGGER.exception("Figure generation failed for %s", identifier)
                     with self.store.connect() as connection:
@@ -259,7 +287,8 @@ class FigureJobs:
             )
         if self.on_start:
             self.on_start()
-        spec = FigureBoardSpec.model_validate_json(row["spec_json"])
+        spec = parse_figure(row["spec_json"])
+        charts, stacks = chart_ids(spec), layer_ids(spec)
         # One bounded build holds the shared research execution lock. Avoid
         # automatic scans of the large live snapshots while Matplotlib allocates
         # its small objects; collect its cycles once after releasing the sources.
@@ -270,7 +299,7 @@ class FigureJobs:
             with self.store.connect() as connection:
                 loaded = {
                     key: source(connection, row["project_id"], key)
-                    for key in dict.fromkeys(spec.panel_chart_ids)
+                    for key in dict.fromkeys(charts + [key for stack in stacks for key in stack])
                 }
             panels = json.loads(row["panels_json"])
             for panel in panels:
@@ -282,7 +311,10 @@ class FigureJobs:
             # Rendering runs without a SQLite connection or write transaction.
             formats: dict[str, float] = {}
             artifacts, scene = render_board(
-                [loaded[key] for key in spec.panel_chart_ids], spec, timings=formats
+                [loaded[key] for key in charts],
+                spec,
+                timings=formats,
+                layers=[[loaded[key] for key in stack] for stack in stacks],
             )
             render_end = perf_counter()
             scene["panelMetadata"] = panels

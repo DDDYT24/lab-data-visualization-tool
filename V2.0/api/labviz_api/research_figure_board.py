@@ -10,14 +10,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import Field, model_validator
 from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
-from .research_contract import Identifier, ResearchModel
+from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, layer_ids, parse_figure
 from .research_figure_render import render_board
 from .research_figure_sources import source
 from .research_panel_headers import install_headers
@@ -25,30 +24,6 @@ from .research_preparation import PreparationError
 from .research_store import ResearchStore
 
 ARTIFACT_KINDS = ("svg", "png", "pdf")
-
-
-class FigureBoardSpec(ResearchModel):
-    schema_version: Literal[1] = 1
-    point_rendering: Literal["auto", "vector", "raster"] = "auto"
-    title: str = Field(default="", max_length=160)
-    axis_mode: Literal["independent", "shared_x", "shared_y", "shared_xy"] = "independent"
-    palette: Literal["blue_teal", "grayscale"] = "blue_teal"
-    font_size: int = Field(default=10, ge=8, le=16)
-    grid_visible: bool = True
-    panel_titles: list[Annotated[str, Field(max_length=160)]] = Field(
-        default_factory=list, max_length=4
-    )
-    panel_chart_ids: list[Identifier] = Field(min_length=1, max_length=4)
-
-    @model_validator(mode="after")
-    def valid_layout(self) -> FigureBoardSpec:
-        if self.panel_titles and len(self.panel_titles) != len(self.panel_chart_ids):
-            raise ValueError("Panel titles must match the visible panel count.")
-        if len(self.panel_chart_ids) not in {1, 2, 4}:
-            raise ValueError("Choose exactly one, two or four panels.")
-        if any(not value.strip() or len(value) > 128 for value in self.panel_chart_ids):
-            raise ValueError("Every panel needs a saved chart identifier.")
-        return self
 
 
 def install_boards(store: ResearchStore) -> None:
@@ -89,27 +64,31 @@ def install_boards(store: ResearchStore) -> None:
 
 
 def resolve_panels(
-    connection: sqlite3.Connection, project_id: str, spec: FigureBoardSpec
+    connection: sqlite3.Connection, project_id: str, spec: FigureBoardSpec | FigureSpec
 ) -> list[dict[str, Any]]:
+    charts = chart_ids(spec)
     loaded = {
         identifier: source(connection, project_id, identifier)
-        for identifier in dict.fromkeys(spec.panel_chart_ids)
+        for identifier in dict.fromkeys(charts)
     }
-    return panel_metadata([loaded[identifier] for identifier in spec.panel_chart_ids], spec)
+    return panel_metadata([loaded[identifier] for identifier in charts], spec)
 
 
-def panel_metadata(sources: list[dict[str, Any]], spec: FigureBoardSpec) -> list[dict[str, Any]]:
+def panel_metadata(
+    sources: list[dict[str, Any]], spec: FigureBoardSpec | FigureSpec
+) -> list[dict[str, Any]]:
+    figure = as_figure(spec)
     panels = []
-    for index, (identifier, panel) in enumerate(zip(spec.panel_chart_ids, sources, strict=True)):
+    for placed, identifier, panel in zip(figure.panels, chart_ids(spec), sources, strict=True):
         observations = panel["rows"]
         units = {item.get("experimentalUnit") for item in observations}
         panels.append(
             {
-                "label": "ABCD"[index],
+                "label": placed.label,
                 "chartId": identifier,
                 "revisionId": panel["revisionId"],
                 "kind": panel["kind"],
-                "title": (spec.panel_titles[index] if spec.panel_titles else "") or panel["title"],
+                "title": placed.title or panel["title"],
                 "unit": panel["unit"],
                 "observations": len(observations),
                 "independentUnits": None if None in units else len(units),
@@ -119,13 +98,27 @@ def panel_metadata(sources: list[dict[str, Any]], spec: FigureBoardSpec) -> list
     return panels
 
 
+def refusal_text(error: PreparationError) -> str:
+    """A refused build, stored in the job's error column so it reads back as a refusal."""
+    return json.dumps({"refusal": error.code, "message": str(error)})
+
+
+def refusal(error: str | None) -> dict[str, str] | None:
+    """The refusal a failed build stored, or None for a failure worth retrying."""
+    if not error or not error.startswith('{"refusal"'):
+        return None
+    stored: dict[str, str] = json.loads(error)
+    return stored
+
+
 def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
-    spec = FigureBoardSpec.model_validate_json(row["spec_json"])
+    spec = parse_figure(row["spec_json"])
     job = connection.execute(
         "SELECT state,panels_json,error,timings_json FROM research_figure_jobs WHERE board_id=?",
         (row["id"],),
     ).fetchone()
     if job:
+        refused = refusal(job["error"])
         return {
             "id": row["id"],
             "createdAt": row["created_at"],
@@ -133,7 +126,8 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
             "panels": json.loads(job["panels_json"]),
             "composed": job["state"] == "ready",
             "artifactState": job["state"],
-            "artifactError": job["error"],
+            "artifactError": refused["message"] if refused else job["error"],
+            "artifactRefusal": refused["refusal"] if refused else None,
             "artifactTimings": json.loads(job["timings_json"]),
         }
     artifact = connection.execute(
@@ -147,7 +141,7 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
         else resolve_panels(connection, row["project_id"], spec)
     )
     # Duplicates remap chart/revision IDs but retain artifact bytes and original provenance.
-    if [panel["chartId"] for panel in panels] != spec.panel_chart_ids:
+    if [panel["chartId"] for panel in panels] != chart_ids(spec):
         panels = resolve_panels(connection, row["project_id"], spec)
     return {
         "id": row["id"],
@@ -160,13 +154,14 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
         "panels": panels,
         "artifactState": "ready" if artifact else "unavailable",
         "artifactError": None,
+        "artifactRefusal": None,
     }
 
 
 def save_board(
     store: ResearchStore,
     project_id: str,
-    spec: FigureBoardSpec,
+    spec: FigureBoardSpec | FigureSpec,
     on_scene: Callable[[str, dict[str, Any]], None] | None = None,
     timings: dict[str, float] | None = None,
     *,
@@ -189,11 +184,13 @@ def save_board(
             gc.disable()
         try:
             # Resolve each immutable source once, even when it is placed in several panels.
+            charts, stacks = chart_ids(spec), layer_ids(spec)
             loaded = {
                 identifier: source(connection, project_id, identifier)
-                for identifier in dict.fromkeys(spec.panel_chart_ids)
+                for identifier in dict.fromkeys(charts + [key for stack in stacks for key in stack])
             }
-            sources = [loaded[identifier] for identifier in spec.panel_chart_ids]
+            sources = [loaded[identifier] for identifier in charts]
+            layers = [[loaded[key] for key in stack] for stack in stacks]
             view: dict[str, Any] = {
                 "id": row["id"],
                 "createdAt": row["created_at"],
@@ -205,13 +202,13 @@ def save_board(
             if restore_gc:
                 gc.enable()
         rendered_start = perf_counter()
-        artifacts, scene = render_board(sources, spec)
+        artifacts, scene = render_board(sources, spec, layers=layers)
         rendered_end = perf_counter()
         # Small frozen panel summaries allow reopen without decoding complete chart results.
         scene["panelMetadata"] = view["panels"]
         # The scene owns complete source rows. Release render-only snapshots before
         # allocating serialized scene bytes and SQLite's transaction buffers.
-        del loaded, sources
+        del loaded, sources, layers
         if sum(panel["observations"] for panel in view["panels"]) > 20_000:
             gc.collect()
         connection.execute(
@@ -229,6 +226,7 @@ def save_board(
         view["composed"] = True
         view["artifactState"] = "ready"
         view["artifactError"] = None
+        view["artifactRefusal"] = None
     persisted_end = perf_counter()
     if on_scene is not None:
         on_scene(row["id"], scene)

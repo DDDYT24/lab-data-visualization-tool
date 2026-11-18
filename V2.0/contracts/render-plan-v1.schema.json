@@ -6,7 +6,9 @@
         "scale": {
           "enum": [
             "linear",
-            "category"
+            "category",
+            "log10",
+            "symlog"
           ],
           "title": "Scale",
           "type": "string"
@@ -67,6 +69,19 @@
     "BandMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "band",
           "title": "Kind",
@@ -136,6 +151,19 @@
     "BoxMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "box",
           "title": "Kind",
@@ -218,6 +246,66 @@
       "title": "BoxMark",
       "type": "object"
     },
+    "BracketNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "bracket",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "foot": {
+          "title": "Foot",
+          "type": "number"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "labelAt": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Labelat",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "y",
+        "foot",
+        "label",
+        "labelAt"
+      ],
+      "title": "BracketNote",
+      "type": "object"
+    },
     "Decimation": {
       "additionalProperties": false,
       "properties": {
@@ -245,6 +333,19 @@
     "ErrorbarMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "errorbar",
           "title": "Kind",
@@ -355,6 +456,19 @@
       "additionalProperties": false,
       "description": "Values on a grid: heatmap cells, or the heights of a 3D surface.",
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "mesh",
           "title": "Kind",
@@ -532,6 +646,36 @@
             "$ref": "#/$defs/LegendEntry"
           },
           "title": "Legend",
+          "type": "array"
+        },
+        "notes": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "bracket": "#/$defs/BracketNote",
+                "hline": "#/$defs/RuleNote",
+                "rect": "#/$defs/RectNote",
+                "text": "#/$defs/TextNote",
+                "vline": "#/$defs/RuleNote"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextNote"
+              },
+              {
+                "$ref": "#/$defs/RuleNote"
+              },
+              {
+                "$ref": "#/$defs/RectNote"
+              },
+              {
+                "$ref": "#/$defs/BracketNote"
+              }
+            ]
+          },
+          "title": "Notes",
           "type": "array"
         }
       },
@@ -729,6 +873,19 @@
     "PointsMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "points",
           "title": "Kind",
@@ -826,6 +983,19 @@
     "PolylineMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "polyline",
           "title": "Kind",
@@ -911,9 +1081,87 @@
       "title": "PolylineMark",
       "type": "object"
     },
+    "RectNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "rect",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "X",
+          "type": "array"
+        },
+        "y": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Y",
+          "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "labelAt": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Labelat",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "y",
+        "label",
+        "labelAt"
+      ],
+      "title": "RectNote",
+      "type": "object"
+    },
     "RectsMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "rects",
           "title": "Kind",
@@ -1013,9 +1261,50 @@
       "title": "RectsMark",
       "type": "object"
     },
+    "RuleNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "hline",
+            "vline"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value",
+        "label"
+      ],
+      "title": "RuleNote",
+      "type": "object"
+    },
     "SegmentsMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "segments",
           "title": "Kind",
@@ -1107,6 +1396,19 @@
     "SummaryMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "summary",
           "title": "Kind",
@@ -1179,6 +1481,36 @@
       "title": "SummaryMark",
       "type": "object"
     },
+    "TextNote": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "y",
+        "text"
+      ],
+      "title": "TextNote",
+      "type": "object"
+    },
     "Tick": {
       "additionalProperties": false,
       "properties": {
@@ -1201,6 +1533,19 @@
     "ViolinMark": {
       "additionalProperties": false,
       "properties": {
+        "layer": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Layer"
+        },
         "kind": {
           "const": "violin",
           "title": "Kind",

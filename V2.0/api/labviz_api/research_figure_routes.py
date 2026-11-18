@@ -6,15 +6,16 @@ import gc
 import json
 from collections.abc import Callable
 from time import perf_counter
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Cookie, FastAPI, Query
+from fastapi import Path as PathParameter
 from fastapi.responses import Response
 from pydantic_core import from_json, to_json
 
+from .figure_spec import AnyFigure, FigureBoardSpec
 from .processing import ProcessingError
 from .research_figure_board import (
-    FigureBoardSpec,
     SceneIndex,
     artifact_row,
     install_boards,
@@ -122,7 +123,7 @@ def register_figure_routes(
     @app.post("/api/v1/projects/{project_id}/research/figure-boards")
     def save(
         project_id: str,
-        body: FigureBoardSpec,
+        body: AnyFigure,
         response: Response,
         defer_artifacts: bool = Query(default=False, alias="deferArtifacts"),
         user: Any = user_dep,
@@ -318,7 +319,7 @@ def register_figure_routes(
     def panel_plan(
         project_id: str,
         board_id: str,
-        panel: Literal["A", "B", "C", "D"],
+        panel: Annotated[str, PathParameter(pattern="^[A-Za-z]$")],
         user: Any = user_dep,
         guest_token: str | None = Cookie(default=None, alias=guest_cookie),
         repository: Any = repository_dep,

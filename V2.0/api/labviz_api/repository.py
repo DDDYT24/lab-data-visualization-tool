@@ -1416,9 +1416,16 @@ class ProjectRepository:
                             (source_project_id,),
                         ).fetchall():
                             board_spec = json.loads(board["spec_json"])
-                            board_spec["panelChartIds"] = [
-                                chart_ids[key] for key in board_spec["panelChartIds"]
-                            ]
+                            if board_spec.get("schemaVersion") == 2:
+                                # A v2 figure names its charts in each panel's layers.
+                                for panel in board_spec["panels"]:
+                                    for layer in panel["layers"]:
+                                        if layer.get("chartId"):
+                                            layer["chartId"] = chart_ids[layer["chartId"]]
+                            else:
+                                board_spec["panelChartIds"] = [
+                                    chart_ids[key] for key in board_spec["panelChartIds"]
+                                ]
                             new_board_id = uuid4().hex
                             board_ids[board["id"]] = new_board_id
                             connection.execute(

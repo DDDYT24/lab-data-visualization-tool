@@ -17,14 +17,69 @@ from unittest.mock import patch
 import pandas as pd
 from matplotlib.figure import Figure
 
-from labviz_api import research_figure_render
+from labviz_api import research_raster
+from labviz_api.figure_spec import FigureBoardSpec, FigureSpec
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
-from labviz_api.research_figure_board import FigureBoardSpec, SceneIndex, interaction
+from labviz_api.research_figure_board import SceneIndex, interaction
 from labviz_api.research_figure_render import render_board
 from labviz_api.research_figure_sources import legacy_snapshot, scientific_source
 from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
 from labviz_api.research_raster import freeze_raster_layers
 from scripts.measure_v22_performance import _csv_payload, _line_chart, _process_peak_memory_bytes
+
+# The slowest six-panel layout measured for S4d1: nine cells of canvas at 300 dpi.
+SIX_PANEL_MOSAIC = FigureSpec.model_validate(
+    {
+        "schemaVersion": 2,
+        "title": "Six scientific panels",
+        "layout": {"kind": "mosaic", "rows": 3, "cols": 3, "mosaic": ["AAB", "CDE", "CDF"]},
+        "panels": [
+            {"id": f"p{index}", "label": label, "layers": [{"kind": "chart", "chartId": label}]}
+            for index, label in enumerate("ABCDEF")
+        ],
+    }
+)
+
+
+def timed_board(
+    prefix: str, sources: list[Any], spec: FigureBoardSpec | FigureSpec, times: dict[str, float]
+) -> tuple[dict[str, bytes], dict[str, Any]]:
+    """Render every format once; record geometry and each format's time under `prefix`."""
+    encode_times: dict[str, float] = {}
+    original_savefig = Figure.savefig
+    raster_times: list[float] = []
+    original_freeze = freeze_raster_layers
+
+    def timed_freeze(figure: Figure) -> int:
+        start = perf_counter()
+        result: int = original_freeze(figure)
+        raster_times.append((perf_counter() - start) * 1000)
+        return result
+
+    def timed_savefig(self: Any, *args: Any, **kwargs: Any) -> Any:
+        start = perf_counter()
+        value = original_savefig(self, *args, **kwargs)
+        encode_times[kwargs["format"]] = (perf_counter() - start) * 1000
+        return value
+
+    start = perf_counter()
+    with (
+        patch.object(Figure, "savefig", timed_savefig),
+        # render_board imports it inside the function, so the module attribute is patched.
+        patch.object(research_raster, "freeze_raster_layers", timed_freeze),
+    ):
+        artifacts, scene = render_board(sources, spec)
+    total = (perf_counter() - start) * 1000
+    raster_prepare = sum(raster_times)
+    layout = total - sum(encode_times.values()) - raster_prepare
+    times[prefix + "AllFormatsMs"] = total
+    times[prefix + "GeometryMs"] = layout
+    times[prefix + "RasterLayerPrepareMs"] = raster_prepare
+    for kind, duration in encode_times.items():
+        # PNG uses its direct Agg render; only vector exports need the cache.
+        cold_raster_cost = 0.0 if kind == "png" else raster_prepare
+        times[prefix + kind.title() + "Ms"] = layout + cold_raster_cost + duration
+    return artifacts, scene
 
 
 def measure(rows: int, mixed: bool = False) -> dict[str, Any]:
@@ -84,54 +139,9 @@ def measure(rows: int, mixed: bool = False) -> dict[str, Any]:
             captured = legacy_snapshot(Repository(frame), "benchmark", 1)
             times["legacyCaptureMs"] = (perf_counter() - start) * 1000
             sources = [captured, scientific[0], captured, scientific[1]]
-        encode_times: dict[str, float] = {}
-        original_savefig = Figure.savefig
-        raster_times: list[float] = []
-        original_freeze = freeze_raster_layers
-
-        def timed_freeze(
-            figure: Figure,
-            _freeze: Any = original_freeze,
-            _record: list[float] = raster_times,
-        ) -> int:
-            start = perf_counter()
-            result: int = _freeze(figure)
-            _record.append((perf_counter() - start) * 1000)
-            return result
-
-        def timed_savefig(
-            self: Any,
-            *args: Any,
-            _save: Any = original_savefig,
-            _record: dict[str, float] = encode_times,
-            **kwargs: Any,
-        ) -> Any:
-            start = perf_counter()
-            value = _save(self, *args, **kwargs)
-            _record[kwargs["format"]] = (perf_counter() - start) * 1000
-            return value
-
-        start = perf_counter()
-        with (
-            patch.object(Figure, "savefig", timed_savefig),
-            patch.object(research_figure_render, "freeze_raster_layers", timed_freeze),
-        ):
-            artifacts, scene = render_board(
-                sources,
-                FigureBoardSpec(
-                    title="Four scientific panels", panel_chart_ids=["a", "b", "c", "d"]
-                ),
-            )
-        total = (perf_counter() - start) * 1000
-        raster_prepare = sum(raster_times)
-        layout = total - sum(encode_times.values()) - raster_prepare
-        times["fourPanelAllFormatsMs"] = total
-        times["fourPanelGeometryMs"] = layout
-        times["rasterLayerPrepareMs"] = raster_prepare
-        for kind, duration in encode_times.items():
-            # PNG uses its direct Agg render; only vector exports need the cache.
-            cold_raster_cost = 0.0 if kind == "png" else raster_prepare
-            times["fourPanel" + kind.title() + "Ms"] = layout + cold_raster_cost + duration
+        four = FigureBoardSpec(title="Four scientific panels", panel_chart_ids=["a", "b", "c", "d"])
+        artifacts, scene = timed_board("fourPanel", sources, four, times)
+        timed_board("sixPanel", scientific * 3, SIX_PANEL_MOSAIC, times)
         sizes = {key: len(value) for key, value in artifacts.items()}
         assert sum(len(scene["rowSets"][key]) for key in scene["panelRowSets"].values()) == rows * 4
         assert len(scene["marks"]) >= 4
@@ -159,6 +169,7 @@ def measure(rows: int, mixed: bool = False) -> dict[str, Any]:
         "workload": "legacy-line/raw-point/legacy-line/violin"
         if mixed
         else "raw-point/violin/raw-point/violin",
+        "sixPanelWorkload": "raw-point/violin three times, 3x3 mosaic AAB/CDE/CDF",
         "dataset": f"legacy-linear-{rows}",
         "datasetSha256": hashlib.sha256(payload).hexdigest(),
         "runs": runs,
@@ -217,6 +228,9 @@ def main() -> None:
         "fourPanelPngMs": budget["targetsMs"]["fourPanelPng300dpi"],
         "fourPanelSvgMs": budget["targetsMs"]["fourPanelSvg"],
         "fourPanelPdfMs": budget["targetsMs"]["fourPanelPdf"],
+        "sixPanelPngMs": budget["targetsMs"]["sixPanelPng300dpi"],
+        "sixPanelSvgMs": budget["targetsMs"]["sixPanelSvg"],
+        "sixPanelPdfMs": budget["targetsMs"]["sixPanelPdf"],
     }
     report["proxyBudgetChecks"] = {
         key: {

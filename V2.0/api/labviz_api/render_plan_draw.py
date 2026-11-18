@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .render_contract import GRID_COLOR, LINE_STYLES
+from .plan_axes import SYMLOG_THRESHOLD
+from .render_contract import GEOMETRY, GRID_COLOR, LINE_STYLES
+
+NOTE = GEOMETRY["annotation"]
+LAYER_STEP: int = GEOMETRY["layers"]["step"]
 
 # A mark with more bars than this is drawn as one collection, and the legend then takes a fixed
 # place (`dense_bars`). A patch per bar, and a legend that tests every bar each time it looks for
@@ -12,7 +16,26 @@ from .render_contract import GRID_COLOR, LINE_STYLES
 BAR_PATCH_LIMIT = 1000
 
 
+def layer_lift(marks: list[dict[str, Any]]) -> float:
+    """How far the panel's top layer is lifted; notes go above it."""
+    top: int = max((mark.get("layer") or 0 for mark in marks), default=0)
+    return float(top * LAYER_STEP)
+
+
 def draw_mark(ax: Any, mark: dict[str, Any], dense: bool) -> None:
+    """Draw one mark; a mark of layer n sits n layer steps above every mark of lower layers."""
+    layer = mark.get("layer")
+    if not layer:
+        draw_kind(ax, mark, dense)
+        return
+    before = set(ax.get_children())
+    draw_kind(ax, mark, dense)
+    for artist in ax.get_children():
+        if artist not in before:
+            artist.set_zorder(artist.get_zorder() + layer * LAYER_STEP)
+
+
+def draw_kind(ax: Any, mark: dict[str, Any], dense: bool) -> None:
     from matplotlib.collections import LineCollection
 
     if mark["kind"] == "segments":
@@ -135,7 +158,10 @@ def draw_rects(ax: Any, mark: dict[str, Any], dense: bool) -> None:
         "rasterized": dense,
     }
     if mark["shape"] == "stairs":
-        ax.stairs(mark["y1"], [*mark["x0"], mark["x1"][-1]], fill=True, **style)
+        # Bins rise from y0: 0 on a linear axis, the axis floor on a log count axis. A list
+        # baseline writes other SVG and PDF bytes than 0, so linear exports pass the number.
+        baseline = mark["y0"] if any(mark["y0"]) else 0
+        ax.stairs(mark["y1"], [*mark["x0"], mark["x1"][-1]], baseline=baseline, fill=True, **style)
     elif len(mark["x0"]) > BAR_PATCH_LIMIT:
         import numpy as np
         from matplotlib.collections import PolyCollection
@@ -204,7 +230,101 @@ def draw_box(ax: Any, mark: dict[str, Any]) -> None:
     )
 
 
+def draw_notes(ax: Any, notes: list[dict[str, Any]], lift: float = 0) -> None:
+    """Annotations exactly as the plan states them; labels sit a fixed gap from their anchor.
+
+    `lift` puts lines and text above a layered panel's top layer; shaded ranges stay under all.
+    """
+    from matplotlib.patches import Rectangle
+
+    color, gap = NOTE["color"], NOTE["labelGap"]
+    line = {"color": color, "linewidth": NOTE["lineWidth"], "zorder": 6 + lift}
+    words = {"color": color, "fontsize": NOTE["fontSize"], "zorder": 7 + lift}
+
+    def label(
+        text: str, anchor: tuple[float, float], frame: Any, offset: Any, **align: str
+    ) -> None:
+        if text:
+            ax.annotate(
+                text,
+                anchor,
+                xycoords=frame,
+                xytext=offset,
+                textcoords="offset points",
+                **align,
+                **words,
+            )
+
+    for note in notes:
+        kind = note["kind"]
+        if kind == "text":
+            ax.text(
+                note["x"], note["y"], note["text"], ha="center", va="center", clip_on=True, **words
+            )
+        elif kind == "hline":
+            ax.axhline(note["value"], linestyle=LINE_STYLES[NOTE["ruleStyle"]], **line)
+            label(
+                note["label"],
+                (1.0, note["value"]),
+                ("axes fraction", "data"),
+                (-gap, gap),
+                ha="right",
+                va="bottom",
+            )
+        elif kind == "vline":
+            ax.axvline(note["value"], linestyle=LINE_STYLES[NOTE["ruleStyle"]], **line)
+            label(
+                note["label"],
+                (note["value"], 1.0),
+                ("data", "axes fraction"),
+                (gap, -gap),
+                ha="left",
+                va="top",
+            )
+        elif kind == "rect":
+            (x0, x1), (y0, y1) = note["x"], note["y"]
+            ax.add_patch(
+                Rectangle(
+                    (x0, y0),
+                    x1 - x0,
+                    y1 - y0,
+                    facecolor=color,
+                    edgecolor="none",
+                    alpha=NOTE["rectOpacity"],
+                    zorder=0.5,
+                )
+            )
+            label(note["label"], tuple(note["labelAt"]), "data", (gap, -gap), ha="left", va="top")
+        else:
+            (x0, x1), y, foot = note["x"], note["y"], note["foot"]
+            ax.plot([x0, x0, x1, x1], [foot, y, y, foot], **line)
+            label(note["label"], tuple(note["labelAt"]), "data", (0, gap), ha="center", va="bottom")
+
+
+def set_scale(ax: Any, name: str, scale: str) -> None:
+    """Place values along a log or symlog axis exactly as plan_axes.axis_position does."""
+    if scale not in ("log10", "symlog"):
+        return
+    import numpy as np
+
+    def forward(values: Any) -> Any:
+        data = np.asarray(values, dtype=float)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if scale == "log10":
+                return np.log10(data)
+            return np.sign(data) * np.log10(1 + np.abs(data) / SYMLOG_THRESHOLD)
+
+    def inverse(positions: Any) -> Any:
+        data = np.asarray(positions, dtype=float)
+        if scale == "log10":
+            return 10.0**data
+        return np.sign(data) * (10.0 ** np.abs(data) - 1) * SYMLOG_THRESHOLD
+
+    getattr(ax, f"set_{name}scale")("function", functions=(forward, inverse))
+
+
 def draw_y_axis(ax: Any, axis: dict[str, Any]) -> None:
+    set_scale(ax, "y", axis["scale"])
     ax.set_yticks([t["value"] for t in axis["ticks"]], [t["label"] for t in axis["ticks"]])
     ax.set_ylim(*axis["domain"])
     ax.set_ylabel(axis["title"])
@@ -222,6 +342,7 @@ def draw_panel(
     x_axis, y_axis, z_axis = panel["axes"]["x"], panel["axes"]["y"], panel["axes"]["z"]
     # Heatmap column names would overlap if they ran along the axis.
     cells = any(mark.get("shape") == "cells" for mark in panel["marks"])
+    set_scale(ax, "x", x_axis["scale"])
     ax.set_xticks(
         [t["value"] for t in x_axis["ticks"]],
         [t["label"] for t in x_axis["ticks"]],
@@ -245,3 +366,4 @@ def draw_panel(
         else:
             # Off must also override a grid-enabled Matplotlib theme.
             ax.grid(False, axis=name)
+    draw_notes(ax, panel.get("notes", []), layer_lift(panel["marks"]))

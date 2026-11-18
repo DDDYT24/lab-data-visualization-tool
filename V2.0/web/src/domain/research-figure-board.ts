@@ -1,5 +1,6 @@
 import { z } from "zod";
 import generatedSpec from "../../../contracts/figure-board-v1.schema.json";
+import { figureSpecSchema, type FigureSpec } from "./figure-spec";
 
 export type FigureBoardSpec = {
   schemaVersion: 1; title: string; axisMode: "independent" | "shared_x" | "shared_y" | "shared_xy"; palette?: "blue_teal" | "grayscale"; fontSize?: number; gridVisible?: boolean; pointRendering?: "auto" | "vector" | "raster"; panelTitles?: string[]; panelChartIds: string[];
@@ -10,17 +11,23 @@ export const figureBoardSpecSchema = z.fromJSONSchema(
   "Choose one, two or four panels");
 export const figureSourceSchema = z.object({ charts: z.array(z.object({
   id: z.string(), revisionId: z.string(), createdAt: z.string(), legacy: z.boolean(),
-  spec: z.object({ kind: z.string(), title: z.string() }),
+  // `pairTimes` tells which research charts can share a panel's axes.
+  spec: z.object({ kind: z.string(), title: z.string(), pairTimes: z.array(z.string()).optional() }),
 })) });
 export type FigureSources = z.infer<typeof figureSourceSchema>;
-const boardHeader = z.object({ id: z.string(), createdAt: z.string(), spec: figureBoardSpecSchema });
+// A board stores either version; the API reads it by schemaVersion and returns it as stored.
+// The v1 schema is generated from JSON Schema and has no static type, so the union is typed here once.
+const storedSpec = z.union([figureBoardSpecSchema, figureSpecSchema]) as unknown as z.ZodType<FigureBoardSpec | FigureSpec>;
+const boardHeader = z.object({ id: z.string(), createdAt: z.string(), spec: storedSpec });
 export const figureBoardHistorySchema = z.object({ boards: z.array(boardHeader) });
 export const figureBoardSchema = boardHeader.extend({
   composed: z.boolean().default(false),
   artifactState: z.enum(["queued", "running", "ready", "failed", "unavailable"]).optional(),
   artifactError: z.string().nullable().optional(),
+  // Set when the build refused the figure as saved; retrying it would fail the same way.
+  artifactRefusal: z.string().nullable().optional(),
   panels: z.array(z.object({
-    label: z.enum(["A", "B", "C", "D"]), chartId: z.string(), revisionId: z.string(),
+    label: z.string().regex(/^[A-Za-z]$/), chartId: z.string(), revisionId: z.string(),
     kind: z.enum(["grouped_strip", "paired", "violin", "line", "scatter", "box", "heatmap"]), title: z.string(), unit: z.string(),
     observations: z.number(), independentUnits: z.number().nullable(), resultSha256: z.string(),
   })),

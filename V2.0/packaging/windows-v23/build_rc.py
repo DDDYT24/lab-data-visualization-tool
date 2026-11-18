@@ -44,10 +44,88 @@ REVIEWED_DEVELOPMENT_ADVISORIES = frozenset({"minimatch"})
 REVIEWED_DEVELOPMENT_SEVERITIES = frozenset({"info", "low", "moderate"})
 
 
+# Reviewed 2026-11-17, owner approved: GHSA-fc5q-39xc-vjpf (picomatch ReDoS through repeated
+# extglobs, high, every release up to 4.0.7, no fixed release yet). It reaches the production
+# tree only as @parcel/watcher's own picomatch; next-intl loads @parcel/watcher only in its
+# message extractor (dist/*/extractor/source/SourceFileWatcher.js), which LabViz does not use,
+# so no glob reaches it. A finding passes only on that advisory and inside that one path; the
+# same advisory anywhere else, or any other advisory, still stops the build. Remove this once a
+# fixed picomatch is released and installed.
+REVIEWED_PRODUCTION_ADVISORY = "https://github.com/advisories/GHSA-fc5q-39xc-vjpf"
+REVIEWED_PRODUCTION_PATH = "node_modules/@parcel/watcher"
+
+# Reviewed 2026-11-18, owner approved: the same picomatch advisory reaches the development tree
+# through the test and lint tools (vitest, vite, tinyglobby, fdir, micromatch, fast-glob and the
+# ESLint plugins). They run only in development and CI, are not shipped, and match only globs
+# from the project's own configuration. A development finding passes on this review only when
+# every advisory it traces to is that picomatch advisory or the reviewed minimatch one above
+# (and then only on the reviewed packages); anything else, or a chain that cannot be traced,
+# still stops the build. Remove with the production exception once picomatch is fixed.
+REVIEWED_MINIMATCH_ADVISORY = "https://github.com/advisories/GHSA-g3hv-75wg-m249"
+
+
+def root_advisories(
+    audit: dict, name: str, seen: frozenset[str] = frozenset()
+) -> set[str]:
+    """The advisory URLs a finding traces to through the vulnerable packages it depends on."""
+    findings = audit.get("vulnerabilities", {})
+    roots: set[str] = set()
+    for source in findings.get(name, {}).get("via", []):
+        if isinstance(source, dict):
+            roots.add(str(source.get("url")))
+        elif source not in findings:
+            roots.add("untraced:" + str(source))
+        elif source not in seen:
+            roots |= root_advisories(audit, source, seen | {name})
+    return roots
+
+
+def reviewed_picomatch_development_finding(audit: dict, name: str) -> bool:
+    roots = root_advisories(audit, name)
+    return (
+        REVIEWED_PRODUCTION_ADVISORY in roots
+        and roots <= {REVIEWED_PRODUCTION_ADVISORY, REVIEWED_MINIMATCH_ADVISORY}
+        and (
+            REVIEWED_MINIMATCH_ADVISORY not in roots
+            or name in REVIEWED_DEVELOPMENT_PACKAGES
+        )
+    )
+
+
+def reviewed_production_finding(finding: dict) -> bool:
+    nodes = finding.get("nodes", [])
+    return (
+        bool(nodes)
+        and all(
+            node == REVIEWED_PRODUCTION_PATH
+            or node.startswith(REVIEWED_PRODUCTION_PATH + "/")
+            for node in nodes
+        )
+        and all(
+            source.get("url") == REVIEWED_PRODUCTION_ADVISORY
+            if isinstance(source, dict)
+            else source == "picomatch"
+            for source in finding.get("via", [])
+        )
+    )
+
+
+def unreviewed_production_findings(audit: dict) -> list[str]:
+    """Return every production audit finding that the review above does not cover."""
+    return [
+        name
+        for name, finding in sorted(audit.get("vulnerabilities", {}).items())
+        if not reviewed_production_finding(finding)
+    ]
+
+
 def unreviewed_development_findings(audit: dict) -> list[str]:
-    """Return every development audit finding that the review above does not cover."""
+    """Return every development audit finding that the reviews above do not cover."""
     unreviewed = []
     for name, finding in sorted(audit.get("vulnerabilities", {}).items()):
+        picomatch_only = reviewed_picomatch_development_finding(audit, name)
+        if reviewed_production_finding(finding) or picomatch_only:
+            continue
         advisories = {
             source.get("name")
             for source in finding.get("via", [])
@@ -347,7 +425,7 @@ def main():
         )
         run("web-types", [node, "node_modules/typescript/bin/tsc", "--noEmit"], cwd=web)
         npm = node.parent / "node_modules/npm/bin/npm-cli.js"
-        run(
+        production_exit = run(
             "npm-audit-production",
             [
                 node,
@@ -358,7 +436,17 @@ def main():
                 "--json",
             ],
             cwd=web,
+            allow_error=True,
         )
+        production = read(output / f"{len(state['runs']):02d}-npm-audit-production.log")
+        if (
+            production_exit not in (0, 1)
+            or not isinstance(production.get("metadata"), dict)
+            or unreviewed_production_findings(production)
+        ):
+            raise RuntimeError(
+                "The production audit contains an unreviewed finding or did not complete."
+            )
         audit_exit = run(
             "npm-audit-development",
             [node, npm, "audit", "--registry=https://registry.npmjs.org", "--json"],

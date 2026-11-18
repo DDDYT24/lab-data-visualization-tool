@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   figureInteractionSchema, figureSourceSchema, figureBoardSchema, figureBoardHistorySchema, figureBoardSpecSchema, type FigureBoardSpec,
 } from "@/domain/research-figure-board";
+import { figureSpecSchema, type FigureSpec } from "@/domain/figure-spec";
 import { renderPlanSchema } from "@/domain/render-plan";
 import { request } from "./labviz-api";
 
@@ -19,8 +20,9 @@ export const researchFigureApi = {
   retry(id: string, boardId: string) {
     return request(`${path(id)}/${encodeURIComponent(boardId)}/retry`, figureBoardSchema, { method: "POST" });
   },
-  save(id: string, spec: FigureBoardSpec) {
-    figureBoardSpecSchema.parse(spec);
+  save(id: string, spec: FigureBoardSpec | FigureSpec) {
+    if (spec.schemaVersion === 1) figureBoardSpecSchema.parse(spec);
+    else figureSpecSchema.parse(spec);
     return request(path(id) + "?deferArtifacts=true", figureBoardSchema, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec),
     });

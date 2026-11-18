@@ -21,6 +21,7 @@ from uuid import uuid4
 from pydantic import Field, model_validator
 
 from .artifacts import MEDIA_TYPES, remember
+from .figure_spec import FigureBoardSpec, parse_figure, project_board
 from .models import ChartSpec
 from .processing import ProcessingError
 from .render_plan import build_research_plan, plan_bytes
@@ -28,7 +29,7 @@ from .research_chart_render import COLORS, draw_plan
 from .research_charts import ScientificChartSpec, compute_chart
 from .research_contract import ResearchModel
 from .research_dataset import encode_raw
-from .research_figure_board import FigureBoardSpec, insert_artifacts
+from .research_figure_board import insert_artifacts
 from .research_figure_render import render_board
 from .research_figure_sources import digest, legacy_snapshot, scientific_source, source
 from .research_preparation import PreparationError, PreparationPlan, prepare
@@ -138,7 +139,15 @@ def template_from_board(
         ).fetchone()
         if board is None:
             raise PreparationError("figure-not-found", "Choose a saved figure.")
-        figure = FigureBoardSpec.model_validate_json(board["spec_json"])
+        stored = parse_figure(board["spec_json"])
+        # A v2 figure that says nothing v1 cannot is templated as its v1 board.
+        figure = stored if isinstance(stored, FigureBoardSpec) else project_board(stored)
+        if figure is None:
+            raise PreparationError(
+                "reuse-figure-unsupported",
+                "A template can be made from a one-, two- or four-panel grid figure without "
+                "layers, axis settings, annotations or panel label styles only.",
+            )
         panels = [source(c, project_id, key) for key in figure.panel_chart_ids]
         labels = sorted(
             {g["label"] for p in panels if "scientific" in p for g in p["scientific"]["groups"]},

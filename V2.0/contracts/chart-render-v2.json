@@ -8,7 +8,8 @@
     "maxTicks3d": 5,
     "stepMultiples": [1, 2, 5, 10],
     "minRelativeSpan": 1e-12,
-    "plainExponents": [-4, 5]
+    "plainExponents": [-4, 5],
+    "symlogThreshold": 1
   },
   "jitter": {
     "rule": "sha256-uniform-v1",
@@ -42,5 +43,18 @@
   },
   "points": {
     "denseThreshold": 20000
+  },
+  "annotation": {
+    "color": "#20252D",
+    "lineWidth": 1,
+    "ruleStyle": "dashed",
+    "rectOpacity": 0.12,
+    "fontSize": 9,
+    "labelGap": 3,
+    "bracketDrop": 0.02
+  },
+  "layers": {
+    "max": 8,
+    "step": 10
   }
 }

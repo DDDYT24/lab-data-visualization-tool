@@ -9,7 +9,7 @@ from typing import Any
 from .processing import _cjk_font_info, _contains_cjk
 from .render_plan import build_research_plan
 from .render_plan import rasterize_points as rasterize_points
-from .render_plan_draw import draw_mark
+from .render_plan_draw import draw_mark, draw_notes, layer_lift, set_scale
 from .research_preparation import PreparationError
 from .research_styles import COLORS as COLORS
 
@@ -41,6 +41,8 @@ def draw_plan(
         for mark in panel["marks"]:
             draw_mark(ax, mark, plan["rendering"]["rasterizePoints"])
         x_axis, y_axis = panel["axes"]["x"], panel["axes"]["y"]
+        set_scale(ax, "x", x_axis["scale"])
+        set_scale(ax, "y", y_axis["scale"])
         ax.set_xticks(
             [tick["value"] for tick in x_axis["ticks"]],
             [tick["label"] for tick in x_axis["ticks"]],
@@ -48,7 +50,7 @@ def draw_plan(
         )
         ax.set_xlim(*x_axis["domain"])
         if panel["legend"]:
-            ax.legend(
+            legend = ax.legend(
                 handles=[
                     Line2D([0], [0], color=entry["color"], label=entry["label"])
                     for entry in panel["legend"]
@@ -56,6 +58,8 @@ def draw_plan(
                 fontsize=8,
                 loc="best",
             )
+            # Above the top layer, as the notes are.
+            legend.set_zorder(legend.get_zorder() + layer_lift(panel["marks"]))
         ax.set_title(panel["title"], pad=14, wrap=True)
         ax.set_ylabel(y_axis["title"])
         for name in ("x", "y"):
@@ -69,6 +73,7 @@ def draw_plan(
             [tick["label"] for tick in y_axis["ticks"]],
         )
         ax.set_ylim(*y_axis["domain"])
+        draw_notes(ax, panel.get("notes", []), layer_lift(panel["marks"]))
         if target_axis is not None:
             return {}
         figure.text(0.1, 0.02, "\n".join(plan["disclosures"]), fontsize=8)
