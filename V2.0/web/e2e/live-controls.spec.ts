@@ -7,10 +7,14 @@ test.skip(!process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY, "Requires packaged local API
 test("real API scientific controls persist into the downloaded figure", async ({ page }) => {
   test.setTimeout(240_000);
   const observed: { fitting: Record<string, unknown>; body: { series: { fit: unknown }[] } }[] = [];
-  page.on("response", async (response) => {
-    if (response.url().endsWith("/chart-analysis") && response.ok()) {
-      observed.push({ fitting: response.request().postDataJSON().chart.fitting, body: await response.json() });
-    }
+  // Read each analysis answer as the API sends it: the browser's network buffer can drop a
+  // large response body before a listener reads it.
+  await page.route("**/chart-analysis", async (route) => {
+    const response = await route.fetch().catch(() => null);
+    if (!response) return route.abort().catch(() => undefined);
+    if (response.ok()) observed.push({ fitting: route.request().postDataJSON().chart.fitting, body: await response.json() });
+    // A request the page cancelled meanwhile can no longer be answered.
+    await route.fulfill({ response }).catch(() => undefined);
   });
   const unlocked = page.waitForResponse((r) => r.url().endsWith("/local/session") && r.request().method() === "POST");
   await page.goto(`/#labviz-access=${encodeURIComponent(process.env.LABVIZ_E2E_LOCAL_ACCESS_KEY!)}`);
