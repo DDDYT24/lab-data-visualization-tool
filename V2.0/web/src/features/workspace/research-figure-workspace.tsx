@@ -221,7 +221,6 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
         candidates={catalog.charts.filter((chart) => fitsWith(inspected.id)(chart.id) && !panelLayers(panels[inspectedIndex]!).includes(chart.id)).map((chart) => chart.id)}
         chartName={chartName} chartTitle={chartTitle}
         disabled={blocked} t={t} onChange={(panel) => updatePanel(inspectedIndex, panel)} />)}
-    <Typography variant="caption">{t("Clear removes a panel binding only. Undo restores its previous binding and layout.", "清空只移除面板绑定，撤销可恢复此前绑定和布局。")}</Typography>
   </Stack>;
   return <Paper variant="outlined" sx={{ p: 2 }} data-testid="figure-workspace">
     <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,1fr)", "@media (min-width:1400px)": { gridTemplateColumns: `minmax(0,1fr) ${overview ? "272px" : "240px"}` }, gap: 2, alignItems: "start" }}>
@@ -232,11 +231,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       {overview && <Box data-testid="saved-figure-summary" sx={{ display: "flex", gap: 1, flexWrap: "wrap", color: "text.secondary" }}>
         <Typography variant="caption">{t("Saved layout revision", "已保存布局修订")}: {saved?.id.slice(0, 12) ?? t("None", "暂无")}</Typography>
         <Typography variant="caption">{t("Panels", "面板")}: {saved ? chartIdsOf(saved.spec).length : 0}</Typography>
-        <Typography variant="caption">{t("Counts belong to each panel's source revision.", "计数按各面板来源修订分别列出。")}</Typography>
       </Box>}
-      <Alert severity="info" sx={overview ? { display: "none" } : undefined}>{t(
-        "Save the layout to keep your panel bindings. The composed figure generates in the background. Shared axes require matching meanings, units and categories. Selections inspect saved data only.",
-        "保存布局后，面板配置会保留到本地，整页组合图在后台生成。共享坐标轴要求含义、单位及类别一致。点选仅查看已保存数据。")}</Alert>
       <Typography role="status" data-testid="figure-save-state" sx={overview ? { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)" } : undefined}>
         {loading ? t("Loading layout…", "正在加载布局…") : busy ? operation === "save" ? t("Saving layout…", "正在保存布局…") : operation === "capture" ? t("Capturing and validating chart…", "正在捕获并验证图表…") : t("Loading saved layout…", "正在加载已保存布局…") : error ? operation === "save" ? t("Save failed — draft retained", "保存失败：已保留草稿") : t("Request failed — draft retained", "请求失败：已保留草稿") : dirty || !saved ? t("Unsaved layout", "布局尚未保存") : t("Saved locally", "已保存到本地")}
       </Typography>
@@ -291,7 +286,6 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
         </AccordionSummary>
         <AccordionDetails sx={{ p: overview ? 2 : 0 }} id="figure-draft-controls">
           <Stack spacing={2} sx={{ minWidth: 0 }}>
-          {overview && <Alert severity="info">{t("Saving creates a new layout revision. Draft edits do not change the saved preview or exports.", "保存会创建新的布局修订。草稿编辑不会改变已保存预览或导出。")}</Alert>}
       <Stack direction="row" useFlexGap sx={{ flexWrap: "wrap", gap: 1 }}>
         <Button disabled={blocked || !undoDrafts.length} onClick={() => { const value = undoDrafts.at(-1)!; setRedoDrafts((items) => [...items, draft]); setUndoDrafts((items) => items.slice(0,-1)); restore(value); }}>{t("Undo layout edit", "撤销布局编辑")}</Button>
         <Button disabled={blocked || !redoDrafts.length} onClick={() => { const value = redoDrafts.at(-1)!; setUndoDrafts((items) => [...items, draft]); setRedoDrafts((items) => items.slice(0,-1)); restore(value); }}>{t("Redo layout edit", "重做布局编辑")}</Button>
@@ -386,7 +380,6 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
               </TextField>
               <TextField label={t(`Panel ${label} title (figure only)`, `面板 ${label} 标题（仅作用于组合图）`)}
                 value={panels[index]!.title} disabled={blocked} slotProps={{ htmlInput: { maxLength: 160 } }}
-                helperText={t("Blank keeps the source title. Saved source values and method stay unchanged.", "留空沿用来源标题，来源图表的数值和方法保持不变。")}
                 onChange={(e) => updatePanel(index, { ...panels[index]!, title: e.target.value })} />
               <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                 <Button disabled={blocked || index === 0} onClick={() => update(movePanel(draft, index, -1))}

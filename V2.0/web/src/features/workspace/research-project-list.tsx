@@ -11,7 +11,6 @@ export function ResearchProjectList({ projectId }: { projectId: string }) {
   const projects = useQuery({ queryKey: ["projects"], queryFn: ({ signal }) => labvizApi.listProjects(signal) });
   return <Stack spacing={1} sx={{ minWidth: 0 }}>
     <Typography component="h2" variant="subtitle1">{t("Projects", "项目")}</Typography>
-    <Typography variant="caption">{t("Open another project in a new tab to retain this draft.", "其他项目在新标签页打开，保留当前草稿。")}</Typography>
     {projects.isPending && <Typography role="status">{t("Loading projects…", "正在加载项目…")}</Typography>}
     {projects.error && <Alert severity="error">{t("Project list unavailable.", "项目列表暂不可用。")}</Alert>}
     {projects.data?.projects.slice(0, 12).map((project) => <Button key={project.id} component="a"

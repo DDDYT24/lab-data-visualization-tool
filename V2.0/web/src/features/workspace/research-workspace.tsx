@@ -218,10 +218,6 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
   return (
     <Stack spacing={2} data-testid="research-workspace" sx={{ minWidth: 0, "& .MuiButton-root": { minHeight: 44 }, "@media (prefers-reduced-motion: reduce)": { "& *, & *::before, & *::after": { transition: "none !important", animation: "none !important" } } }}>
       <Typography component={overview ? "h2" : "h1"} variant="h5" sx={overview ? { position: "absolute", width: "1px", height: "1px", m: "-1px", p: 0, overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" } : undefined}>{text("Research workspace", "研究工作台")}</Typography>
-      <Alert severity="info" sx={overview ? { display: task === "figures" ? "none" : undefined, py: 0, bgcolor: "transparent", "& .MuiAlert-message": { fontSize: 12 } } : undefined}>
-        {text("Research revisions belong to this project. Quick plot continues to show the original imported file.",
-          "研究版本保存在当前项目中；切回快速出图时，仍显示原始导入文件。")}
-      </Alert>
       <Paper variant="outlined" sx={{ position: "sticky", top: 0, zIndex: 2, bgcolor: "background.paper", ...(overview && { borderRadius: 0, borderWidth: "0 0 1px" }) }}>
         <Tabs value={task} onChange={(_, value: ResearchTask) => selectTask(value)} variant="scrollable" scrollButtons="auto" aria-label={text("Research tasks", "研究任务")} sx={overview ? { "& .MuiTabs-list": { justifyContent: { sm: "center" } } } : undefined}>
           {[["data", "Data", "数据"], ["quality", "Quality", "质量"], ["analysis", "Analysis", "分析"], ["figures", "Figures", "图表"], ["outputs", "Outputs", "输出"]].map(([id,en,cn]) =>
@@ -274,7 +270,6 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
           <Typography>{text("Preview cancellation prevents applying its result. Server work may finish. Saved charts, figures and outputs retain their own revisions.", "取消预览会阻止应用其结果，服务端可能继续计算。已保存图表、组合图和输出保留各自的版本。")}</Typography>
           {error && <Alert severity="error">{error}</Alert>}
           {detailsOpen && <SourceDataTools />}
-          <Typography variant="caption">{text("Reloading saved status preserves the current draft. Discarding is a separate action.", "刷新已保存状态会保留当前草稿，放弃草稿是单独的操作。")}</Typography>
         </Stack>
       </Drawer>
       {previewRunning && <Button onClick={() => { previewAbort.current?.abort(); setCancelled(true); }}>{text("Cancel preparation preview", "取消数据准备预览")}</Button>}
@@ -453,8 +448,7 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
           {" "}{text("Summaries use the full prepared input, not only these displayed rows.", "汇总使用完整准备数据，而不是只使用显示行。")}
         </Typography>
         {pageControls("observations", data.summary.observations)}
-        <Typography variant="caption">{text("Scroll the table horizontally to inspect all source and QC fields.", "表格可横向滚动，查看完整来源和 QC 字段。")}</Typography>
-        <TextField label={text("Search displayed rows", "搜索当前页数据行")} value={rowSearch} onChange={(e) => setRowSearch(e.target.value)} helperText={text("This filters the displayed page only; n and saved data do not change.", "仅筛选当前显示页，不改变 n 或已保存数据。")}/>
+        <TextField label={text("Search displayed rows", "搜索当前页数据行")} value={rowSearch} onChange={(e) => setRowSearch(e.target.value)} />
         <Button aria-pressed={rawValues} onClick={() => setRawValues(!rawValues)}>{rawValues ? text("Show derived values", "显示处理后值") : text("Show reported values", "显示原始报告值")}</Button>
         <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 560, "& th:first-of-type, & td:first-of-type": { position: "sticky", left: 0, width: 120, minWidth: 120, maxWidth: 120, bgcolor: "background.paper", zIndex: 1 }, "& th:nth-of-type(2), & td:nth-of-type(2)": { position: "sticky", left: 120, bgcolor: "background.paper", zIndex: 1 } }}>
           <Table stickyHeader size="small" sx={{ minWidth: 900, tableLayout: "fixed", "& td": { overflowWrap: "anywhere" } }} aria-label={text("Research observations", "研究观测表")}>
@@ -481,8 +475,6 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
             </TableRow>)}</TableBody>
           </Table>
         </TableContainer>
-        <Typography variant="body2">{text("Selection only highlights a row. Exclusion needs a reason, preview and apply.",
-          "选择只高亮行；排除数据需要填写原因、预览并应用。")}</Typography>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
           <TextField fullWidth label={text("Exclusion reason", "排除原因")} value={reason} onChange={(e) => setReason(e.target.value)} />
           <Button disabled={busy || !selected || !reason.trim()} onClick={() => edit({
