@@ -56,7 +56,7 @@ class InstallationTests(unittest.TestCase):
 
     def test_future_epoch_and_invalid_checkpoint_block_preparation(self):
         root,candidate,_=self.package('first')
-        m.atomic(self.profile.root/'data-schema.json',m.encoded({'profileId':self.profile.identifier,'dataEpoch':3}))
+        m.atomic(self.profile.root/'data-schema.json',m.encoded({'profileId':self.profile.identifier,'dataEpoch':m.DATA_EPOCH+1}))
         with self.assertRaisesRegex(ValueError,'newer'):m.prepare(root,candidate,self.owner,self.payload)
         self.assertFalse((root/'upgrade.json').exists())
         self.profile.set_epoch(1);(self.owner/'session/checkpoint.json').write_bytes(b'unsupported')
