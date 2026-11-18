@@ -16,6 +16,8 @@ from labviz_api.figure_spec import FigureSpec, panel_cells
 from labviz_api.main import create_app
 from labviz_api.plan_axes import axis_position
 from labviz_api.render_plan import RenderPlan
+from labviz_api.research_figure_render import check_figure
+from labviz_api.research_preparation import PreparationError
 
 MOSAIC = ["AAB", "CDE", "CDF"]
 
@@ -291,3 +293,23 @@ def test_a_template_is_refused_for_a_v2_figure(saved: Any) -> None:
     response = client.post(project_url + "/templates", json={"boardId": body["id"], "name": "T"})
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "reuse-figure-unsupported"
+
+
+@pytest.mark.parametrize(
+    ("extra", "refused"),
+    [
+        ({"layout": {"kind": "grid", "rows": 1, "cols": 6}, "canvas": {"dpi": 300}}, False),
+        ({"layout": {"kind": "grid", "rows": 1, "cols": 6}, "canvas": {"dpi": 1200}}, True),
+        ({"canvas": {"sizePreset": "custom", "width": 180, "height": 120, "dpi": 1200}}, False),
+        ({"canvas": {"sizePreset": "custom", "width": 1000, "height": 1000, "dpi": 1200}}, True),
+    ],
+)
+def test_a_figure_too_large_to_draw_is_refused(extra: dict[str, Any], refused: bool) -> None:
+    count = extra.get("layout", {}).get("cols", 1)
+    spec = FigureSpec.model_validate(figure(["c"], "ABCDEF"[:count], **extra))
+    if refused:
+        with pytest.raises(PreparationError) as caught:
+            check_figure(spec)
+        assert caught.value.code == "figure-canvas-too-large"
+    else:
+        check_figure(spec)
