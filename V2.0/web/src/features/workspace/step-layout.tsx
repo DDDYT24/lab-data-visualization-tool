@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 
 type StepLayoutProps = {
   title: string;
-  description: string;
+  // A step whose title, canvas and controls explain it leaves this out.
+  description?: string;
   canvas: ReactNode;
   inspector: ReactNode;
 };
@@ -18,13 +19,15 @@ export function StepLayout({ title, description, canvas, inspector }: StepLayout
         >
           {title}
         </Typography>
-        <Typography
-          color="text.secondary"
-          sx={{ maxWidth: 760, mt: 0.75 }}
-          variant="body2"
-        >
-          {description}
-        </Typography>
+        {description ? (
+          <Typography
+            color="text.secondary"
+            sx={{ maxWidth: 760, mt: 0.75 }}
+            variant="body2"
+          >
+            {description}
+          </Typography>
+        ) : null}
       </Box>
       <Box
         sx={{

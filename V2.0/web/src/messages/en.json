@@ -256,13 +256,11 @@
   },
   "chart": {
     "title": "Create your chart",
-    "description": "Choose the chart, analysis, axes, and layout the experiment needs. Scientific calculations come from the Python service.",
     "settings": "Chart settings",
     "loadingTitle": "Preparing chart data",
     "loadingBody": "The chart will render after the API returns a validated preview.",
     "chartType": "Chart type",
     "singleValueHelp": "This dataset has one numeric field. Use a histogram or box plot to show its distribution.",
-    "distributionAxisHelp": "Select the measured response below. Distribution plots do not require a separate X field. Values are pooled; categorical grouping is not supported here.",
     "line": "Line chart",
     "types": {
       "line": "Line chart",
@@ -301,9 +299,7 @@
     "saveFailed": "The chart settings could not be saved.",
     "surfaceSetupTitle": "Choose the three surface dimensions",
     "surfaceSetupDescription": "Select X and Y as the two grid coordinates, then select Z as the measured response. The preview will appear after all three fields are different.",
-    "surfaceAxisHelp": "X and Y locate each point on the grid. Z is the measured value whose height and color form the surface.",
     "dataTableTitle": "View the chart data as a table",
-    "dataTableDescription": "Use the table as a non-visual alternative to the chart. Highlighted cells correspond to quality findings in the current preview.",
     "surfaceDiagnostics": {
       "invalidValues": "The surface has {count} non-finite point(s). Fix or remove those rows.",
       "insufficientPoints": "A surface needs at least three complete points and two unique X and Y values.",
@@ -326,9 +322,6 @@
     "grayscaleColorHelp": "Grayscale preview overrides series colors. Turn it off to use a custom color.",
     "valueColorHelp": "Surface and heatmap colors represent values on the color scale. Individual series colors do not apply; preview and export use the same scale.",
     "analysis": "Fitting and uncertainty",
-    "analysisHelp": "Fitting estimates a trend from the selected points. Uncertainty shows measurement spread or a supplied error column; choose only options supported by your experiment design.",
-    "contextualTip": "Choose X and Y from the numeric fields first. For a surface, use separate X, Y, and Z fields and keep the grid complete.",
-    "groupHelp": "Grouping draws separate series for categories or repeated conditions without changing the measurements.",
     "fitModel": "Fit model",
     "fitMethod": "Fit method",
     "fitMethods": {

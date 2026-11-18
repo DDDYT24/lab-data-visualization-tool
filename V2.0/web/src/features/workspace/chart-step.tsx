@@ -27,7 +27,6 @@ import { useTranslations } from "next-intl";
 
 import { ApiStatePanel } from "@/components/common/api-state-panel";
 import { ChartCanvas } from "@/components/common/chart-canvas";
-import { ContextualTip } from "@/components/common/contextual-tip";
 import { DataPreviewTable } from "@/components/common/data-preview-table";
 import type { ChartAnalysis } from "@/domain/api-contract";
 import type { ChartSpec } from "@/domain/chart-spec";
@@ -58,7 +57,6 @@ export function ChartStep({
   onContinue: () => void;
 }) {
   const t = useTranslations("chart");
-  const helpT = useTranslations("help");
   const projectId = useWorkspaceStore((state) => state.projectId);
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
   const issueActions = useWorkspaceStore((state) => state.issueActions);
@@ -430,11 +428,6 @@ export function ChartStep({
 
   const canvas = (
     <Stack spacing={1.5}>
-      <ContextualTip
-        body={t("contextualTip")}
-        dismissLabel={helpT("dismissTip")}
-        id="chart-fields"
-      />
       <Paper sx={{ border: 1, borderColor: "divider", p: { xs: 1, md: 2 } }}>
         {surfaceNeedsAnotherField ? (
           <ApiStatePanel
@@ -477,9 +470,6 @@ export function ChartStep({
           <Typography sx={{ fontWeight: 700 }}>{t("dataTableTitle")}</Typography>
         </AccordionSummary>
         <AccordionDetails>
-          <Typography color="text.secondary" sx={{ mb: 1.5 }} variant="body2">
-            {t("dataTableDescription")}
-          </Typography>
           <DataPreviewTable
         active={active}
             findings={quality.findings}
@@ -609,9 +599,7 @@ export function ChartStep({
           {numericColumns.length === 1 ? (
             <Alert severity="info">{t("singleValueHelp")}</Alert>
           ) : null}
-          {distributionChart ? (
-            <Typography color="text.secondary" variant="body2">{t("distributionAxisHelp")}</Typography>
-          ) : <FormControl fullWidth size="small">
+          {distributionChart ? null : <FormControl fullWidth size="small">
             <InputLabel id="chart-x-field-label">{t("xField")}</InputLabel>
             <Select
               label={t("xField")}
@@ -663,9 +651,6 @@ export function ChartStep({
           </FormControl>}
           {chartSpec.type === "surface3d" ? (
             <Stack spacing={1.5}>
-              <Typography color="text.secondary" variant="caption">
-                {t("surfaceAxisHelp")}
-              </Typography>
               <FormControl fullWidth size="small">
                 <InputLabel id="surface-y-field-label">{t("surfaceYField")}</InputLabel>
                 <Select
@@ -766,12 +751,6 @@ export function ChartStep({
               ))}
             </Select>
           </FormControl>
-          <Typography color="text.secondary" variant="caption">
-            {t("groupHelp")}
-          </Typography>
-          {surfaceNeedsAnotherField ? (
-            <Alert severity="warning">{t("surfaceSetupDescription")}</Alert>
-          ) : null}
           {surfaceDiagnosticMessage ? (
             <Alert severity="warning">{surfaceDiagnosticMessage}</Alert>
           ) : null}
@@ -919,9 +898,6 @@ export function ChartStep({
             <AccordionSummary>{t("analysis")}</AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
-                <Typography color="text.secondary" variant="caption">
-                  {t("analysisHelp")}
-                </Typography>
                 <FormControl fullWidth size="small">
                   <InputLabel id="fit-model-label">{t("fitModel")}</InputLabel>
                   <Select
@@ -1335,7 +1311,6 @@ export function ChartStep({
   return (
     <StepLayout
       canvas={canvas}
-      description={t("description")}
       inspector={inspector}
       title={t("title")}
     />
