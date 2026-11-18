@@ -36,12 +36,38 @@ try{
   await page.goto(origin+`/workspace/${project}?workspace=research&researchTask=analysis`);
   await page.getByRole('tab',{name:'Analysis',exact:true}).click();
   const closeDrawer=page.getByRole('button',{name:'Return to active task',exact:true});if(await closeDrawer.isVisible())await closeDrawer.click();
-  const preview=page.getByRole('button',{name:'Preview PDF',exact:true});await preview.waitFor();await preview.focus();await page.keyboard.press('Enter');
+  const preview=page.getByRole('button',{name:'Preview PDF',exact:true});await preview.waitFor();await preview.focus();
+  const sourcePdfResponse=page.waitForResponse(response=>{
+    const url=new URL(response.url());
+    return url.origin===new URL(origin).origin&&url.pathname.startsWith('/api/v1/projects/')
+      &&response.request().method()==='GET'&&response.headers()['content-type']?.split(';')[0].trim().toLowerCase()==='application/pdf';
+  });
+  await page.keyboard.press('Enter');
   const frame=page.getByTitle('Saved PDF preview',{exact:true});await expect(frame).toBeVisible();
-  const pdf=await page.request.get(new URL(await frame.getAttribute('src'),origin).toString());
-  expect(pdf.headers()['content-type']).toContain('application/pdf');expect(pdf.headers()['content-disposition']).toContain('inline');expect((await pdf.body()).subarray(0,4).toString()).toBe('%PDF');
+  const sourcePdf=await sourcePdfResponse;expect(sourcePdf.ok()).toBe(true);
+  // Chromium's PDF handling can expose an empty body through the CDP response
+  // observer. Fetch the exact authenticated source independently, then compare
+  // every byte with the blob the application actually put in its iframe.
+  const sourceUrl=new URL(sourcePdf.url());
+  expect(sourceUrl.origin).toBe(new URL(origin).origin);
+  const sourceBytes=await page.request.get(sourceUrl.href);
+  expect(sourceBytes.ok()).toBe(true);
+  expect(sourceBytes.headers()['content-type']?.split(';')[0].trim().toLowerCase()).toBe('application/pdf');
+  const expectedPdf=await sourceBytes.body();expect(expectedPdf.length).toBeGreaterThan(5);expect(expectedPdf.subarray(0,5).toString()).toBe('%PDF-');
+  const previewUrl=new URL(await frame.getAttribute('src'),origin);
+  expect(previewUrl.protocol).toBe('blob:');expect(previewUrl.origin).toBe(new URL(origin).origin);
+  const pdf=await page.evaluate(async href=>{
+    const url=new URL(href);
+    if(url.protocol!=='blob:'||url.origin!==window.location.origin)throw Error('PDF preview must be a blob owned by this origin');
+    const response=await fetch(url);
+    if(!response.ok)throw Error('PDF preview blob is unavailable');
+    return {type:response.headers.get('content-type'),bytes:Array.from(new Uint8Array(await response.arrayBuffer()))};
+  },previewUrl.href);
+  expect(pdf.type?.split(';')[0].trim().toLowerCase()).toBe('application/pdf');
+  const previewPdf=Buffer.from(pdf.bytes);expect(previewPdf.length).toBe(expectedPdf.length);
+  expect(previewPdf.subarray(0,5).toString()).toBe('%PDF-');expect(previewPdf.equals(expectedPdf)).toBe(true);
   await page.keyboard.press('Escape');await expect(frame).toHaveCount(0);await expect(preview).toBeFocused();
-  check('inline-pdf-keyboard-open-escape-and-focus-return',{pdfRendererVisuallyAccepted:false});
+  check('inline-pdf-keyboard-open-escape-and-focus-return',{pdfBytes:previewPdf.length,blobMatchesAuthenticatedSource:true,pdfRendererVisuallyAccepted:false});
   await page.getByRole('button',{name:'Save and computation details',exact:true}).click();
   await expect(page.getByTestId('desktop-data-tools')).toBeVisible();
   async function operation(button){

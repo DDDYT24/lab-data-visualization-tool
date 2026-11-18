@@ -1,4 +1,16 @@
 export async function copyText(value: string): Promise<boolean> {
+  const desktop = window.labvizDesktopTransport;
+  if (desktop) {
+    try {
+      const response = await fetch(new URL("/clipboard/write", desktop.url), {
+        method: "POST", headers: { "Content-Type": "application/json", "X-LabViz-Desktop": desktop.token },
+        body: JSON.stringify({text: value}), signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return false;
+      const result = await response.json();
+      return result.copied === true && result.verified === true;
+    } catch { return false; }
+  }
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value);

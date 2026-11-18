@@ -1,13 +1,21 @@
 "use client";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from "@mui/material";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale } from "next-intl";
 
 export function DesktopPdfPreview({ href }: { href: string }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const [preview, setPreview] = useState<{ href: string; url?: string; error?: boolean } | null>(null);
   const desktop = useSyncExternalStore(() => () => {}, () => !!window.labvizDesktopTransport, () => false);
   const zh = useLocale().startsWith("zh");
+  useEffect(() => {
+    if (!open || !desktop) return;
+    const close = () => setOpen(false);
+    // Native PDF controls receive Escape in their own browser document.
+    window.addEventListener("labviz:desktop-escape", close);
+    return () => window.removeEventListener("labviz:desktop-escape", close);
+  }, [open, desktop]);
   useEffect(() => {
     if (!open || !desktop) return;
     const controller = new AbortController();
@@ -35,8 +43,9 @@ export function DesktopPdfPreview({ href }: { href: string }) {
   if (!desktop) return null;
   const current = preview?.href === href ? preview : null;
   return <>
-    <Button onClick={() => { setPreview(null); setOpen(true); }}>{zh ? "预览 PDF" : "Preview PDF"}</Button>
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="lg" aria-labelledby="desktop-pdf-title">
+    <Button ref={trigger} onClick={() => { setPreview(null); setOpen(true); }}>{zh ? "预览 PDF" : "Preview PDF"}</Button>
+    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="lg" aria-labelledby="desktop-pdf-title"
+      slotProps={{ transition: { onExited: () => trigger.current?.focus() } }}>
       <DialogTitle id="desktop-pdf-title">{zh ? "已保存的 PDF" : "Saved PDF"}</DialogTitle>
       <DialogContent sx={{ height: "70vh", p: 0 }}>{open && (current?.error
         ? <Alert severity="error">{zh ? "无法预览已保存的 PDF，请关闭预览后重试。" : "Could not preview the saved PDF. Close this preview and try again."}</Alert>
