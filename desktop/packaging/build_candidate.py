@@ -41,7 +41,7 @@ def freeze(bundle, output, cargo):
     files=sorted(p for p in bundle.rglob('*') if p.is_file())
     with ThreadPoolExecutor(max_workers=8) as pool:hashes=list(pool.map(sha,files))
     manifest={'format':'labviz-desktop-package-v1','appId':'org.labviz.desktop.preview','dataEpoch':DATA_EPOCH,'checkpointSchema':1,
-        'version':'2.3.0-desktop.1','sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+        'version':'2.4.0-rc.1','sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
         'sourceDirty':provenance.git_identity(ROOT)['dirty'],'tauriVersion':'2.12.4','webview2':json.loads((bundle/'webview2.json').read_text(encoding='utf-8')),
         'buildProvenance': {name:sha(bundle/'provenance'/name) for name in ['host.json','web.json','stage.json']},
         'webBuildId':json.loads((bundle/'app/candidate-build.json').read_text(encoding='utf-8'))['webBuildId'],
