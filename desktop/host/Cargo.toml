@@ -23,6 +23,7 @@ sha2 = "0.10"
 dunce = "1"
 open = "5"
 rfd = { version = "=0.17.2", features = ["common-controls-v6"] }
+webview2-com = "=0.39.1"
 
 [profile.release]
 codegen-units = 1

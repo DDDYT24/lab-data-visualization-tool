@@ -14,7 +14,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from maintenance import DATA_EPOCH, DESKTOP_ID, backend, backup, checkpoint_schema, identity, read, verify, restored_copy
+from maintenance import DATA_EPOCH, DESKTOP_ID, backend, backup, checkpoint_schema, identity, read, verify, restored_copy, files
 from session import atomic, encoded, unlinked
 from service_runner import Mutex, sid, SimpleProcess, record as process_record
 from process_job import OwnedJob
@@ -94,6 +94,71 @@ def pointer(root, name):
 
 def mark(root, name, candidate):
     atomic(root/name, encoded({'appId': DESKTOP_ID, 'packageId': candidate}))
+
+
+def owned_backup(owner, receipt, payload, maximum_epoch=DATA_EPOCH):
+    """Bind an immutable backup to the selected owner before replacing any state."""
+    if (not isinstance(receipt, dict) or set(receipt) != {'backupId', 'backupDirectory'}
+            or not re.fullmatch('[a-f0-9]{32}', receipt.get('backupId', ''))):
+        raise ValueError('Invalid desktop rollback backup receipt')
+    directory = unlinked(Path(receipt['backupDirectory']))
+    if directory != unlinked(owner/'backups'/receipt['backupId']):
+        raise ValueError('The desktop rollback backup is outside this profile')
+    record = verify(directory, payload)
+    with backend(owner, payload) as profile:
+        if (record['backupId'] != receipt['backupId'] or record['profileId'] != profile.identifier
+                or record['checkpointSchema'] != 1 or record['dataEpoch'] > maximum_epoch):
+            raise ValueError('The desktop rollback backup identity or epoch differs')
+    return directory
+
+
+def restore_desktop(owner, source):
+    """Swap a complete saved desktop state, retaining every newer draft and staged file."""
+    staging = unlinked(owner/('desktop-staging-'+uuid.uuid4().hex))
+    staging.mkdir()
+    for member in files(source) if source.exists() else []:
+        relative = member.relative_to(source)
+        if relative.parts[0] not in {'session', 'preferences.json'}:
+            raise ValueError('Unexpected desktop rollback backup member')
+        target = unlinked(staging/relative)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(member, target)
+    retained = unlinked(owner/('desktop.retained-'+uuid.uuid4().hex))
+    retained.mkdir()
+    moved = []
+    installed = []
+    try:
+        for name in ('session', 'preferences.json'):
+            current = unlinked(owner/name)
+            if current.exists():
+                if current.is_dir():
+                    files(current)
+                os.replace(current, retained/name)
+                moved.append(name)
+        for name in ('session', 'preferences.json'):
+            current = staging/name
+            if current.exists():
+                os.replace(current, owner/name)
+                installed.append(name)
+    except BaseException:
+        for name in reversed(installed):
+            os.replace(owner/name, retained/('failed-'+name))
+        for name in reversed(moved):
+            os.replace(retained/name, owner/name)
+        raise
+    if not any(staging.iterdir()):
+        staging.rmdir()
+    return retained
+
+
+def restore_snapshot(owner, receipt, payload):
+    directory = owned_backup(owner, receipt, payload)
+    with backend(owner, payload) as profile:
+        from labviz_api.installed_lifecycle import replace_active
+        retained = replace_active(profile, directory/'data')
+    desktop = restore_desktop(owner, directory/'desktop')
+    checkpoint_schema(owner, strict=True)
+    return {'retainedDataDirectory': str(retained), 'retainedDesktopDirectory': str(desktop)}
 
 
 def initialise(owner):
@@ -204,25 +269,40 @@ def activate(root, base, payload):
     held=Mutex(lock_name('LabVizDesktopPreview',owner))
     try:
         if journal['backup']:
-            with backend(owner,payload):verify(Path(journal['backup']['backupDirectory']),payload)
+            owned_backup(owner, journal['backup'], payload)
         try:
             folder=version(root,candidate,True)
+            restored = {}
+            if journal.get('rollbackSource'):
+                maximum = read(folder/'desktop-package.json')['manifest']['dataEpoch']
+                owned_backup(owner, journal['rollbackSource'], payload, maximum)
+                restored = restore_snapshot(owner, journal['rollbackSource'], payload)
+                journal['restored'] = restored
+                atomic(root/'upgrade.json', encoded(journal))
             health(folder,owner)
             mark(root,'current-candidate.json',candidate)
             journal['state']='activated'
-            atomic(root/'last-upgrade.json',encoded(journal))
+            previous_receipt = read(root/'last-upgrade.json') if (root/'last-upgrade.json').exists() else {}
+            preserve_rollback = (
+                journal['previous'] == candidate
+                and previous_receipt.get('format') == 'labviz-desktop-upgrade-v1'
+                and previous_receipt.get('appId') == DESKTOP_ID
+                and previous_receipt.get('state') == 'activated'
+                and previous_receipt.get('packageId') == candidate
+                and previous_receipt.get('profileRoot') == str(owner)
+                and previous_receipt.get('previous') not in (None, candidate)
+                and previous_receipt.get('backup')
+            )
+            if not preserve_rollback:
+                atomic(root/'last-upgrade.json',encoded(journal))
             (root/'pending-candidate.json').unlink()
             (root/'upgrade.json').unlink()
-            return {'runtimeRoot':str(folder),'packageId':candidate,'activated':True}
+            return {'runtimeRoot':str(folder),'packageId':candidate,'activated':True,
+                    **({'explicitRollback': True, 'retainedCurrentBackup': journal['backup'], **restored}
+                       if journal.get('rollbackSource') else {})}
         except Exception as error:
             if journal['backup']:
-                source=Path(journal['backup']['backupDirectory'])
-                with backend(owner,payload) as profile:
-                    from labviz_api.installed_lifecycle import replace_active
-                    replace_active(profile,source/'data')
-                for item in (source/'desktop').rglob('*') if (source/'desktop').exists() else []:
-                    if item.is_file():
-                        target=unlinked(owner/item.relative_to(source/'desktop'));target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(item,target)
+                journal['failureRecovery'] = restore_snapshot(owner, journal['backup'], payload)
             journal.update(state='failed',message=str(error))
             atomic(root/'failed-upgrade.json',encoded(journal))
             (root/'pending-candidate.json').unlink()
@@ -235,9 +315,42 @@ def activate(root, base, payload):
     finally:held.close()
 
 
+def rollback(root, base, payload):
+    """Use the current helper to restore the preceding candidate's pre-upgrade snapshot."""
+    root = program(root)
+    owner = selected(base)
+    current = pointer(root, 'current-candidate.json')
+    receipt = read(root/'last-upgrade.json')
+    previous = receipt.get('previous')
+    if (receipt.get('format') != 'labviz-desktop-upgrade-v1'
+            or receipt.get('appId') != DESKTOP_ID or receipt.get('state') != 'activated'
+            or receipt.get('packageId') != current or receipt.get('profileRoot') != str(owner)
+            or not previous or previous == current):
+        raise ValueError('No matching preceding desktop candidate and rollback snapshot are available')
+    version(root, current, True)
+    target = version(root, previous, True)
+    maximum = read(target/'desktop-package.json')['manifest']['dataEpoch']
+    saved = receipt.get('backup')
+    owned_backup(owner, saved, payload, maximum)
+    journal_path = root/'upgrade.json'
+    pending = pointer(root, 'pending-candidate.json')
+    if journal_path.exists() or pending:
+        journal = read(journal_path) if journal_path.exists() else {}
+        if (journal.get('rollbackSource') != saved or journal.get('previous') != current
+                or journal.get('packageId') != previous or journal.get('profileRoot') != str(owner)
+                or pending not in (None, previous)):
+            raise ValueError('Complete the existing desktop installation transaction before rolling back')
+    else:
+        journal = prepare(root, previous, base, payload)
+        journal['rollbackSource'] = saved
+        atomic(journal_path, encoded(journal))
+    mark(root, 'pending-candidate.json', previous)
+    return activate(root, base, payload)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['check','prepare','activate','abort','uninstall'])
+    parser.add_argument('action',choices=['check','prepare','activate','rollback','abort','uninstall'])
     parser.add_argument('--install-root',type=Path,required=True)
     parser.add_argument('--profile-base',type=Path,required=True)
     parser.add_argument('--payload',type=Path,required=True)
@@ -257,6 +370,7 @@ def main():
             if not args.package or not PACKAGE_ID.fullmatch(args.package):raise ValueError('Invalid desktop package')
             result=prepare(root,args.package,base,args.payload)
         elif args.action=='activate':result=activate(root,base,args.payload)
+        elif args.action=='rollback':result=rollback(root,base,args.payload)
         elif args.action=='uninstall':
             program(root)
             for path in root.rglob('*'):unlinked(path)
@@ -267,6 +381,8 @@ def main():
             if path.exists() and not (root/'pending-candidate.json').exists() and read(path)['packageId']==args.package:path.unlink()
             result={'aborted':True,'dataRetained':True}
         print(json.dumps(result))
+        if args.action == 'rollback' and result.get('rolledBack'):
+            raise SystemExit(20)
     finally:held.close()
 
 
