@@ -84,7 +84,7 @@ Get-FileHash .\LabViz-Desktop-2.3.0-desktop.1-Private-Setup.exe -Algorithm SHA25
 I bring my own Python, Node.js, scientific libraries and fonts, and open in my own window. Start **LabViz Desktop Preview** from the Start menu. Closing the window saves a checkpoint, and the next start returns to the same workspace. Uninstalling keeps your data.
 
 - **V2.3.0** is the stable release.
-- **V2.4.0-rc.1** is the next preview. It upgrades your data to a format V2.3.0 cannot open, so make a backup first. See the [V2.4 preview notes](V2.0/RELEASE_NOTES_V2.4.md).
+- **V2.4.0-rc.1** is the next preview. It upgrades your data to a format V2.3.0 cannot open; the installer keeps a snapshot from before the upgrade, and the [V2.4 preview notes](V2.0/RELEASE_NOTES_V2.4.md) give the steps back to V2.3.0.
 
 See [install, backup and recovery](V2.0/docs/INSTALL_V2.3.md).
 

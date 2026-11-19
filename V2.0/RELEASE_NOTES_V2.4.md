@@ -27,6 +27,7 @@ V2.4 gives every chart one drawing plan. The server works out every number that 
 - Panels take annotations: text, reference lines, shaded ranges and brackets.
 - One panel can overlay several saved charts of the same data, for example raw points over a violin.
 - Figures from V2.3 open unchanged. Saving a V2.3 figure again produces the same PNG, SVG and PDF files.
+- Fixed: in a classic chart of more than 250 rows captured into a figure, most points linked to the wrong source row. Captures saved earlier keep their stored links.
 
 **Editing.**
 - Chart settings are split into Data, Method and Appearance tabs.
@@ -53,7 +54,7 @@ $v = "$root\versions\$($id.Substring(0, 24))"
 & "$v\app\runtime\python\python.exe" -B -X utf8 "$v\runtime\installation.py" rollback --install-root $root --profile-base "$env:LOCALAPPDATA\LabVizDesktopPreview" --payload "$v\app"
 ```
 
-This makes V2.3.0 the active program again and restores the snapshot. Work saved in V2.4 is not lost: it is kept beside the restored data in a folder whose name starts with `data.retained-`, together with a backup of it.
+This makes V2.3.0 the active program again and restores the snapshot. When it worked, it prints one line that contains `"activated": true` and `"explicitRollback": true`. Any other result, an error or exit code 20, means V2.3.0 did not become active; keep the output when you report it. Work saved in V2.4 is not lost: it is kept beside the restored data in a folder whose name starts with `data.retained-`, together with a backup of it.
 
 ## Install
 
@@ -63,6 +64,8 @@ Download the setup file and `SHA256SUMS.txt` from the release, check the SHA-256
 
 - The installer is unsigned.
 - Line, scatter and bar exports with more than 250 rows differ from V2.3.0, because every row is now drawn. A 100,000-row bar export takes about 3 to 6 seconds.
+- With 100,000 rows per panel, composed figures are slower than their targets: a four-panel export takes about 17 seconds and a six-panel one about 25 (targets 8 and 10 seconds), and recalculating a strip or violin chart takes 5 to 6 seconds (target 3). At 10,000 rows every target is met.
+- Reopening a saved project of 100,000 rows with a four-panel figure took about 3.5 seconds in testing, and once more than 5; V2.3.0 took about 1.3 seconds. The cause is not known yet.
 - In a narrow custom figure canvas, category names and the count line under them can overlap. The default size is unaffected.
 - A paired chart without a group column lists one legend entry named "Undeclared".
 - Messages that refuse a chart or a figure are in English only.

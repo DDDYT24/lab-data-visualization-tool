@@ -40,7 +40,7 @@ UninstallDisplayIcon={app}\LabViz.exe
 CloseApplications=no
 RestartApplications=no
 SetupMutex=Local\LabVizDesktopPreview-Setup
-VersionInfoVersion=2.3.0.1
+VersionInfoVersion=2.4.0.1
 VersionInfoDescription=LabViz private desktop preview
 
 [Languages]
