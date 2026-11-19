@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import math
+import sys
 from typing import Any
 
 from .render_contract import GEOMETRY
@@ -161,7 +162,13 @@ def controlled_axis(
     else:
         start, end = (axis_position(scale, edge) for edge in (min(values), max(values)))
         margin = (end - start) * AXIS_MARGIN or AXIS_MARGIN
-        low, high = axis_value(scale, start - margin), axis_value(scale, end + margin)
+        try:
+            low, high = axis_value(scale, start - margin), axis_value(scale, end + margin)
+        except OverflowError:
+            low, high = -math.inf, math.inf
+    # The same bound the built axes keep: a span that is not a finite, positive float has no ticks.
+    if not sys.float_info.min <= high - low < math.inf:
+        raise PreparationError("chart-axis-range", "These values are too extreme to plot.")
     if scale == "log10" and low <= 0:
         raise PreparationError("axis-log-nonpositive", "A log axis needs limits above zero.")
     if control["ticks"] is not None:

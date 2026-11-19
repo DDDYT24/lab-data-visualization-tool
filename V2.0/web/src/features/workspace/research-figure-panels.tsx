@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Box, Skeleton } from "@mui/material";
+import { Alert, Box, Skeleton } from "@mui/material";
+import { useLocale } from "next-intl";
 
 import { RenderPlanChart } from "@/components/common/render-plan-chart";
 import { densePointThreshold } from "@/domain/chart-render-contract";
@@ -17,6 +18,7 @@ export function interactivePanels(panels: FigureInteraction["panels"]) {
 export function ResearchFigurePanels({ boardId, labels, onSelect, projectId, selected }: {
   boardId: string; labels: string[]; onSelect: (ids: string[]) => void; projectId: string; selected: string[];
 }) {
+  const zh = useLocale().startsWith("zh");
   const key = `${boardId}:${labels.join("")}`;
   const [loaded, setLoaded] = useState<{ key: string; plans: (RenderPlan | null)[] } | null>(null);
   useEffect(() => {
@@ -29,7 +31,9 @@ export function ResearchFigurePanels({ boardId, labels, onSelect, projectId, sel
   }, [boardId, projectId, key]);
   if (loaded?.key !== key) return <Skeleton height={440} variant="rounded" />;
   return <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "repeat(2, minmax(0, 1fr))" } }}>
-    {loaded.plans.map((plan) => plan && <RenderPlanChart key={plan.planHash} label={plan.panels[0]!.title}
-      onSelect={onSelect} plan={plan} selected={selected} />)}
+    {loaded.plans.map((plan, index) => plan ? <RenderPlanChart key={plan.planHash} label={plan.panels[0]!.title}
+      onSelect={onSelect} plan={plan} selected={selected} /> : <Alert key={labels[index]} severity="warning" role="status">
+        {zh ? `面板 ${labels[index]}：交互视图暂不可用，导出不受影响。` : `Panel ${labels[index]}: interactive view unavailable; exports are unaffected.`}
+      </Alert>)}
   </Box>;
 }

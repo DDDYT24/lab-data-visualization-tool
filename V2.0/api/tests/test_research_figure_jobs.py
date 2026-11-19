@@ -20,6 +20,7 @@ import labviz_api.research_figure_jobs as jobs
 from labviz_api.main import create_app
 from labviz_api.research_figure_board import artifact_row, read_board
 from labviz_api.research_figure_render import render_board
+from labviz_api.research_preparation import PreparationError
 from labviz_api.research_store import ResearchStore
 
 
@@ -428,3 +429,26 @@ def test_evicting_scene_during_new_chart_keeps_old_selection_and_exports(tmp_pat
         }
         for kind, payload in artifacts.items():
             assert client.get(url + "/artifact/" + kind).content == payload
+
+
+def test_a_missing_font_fails_generation_without_refusing_a_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_render = render_board
+
+    def no_font(*args: Any, **kwargs: Any) -> Any:
+        raise PreparationError("chart-cjk-font", "A CJK font is required for Chinese labels.")
+
+    with TestClient(create_app(settings(tmp_path))) as client:
+        unlock(client)
+        identifier = project(client)
+        chart = charts(client, identifier)[0]
+        base = f"/api/v1/projects/{identifier}/research/figure-boards"
+        monkeypatch.setattr(jobs, "render_board", no_font)
+        response = client.post(base + "?deferArtifacts=true", json={"panelChartIds": [chart["id"]]})
+        assert response.status_code == 202
+        url = base + "/" + response.json()["id"]
+        wait_state(client, url, "failed")
+        monkeypatch.setattr(jobs, "render_board", original_render)
+        assert client.post(url + "/retry").status_code == 202
+        wait_state(client, url)

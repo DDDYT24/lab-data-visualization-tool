@@ -73,8 +73,28 @@ def controlled(panel: FigurePanel, dimension: str) -> bool:
     return bool(control != PLAIN_CONTROL)
 
 
+# Matplotlib refuses a side past 2**16 pixels, and an RGBA buffer of 200 million pixels is
+# about 800 MB; a figure that would need more is refused before anything is stored or drawn.
+MAX_FIGURE_SIDE_PIXELS = 32_768
+MAX_FIGURE_PIXELS = 200_000_000
+
+
+def figure_inches(spec: FigureSpec) -> tuple[float, float]:
+    """The drawn figure's size: the custom canvas, or one fixed cell per layout cell."""
+    canvas = spec.canvas
+    if canvas.width is not None and canvas.height is not None:
+        per_inch = MILLIMETRES_PER_INCH if canvas.unit == "mm" else 1.0
+        return (canvas.width / per_inch, canvas.height / per_inch)
+    return (CELL_INCHES[0] * spec.layout.cols, CELL_INCHES[1] * spec.layout.rows)
+
+
 def check_figure(spec: FigureSpec) -> None:
     """Refusals the figure alone decides, run before a revision is stored or drawn."""
+    width, height = (side * spec.canvas.dpi for side in figure_inches(spec))
+    if max(width, height) > MAX_FIGURE_SIDE_PIXELS or width * height > MAX_FIGURE_PIXELS:
+        raise PreparationError(
+            "figure-canvas-too-large", "Choose a smaller canvas or a lower resolution."
+        )
     if spec.palette.categorical not in PALETTES:
         raise PreparationError("figure-palette-unknown", "Choose a known figure palette.")
     for dimension in ("x", "y"):
@@ -160,12 +180,7 @@ def render_board(
         panel_labels = [panel.label for panel in spec.panels]
         rows, columns = spec.layout.rows, spec.layout.cols
         canvas = spec.canvas
-        if canvas.width is not None and canvas.height is not None:
-            per_inch = MILLIMETRES_PER_INCH if canvas.unit == "mm" else 1.0
-            size = (canvas.width / per_inch, canvas.height / per_inch)
-        else:
-            size = (CELL_INCHES[0] * columns, CELL_INCHES[1] * rows)
-        figure = Figure(figsize=size, dpi=canvas.dpi)
+        figure = Figure(figsize=figure_inches(spec), dpi=canvas.dpi)
         grid = figure.add_gridspec(rows, columns)
         axes = [
             figure.add_subplot(grid[row : row + tall, column : column + wide])

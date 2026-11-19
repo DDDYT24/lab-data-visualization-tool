@@ -544,7 +544,7 @@ def main():
             and (program / "failed-upgrade.json").exists()
         )
         record("failedCandidateAutomaticallyRestoresPrevious")
-        older = variant("older-epoch", epoch=1)
+        older = variant("older-epoch", epoch=2)
         run(
             "start-v23-installed.ps1",
             ["-SkipOpenBrowser", "-HealthCheckOnly"],
@@ -553,7 +553,7 @@ def main():
         )
         assert (
             read(program / "current-candidate.json")["candidateId"] == original
-            and read(profile / "data-schema.json")["dataEpoch"] == 2
+            and read(profile / "data-schema.json")["dataEpoch"] == 3
             and sentinel() == 1.25
         )
         (program / "pending-candidate.json").unlink()
@@ -562,7 +562,7 @@ def main():
         marker = read(program / "current-candidate.json")
         write(program / "current-candidate.json", {**marker, "candidateId": older})
         schema = read(profile / "data-schema.json")
-        write(profile / "data-schema.json", {**schema, "dataEpoch": 1})
+        write(profile / "data-schema.json", {**schema, "dataEpoch": 2})
         newer = variant("newer-epoch", source=original)
         run(
             "start-v23-installed.ps1",
@@ -571,7 +571,7 @@ def main():
         )
         assert (
             read(program / "current-candidate.json")["candidateId"] == newer
-            and read(profile / "data-schema.json")["dataEpoch"] == 2
+            and read(profile / "data-schema.json")["dataEpoch"] == 3
             and sentinel() == 1.25
         )
         seed(3.75)
@@ -582,7 +582,7 @@ def main():
         )
         assert (
             read(program / "current-candidate.json")["candidateId"] == older
-            and read(profile / "data-schema.json")["dataEpoch"] == 1
+            and read(profile / "data-schema.json")["dataEpoch"] == 2
             and sentinel() == 1.25
         )
         assert any(
@@ -590,7 +590,7 @@ def main():
         )
         record("rollbackToOlderEpochRestoresItsSnapshot")
         schema = read(profile / "data-schema.json")
-        write(profile / "data-schema.json", {**schema, "dataEpoch": 3})
+        write(profile / "data-schema.json", {**schema, "dataEpoch": 4})
         before = sha(profile / "data/labviz.db")
         try:
             run(
@@ -601,7 +601,7 @@ def main():
             )
             assert (
                 sha(profile / "data/labviz.db") == before
-                and read(profile / "data-schema.json")["dataEpoch"] == 3
+                and read(profile / "data-schema.json")["dataEpoch"] == 4
             )
         finally:
             write(profile / "data-schema.json", schema)

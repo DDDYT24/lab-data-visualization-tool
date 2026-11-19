@@ -115,6 +115,18 @@ def test_preparing_twice_is_idempotent(tmp_path: Path) -> None:
     assert tables(database) == before
 
 
+def test_an_upgrade_stopped_after_0109_altered_the_table_starts_again(tmp_path: Path) -> None:
+    database = tmp_path / "labviz.db"
+    prepare_local_database(database, project_ttl_seconds=TTL)
+    # The column exists, but the run stopped before Alembic recorded 0109 or 0110.
+    with sqlite3.connect(database) as connection:
+        connection.execute("DROP TABLE research_figure_panel_plans")
+        connection.execute(f"UPDATE {VERSION_TABLE} SET version_num = '0108_pack_decision_rows'")
+
+    assert prepare_local_database(database, project_ttl_seconds=TTL) == head_revision()
+    assert "research_figure_panel_plans" in tables(database)
+
+
 def test_the_local_chain_is_separate_from_the_postgresql_chain(tmp_path: Path) -> None:
     database = tmp_path / "labviz.db"
 

@@ -16,7 +16,7 @@ from session import atomic, encoded, unlinked, io_path
 
 DESKTOP_ID = 'org.labviz.desktop.preview'
 # Keep in step with DATA_EPOCH in V2.0/api/labviz_api/installed_profile.py.
-DATA_EPOCH = 2
+DATA_EPOCH = 3
 HEX = re.compile(r'^[a-f0-9]{32}$')
 
 

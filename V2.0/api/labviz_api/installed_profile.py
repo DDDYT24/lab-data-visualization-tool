@@ -13,7 +13,8 @@ from uuid import uuid4
 
 APP_ID = "55B46BB7-101E-46DC-951A-3DE7E402EDD0"
 # Epoch 2 holds the local schema migrations 0101-0108, which epoch 1 runtimes cannot read.
-DATA_EPOCH = 2
+# Epoch 3 adds 0109 (chart render plans) and 0110 (figure panel plans), which V2.3.0 cannot read.
+DATA_EPOCH = 3
 
 
 def unlinked(path: Path) -> Path:

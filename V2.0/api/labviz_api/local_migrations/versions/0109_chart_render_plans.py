@@ -27,7 +27,11 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     bind = op.get_bind()
     connection = cast(sqlite3.Connection, bind.connection.driver_connection)
-    connection.execute("ALTER TABLE research_charts ADD COLUMN plan_sha256 TEXT")
+    # SQLite applies the ALTER on its own, before Alembic writes the version row; a run stopped
+    # between the two must be able to start again.
+    columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(research_charts)")}
+    if "plan_sha256" not in columns:
+        connection.execute("ALTER TABLE research_charts ADD COLUMN plan_sha256 TEXT")
 
 
 def downgrade() -> None:

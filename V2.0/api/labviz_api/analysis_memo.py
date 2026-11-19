@@ -51,6 +51,8 @@ class AnalysisMemo:
 
     def analysis(self, project_id: str, frame: pd.DataFrame, chart: ChartSpec) -> dict[str, Any]:
         digest = hashlib.sha256(pd.util.hash_pandas_object(frame).to_numpy().tobytes())
+        # The value hash ignores column names; renamed columns are different data to a chart.
+        digest.update(json.dumps([str(name) for name in frame.columns]).encode("utf-8"))
         digest.update(json.dumps(analysis_inputs(chart), sort_keys=True).encode("utf-8"))
         digest.update(project_id.encode("utf-8"))
         key = digest.hexdigest()

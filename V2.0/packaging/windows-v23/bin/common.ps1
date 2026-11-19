@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $OutputEncoding = [Console]::OutputEncoding
 $V23AppId = '55B46BB7-101E-46DC-951A-3DE7E402EDD0'
 # Keep in step with DATA_EPOCH in labviz_api/installed_profile.py.
-$V23DataEpoch = 2
+$V23DataEpoch = 3
 
 function Assert-Unlinked([string]$Path) {
     $absolute = [IO.Path]::GetFullPath($Path)

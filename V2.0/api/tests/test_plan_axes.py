@@ -149,6 +149,9 @@ def test_manual_domain_and_ticks() -> None:
             {"y": {"domain": [0.0, 4.0], "ticks": [0.0, 5.0]}},
             "axis-ticks-outside",
         ),
+        # Limits or data at the edge of a float: refused, not an overflow inside the server.
+        ([1.0, 2.0, 3.0], {"y": {"domain": [-1e308, 1e308]}}, "chart-axis-range"),
+        ([1.0, 1e308], {"y": {"scale": "log10"}}, "chart-axis-range"),
     ],
 )
 def test_refused_controls(values: list[float], control: dict[str, Any], code: str) -> None:
