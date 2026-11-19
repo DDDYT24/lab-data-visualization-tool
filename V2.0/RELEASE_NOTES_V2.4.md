@@ -44,11 +44,16 @@ V2.4 gives every chart one drawing plan. The server works out every number that 
 
 V2.4 adds two tables to the local database. A profile that V2.4.0-rc.1 has opened is marked with data epoch 3. V2.3.0 refuses that profile without changing it.
 
-To keep a way back:
-1. Before installing, make a backup from the data tools in V2.3.0.
-2. To return, reinstall V2.3.0 and restore that backup.
+Installing over V2.3.0 keeps the V2.3.0 program and a snapshot of your data taken just before the upgrade. To go back, exit LabViz and run this in PowerShell:
 
-See [installation, backup and recovery](docs/INSTALL_V2.3.md).
+```powershell
+$root = "$env:LOCALAPPDATA\Programs\LabVizDesktopPreview"
+$id = (Get-Content "$root\current-candidate.json" | ConvertFrom-Json).packageId
+$v = "$root\versions\$($id.Substring(0, 24))"
+& "$v\app\runtime\python\python.exe" -B -X utf8 "$v\runtime\installation.py" rollback --install-root $root --profile-base "$env:LOCALAPPDATA\LabVizDesktopPreview" --payload "$v\app"
+```
+
+This makes V2.3.0 the active program again and restores the snapshot. Work saved in V2.4 is not lost: it is kept beside the restored data in a folder whose name starts with `data.retained-`, together with a backup of it.
 
 ## Install
 
