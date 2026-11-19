@@ -27,6 +27,7 @@ V2.4 gives every chart one drawing plan. The server works out every number that 
 - Panels take annotations: text, reference lines, shaded ranges and brackets.
 - One panel can overlay several saved charts of the same data, for example raw points over a violin.
 - Figures from V2.3 open unchanged. Saving a V2.3 figure again produces the same PNG, SVG and PDF files.
+- Fixed: in a classic chart of more than 250 rows captured into a figure, most points linked to the wrong source row. Captures saved earlier keep their stored links.
 
 **Editing.**
 - Chart settings are split into Data, Method and Appearance tabs.
@@ -53,7 +54,7 @@ $v = "$root\versions\$($id.Substring(0, 24))"
 & "$v\app\runtime\python\python.exe" -B -X utf8 "$v\runtime\installation.py" rollback --install-root $root --profile-base "$env:LOCALAPPDATA\LabVizDesktopPreview" --payload "$v\app"
 ```
 
-This makes V2.3.0 the active program again and restores the snapshot. Work saved in V2.4 is not lost: it is kept beside the restored data in a folder whose name starts with `data.retained-`, together with a backup of it.
+This makes V2.3.0 the active program again and restores the snapshot. When it worked, it prints one line that contains `"activated": true` and `"explicitRollback": true`. Any other result, an error or exit code 20, means V2.3.0 did not become active; keep the output when you report it. Work saved in V2.4 is not lost: it is kept beside the restored data in a folder whose name starts with `data.retained-`, together with a backup of it.
 
 ## Install
 

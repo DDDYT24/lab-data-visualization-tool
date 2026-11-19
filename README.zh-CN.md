@@ -84,7 +84,7 @@ Get-FileHash .\LabViz-Desktop-2.3.0-desktop.1-Private-Setup.exe -Algorithm SHA25
 我自带 Python、Node.js、科研依赖和字体，在自己的窗口里运行。从开始菜单打开 **LabViz Desktop Preview**。关闭窗口时我会保存检查点，下次打开回到同一个工作区。卸载时默认保留你的资料。
 
 - **V2.3.0** 是稳定版。
-- **V2.4.0-rc.1** 是下一个预览版。它会把资料升级成 V2.3.0 打不开的格式，请先备份。详见 [V2.4 预览版说明](V2.0/RELEASE_NOTES_V2.4.md)。
+- **V2.4.0-rc.1** 是下一个预览版。它会把资料升级成 V2.3.0 打不开的格式；安装时会保留升级前的快照，退回 V2.3.0 的步骤见 [V2.4 预览版说明](V2.0/RELEASE_NOTES_V2.4.md)。
 
 详见[安装、备份与恢复](V2.0/docs/INSTALL_V2.3.md)。
 
