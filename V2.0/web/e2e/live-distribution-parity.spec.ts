@@ -45,14 +45,16 @@ for (const filename of ["04_group_comparison.txt", "05_distribution.json"]) {
     await page.getByRole("button", { name: "Customize export" }).click();
     const chart = page.locator('main [role="img"]').first();
     await expect(chart.locator("svg")).toBeVisible();
-    await expect.poll(() => chart.locator('path[fill="#dc2626"]').count()).toBeGreaterThan(bins.filter((bin) => bin.count > 0).length);
-    const rectangles = await chart.locator("svg").evaluate((svg) =>
+    const measureBars = () => chart.locator("svg").evaluate((svg) =>
       Array.from(svg.querySelectorAll('path[fill="#dc2626"]')).map((element) => {
         const box = (element as SVGGraphicsElement).getBBox();
         return { x: box.x, y: box.y, width: box.width, height: box.height, opacity: element.getAttribute("fill-opacity") ?? element.getAttribute("opacity") };
       }).filter((box) => box.height > 20 && box.width > 1).sort((a, b) => a.x - b.x),
     );
     const nonempty = bins.filter((bin) => bin.count > 0);
+    // The export step replaces the chart preview while it loads; measure once its bars are drawn.
+    await expect.poll(async () => (await measureBars()).length, { timeout: 60_000 }).toBe(nonempty.length);
+    const rectangles = await measureBars();
     expect(rectangles).toHaveLength(nonempty.length);
     const left = rectangles[0].x;
     const right = rectangles.at(-1)!.x + rectangles.at(-1)!.width;
