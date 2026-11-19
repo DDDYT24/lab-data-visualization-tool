@@ -20,8 +20,8 @@
 [Setup]
 AppId={{CA2B3AF4-BFB0-4541-8EA5-2E978F105D63}
 AppName=LabViz Desktop Preview
-AppVersion=2.3.0
-AppVerName=LabViz Desktop Preview 2.3.0-desktop.1
+AppVersion=2.4.0
+AppVerName=LabViz Desktop Preview 2.4.0-rc.1
 AppPublisher=LabViz
 DefaultDirName={localappdata}\Programs\LabVizDesktopPreview
 DefaultGroupName=LabViz Desktop Preview
@@ -31,7 +31,7 @@ MinVersion=10.0
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=LabViz-Desktop-2.3.0-desktop.1-Private-Setup
+OutputBaseFilename=LabViz-Desktop-2.4.0-rc.1-Private-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

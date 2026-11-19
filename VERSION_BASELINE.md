@@ -1,16 +1,19 @@
 # LabViz Version Baseline
 
-- **Last reviewed:** 2026-11-03
-- **Current release:** V2.2.0 Windows local release (single Windows profile; unsigned)
+- **Last reviewed:** 2026-11-18
+- **Current release:** V2.3.0 Windows desktop release (2026-11-16; single Windows profile; unsigned)
+- **Next:** V2.4.0-rc.1 Windows desktop pre-release, being prepared
 - **Future backlog and completion status:** kept by the maintainer outside this repository
 
-V2.3.0-rc.1 (2026-10-18) and V2.3.0-rc.2 (2026-11-03) are published as Windows
-pre-releases. Their research workspace, optional overview interface, and separate Windows
-RC pipeline are implemented; rc.2 adds the local storage refit (S0–S2 of the V2.4 plan) and
-an automated upgrade-and-rollback check against the published rc.1. Clean-machine, offline,
-accessibility and researcher acceptance remain open, and V2.3.0 final is not released. V2.2.0 stays
-the stable release. See the [V2.3 RC notes](V2.0/RELEASE_NOTES_V2.3.md) for scope
-and pending observations.
+V2.3.0 is the first desktop release: one window, native file dialogs, an embedded PDF preview and
+one installer, carrying the research workspace, scientific charts, composed figures and frozen
+research outputs of V2.3.0-rc.1 and rc.2. Clean-machine, offline, screen-reader and a full
+keyboard pass remain unchecked. See the GitHub release for its verification record.
+
+V2.4.0-rc.1 makes one drawing plan the source of every chart (preview equals export), makes
+research charts interactive, and extends composed figures to six panels with axis controls,
+annotations and layers. It raises the data epoch to 3, which V2.3.0 refuses. See the
+[V2.4 notes](V2.0/RELEASE_NOTES_V2.4.md).
 
 This file is a short version history, not a second backlog. It records what each
 major version actually delivered and the boundary that version did not claim.
@@ -32,6 +35,8 @@ and distinguishes owner testimony from agent-observed and final-artifact evidenc
 | **V2.1.0** | Structured 3D and research-workflow release | Added structured-grid/surface validation with explicit X/Y/Z roles, grid-aware quality findings and chart recommendations, browser/export parity for 3D surfaces, beginner guidance, ordinary/weighted fitting with Student-t and residual-bootstrap pointwise bands, residual diagnostics and limitations, minimum `Experiment`/`ExperimentRun` lineage, UTF-8 BOM handling, Unicode-safe downloads, migration-name reconciliation, and the local privacy/offline/backup documentation set | Prediction intervals, simultaneous bands, robust regression, multiplicity correction, desktop installers, team features, billing, and AWS Phase 6C/6D live acceptance remain deferred |
 | **V2.1.1** | Historical security patch release | Updated Next.js, Sharp, Nanoid, Vitest and related dependencies; aligned API and website version metadata; preserved V2.1.0 behavior and local data paths | No new scientific workflow or data-format change; it does not claim a deployed cloud service |
 | **V2.2.0** | Windows local release | Ready-to-run per-user installer; account-free SQLite/local-object history and figure gallery; seven synthetic examples; bilingual Help/About; themes/accessibility; prediction/Working–Hotelling bands and linear Huber; categorical/single-value chart defaults; histogram/axis content parity; WebKit navigation and production dependency patches | Single ordinary Windows profile; unsigned installer. Two-account ACL/loopback isolation is untested, authentic V2.1.1 installer upgrade/rollback is owner-waived, and preceding-candidate manual acceptance is owner testimony rather than independent final-hash proof. Exact commit/build/hash and fresh checks are in release assets. Cloud collaboration and native macOS/Linux packages remain deferred. |
+| **V2.3.0** | Windows desktop release | Native desktop window with Open/Save dialogs, embedded PDF preview and one installer; close-and-continue checkpoints; research workspace with explicit sample, experimental-unit, group, time-point and pair mappings; grouped raw-point, paired-change and violin charts; figures of up to four panels; frozen research outputs; Alembic-managed local SQLite with Parquet dataset versions and data epoch 2 | Single ordinary Windows profile; unsigned installer. Full keyboard pass, export step at 200% zoom, restore through the data tools, upgrade from rc.2 with rollback, clean machine, disconnected workflow and screen reader unchecked. Native macOS/Linux and hosted collaboration deferred |
+| **V2.4.0-rc.1** | Windows desktop pre-release (in preparation) | One server-side RenderPlan drawn by both the preview and the export for every chart kind; interactive research charts linked to source rows; exports draw every row and the full surface grid; FigureSpec v2 figures with up to six panels, grid or mosaic, log/symlog axes, manual domains and ticks, annotations and layered panels; chart settings in Data/Method/Appearance tabs with appearance edits drawn without recomputation; data epoch 3 | V2.3.0 refuses profiles V2.4 has opened; the way back is the pre-upgrade backup. Unsigned. Known issues are listed in the V2.4 notes |
 
 ## Release references
 
@@ -40,11 +45,13 @@ and distinguishes owner testimony from agent-observed and final-artifact evidenc
 - V1.1 is retained under [`V1.1/`](V1.1/) as the legacy Streamlit application.
 - V2.0.0, V2.1.0, and V2.1.1 are the repository release tags.
 - V2.2.0 is the Windows local release tag with an unsigned public installer; see its scoped acceptance record.
+- V2.3.0 is the Windows desktop release tag; its verification record is in the GitHub release.
 - User-facing installation instructions live in [`README.md`](README.md) and
   [`README.zh-CN.md`](README.zh-CN.md).
 - Detailed release notes are [`V2.0/RELEASE_NOTES_V2.0.md`](V2.0/RELEASE_NOTES_V2.0.md),
   [`V2.0/RELEASE_NOTES_V2.1.md`](V2.0/RELEASE_NOTES_V2.1.md), [`V2.0/RELEASE_NOTES_V2.1.1.md`](V2.0/RELEASE_NOTES_V2.1.1.md), and
-  [`V2.0/RELEASE_NOTES_V2.2.md`](V2.0/RELEASE_NOTES_V2.2.md).
+  [`V2.0/RELEASE_NOTES_V2.2.md`](V2.0/RELEASE_NOTES_V2.2.md), [`V2.0/RELEASE_NOTES_V2.3.md`](V2.0/RELEASE_NOTES_V2.3.md)
+  (the V2.3 release candidates) and [`V2.0/RELEASE_NOTES_V2.4.md`](V2.0/RELEASE_NOTES_V2.4.md).
 
 ## Maintenance rule
 

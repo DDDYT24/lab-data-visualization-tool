@@ -29,6 +29,7 @@ htmlcov/
 *.svg
 *.pdf
 !V2.0/assets/*.png
+!docs/readme/*.png
 !V2.0/assets/*.svg
 !V2.0/web/public/about/*.svg
 !V2.0/assets/*.ico

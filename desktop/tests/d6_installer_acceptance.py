@@ -16,6 +16,7 @@ import winreg
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'desktop/runtime'))
 import installation as lifecycle
+from maintenance import DATA_EPOCH
 from session import encoded, unlinked, io_path
 
 trial=unlinked(Path(sys.argv[1]).resolve())
@@ -122,7 +123,7 @@ try:
     check('actual-failed-service-activation-restores-previous-program-data-and-draft')
     for member,label in [(second_folder,'compatible-generation'),(failed_folder,'failed-generation')]:
         destination=trial/('retained-'+label);assert member.resolve().is_relative_to(program/'versions') and destination.resolve().is_relative_to(trial) and not destination.exists();shutil.move(member,destination)
-    schema=profile/'appdata/LabVizV23/data-schema.json';original=schema.read_bytes();future=json.loads(original);future['dataEpoch']=3;schema.write_bytes(encoded(future))
+    schema=profile/'appdata/LabVizV23/data-schema.json';original=schema.read_bytes();future=json.loads(original);future['dataEpoch']=DATA_EPOCH+1;schema.write_bytes(encoded(future))
     execute([folder/'app/runtime/python/python.exe','-B','-X','utf8',folder/'runtime/installation.py','prepare','--install-root',program,'--profile-base',profile,'--payload',folder/'app','--package',record['packageId']],'future-epoch',expect=1)
     assert schema.read_bytes()==encoded(future) and science()==before;schema.write_bytes(original)
     check('future-epoch-refusal-keeps-current-data-and-candidate')
