@@ -139,7 +139,9 @@ try {
       const started = Date.now();
       await charts.getByRole('button', { name: 'Generate and save chart', exact: true }).click();
       const image = charts.getByRole('img', { name: title, exact: true });
-      await expect.poll(() => image.evaluate(el => el.naturalWidth), { timeout: 180000 }).toBeGreaterThan(0);
+      // A chart saved with a render plan draws interactively; its canvas appears once the plan loads.
+      await expect(image).toHaveAttribute('data-plan-hash', /^[0-9a-f]{64}$/, { timeout: 180000 });
+      await expect(image.locator('canvas').first()).toBeVisible({ timeout: 60000 });
       const jsonHref = await charts.getByRole('link', { name: 'Download JSON', exact: true }).getAttribute('href');
       const frozen = JSON.parse((await artifact(jsonHref, 'json', title.replaceAll(' ', '-'))).toString());
       expect(frozen.result.points).toHaveLength(mode === 'large' ? 100000 : 12);
