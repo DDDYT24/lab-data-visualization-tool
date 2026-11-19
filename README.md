@@ -7,41 +7,86 @@
 
 # LabViz
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [Stable V2.2.0](https://github.com/DDDYT24/lab-data-visualization-tool/releases/tag/v2.2.0) · [V2.3 RC notes](V2.0/RELEASE_NOTES_V2.3.md) · [MIT license](LICENSE)
+**Messy lab table in, figure you can publish out. On your own computer.**
+
+[![CI](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DDDYT24/lab-data-visualization-tool/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/DDDYT24/lab-data-visualization-tool?label=stable&color=0f766e)](https://github.com/DDDYT24/lab-data-visualization-tool/releases/latest)
+[![Windows](https://img.shields.io/badge/Windows-desktop-2563eb)](https://github.com/DDDYT24/lab-data-visualization-tool/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
+
+[English](README.md) · [简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [V2.4 preview notes](V2.0/RELEASE_NOTES_V2.4.md)
 
 </div>
 
-LabViz, a scientific plotting tool that runs on your own computer. Hand me a CSV or Excel file and I check it first: missing values, duplicate rows and outliers are flagged, and you decide what stays. Then I turn it into figures you can put in a paper.
+Hi, I'm LabViz. Hand me a CSV or Excel file and I read it before I draw anything. Missing values, duplicate rows and odd points get flagged, and you decide what stays. Then I turn what's left into figures you can put in a paper, and I can show you which rows made each point.
 
-## Where I am
+<p align="center">
+  <img src="docs/readme/app-chart.png" alt="LabViz chart step: a dose-response scatter plot with three linear fits, their equations and a 95% confidence band, next to the Data, Method and Appearance settings" width="900">
+</p>
 
-- **V2.2.0**: stable. Use this one for everyday work.
-- **V2.3.0-rc.2**: preview. The installer is unsigned and acceptance is incomplete, so try it with synthetic data or a copy.
-- **Desktop edition** (`desktop/`): I'm learning to run in my own window instead of a browser. Not released yet.
+## How a figure happens
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/readme/app-import.png" alt="Import step: a preview of the time-series table with its import settings"></td>
+    <td width="50%"><img src="docs/readme/app-quality.png" alt="Inspect step: the quality summary lists three findings, starting with one missing value"></td>
+  </tr>
+  <tr>
+    <td><b>1. Show me the file.</b> I preview it before importing anything, so a wrong header row is caught in seconds.</td>
+    <td><b>2. I point out the odd bits.</b> Missing cells, duplicates, type clashes and outliers. I flag them. I don't quietly delete them.</td>
+  </tr>
+</table>
+
+**3. Pick a chart, tune it, export it.** Data, method and appearance each have their own tab. The window and the exported PNG, SVG or PDF draw from the same plan, so the preview and the file agree down to the tick marks.
+
+## Things I drew
+
+Every figure below is a real export, made by LabViz from synthetic data.
+
+<p align="center">
+  <img src="docs/readme/figure-three-panels.png" alt="A three-panel figure: A, raw points with experimental-unit means for three treatments; B, violin plots of the same data; C, paired before-and-after lines for placebo and treated subjects" width="900">
+</p>
+<p align="center"><sub><b>A</b> raw points, not just bars · <b>B</b> distributions with every point · <b>C</b> paired change per subject</sub></p>
+
+<table>
+  <tr>
+    <td><img src="docs/readme/chart-fit.png" alt="Scatter plot with a linear fit, its equation and R squared"></td>
+    <td><img src="docs/readme/chart-surface.png" alt="3D response surface"></td>
+    <td><img src="docs/readme/chart-heatmap.png" alt="Correlation heatmap"></td>
+  </tr>
+  <tr>
+    <td align="center">Fits that show their equation</td>
+    <td align="center">3D surfaces</td>
+    <td align="center">Correlation matrices</td>
+  </tr>
+</table>
+
+See the small print under the research charts? That's me keeping count: observations, independent units, exclusions. Three repeat measurements of one mouse are still one mouse, so your n stays honest.
 
 ## What I do
 
-- Read CSV, TSV, TXT, JSON and XLSX, and show you a preview before importing.
-- Check for missing values, duplicates, type conflicts and outliers. I flag them; I don't delete for you, and every exclusion keeps its reason.
-- Draw line, scatter, bar, histogram, box, heatmap and 3D surface charts. V2.3 adds grouped raw points, paired change and violin plots, and up to four panels in one figure.
-- Export PNG, SVG and PDF. V2.3 can also freeze a figure with each panel's source data, its parameters and revision history as one research output.
-- Keep samples, observations and independent experimental units apart, so repeated measurements never inflate your n.
+- **Read** CSV, TSV, TXT, JSON and XLSX, and show a preview before importing.
+- **Check** for missing values, duplicates, type conflicts and outliers. Every exclusion keeps its reason, and you can undo it.
+- **Draw** line, scatter, bar, histogram, box, heatmap and 3D surface charts, plus grouped raw points, paired change and violin plots for research data.
+- **Compose** figures of up to six panels in a grid or a mosaic, with log axes, manual ranges and ticks, and annotations (V2.4 preview).
+- **Export** PNG, SVG and PDF, and freeze a figure together with each panel's source data, parameters and revision history.
 
 Everything runs locally. No account, database server or online service is needed.
 
 ## Install (Windows)
 
-Download the installer and `SHA256SUMS.txt` from [Releases](https://github.com/DDDYT24/lab-data-visualization-tool/releases) and check the hash first:
+Download the setup file and `SHA256SUMS.txt` from [Releases](https://github.com/DDDYT24/lab-data-visualization-tool/releases) and check the hash first:
 
 ```powershell
-Get-FileHash .\LabViz-V23-2.3.0-rc.2-Setup.exe -Algorithm SHA256
+Get-FileHash .\LabViz-Desktop-2.3.0-desktop.1-Private-Setup.exe -Algorithm SHA256
 ```
 
-I bring my own Python, Node.js, scientific libraries and fonts. Start **LabViz V2.3** from the Start menu, and use **Stop LabViz V2.3** before a backup. V2.3 and V2.2 keep separate programs and data; you import old data explicitly, and I keep your data when uninstalled.
+I bring my own Python, Node.js, scientific libraries and fonts, and open in my own window. Start **LabViz Desktop Preview** from the Start menu. Closing the window saves a checkpoint, and the next start returns to the same workspace. Uninstalling keeps your data.
 
-Installing rc.2 over rc.1 moves your data to a format rc.1 cannot open. If you roll back, I restore the snapshot taken before the upgrade and keep anything saved in rc.2 in a separate retained folder.
+- **V2.3.0** is the stable release.
+- **V2.4.0-rc.1** is the next preview. It upgrades your data to a format V2.3.0 cannot open, so make a backup first. See the [V2.4 preview notes](V2.0/RELEASE_NOTES_V2.4.md).
 
-See [install, import, backup and uninstall](V2.0/docs/INSTALL_V2.3.md).
+See [install, backup and recovery](V2.0/docs/INSTALL_V2.3.md).
 
 ## Run from source
 
@@ -50,17 +95,17 @@ You need Git, Python 3.12 or 3.13, and Node.js 22.22.2 or later (packaging uses 
 ```powershell
 git clone https://github.com/DDDYT24/lab-data-visualization-tool.git
 Set-Location -LiteralPath .\lab-data-visualization-tool
-git checkout v2.3.0-rc.2
+git checkout v2.3.0
 .\start-labviz.cmd
 ```
 
-Source mode uses ports 3001 and 8001 and keeps data in `V2.0/api/.labviz/v23-development`. To rebuild the installer, see the [Windows RC build guide](V2.0/packaging/windows-v23/README.md).
+Source mode uses ports 3001 and 8001 and keeps data in `V2.0/api/.labviz/v23-development`.
 
 ## What I can't promise yet
 
-- Acceptance on a clean machine, a fully disconnected workflow, real 200% zoom with a screen reader, and a physical iPhone.
-- Code signing. Windows may warn you; keep its protection on rather than working around it.
-- My production dependencies have no known advisories. The lint tools I use in development still have 16 moderate ones through `minimatch`, waiting for an upstream fix; see the [dependency review](V2.0/docs/DEPENDENCY_SECURITY_REVIEW.md).
+- Code signing. Windows will warn you; keep its protection on rather than working around it.
+- Acceptance on a clean machine, a fully disconnected workflow, and screen-reader use.
+- One open advisory in `picomatch` has no fixed release yet. It reaches only an unused part of one production package and development tools that I don't ship; see the [dependency review](V2.0/docs/DEPENDENCY_SECURITY_REVIEW.md).
 
 Whether a figure of mine is ready for a journal depends on you checking its size, fonts, statistical assumptions and caption. I don't judge whether the experiment itself is sound.
 
