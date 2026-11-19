@@ -63,6 +63,7 @@ Download the setup file and `SHA256SUMS.txt` from the release, check the SHA-256
 
 - The installer is unsigned.
 - Line, scatter and bar exports with more than 250 rows differ from V2.3.0, because every row is now drawn. A 100,000-row bar export takes about 3 to 6 seconds.
+- With 100,000 rows per panel, composed figures are slower than their targets: a four-panel export takes about 17 seconds and a six-panel one about 25 (targets 8 and 10 seconds), and recalculating a strip or violin chart takes 5 to 6 seconds (target 3). At 10,000 rows every target is met.
 - In a narrow custom figure canvas, category names and the count line under them can overlap. The default size is unaffected.
 - A paired chart without a group column lists one legend entry named "Undeclared".
 - Messages that refuse a chart or a figure are in English only.
