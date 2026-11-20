@@ -45,6 +45,15 @@ describe("figure draft", () => {
     expect(specFromDraft({ ...two, panels: two.panels.map((p, i) => (i ? p : { ...p, notes: [{ kind: "hline", value: 1, label: "" }] })) }).schemaVersion).toBe(2);
   });
 
+  it("saves a font choice, a hidden count line or the footer as v2, and reopens them", () => {
+    const two = withCount({ ...emptyDraft(), panels: emptyDraft().panels.map((p) => ({ ...p, chartId: "c" })) }, 2);
+    for (const change of [{ fontFamily: "Arial" as const }, { categoryCounts: false }, { provenanceOnFigure: true }]) {
+      const spec = specFromDraft({ ...two, ...change }) as FigureSpec;
+      expect(spec).toMatchObject({ schemaVersion: 2, ...change });
+      expect(draftFromSpec(spec)).toMatchObject(change);
+    }
+  });
+
   it("does not send a panel's control on a shared axis, and keeps it in the draft", () => {
     const draft = six();
     draft.panels[1] = { ...draft.panels[1]!, axes: { x: draft.panels[1]!.axes.x, y: { scale: "symlog", domain: null, ticks: null } } };

@@ -21,6 +21,9 @@
         "gridVisible": true,
         "axisMode": "independent",
         "pointRendering": "auto",
+        "fontFamily": "DejaVu Sans",
+        "categoryCounts": true,
+        "provenanceOnFigure": false,
         "canvas": {
           "sizePreset": "double_column",
           "width": null,
@@ -119,6 +122,9 @@
         "gridVisible": false,
         "axisMode": "shared_y",
         "pointRendering": "raster",
+        "fontFamily": "DejaVu Sans",
+        "categoryCounts": true,
+        "provenanceOnFigure": false,
         "canvas": {
           "sizePreset": "double_column",
           "width": null,
@@ -267,6 +273,9 @@
         "gridVisible": true,
         "axisMode": "shared_xy",
         "pointRendering": "auto",
+        "fontFamily": "DejaVu Sans",
+        "categoryCounts": true,
+        "provenanceOnFigure": false,
         "canvas": {
           "sizePreset": "double_column",
           "width": null,
@@ -487,6 +496,9 @@
       "gridVisible": true,
       "axisMode": "independent",
       "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
       "canvas": {
         "sizePreset": "double_column",
         "width": null,
@@ -658,6 +670,9 @@
       "gridVisible": true,
       "axisMode": "independent",
       "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
       "canvas": {
         "sizePreset": "double_column",
         "width": null,
@@ -967,6 +982,9 @@
       "gridVisible": true,
       "axisMode": "independent",
       "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
       "canvas": {
         "sizePreset": "double_column",
         "width": null,
@@ -1141,6 +1159,9 @@
       "gridVisible": true,
       "axisMode": "independent",
       "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
       "canvas": {
         "sizePreset": "double_column",
         "width": null,
@@ -1228,6 +1249,9 @@
       "gridVisible": true,
       "axisMode": "independent",
       "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
       "canvas": {
         "sizePreset": "double_column",
         "width": null,
@@ -1345,6 +1369,9 @@
       "gridVisible": true,
       "axisMode": "independent",
       "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
       "canvas": {
         "sizePreset": "double_column",
         "width": null,
@@ -1458,6 +1485,9 @@
       "gridVisible": true,
       "axisMode": "independent",
       "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
       "canvas": {
         "sizePreset": "custom",
         "width": 120.0,
@@ -1478,6 +1508,252 @@
       },
       "palette": {
         "categorical": "okabe_ito",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "fontFamily": "Times New Roman",
+      "categoryCounts": true,
+      "provenanceOnFigure": false,
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 1,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": false,
+      "provenanceOnFigure": false,
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 1,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
+        "sequential": "viridis",
+        "diverging": "blue_red"
+      },
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "title": "",
+          "datasetRef": null,
+          "axes": {
+            "x": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            },
+            "y": {
+              "scale": "linear",
+              "domain": null,
+              "ticks": null
+            }
+          },
+          "annotations": [],
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a",
+              "encoding": {
+                "x": null,
+                "y": null,
+                "y2": null,
+                "z": null,
+                "group": null,
+                "error": null,
+                "weight": null,
+                "sampleId": null
+              },
+              "method": null,
+              "style": {
+                "color": null,
+                "colorBy": null,
+                "marker": null,
+                "size": null,
+                "lineStyle": null,
+                "width": null,
+                "opacity": 1.0,
+                "zIndex": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "title": "",
+      "fontSize": 10,
+      "gridVisible": true,
+      "axisMode": "independent",
+      "pointRendering": "auto",
+      "fontFamily": "DejaVu Sans",
+      "categoryCounts": true,
+      "provenanceOnFigure": true,
+      "canvas": {
+        "sizePreset": "double_column",
+        "width": null,
+        "height": null,
+        "unit": "mm",
+        "dpi": 300,
+        "background": "#ffffff",
+        "transparent": false,
+        "grayscale": false
+      },
+      "layout": {
+        "kind": "grid",
+        "rows": 1,
+        "cols": 1,
+        "mosaic": null,
+        "gutter": 0.08,
+        "labelStyle": "upper"
+      },
+      "palette": {
+        "categorical": "blue_teal",
         "sequential": "viridis",
         "diverging": "blue_red"
       },
@@ -1999,6 +2275,21 @@
         }
       ],
       "script": "x"
+    },
+    {
+      "panels": [
+        {
+          "id": "p1",
+          "label": "A",
+          "layers": [
+            {
+              "kind": "chart",
+              "chartId": "a"
+            }
+          ]
+        }
+      ],
+      "fontFamily": "Comic Sans MS"
     }
   ]
 }

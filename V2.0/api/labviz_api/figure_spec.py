@@ -215,6 +215,12 @@ class FigureSpec(ResearchModel):
     grid_visible: bool = True
     axis_mode: Literal["independent", "shared_x", "shared_y", "shared_xy"] = "independent"
     point_rendering: Literal["auto", "vector", "raster"] = "auto"
+    # Every text of the figure; DejaVu Sans is what figures used before there was a choice.
+    font_family: Literal["DejaVu Sans", "Arial", "Times New Roman"] = "DejaVu Sans"
+    # The "obs=, units=" line under each category name.
+    category_counts: bool = True
+    # Input rows, revision and methods under each panel. Off, they reach the output notes only.
+    provenance_on_figure: bool = False
     canvas: Canvas = Field(default_factory=Canvas)
     layout: Layout = Field(default_factory=Layout)
     palette: Palette = Field(default_factory=Palette)

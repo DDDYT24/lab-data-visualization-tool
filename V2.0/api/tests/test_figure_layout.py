@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -313,3 +314,97 @@ def test_a_figure_too_large_to_draw_is_refused(extra: dict[str, Any], refused: b
         assert caught.value.code == "figure-canvas-too-large"
     else:
         check_figure(spec)
+
+
+def artifact(client: TestClient, url: str, kind: str) -> bytes:
+    response = client.get(f"{url}/artifact/{kind}")
+    assert response.status_code == 200, response.text
+    return bytes(response.content)
+
+
+def assert_text_is_text(pdf: bytes, svg: bytes) -> None:
+    """Journals refuse Type 3 fonts, and outlined SVG text cannot be edited."""
+    assert b"/Type3" not in pdf and b"/FontFile2" in pdf
+    assert b"<text" in svg
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_exports_keep_text_and_leave_the_provenance_footer_off(saved: Any, version: int) -> None:
+    client, base, ids = saved
+    body = {"panelChartIds": ids} if version == 1 else figure(ids, "AB", layout={"cols": 2})
+    board = client.post(base, json=body).json()
+    assert board["spec"]["schemaVersion"] == version
+    url = f"{base}/{board['id']}"
+    svg = artifact(client, url, "svg")
+    assert_text_is_text(artifact(client, url, "pdf"), svg)
+    assert b"Input rows=" not in svg
+    # The footer's text stays in the panel plan and the output notes.
+    plan = json.loads(client.get(f"{url}/plans/A").content)
+    assert plan["disclosures"][0].startswith("Input rows=")
+
+
+def test_the_provenance_footer_can_be_drawn(saved: Any) -> None:
+    client, base, ids = saved
+    board = client.post(base, json=figure(ids, "A", provenanceOnFigure=True)).json()
+    assert b"Input rows=" in artifact(client, f"{base}/{board['id']}", "svg")
+
+
+def test_research_chart_exports_keep_text(saved: Any) -> None:
+    client, base, ids = saved
+    url = base.replace("figure-boards", "charts") + f"/{ids[0]}"
+    assert_text_is_text(artifact(client, url, "pdf"), artifact(client, url, "svg"))
+
+
+def test_a_chosen_font_reaches_every_text_of_the_figure(saved: Any) -> None:
+    from matplotlib import font_manager
+
+    client, base, ids = saved
+    board = client.post(
+        base, json=figure(ids, "AB", layout={"cols": 2}, title="Dose", fontFamily="Times New Roman")
+    ).json()
+    url = f"{base}/{board['id']}"
+    svg = artifact(client, url, "svg").decode()
+    families = re.findall(r"font-family: ([^;\"]+)", svg)
+    assert families and all(family.startswith("'Times New Roman'") for family in families)
+    pdf = artifact(client, url, "pdf")
+    assert b"/Type3" not in pdf
+    try:
+        font_manager.findfont("Times New Roman", fallback_to_default=False)
+    except ValueError:
+        return  # The CI runner has no Times New Roman; Windows checks the embedded font.
+    assert set(re.findall(rb"/BaseFont /[A-Z]{6}\+(\w+)", pdf)) == {b"TimesNewRomanPSMT"}
+
+
+def test_chinese_labels_embed_their_glyphs_in_the_svg(saved: Any) -> None:
+    client, base, ids = saved
+    board = client.post(base, json=figure(ids, "A", title="剂量反应")).json()
+    url = f"{base}/{board['id']}"
+    svg = artifact(client, url, "svg")
+    assert_text_is_text(artifact(client, url, "pdf"), svg)
+    assert b"@font-face" in svg and "剂量反应".encode() in svg
+
+
+def test_the_count_line_can_be_left_out(saved: Any) -> None:
+    client, base, ids = saved
+
+    def ticks(spec: dict[str, Any]) -> list[str]:
+        board = client.post(base, json=spec).json()
+        plan = json.loads(client.get(f"{base}/{board['id']}/plans/A").content)
+        return [tick["label"] for tick in plan["panels"][0]["axes"]["x"]["ticks"]]
+
+    counted, plain = ticks(figure(ids, "A")), ticks(figure(ids, "A", categoryCounts=False))
+    assert all("\nobs=" in label for label in counted)
+    assert plain == [label.split("\n")[0] for label in counted]
+
+
+@pytest.mark.parametrize(
+    "extra", [{"fontFamily": "Arial"}, {"categoryCounts": False}, {"provenanceOnFigure": True}]
+)
+def test_a_template_is_refused_for_what_v1_cannot_draw(saved: Any, extra: dict[str, Any]) -> None:
+    client, base, ids = saved
+    body = client.post(base, json=figure(ids, "AB", layout={"cols": 2}, **extra)).json()
+    project_url = base.rsplit("/", 1)[0]
+    response = client.post(project_url + "/templates", json={"boardId": body["id"], "name": "T"})
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "reuse-figure-unsupported"
+    assert "font choice" in response.json()["message"]
