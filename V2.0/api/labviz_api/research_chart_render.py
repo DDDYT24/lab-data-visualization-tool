@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import io
-import threading
 from typing import TYPE_CHECKING, Any
 
-from .processing import _cjk_font_info, _contains_cjk, embed_svg_font
+from .processing import RENDER_LOCK, _cjk_font_info, _contains_cjk, embed_svg_font
 from .render_plan import build_research_plan
 from .render_plan import rasterize_points as rasterize_points
 from .render_plan_draw import draw_mark, draw_notes, layer_lift, set_scale
@@ -16,7 +15,6 @@ from .research_styles import COLORS as COLORS
 if TYPE_CHECKING:
     from matplotlib.typing import RcKeyType
 
-_RENDER_LOCK = threading.RLock()
 # Room left of the axis, in inches: the y title and pads, plus one tick label's digits at 10 pt.
 LEFT_TITLE_INCHES = 0.4
 LEFT_DIGIT_INCHES = 0.09
@@ -39,7 +37,7 @@ def draw_plan(
 
     from .research_raster import freeze_raster_layers
 
-    with _RENDER_LOCK:
+    with RENDER_LOCK:
         panel = plan["panels"][0]
         figure = target_figure or Figure(figsize=(8, 5.5), dpi=300)
         ax = target_axis if target_axis is not None else figure.subplots()
@@ -95,9 +93,13 @@ def draw_plan(
                 raise PreparationError(
                     "chart-cjk-font", "A CJK font is required for Chinese labels."
                 )
+            # The bundled file draws every text; the family name lets SVG text find the glyphs
+            # embed_svg_font adds.
             for text in texts:
                 text.set_fontproperties(
-                    font_manager.FontProperties(fname=info[1], size=text.get_fontsize())
+                    font_manager.FontProperties(
+                        family=[info[0], "sans-serif"], fname=info[1], size=text.get_fontsize()
+                    )
                 )
         artifacts = {}
         with rc_context(VECTOR_TEXT):

@@ -19,6 +19,7 @@ from time import perf_counter
 from typing import Any, cast, get_args
 
 from .figure_spec import (
+    DEFAULT_FONT,
     FigureBoardSpec,
     FigurePanel,
     FigureSpec,
@@ -30,16 +31,10 @@ from .models import ChartSpec
 from .plan_axes import PLAIN_CONTROL, apply_axis_controls
 from .plan_classic import SERIES_KINDS, build_classic_plan
 from .plan_notes import apply_notes
-from .processing import _cjk_font_info, _contains_cjk, embed_svg_font, series_rows
+from .processing import RENDER_LOCK, _cjk_font_info, _contains_cjk, embed_svg_font, series_rows
 from .processing import render_chart as legacy_render
 from .render_plan import build_research_plan, merge_axis, merge_layers, plan_bytes, plan_hash
-from .research_chart_render import (
-    _RENDER_LOCK,
-    COLORS,
-    VECTOR_TEXT,
-    draw_plan,
-    rasterize_points,
-)
+from .research_chart_render import COLORS, VECTOR_TEXT, draw_plan, rasterize_points
 from .research_charts import ScientificChartSpec
 from .research_preparation import PreparationError
 
@@ -184,7 +179,7 @@ def render_board(
 
     from .research_raster import freeze_raster_layers
 
-    with _RENDER_LOCK:
+    with RENDER_LOCK:
         started = perf_counter()
         spec = as_figure(board)
         count = len(sources)
@@ -375,14 +370,20 @@ def render_board(
         info = _cjk_font_info() if any(_contains_cjk(t.get_text()) for t in texts) else None
         if any(_contains_cjk(t.get_text()) for t in texts) and info is None:
             raise PreparationError("chart-cjk-font", "A CJK font is required for Chinese labels.")
+        *chosen, generic = FONT_FAMILIES[spec.font_family]
         for text in texts:
             text.set_parse_math(False)
-            if info:
+            if info and spec.font_family == DEFAULT_FONT:
+                # The bundled CJK file draws every text, as before the choice existed; the family
+                # name lets SVG text find the glyphs embed_svg_font adds.
                 text.set_fontproperties(
-                    font_manager.FontProperties(fname=info[1], size=text.get_fontsize())
+                    font_manager.FontProperties(
+                        family=[info[0], generic], fname=info[1], size=text.get_fontsize()
+                    )
                 )
             else:
-                text.set_fontfamily(FONT_FAMILIES[spec.font_family])
+                # A chosen font draws what it can; Chinese glyphs fall back to the CJK font.
+                text.set_fontfamily([*chosen, *([info[0]] if info else []), generic])
         # Transform coordinates after axis sharing/layout, using the same Figure as the exports.
         FigureCanvasAgg(figure)
         # Resolve transforms/text geometry without painting the full dense data twice.

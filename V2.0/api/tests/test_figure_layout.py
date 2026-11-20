@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +17,7 @@ from labviz_api.figure_spec import FigureSpec, panel_cells
 from labviz_api.main import create_app
 from labviz_api.plan_axes import axis_position
 from labviz_api.render_plan import RenderPlan
-from labviz_api.research_figure_render import check_figure
+from labviz_api.research_figure_render import FONT_FAMILIES, check_figure
 from labviz_api.research_preparation import PreparationError
 
 MOSAIC = ["AAB", "CDE", "CDF"]
@@ -382,6 +382,37 @@ def test_chinese_labels_embed_their_glyphs_in_the_svg(saved: Any) -> None:
     svg = artifact(client, url, "svg")
     assert_text_is_text(artifact(client, url, "pdf"), svg)
     assert b"@font-face" in svg and "剂量反应".encode() in svg
+    assert b"font-family: 'Noto Sans SC'" in svg
+
+
+def test_a_chosen_font_keeps_its_place_beside_chinese_labels(saved: Any) -> None:
+    client, base, ids = saved
+    body = figure(ids, "A", title="剂量反应 Dose", fontFamily="Times New Roman")
+    url = f"{base}/{client.post(base, json=body).json()['id']}"
+    svg = artifact(client, url, "svg").decode()
+    families = re.findall(r"font-family: ([^;\"]+)", svg)
+    assert families and all(
+        family.startswith("'Times New Roman', 'Noto Sans SC'") for family in families
+    )
+    # Chinese glyphs come from the CJK font, the rest from the chosen one.
+    assert b"NotoSansSC" in artifact(client, url, "pdf")
+
+
+def test_research_chart_with_chinese_labels_keeps_text(saved: Any) -> None:
+    client, base, ids = saved
+    charts_url = base.replace("figure-boards", "charts")
+    revision = client.get(f"{charts_url}/{ids[1]}").json()["revisionId"]
+    created = client.post(charts_url, json={"revisionId": revision, "spec": {"title": "剂量"}})
+    assert created.status_code == 200, created.text
+    url = f"{charts_url}/{created.json()['id']}"
+    svg = artifact(client, url, "svg")
+    assert_text_is_text(artifact(client, url, "pdf"), svg)
+    assert b"@font-face" in svg and b"font-family: 'Noto Sans SC'" in svg
+
+
+def test_every_figure_font_has_its_matplotlib_families() -> None:
+    fonts = get_args(FigureSpec.model_fields["font_family"].annotation)
+    assert set(FONT_FAMILIES) == set(fonts)
 
 
 def test_the_count_line_can_be_left_out(saved: Any) -> None:

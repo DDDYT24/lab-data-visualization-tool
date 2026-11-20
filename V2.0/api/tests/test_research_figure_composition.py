@@ -120,6 +120,10 @@ def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -
         assert b"<svg" in artifacts["svg"]
         assert artifacts["png"][1:4] == b"PNG"
         assert artifacts["pdf"][:4] == b"%PDF"
+        # A captured classic panel keeps its text as text too, and the Chinese title names the
+        # font whose glyphs the SVG embeds.
+        assert b"/Type3" not in artifacts["pdf"] and b"/FontFile2" in artifacts["pdf"]
+        assert b"<text" in artifacts["svg"] and b"font-family: 'Noto Sans SC'" in artifacts["svg"]
         view = client.get(url + "/interaction").json()
         # Every captured panel has a plan, correlation heatmaps included.
         panel_plan = client.get(url + "/plans/B")

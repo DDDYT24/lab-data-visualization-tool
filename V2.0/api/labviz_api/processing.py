@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import threading
 import zlib
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
@@ -118,6 +119,13 @@ def _cjk_font_info() -> tuple[str, str] | None:
         if family:
             return family, str(resolved)
     return None
+
+
+#: Matplotlib's rcParams are global and `rc_context` restores a snapshot of all of them on exit,
+#: so two threads saving with different settings can undo each other mid-save. Every save that
+#: sets rcParams holds this lock: classic exports here, research charts and figures in
+#: research_chart_render.
+RENDER_LOCK = threading.RLock()
 
 
 def embed_svg_font(svg: bytes, figure: Any, font_path: str, family: str) -> bytes:
@@ -2599,21 +2607,22 @@ def render_chart(
         "facecolor": "none" if export.transparent_background else export.background_color,
         "transparent": export.transparent_background,
     }
-    if export.format == "svg":
-        with matplotlib.rc_context({"svg.fonttype": "none"}):
+    with RENDER_LOCK:
+        if export.format == "svg":
+            with matplotlib.rc_context({"svg.fonttype": "none"}):
+                figure.savefig(output, **save_kwargs)
+            if resolved_font_properties is not None:
+                return embed_svg_font(
+                    output.getvalue(),
+                    figure,
+                    str(resolved_font_properties.get_file()),
+                    resolved_font_family,
+                )
+        elif export.format == "pdf":
+            with matplotlib.rc_context({"pdf.fonttype": 42}):
+                figure.savefig(output, **save_kwargs)
+        else:
             figure.savefig(output, **save_kwargs)
-        if resolved_font_properties is not None:
-            return embed_svg_font(
-                output.getvalue(),
-                figure,
-                str(resolved_font_properties.get_file()),
-                resolved_font_family,
-            )
-    elif export.format == "pdf":
-        with matplotlib.rc_context({"pdf.fonttype": 42}):
-            figure.savefig(output, **save_kwargs)
-    else:
-        figure.savefig(output, **save_kwargs)
     return output.getvalue()
 
 
