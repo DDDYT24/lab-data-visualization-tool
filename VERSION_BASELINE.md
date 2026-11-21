@@ -1,8 +1,8 @@
 # LabViz Version Baseline
 
-- **Last reviewed:** 2026-11-20
-- **Current release:** V2.3.0 Windows desktop release (2026-11-16; single Windows profile; unsigned)
-- **Next:** V2.4.0 Windows desktop release, being prepared
+- **Last reviewed:** 2026-11-21
+- **Current release:** V2.4.0 Windows desktop release (2026-11-21; single Windows profile; unsigned)
+- **Previous release:** V2.3.0 Windows desktop release (2026-11-16)
 - **Future backlog and completion status:** kept by the maintainer outside this repository
 
 V2.3.0 is the first desktop release: one window, native file dialogs, an embedded PDF preview and
@@ -13,7 +13,8 @@ keyboard pass remain unchecked. See the GitHub release for its verification reco
 V2.4.0 makes one drawing plan the source of every chart (preview equals export), makes
 research charts interactive, extends composed figures to six panels with axis controls,
 annotations and layers, and exports PDF and SVG with real text and a choice of font. It raises
-the data epoch to 3, which V2.3.0 refuses. See the [V2.4 notes](V2.0/RELEASE_NOTES_V2.4.md).
+the data epoch to 3, which V2.3.0 refuses. See the [V2.4 notes](V2.0/RELEASE_NOTES_V2.4.md), and
+the GitHub release for its verification record.
 
 This file is a short version history, not a second backlog. It records what each
 major version actually delivered and the boundary that version did not claim.
@@ -36,7 +37,7 @@ and distinguishes owner testimony from agent-observed and final-artifact evidenc
 | **V2.1.1** | Historical security patch release | Updated Next.js, Sharp, Nanoid, Vitest and related dependencies; aligned API and website version metadata; preserved V2.1.0 behavior and local data paths | No new scientific workflow or data-format change; it does not claim a deployed cloud service |
 | **V2.2.0** | Windows local release | Ready-to-run per-user installer; account-free SQLite/local-object history and figure gallery; seven synthetic examples; bilingual Help/About; themes/accessibility; prediction/Working–Hotelling bands and linear Huber; categorical/single-value chart defaults; histogram/axis content parity; WebKit navigation and production dependency patches | Single ordinary Windows profile; unsigned installer. Two-account ACL/loopback isolation is untested, authentic V2.1.1 installer upgrade/rollback is owner-waived, and preceding-candidate manual acceptance is owner testimony rather than independent final-hash proof. Exact commit/build/hash and fresh checks are in release assets. Cloud collaboration and native macOS/Linux packages remain deferred. |
 | **V2.3.0** | Windows desktop release | Native desktop window with Open/Save dialogs, embedded PDF preview and one installer; close-and-continue checkpoints; research workspace with explicit sample, experimental-unit, group, time-point and pair mappings; grouped raw-point, paired-change and violin charts; figures of up to four panels; frozen research outputs; Alembic-managed local SQLite with Parquet dataset versions and data epoch 2 | Single ordinary Windows profile; unsigned installer. Full keyboard pass, export step at 200% zoom, restore through the data tools, upgrade from rc.2 with rollback, clean machine, disconnected workflow and screen reader unchecked. Native macOS/Linux and hosted collaboration deferred |
-| **V2.4.0** | Windows desktop release (in preparation) | One server-side RenderPlan drawn by both the preview and the export for every chart kind; interactive research charts linked to source rows; exports draw every row and the full surface grid; FigureSpec v2 figures with up to six panels, grid or mosaic, log/symlog axes, manual domains and ticks, annotations and layered panels; TrueType fonts in PDF and text in SVG, a figure font choice, provenance off the figure by default; chart settings in Data/Method/Appearance tabs with appearance edits drawn without recomputation; data epoch 3 | V2.3.0 refuses profiles V2.4 has opened; the way back is the pre-upgrade backup. Unsigned. Known issues are listed in the V2.4 notes |
+| **V2.4.0** | Windows desktop release | One server-side RenderPlan drawn by both the preview and the export for every chart kind; interactive research charts linked to source rows; exports draw every row and the full surface grid; FigureSpec v2 figures with up to six panels, grid or mosaic, log/symlog axes, manual domains and ticks, annotations and layered panels; TrueType fonts in PDF and text in SVG, a figure font choice, provenance off the figure by default; chart settings in Data/Method/Appearance tabs with appearance edits drawn without recomputation; data epoch 3 | V2.3.0 refuses profiles V2.4 has opened; the way back is the pre-upgrade backup. Unsigned. Full keyboard pass, clean machine, disconnected workflow and screen reader unchecked. Known issues are listed in the V2.4 notes |
 
 ## Release references
 
