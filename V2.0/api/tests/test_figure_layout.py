@@ -17,7 +17,13 @@ from labviz_api.figure_spec import FigureSpec, panel_cells
 from labviz_api.main import create_app
 from labviz_api.plan_axes import axis_position
 from labviz_api.render_plan import RenderPlan
-from labviz_api.research_figure_render import FONT_FAMILIES, check_figure
+from labviz_api.research_figure_render import (
+    BOTTOM,
+    FONT_FAMILIES,
+    GAPS,
+    TEXT_PAD_POINTS,
+    check_figure,
+)
 from labviz_api.research_preparation import PreparationError
 
 MOSAIC = ["AAB", "CDE", "CDF"]
@@ -439,3 +445,66 @@ def test_a_template_is_refused_for_what_v1_cannot_draw(saved: Any, extra: dict[s
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "reuse-figure-unsupported"
     assert "font choice" in response.json()["message"]
+
+
+def drawn_layout(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient, base: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """The subplot parameters and each panel's frame and text extent as the export draws them."""
+    from matplotlib.figure import Figure
+
+    seen: list[dict[str, Any]] = []
+    original = Figure.savefig
+
+    def capture(figure: Any, *args: Any, **kwargs: Any) -> Any:
+        if not seen:
+            renderer = figure.canvas.get_renderer()
+            seen.append(
+                {
+                    "bottom": figure.subplotpars.bottom,
+                    "hspace": figure.subplotpars.hspace,
+                    "pad": TEXT_PAD_POINTS * figure.dpi / 72,
+                    "boxes": [(ax.bbox.frozen(), ax.get_tightbbox(renderer)) for ax in figure.axes],
+                }
+            )
+        return original(figure, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Figure, "savefig", capture)
+        response = client.post(base, json=body)
+    assert response.status_code == 200, response.text
+    return seen[0]
+
+
+def test_without_the_footer_the_bottom_margin_fits_the_text(
+    saved: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, base, ids = saved
+    layout = drawn_layout(monkeypatch, client, base, figure(ids, "AB", layout={"cols": 2}))
+    lowest = min(tight.y0 for _, tight in layout["boxes"])
+    assert layout["bottom"] < BOTTOM[1]
+    # Nothing is cut off, and no more than the pad is left under the lowest text.
+    assert 0 <= lowest <= layout["pad"] + 1
+
+
+def test_without_the_footer_rows_close_up_without_overlapping(
+    saved: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, base, ids = saved
+    body = figure(ids, "ABCD", layout={"rows": 2, "cols": 2})
+    layout = drawn_layout(monkeypatch, client, base, body)
+    assert layout["hspace"] < GAPS[1]
+    frames = [frame.y0 for frame, _ in layout["boxes"]]
+    upper = [tight for frame, tight in layout["boxes"] if frame.y0 > min(frames)]
+    lower = [tight for frame, tight in layout["boxes"] if frame.y0 == min(frames)]
+    assert min(box.y0 for box in upper) > max(box.y1 for box in lower)
+
+
+def test_with_the_footer_the_layout_is_unchanged(
+    saved: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, base, ids = saved
+    body = figure(ids, "ABCD", layout={"rows": 2, "cols": 2}, provenanceOnFigure=True)
+    layout = drawn_layout(monkeypatch, client, base, body)
+    assert layout["bottom"] == pytest.approx(BOTTOM[2])
+    assert layout["hspace"] == pytest.approx(GAPS[1])
