@@ -104,6 +104,10 @@ ONLY_V2 = [
         },
         palette={"categorical": "okabe_ito"},
     ),
+    # v1 draws DejaVu Sans, the count line and no footer, and cannot say otherwise.
+    one(fontFamily="Times New Roman"),
+    one(categoryCounts=False),
+    one(provenanceOnFigure=True),
 ]
 INVALID = [
     {"panels": []},
@@ -141,6 +145,7 @@ INVALID = [
     one(canvas={"width": 10, "height": 10}),
     one(schemaVersion=1),
     one(script="x"),
+    one(fontFamily="Comic Sans MS"),
 ]
 
 

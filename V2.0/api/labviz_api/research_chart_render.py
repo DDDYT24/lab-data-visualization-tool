@@ -3,21 +3,24 @@
 from __future__ import annotations
 
 import io
-import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .processing import _cjk_font_info, _contains_cjk
+from .processing import RENDER_LOCK, _cjk_font_info, _contains_cjk, embed_svg_font
 from .render_plan import build_research_plan
 from .render_plan import rasterize_points as rasterize_points
 from .render_plan_draw import draw_mark, draw_notes, layer_lift, set_scale
 from .research_preparation import PreparationError
 from .research_styles import COLORS as COLORS
 
-_RENDER_LOCK = threading.RLock()
+if TYPE_CHECKING:
+    from matplotlib.typing import RcKeyType
+
 # Room left of the axis, in inches: the y title and pads, plus one tick label's digits at 10 pt.
 LEFT_TITLE_INCHES = 0.4
 LEFT_DIGIT_INCHES = 0.09
 LEFT_MARGIN = 0.12
+# Vector files keep their text as text: TrueType in PDF (not Type 3), <text> in SVG (not paths).
+VECTOR_TEXT: dict[RcKeyType, Any] = {"pdf.fonttype": 42, "svg.fonttype": "none"}
 
 
 def render_chart(result: dict[str, Any]) -> dict[str, bytes]:
@@ -27,14 +30,14 @@ def render_chart(result: dict[str, Any]) -> dict[str, bytes]:
 def draw_plan(
     plan: dict[str, Any], *, target_figure: Any = None, target_axis: Any = None
 ) -> dict[str, bytes]:
-    from matplotlib import font_manager
+    from matplotlib import font_manager, rc_context
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
     from matplotlib.text import Text
 
     from .research_raster import freeze_raster_layers
 
-    with _RENDER_LOCK:
+    with RENDER_LOCK:
         panel = plan["panels"][0]
         figure = target_figure or Figure(figsize=(8, 5.5), dpi=300)
         ax = target_axis if target_axis is not None else figure.subplots()
@@ -83,32 +86,40 @@ def draw_plan(
         texts = figure.findobj(Text)
         for text in texts:
             text.set_parse_math(False)
+        info = None
         if any(_contains_cjk(text.get_text()) for text in texts):
             info = _cjk_font_info()
             if info is None:
                 raise PreparationError(
                     "chart-cjk-font", "A CJK font is required for Chinese labels."
                 )
+            # The bundled file draws every text; the family name lets SVG text find the glyphs
+            # embed_svg_font adds.
             for text in texts:
                 text.set_fontproperties(
-                    font_manager.FontProperties(fname=info[1], size=text.get_fontsize())
+                    font_manager.FontProperties(
+                        family=[info[0], "sans-serif"], fname=info[1], size=text.get_fontsize()
+                    )
                 )
         artifacts = {}
-        for kind in ("png", "svg", "pdf"):
-            if kind == "svg":
-                # PNG retains its original direct Agg drawing; only vector containers
-                # reuse the approved final-layout 300 dpi data layer.
-                freeze_raster_layers(figure)
-            output: Any = io.StringIO() if kind == "svg" else io.BytesIO()
-            figure.savefig(
-                output,
-                format=kind,
-                backend="module://labviz_api.research_svg_backend" if kind == "svg" else None,
-                facecolor="white",
-                metadata={"Creator": "LabViz scientific-charts-v1"} if kind != "png" else None,
-            )
-            artifacts[kind] = (
-                output.getvalue().encode("utf-8") if kind == "svg" else output.getvalue()
-            )
+        with rc_context(VECTOR_TEXT):
+            for kind in ("png", "svg", "pdf"):
+                if kind == "svg":
+                    # PNG retains its original direct Agg drawing; only vector containers
+                    # reuse the approved final-layout 300 dpi data layer.
+                    freeze_raster_layers(figure)
+                output: Any = io.StringIO() if kind == "svg" else io.BytesIO()
+                figure.savefig(
+                    output,
+                    format=kind,
+                    backend="module://labviz_api.research_svg_backend" if kind == "svg" else None,
+                    facecolor="white",
+                    metadata={"Creator": "LabViz scientific-charts-v1"} if kind != "png" else None,
+                )
+                artifacts[kind] = (
+                    output.getvalue().encode("utf-8") if kind == "svg" else output.getvalue()
+                )
+        if info is not None:
+            artifacts["svg"] = embed_svg_font(artifacts["svg"], figure, info[1], info[0])
         figure.clear()
         return artifacts

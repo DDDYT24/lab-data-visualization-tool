@@ -146,7 +146,8 @@ def template_from_board(
             raise PreparationError(
                 "reuse-figure-unsupported",
                 "A template can be made from a one-, two- or four-panel grid figure without "
-                "layers, axis settings, annotations or panel label styles only.",
+                "layers, axis settings, annotations, panel label styles, a font choice, a hidden "
+                "count line or the provenance footer only.",
             )
         panels = [source(c, project_id, key) for key in figure.panel_chart_ids]
         labels = sorted(

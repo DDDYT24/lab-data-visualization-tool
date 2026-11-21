@@ -19,6 +19,7 @@ from time import perf_counter
 from typing import Any, cast, get_args
 
 from .figure_spec import (
+    DEFAULT_FONT,
     FigureBoardSpec,
     FigurePanel,
     FigureSpec,
@@ -30,10 +31,10 @@ from .models import ChartSpec
 from .plan_axes import PLAIN_CONTROL, apply_axis_controls
 from .plan_classic import SERIES_KINDS, build_classic_plan
 from .plan_notes import apply_notes
-from .processing import _cjk_font_info, _contains_cjk, series_rows
+from .processing import RENDER_LOCK, _cjk_font_info, _contains_cjk, embed_svg_font, series_rows
 from .processing import render_chart as legacy_render
 from .render_plan import build_research_plan, merge_axis, merge_layers, plan_bytes, plan_hash
-from .research_chart_render import _RENDER_LOCK, COLORS, draw_plan, rasterize_points
+from .research_chart_render import COLORS, VECTOR_TEXT, draw_plan, rasterize_points
 from .research_charts import ScientificChartSpec
 from .research_preparation import PreparationError
 
@@ -65,6 +66,14 @@ PLAIN_GUTTER = 0.08
 GAPS = (0.45, 0.9)
 BOTTOM = {1: 0.26, 2: 0.13}
 PALETTES = ("blue_teal", "grayscale")
+# Matplotlib families per FigureSpec font. The generic name ends each list: Matplotlib falls back
+# to it where the font is not installed, and SVG viewers do the same. "sans-serif" alone is what
+# every text had before the choice existed (it resolves to DejaVu Sans).
+FONT_FAMILIES = {
+    "DejaVu Sans": ["sans-serif"],
+    "Arial": ["Arial", "sans-serif"],
+    "Times New Roman": ["Times New Roman", "serif"],
+}
 MILLIMETRES_PER_INCH = 25.4
 
 
@@ -161,7 +170,7 @@ def render_board(
 ) -> tuple[dict[str, bytes], dict[str, Any]]:
     """Draw a board. `sources` stand for the panels (their first layer); `layers` holds every
     layer's source per panel, bottom first, and defaults to the panel's one chart."""
-    from matplotlib import font_manager
+    from matplotlib import font_manager, rc_context
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.collections import PathCollection
     from matplotlib.figure import Figure
@@ -170,7 +179,7 @@ def render_board(
 
     from .research_raster import freeze_raster_layers
 
-    with _RENDER_LOCK:
+    with RENDER_LOCK:
         started = perf_counter()
         spec = as_figure(board)
         count = len(sources)
@@ -205,6 +214,7 @@ def render_board(
                             group_colors=colors,
                             use_grayscale=use_grayscale,
                             point_rendering=spec.point_rendering,
+                            category_counts=spec.category_counts,
                         )
                         for layer in layered[i]
                     ]
@@ -312,14 +322,15 @@ def render_board(
             if legend:
                 for text in legend.get_texts():
                     text.set_fontsize(spec.font_size)
-            ax.text(
-                0,
-                -0.25,
-                footer,
-                va="top",
-                transform=ax.transAxes,
-                fontsize=min(8, max(6, spec.font_size - 2)),
-            )
+            if spec.provenance_on_figure:
+                ax.text(
+                    0,
+                    -0.25,
+                    footer,
+                    va="top",
+                    transform=ax.transAxes,
+                    fontsize=min(8, max(6, spec.font_size - 2)),
+                )
         for dimension in ["x", "y"]:
             if spec.axis_mode not in {"shared_" + dimension, "shared_xy"}:
                 continue
@@ -359,12 +370,20 @@ def render_board(
         info = _cjk_font_info() if any(_contains_cjk(t.get_text()) for t in texts) else None
         if any(_contains_cjk(t.get_text()) for t in texts) and info is None:
             raise PreparationError("chart-cjk-font", "A CJK font is required for Chinese labels.")
+        *chosen, generic = FONT_FAMILIES[spec.font_family]
         for text in texts:
             text.set_parse_math(False)
-            if info:
+            if info and spec.font_family == DEFAULT_FONT:
+                # The bundled CJK file draws every text, as before the choice existed; the family
+                # name lets SVG text find the glyphs embed_svg_font adds.
                 text.set_fontproperties(
-                    font_manager.FontProperties(fname=info[1], size=text.get_fontsize())
+                    font_manager.FontProperties(
+                        family=[info[0], generic], fname=info[1], size=text.get_fontsize()
+                    )
                 )
+            else:
+                # A chosen font draws what it can; Chinese glyphs fall back to the CJK font.
+                text.set_fontfamily([*chosen, *([info[0]] if info else []), generic])
         # Transform coordinates after axis sharing/layout, using the same Figure as the exports.
         FigureCanvasAgg(figure)
         # Resolve transforms/text geometry without painting the full dense data twice.
@@ -445,27 +464,30 @@ def render_board(
                 )
         if timings is not None:
             timings["geometry"] = (perf_counter() - started) * 1000
-        for kind in ["png", "svg", "pdf"]:
-            format_started = perf_counter()
-            if kind == "svg":
-                # PNG retains its original direct Agg drawing; only vector containers
-                # reuse the approved final-layout 300 dpi data layer.
-                freeze_raster_layers(figure)
-                if timings is not None:
-                    timings["rasterPreparation"] = (perf_counter() - format_started) * 1000
+        with rc_context(VECTOR_TEXT):
+            for kind in ["png", "svg", "pdf"]:
                 format_started = perf_counter()
-            stream: Any = io.StringIO() if kind == "svg" else io.BytesIO()
-            figure.savefig(
-                stream,
-                format=kind,
-                backend="module://labviz_api.research_svg_backend" if kind == "svg" else None,
-                facecolor=canvas.background,
-                transparent=canvas.transparent,
-            )
-            artifacts[kind] = (
-                stream.getvalue().encode("utf-8") if kind == "svg" else stream.getvalue()
-            )
-            if timings is not None:
-                timings[kind] = (perf_counter() - format_started) * 1000
+                if kind == "svg":
+                    # PNG retains its original direct Agg drawing; only vector containers
+                    # reuse the approved final-layout 300 dpi data layer.
+                    freeze_raster_layers(figure)
+                    if timings is not None:
+                        timings["rasterPreparation"] = (perf_counter() - format_started) * 1000
+                    format_started = perf_counter()
+                stream: Any = io.StringIO() if kind == "svg" else io.BytesIO()
+                figure.savefig(
+                    stream,
+                    format=kind,
+                    backend="module://labviz_api.research_svg_backend" if kind == "svg" else None,
+                    facecolor=canvas.background,
+                    transparent=canvas.transparent,
+                )
+                artifacts[kind] = (
+                    stream.getvalue().encode("utf-8") if kind == "svg" else stream.getvalue()
+                )
+                if timings is not None:
+                    timings[kind] = (perf_counter() - format_started) * 1000
+        if info is not None:
+            artifacts["svg"] = embed_svg_font(artifacts["svg"], figure, info[1], info[0])
         figure.clear()
         return artifacts, scene

@@ -23,9 +23,13 @@ export type FigurePanel = {
   id: string; label: string; title: string; datasetRef: { datasetId: string; versionId: string } | null;
   axes: { x: AxisControl; y: AxisControl }; annotations: FigureAnnotation[]; layers: FigureLayer[];
 };
+/** Every text of the figure; DejaVu Sans is what figures used before there was a choice. */
+export const FIGURE_FONTS = ["DejaVu Sans", "Arial", "Times New Roman"] as const;
+export type FigureFont = (typeof FIGURE_FONTS)[number];
 export type FigureSpec = {
   schemaVersion: 2; title: string; fontSize: number; gridVisible: boolean;
   axisMode: FigureBoardSpec["axisMode"]; pointRendering: "auto" | "vector" | "raster";
+  fontFamily: FigureFont; categoryCounts: boolean; provenanceOnFigure: boolean;
   canvas: {
     sizePreset: "single_column" | "double_column" | "custom"; width: number | null; height: number | null;
     unit: "mm" | "in"; dpi: number; background: string; transparent: boolean; grayscale: boolean;
@@ -103,6 +107,8 @@ export function completeFigure(raw: Loose): FigureSpec {
   return {
     schemaVersion: 2, title: raw.title ?? "", fontSize: raw.fontSize ?? 10, gridVisible: raw.gridVisible ?? true,
     axisMode: raw.axisMode ?? "independent", pointRendering: raw.pointRendering ?? "auto",
+    fontFamily: raw.fontFamily ?? "DejaVu Sans", categoryCounts: raw.categoryCounts ?? true,
+    provenanceOnFigure: raw.provenanceOnFigure ?? false,
     canvas: { sizePreset: "double_column", width: null, height: null, unit: "mm", dpi: 300, background: "#ffffff", transparent: false, grayscale: false, ...(raw.canvas as object) },
     layout: { kind: "grid", rows: 1, cols: 1, mosaic: null, gutter: 0.08, labelStyle: "upper", ...(raw.layout as object) },
     palette: { categorical: "blue_teal", sequential: "viridis", diverging: "blue_red", ...(raw.palette as object) },

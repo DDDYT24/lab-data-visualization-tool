@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import Discriminator, Field, Tag, model_validator
 
@@ -16,6 +16,8 @@ from .research_contract import Identifier, ResearchModel
 from .research_preparation import PreparationError
 
 MAX_PANELS = 6
+#: What every figure text used before there was a font choice.
+DEFAULT_FONT: Final = "DejaVu Sans"
 MAX_LAYERS = GEOMETRY["layers"]["max"]
 Text = Annotated[str, Field(max_length=160)]
 FieldName = Annotated[str, Field(min_length=1, max_length=255)]
@@ -215,6 +217,12 @@ class FigureSpec(ResearchModel):
     grid_visible: bool = True
     axis_mode: Literal["independent", "shared_x", "shared_y", "shared_xy"] = "independent"
     point_rendering: Literal["auto", "vector", "raster"] = "auto"
+    # Every text of the figure.
+    font_family: Literal["DejaVu Sans", "Arial", "Times New Roman"] = DEFAULT_FONT
+    # The "obs=, units=" line under each category name.
+    category_counts: bool = True
+    # Input rows, revision and methods under each panel. Off, they reach the output notes only.
+    provenance_on_figure: bool = False
     canvas: Canvas = Field(default_factory=Canvas)
     layout: Layout = Field(default_factory=Layout)
     palette: Palette = Field(default_factory=Palette)

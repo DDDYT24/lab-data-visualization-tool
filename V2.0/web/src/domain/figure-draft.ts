@@ -1,5 +1,5 @@
 import type { RenderPlan } from "./render-plan";
-import { completeFigure, projectBoard, upgradeBoard, type FigureAnnotation, type FigurePanel, type FigureSpec } from "./figure-spec";
+import { completeFigure, projectBoard, upgradeBoard, type FigureAnnotation, type FigureFont, type FigurePanel, type FigureSpec } from "./figure-spec";
 import type { FigureBoardSpec } from "./research-figure-board";
 import geometry from "../../../contracts/chart-render-v2.json";
 
@@ -19,11 +19,15 @@ export type PanelDraft = { chartId: string; title: string; axes: { x: AxisDraft;
 export type FigureDraft = {
   title: string; axisMode: FigureBoardSpec["axisMode"]; palette: "blue_teal" | "grayscale"; fontSize: number;
   grid: boolean; pointRendering: "auto" | "vector" | "raster"; labelStyle: FigureSpec["layout"]["labelStyle"];
+  fontFamily: FigureFont; categoryCounts: boolean; provenanceOnFigure: boolean;
   count: number; layout: FigureLayout; panels: PanelDraft[];
   /** Settings the editor does not show (an API client may set them); a re-save keeps them. */
   kept: { canvas?: FigureSpec["canvas"]; gutter?: number; sequential?: string; diverging?: string };
 };
-const DRAFT_KEYS = ["title", "axisMode", "palette", "fontSize", "grid", "pointRendering", "labelStyle", "count", "layout", "panels", "kept"] as const;
+const DRAFT_KEYS = [
+  "title", "axisMode", "palette", "fontSize", "grid", "pointRendering", "labelStyle", "fontFamily", "categoryCounts",
+  "provenanceOnFigure", "count", "layout", "panels", "kept",
+] as const;
 
 const grid = (rows: number, cols: number): FigureLayout => ({ kind: "grid", rows, cols, mosaic: null });
 const mosaic = (...rows: string[]): FigureLayout => ({ kind: "mosaic", rows: rows.length, cols: rows[0]!.length, mosaic: rows });
@@ -56,7 +60,8 @@ const pad = (panels: PanelDraft[]) => [...panels, ...Array.from({ length: MAX_PA
 export function emptyDraft(): FigureDraft {
   return {
     title: "", axisMode: "independent", palette: "blue_teal", fontSize: 10, grid: true, pointRendering: "auto",
-    labelStyle: "upper", count: 1, layout: ARRANGEMENTS[1]![0]!, panels: pad([]), kept: {},
+    labelStyle: "upper", fontFamily: "DejaVu Sans", categoryCounts: true, provenanceOnFigure: false,
+    count: 1, layout: ARRANGEMENTS[1]![0]!, panels: pad([]), kept: {},
   };
 }
 
@@ -83,7 +88,8 @@ export function draftFromSpec(spec: FigureBoardSpec | FigureSpec): FigureDraft {
   const mosaic = figure.layout.mosaic?.map((row) => [...row].map((cell) => rename.get(cell) ?? cell).join("")) ?? null;
   return {
     title: figure.title, axisMode: figure.axisMode, palette, fontSize: figure.fontSize, grid: figure.gridVisible,
-    pointRendering: figure.pointRendering, labelStyle: figure.layout.labelStyle, count: figure.panels.length,
+    pointRendering: figure.pointRendering, labelStyle: figure.layout.labelStyle, fontFamily: figure.fontFamily,
+    categoryCounts: figure.categoryCounts, provenanceOnFigure: figure.provenanceOnFigure, count: figure.panels.length,
     layout: { kind: figure.layout.kind, rows: figure.layout.rows, cols: figure.layout.cols, mosaic },
     panels: pad(figure.panels.map((panel) => {
       // Drawn by zIndex, then by place in the list, as the API orders them.
@@ -103,7 +109,8 @@ export function draftFromSpec(spec: FigureBoardSpec | FigureSpec): FigureDraft {
 export function specFromDraft(draft: FigureDraft): FigureBoardSpec | FigureSpec {
   const figure = completeFigure({
     schemaVersion: 2, title: draft.title, fontSize: draft.fontSize, gridVisible: draft.grid,
-    axisMode: draft.axisMode, pointRendering: draft.pointRendering,
+    axisMode: draft.axisMode, pointRendering: draft.pointRendering, fontFamily: draft.fontFamily,
+    categoryCounts: draft.categoryCounts, provenanceOnFigure: draft.provenanceOnFigure,
     canvas: draft.kept.canvas,
     layout: { ...draft.layout, labelStyle: draft.labelStyle, ...(draft.kept.gutter === undefined ? {} : { gutter: draft.kept.gutter }) },
     palette: {

@@ -485,8 +485,12 @@ def build_research_plan(
     group_colors: dict[Any, str] | None = None,
     use_grayscale: bool = False,
     point_rendering: str | None = None,
+    category_counts: bool = True,
 ) -> dict[str, Any]:
-    """Plan one computed scientific chart; arguments mirror research_chart_render.render_chart."""
+    """Plan one computed scientific chart; arguments mirror research_chart_render.render_chart.
+
+    `category_counts` False leaves the "obs=, units=" line out of each category name.
+    """
     spec = result["spec"]
     zh = spec["locale"] == "zh"
     undeclared = "未声明分组" if zh else "Undeclared"
@@ -568,12 +572,9 @@ def build_research_plan(
         for group in groups:
             count = "?" if group["independentUnits"] is None else str(group["independentUnits"])
             label = name(group["label"])[:36]
-            ticks.append(
-                {
-                    "value": float(group["position"]),
-                    "label": f"{label}\nobs={group['observations']}, units={count}",
-                }
-            )
+            if category_counts:
+                label += f"\nobs={group['observations']}, units={count}"
+            ticks.append({"value": float(group["position"]), "label": label})
             if group["summary"] is not None:
                 summaries.append(
                     {

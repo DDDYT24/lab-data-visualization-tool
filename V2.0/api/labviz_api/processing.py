@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import threading
 import zlib
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
@@ -118,6 +119,34 @@ def _cjk_font_info() -> tuple[str, str] | None:
         if family:
             return family, str(resolved)
     return None
+
+
+#: Matplotlib's rcParams are global and `rc_context` restores a snapshot of all of them on exit,
+#: so two threads saving with different settings can undo each other mid-save. Every save that
+#: sets rcParams holds this lock: classic exports here, research charts and figures in
+#: research_chart_render.
+RENDER_LOCK = threading.RLock()
+
+
+def embed_svg_font(svg: bytes, figure: Any, font_path: str, family: str) -> bytes:
+    """Embed the glyphs a figure's text uses, so SVG text renders without the OS font."""
+    from fontTools import subset
+
+    font = subset.load_font(font_path, subset.Options())
+    subsetter = subset.Subsetter()
+    subsetter.populate(
+        text="".join(item.get_text() for item in figure.findobj(matplotlib.text.Text))
+    )
+    subsetter.subset(font)
+    font_buffer = io.BytesIO()
+    font.save(font_buffer)
+    font.close()
+    encoded = base64.b64encode(font_buffer.getvalue()).decode("ascii")
+    css = (
+        f"<style>@font-face{{font-family:'{family}';"
+        f"src:url(data:font/ttf;base64,{encoded}) format('truetype');}}</style>"
+    )
+    return svg.replace(b"<defs>", b"<defs>" + css.encode("utf-8"), 1)
 
 
 def _contains_cjk(value: object) -> bool:
@@ -2578,33 +2607,22 @@ def render_chart(
         "facecolor": "none" if export.transparent_background else export.background_color,
         "transparent": export.transparent_background,
     }
-    if export.format == "svg":
-        with matplotlib.rc_context({"svg.fonttype": "none"}):
+    with RENDER_LOCK:
+        if export.format == "svg":
+            with matplotlib.rc_context({"svg.fonttype": "none"}):
+                figure.savefig(output, **save_kwargs)
+            if resolved_font_properties is not None:
+                return embed_svg_font(
+                    output.getvalue(),
+                    figure,
+                    str(resolved_font_properties.get_file()),
+                    resolved_font_family,
+                )
+        elif export.format == "pdf":
+            with matplotlib.rc_context({"pdf.fonttype": 42}):
+                figure.savefig(output, **save_kwargs)
+        else:
             figure.savefig(output, **save_kwargs)
-        if resolved_font_properties is not None:
-            # Embed only used glyphs; SVG text remains selectable without OS fonts.
-            from fontTools import subset
-
-            font = subset.load_font(str(resolved_font_properties.get_file()), subset.Options())
-            subsetter = subset.Subsetter()
-            subsetter.populate(
-                text="".join(item.get_text() for item in figure.findobj(matplotlib.text.Text))
-            )
-            subsetter.subset(font)
-            font_buffer = io.BytesIO()
-            font.save(font_buffer)
-            font.close()
-            encoded = base64.b64encode(font_buffer.getvalue()).decode("ascii")
-            css = (
-                f"<style>@font-face{{font-family:'{resolved_font_family}';"
-                f"src:url(data:font/ttf;base64,{encoded}) format('truetype');}}</style>"
-            )
-            return output.getvalue().replace(b"<defs>", b"<defs>" + css.encode("utf-8"), 1)
-    elif export.format == "pdf":
-        with matplotlib.rc_context({"pdf.fonttype": 42}):
-            figure.savefig(output, **save_kwargs)
-    else:
-        figure.savefig(output, **save_kwargs)
     return output.getvalue()
 
 

@@ -869,6 +869,26 @@
       "title": "Pointrendering",
       "type": "string"
     },
+    "fontFamily": {
+      "default": "DejaVu Sans",
+      "enum": [
+        "DejaVu Sans",
+        "Arial",
+        "Times New Roman"
+      ],
+      "title": "Fontfamily",
+      "type": "string"
+    },
+    "categoryCounts": {
+      "default": true,
+      "title": "Categorycounts",
+      "type": "boolean"
+    },
+    "provenanceOnFigure": {
+      "default": false,
+      "title": "Provenanceonfigure",
+      "type": "boolean"
+    },
     "canvas": {
       "$ref": "#/$defs/Canvas"
     },

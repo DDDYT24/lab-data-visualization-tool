@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import {
-  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Drawer, MenuItem, useMediaQuery, Paper, Stack, Tab, Tabs, TextField, Typography,
+  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Drawer, FormControlLabel, MenuItem, useMediaQuery, Paper, Stack, Switch, Tab, Tabs, TextField, Typography,
 } from "@mui/material";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import { FigureArrangementPicker } from "./figure-arrangement-picker";
@@ -15,6 +15,7 @@ import {
   chartIdsOf, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, figureOf, MAX_PANELS, movePanel, PANEL_LABELS, panelLayers, shares, specFromDraft, storedDraft, withChart, withCount,
   type DraftProblem, type FigureDraft, type PanelDraft,
 } from "@/domain/figure-draft";
+import { FIGURE_FONTS, type FigureFont } from "@/domain/figure-spec";
 import type { RenderPlan } from "@/domain/render-plan";
 import type { FigureBoard, FigureBoardHistory, FigureSources } from "@/domain/research-figure-board";
 import { researchChartApi } from "@/lib/api/research-chart-api";
@@ -54,7 +55,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const [error, setError] = useState<string | null>(null);
   // Source chart plans by chart id: their axes frame the panel editor's limits and categories.
   const [sourcePlans, setSourcePlans] = useState<Record<string, RenderPlan | null>>({});
-  const { title, axisMode, palette, fontSize, grid, pointRendering, labelStyle, count, panels } = draft;
+  const { title, axisMode, palette, fontSize, grid, pointRendering, labelStyle, fontFamily, categoryCounts, provenanceOnFigure, count, panels } = draft;
   useDesktopDraft(`figure:${projectId}`, projectId, { research: currentRevision, figure: saved?.id ?? null }, {
     draft, captureSample, capturePanel, selectedPanel, inspectorSource, previewPanel, inspectorOpen, showPanelPreviews, inspectorTab,
     undoDrafts, redoDrafts, dirty, editOpen,
@@ -346,10 +347,17 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
         <MenuItem value="vector">{t("Force vector (slower for large data)", "强制全矢量（大数据较慢）")}</MenuItem>
         <MenuItem value="raster">{t("300 dpi point layer", "300 dpi 点层")}</MenuItem>
       </TextField>
+      <TextField select label={t("Figure font", "组合图字体")} value={fontFamily} disabled={blocked} onChange={(e) => update({ ...draft, fontFamily: e.target.value as FigureFont })}>
+        {FIGURE_FONTS.map((font) => <MenuItem key={font} value={font}>{font}</MenuItem>)}
+      </TextField>
       <TextField select label={t("Figure font size", "组合图字号")} value={fontSize} disabled={blocked} onChange={(e) => update({ ...draft, fontSize: Number(e.target.value) })}>
         {[8, 10, 12, 14, 16].map((size) => <MenuItem key={size} value={size}>{size}</MenuItem>)}
       </TextField>
       <Button disabled={blocked} onClick={() => update({ ...draft, grid: !grid })}>{grid ? t("Hide figure grid", "隐藏组合图网格") : t("Show figure grid", "显示组合图网格")}</Button>
+      <FormControlLabel label={t("Counts under category names", "分类名下显示计数")} disabled={blocked}
+        control={<Switch checked={categoryCounts} onChange={(e) => update({ ...draft, categoryCounts: e.target.checked })} />} />
+      <FormControlLabel label={t("Source details under each panel", "每个面板下显示来源信息")} disabled={blocked}
+        control={<Switch checked={provenanceOnFigure} onChange={(e) => update({ ...draft, provenanceOnFigure: e.target.checked })} />} />
         </Stack></AccordionDetails>
       </Accordion>
       {saved?.composed && !dirty && <Button aria-pressed={showPanelPreviews} onClick={() => setShowPanelPreviews(!showPanelPreviews)}>
