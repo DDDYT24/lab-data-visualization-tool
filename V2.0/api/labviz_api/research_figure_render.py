@@ -75,6 +75,34 @@ FONT_FAMILIES = {
     "Times New Roman": ["Times New Roman", "serif"],
 }
 MILLIMETRES_PER_INCH = 25.4
+# Room kept below the lowest text, and between rows, once the footer is off.
+TEXT_PAD_POINTS = 8.0
+
+
+def reclaim_footer_space(figure: Any, axes: list[Any], rows: int) -> None:
+    """Shrink the bottom margin and row gaps that `BOTTOM` and `GAPS` size for the footer.
+
+    Runs after a layout-only draw, so tick labels and titles have their final extents. It only
+    shrinks: where the text already needs more than the footer's room, that room stays.
+    """
+    renderer = figure.canvas.get_renderer()
+    boxes = [(ax.bbox, ax.get_tightbbox(renderer)) for ax in axes]
+    below = max(frame.y0 - tight.y0 for frame, tight in boxes)
+    above = max(tight.y1 - frame.y1 for frame, tight in boxes)
+    pad = TEXT_PAD_POINTS * figure.dpi / 72
+    height = figure.bbox.height
+    params = figure.subplotpars
+    bottom = min(params.bottom, (below + pad) / height)
+    hspace = params.hspace
+    if rows > 1:
+        # hspace is the gap as a fraction of the mean axes height: span = rows*h + (rows-1)*gap.
+        span = (params.top - bottom) * height
+        gap = below + above + pad
+        room = span - gap * (rows - 1)
+        # A canvas too small for the text keeps the footer's gaps rather than a negative one.
+        if room > 0:
+            hspace = min(hspace, gap * rows / room)
+    figure.subplots_adjust(bottom=bottom, hspace=hspace)
 
 
 def controlled(panel: FigurePanel, dimension: str) -> bool:
@@ -388,6 +416,8 @@ def render_board(
         FigureCanvasAgg(figure)
         # Resolve transforms/text geometry without painting the full dense data twice.
         figure.draw_without_rendering()
+        if not spec.provenance_on_figure:
+            reclaim_footer_space(figure, axes, rows)
         artifacts: dict[str, bytes] = {}
         for label, plan in zip(panel_labels, plans, strict=True):
             if plan is not None:

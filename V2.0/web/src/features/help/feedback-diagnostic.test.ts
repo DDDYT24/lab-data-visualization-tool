@@ -12,7 +12,7 @@ describe("privacy-safe feedback diagnostics", () => {
     });
 
     expect(diagnostic).toEqual({
-      appVersion: "2.4.0-rc.1",
+      appVersion: "2.4.0",
       category: "bug",
       platform: "Windows",
       browser: "Chrome",

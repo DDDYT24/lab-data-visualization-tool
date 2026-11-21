@@ -14,7 +14,7 @@
 [![Windows](https://img.shields.io/badge/Windows-desktop-2563eb)](https://github.com/DDDYT24/lab-data-visualization-tool/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [V2.4 preview notes](V2.0/RELEASE_NOTES_V2.4.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [V2.4 notes](V2.0/RELEASE_NOTES_V2.4.md)
 
 </div>
 
@@ -68,8 +68,8 @@ See the small print under the research charts? That's me keeping count: observat
 - **Read** CSV, TSV, TXT, JSON and XLSX, and show a preview before importing.
 - **Check** for missing values, duplicates, type conflicts and outliers. Every exclusion keeps its reason, and you can undo it.
 - **Draw** line, scatter, bar, histogram, box, heatmap and 3D surface charts, plus grouped raw points, paired change and violin plots for research data.
-- **Compose** figures of up to six panels in a grid or a mosaic, with log axes, manual ranges and ticks, and annotations (V2.4 preview).
-- **Export** PNG, SVG and PDF, and freeze a figure together with each panel's source data, parameters and revision history.
+- **Compose** figures of up to six panels in a grid or a mosaic, with log axes, manual ranges and ticks, and annotations.
+- **Export** PNG, SVG and PDF, with text that stays text and the font you choose, and freeze a figure together with each panel's source data, parameters and revision history.
 
 Everything runs locally. No account, database server or online service is needed.
 
@@ -78,13 +78,12 @@ Everything runs locally. No account, database server or online service is needed
 Download the setup file and `SHA256SUMS.txt` from [Releases](https://github.com/DDDYT24/lab-data-visualization-tool/releases) and check the hash first:
 
 ```powershell
-Get-FileHash .\LabViz-Desktop-2.3.0-desktop.1-Private-Setup.exe -Algorithm SHA256
+Get-FileHash .\LabViz-Desktop-2.4.0-Private-Setup.exe -Algorithm SHA256
 ```
 
 I bring my own Python, Node.js, scientific libraries and fonts, and open in my own window. Start **LabViz Desktop Preview** from the Start menu. Closing the window saves a checkpoint, and the next start returns to the same workspace. Uninstalling keeps your data.
 
-- **V2.3.0** is the stable release.
-- **V2.4.0-rc.1** is the next preview. It upgrades your data to a format V2.3.0 cannot open; the installer keeps a snapshot from before the upgrade, and the [V2.4 preview notes](V2.0/RELEASE_NOTES_V2.4.md) give the steps back to V2.3.0.
+V2.4.0 upgrades your data to a format V2.3.0 cannot open. Installing over V2.3.0 keeps a snapshot from before the upgrade, and the [V2.4 notes](V2.0/RELEASE_NOTES_V2.4.md) give the steps back to V2.3.0.
 
 See [install, backup and recovery](V2.0/docs/INSTALL_V2.3.md).
 

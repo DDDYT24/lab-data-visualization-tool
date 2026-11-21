@@ -14,7 +14,7 @@
 [![Windows](https://img.shields.io/badge/Windows-desktop-2563eb)](https://github.com/DDDYT24/lab-data-visualization-tool/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [更新记录](CHANGELOG.md) · [V2.4 预览版说明](V2.0/RELEASE_NOTES_V2.4.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [更新记录](CHANGELOG.md) · [V2.4 发布说明](V2.0/RELEASE_NOTES_V2.4.md)
 
 </div>
 
@@ -68,8 +68,8 @@
 - **读取** CSV、TSV、TXT、JSON、XLSX，导入前先给你看预览。
 - **检查**缺失、重复、类型冲突和异常值。每一次排除都记下理由，也都能撤销。
 - **作图**：折线、散点、柱状、直方、箱线、热图和 3D 曲面，研究数据还有分组原始点、配对变化和小提琴图。
-- **拼组图**：最多六个面板，网格或自由拼版，支持对数坐标、手动范围和刻度、标注（V2.4 预览版）。
-- **导出** PNG、SVG、PDF，还能把图和各面板的源数据、参数、修订记录一起冻结。
+- **拼组图**：最多六个面板，网格或自由拼版，支持对数坐标、手动范围和刻度、标注。
+- **导出** PNG、SVG、PDF，文字保持为文字、字体可选，还能把图和各面板的源数据、参数、修订记录一起冻结。
 
 所有处理都在本机完成，不需要账号、数据库服务器或在线服务。
 
@@ -78,13 +78,12 @@
 从 [Releases](https://github.com/DDDYT24/lab-data-visualization-tool/releases) 下载安装程序和 `SHA256SUMS.txt`，先核对哈希：
 
 ```powershell
-Get-FileHash .\LabViz-Desktop-2.3.0-desktop.1-Private-Setup.exe -Algorithm SHA256
+Get-FileHash .\LabViz-Desktop-2.4.0-Private-Setup.exe -Algorithm SHA256
 ```
 
 我自带 Python、Node.js、科研依赖和字体，在自己的窗口里运行。从开始菜单打开 **LabViz Desktop Preview**。关闭窗口时我会保存检查点，下次打开回到同一个工作区。卸载时默认保留你的资料。
 
-- **V2.3.0** 是稳定版。
-- **V2.4.0-rc.1** 是下一个预览版。它会把资料升级成 V2.3.0 打不开的格式；安装时会保留升级前的快照，退回 V2.3.0 的步骤见 [V2.4 预览版说明](V2.0/RELEASE_NOTES_V2.4.md)。
+V2.4.0 会把资料升级成 V2.3.0 打不开的格式。覆盖 V2.3.0 安装时会保留升级前的快照，退回 V2.3.0 的步骤见 [V2.4 发布说明](V2.0/RELEASE_NOTES_V2.4.md)。
 
 详见[安装、备份与恢复](V2.0/docs/INSTALL_V2.3.md)。
 

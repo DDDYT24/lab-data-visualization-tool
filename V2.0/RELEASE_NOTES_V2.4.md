@@ -1,6 +1,6 @@
-# LabViz V2.4.0-rc.1
+# LabViz V2.4.0
 
-A Windows desktop preview of V2.4. V2.3.0 remains the stable release while this candidate is evaluated.
+The Windows desktop release of V2.4. It follows V2.3.0.
 
 V2.4 gives every chart one drawing plan. The server works out every number that is drawn, and the preview in the window and the exported file draw that same plan, so the two no longer disagree.
 
@@ -26,7 +26,10 @@ V2.4 gives every chart one drawing plan. The server works out every number that 
 - Each panel can have log10 or symlog axes, a manual range and manual ticks.
 - Panels take annotations: text, reference lines, shaded ranges and brackets.
 - One panel can overlay several saved charts of the same data, for example raw points over a violin.
-- Figures from V2.3 open unchanged. Saving a V2.3 figure again produces the same PNG, SVG and PDF files.
+- Exported PDFs embed TrueType fonts and SVGs keep their text as text, so journals that refuse Type 3 fonts accept them and the text stays editable. Chinese labels carry their glyphs in the SVG. PNG output is unchanged.
+- A figure's text can be set in DejaVu Sans (the default, as before), Arial or Times New Roman.
+- Figures no longer print the input rows, revision and method lines under each panel; they stay in the output notes, and a switch prints them again. The panels take the space the lines used. The count line under category names can be turned off.
+- Figures from V2.3 open unchanged. Saved again, they get the embedded fonts and lose the footer, and their panels grow into the space it used.
 - Fixed: in a classic chart of more than 250 rows captured into a figure, most points linked to the wrong source row. Captures saved earlier keep their stored links.
 
 **Editing.**
@@ -43,7 +46,7 @@ V2.4 gives every chart one drawing plan. The server works out every number that 
 
 ## Data and the way back
 
-V2.4 adds two tables to the local database. A profile that V2.4.0-rc.1 has opened is marked with data epoch 3. V2.3.0 refuses that profile without changing it.
+V2.4 adds two tables to the local database. A profile that V2.4.0 has opened is marked with data epoch 3. V2.3.0 refuses that profile without changing it.
 
 Installing over V2.3.0 keeps the V2.3.0 program and a snapshot of your data taken just before the upgrade. To go back, exit LabViz and run this in PowerShell:
 
@@ -66,7 +69,9 @@ Download the setup file and `SHA256SUMS.txt` from the release, check the SHA-256
 - Line, scatter and bar exports with more than 250 rows differ from V2.3.0, because every row is now drawn. A 100,000-row bar export takes about 3 to 6 seconds.
 - With 100,000 rows per panel, composed figures are slower than their targets: a four-panel export takes about 17 seconds and a six-panel one about 25 (targets 8 and 10 seconds), and recalculating a strip or violin chart takes 5 to 6 seconds (target 3). At 10,000 rows every target is met.
 - Reopening a saved project of 100,000 rows with a four-panel figure took about 3.5 seconds in testing, and once more than 5; V2.3.0 took about 1.3 seconds. The cause is not known yet.
-- In a narrow custom figure canvas, category names and the count line under them can overlap. The default size is unaffected.
+- With the footer switched on, a narrow custom figure canvas can overlap category names, the count line and the footer.
+- Chinese labels are drawn in a thin weight of the bundled font.
+- In the figure editor the interactive panel views draw text in the app font; the composed figure shows the chosen font.
 - A paired chart without a group column lists one legend entry named "Undeclared".
 - Messages that refuse a chart or a figure are in English only.
 - Selecting points on a chart needs a mouse; the data table rows are the keyboard path.
