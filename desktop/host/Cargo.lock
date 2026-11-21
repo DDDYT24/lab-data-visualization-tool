@@ -1930,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "labviz-desktop"
-version = "2.4.0-rc.1"
+version = "2.4.0"
 dependencies = [
  "dunce",
  "open",
