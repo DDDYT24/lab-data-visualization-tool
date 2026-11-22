@@ -75,7 +75,7 @@
       "id": "R04",
       "design": "paired, non-normal",
       "analysis": "Wilcoxon signed-rank",
-      "chart": "paired lines",
+      "chart": "paired lines with box",
       "milestones": [
         "M4"
       ],
@@ -97,7 +97,7 @@
       "id": "R05",
       "design": "treatments against control",
       "analysis": "one-way ANOVA, Dunnett",
-      "chart": "dots, mean ± SEM",
+      "chart": "bar with points",
       "milestones": [
         "M4",
         "M5"
@@ -143,7 +143,7 @@
       "id": "R07",
       "design": "unequal variances",
       "analysis": "Welch ANOVA, Games-Howell",
-      "chart": "dots, mean ± SD",
+      "chart": "box with points",
       "milestones": [
         "M4",
         "M5"
@@ -166,7 +166,7 @@
       "id": "R08",
       "design": "several groups, non-normal",
       "analysis": "Kruskal-Wallis, Dunn (Holm)",
-      "chart": "box with points",
+      "chart": "points with mean ± SD",
       "milestones": [
         "M4",
         "M5"
