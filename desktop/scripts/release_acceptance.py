@@ -6,6 +6,7 @@ Usage, from the repository root:
 Stages:
     session    headless host; the full scientific workflow (15 checks, 17 exports); the part 2
                headless and profile checks; a normal exit with no surviving process
+               (it then writes <candidate>/background-evidence.json, which compiling requires)
     installer  silent install, repair, update and rollback; retention after upgrade; recovery
                from a failed update
     all        session, then installer
@@ -122,6 +123,23 @@ def session(args, run):
     run.record()
     run.step('part2-profile', [sys.executable, '-B', '-X', 'utf8', ROOT/'desktop/tests/part2_profile_acceptance.py',
                                args.trial, args.bundle])
+    write_evidence(args)
+
+
+def write_evidence(args):
+    """The background evidence that desktop/packaging/build_candidate.py requires before compiling."""
+    path = args.candidate/'background-evidence.json'
+    if path.exists():
+        raise SystemExit('keep the existing evidence '+str(path))
+    package = json.loads((args.bundle/'desktop-package.json').read_text(encoding='utf-8'))['packageId']
+    frozen = args.build/'candidate.json'
+    commit = json.loads(frozen.read_text(encoding='utf-8')).get('sourceCommit') if frozen.exists() else None
+    value = {'passed': True, 'inProgress': False, 'packageId': package,
+             'scope': f'Bundled scientific workflow, part 2 headless acceptance and profile-copy acceptance (trial {args.label}); no native window',
+             'scientificChecks': WORKFLOW_CHECKS, 'frozenExports': WORKFLOW_EXPORTS, 'nativeAcceptance': False,
+             'sourceCommit': commit}
+    path.write_text(json.dumps(value, indent=2), encoding='utf-8')
+    print('evidence', path, flush=True)
 
 
 def installer(args, run):
