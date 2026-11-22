@@ -21,19 +21,16 @@ def test_committed_fixtures_match_the_generator_byte_for_byte() -> None:
         assert (ROOT / name).read_bytes() == content.encode(), name
 
 
-def test_generator_repeats_from_its_seeds() -> None:
-    assert build() == build()
-
-
 def test_manifest_describes_every_reference_entry() -> None:
     files = build()
     entries = json.loads(files["manifest.json"])["entries"]
     ids = [entry["id"] for entry in entries]
     assert ids == [f"R{number:02d}" for number in range(1, 21)] == [e.id for e in ENTRIES]
+    with_data = {entry["id"] for entry in entries if entry["file"] is not None}
     for entry in entries:
         assert entry["design"] and entry["analysis"] and entry["chart"] and entry["milestones"]
         if entry["file"] is None:
-            assert entry["panels"] and set(entry["panels"]) < set(ids)
+            assert entry["panels"] and set(entry["panels"]) <= with_data
             continue
         content = files[entry["file"]]
         assert hashlib.sha256(content.encode()).hexdigest() == entry["sha256"]
@@ -46,10 +43,12 @@ def test_manifest_describes_every_reference_entry() -> None:
 def test_each_design_has_the_structure_its_analysis_needs() -> None:
     files = build()
 
-    for entry_id, unit in (("R03", "slice"), ("R04", "mouse")):
+    for entry_id, unit in (("R03", "slice"), ("R04", "mouse"), ("R19", "blot")):
         rows = read(files, entry_id)
-        assert set(Counter(row[unit] for row in rows).values()) == {2}
-        assert len({row["condition"] for row in rows}) == 2
+        conditions = {row["condition"] for row in rows}
+        assert len(conditions) == 2
+        for value in {row[unit] for row in rows}:
+            assert sorted(r["condition"] for r in rows if r[unit] == value) == sorted(conditions)
 
     cells = Counter((row["genotype"], row["treatment"]) for row in read(files, "R09"))
     assert len(cells) == 4 and sorted(cells.values()) == [5, 6, 6, 6]
@@ -66,15 +65,20 @@ def test_each_design_has_the_structure_its_analysis_needs() -> None:
     for animal in animals:
         assert [int(r["time_min"]) for r in course if r["animal"] == animal] == list(R12_TIMES)
 
-    for row in read(files, "R13"):
-        assert float(row["concentration_uM"]) > 0
+    doses = read(files, "R13")
+    assert all(float(row["concentration_uM"]) > 0 for row in doses)
+    compound_of: dict[str, str] = {}
+    for row in doses:
+        assert compound_of.setdefault(row["replicate"], row["compound"]) == row["compound"]
 
     survival = read(files, "R16")
-    assert {row["event"] for row in survival} == {"0", "1"}
     assert all(1 <= int(row["time_days"]) <= R16_FOLLOW_UP for row in survival)
+    for arm in {row["arm"] for row in survival}:
+        assert {r["event"] for r in survival if r["arm"] == arm} <= {"0", "1"}
+        assert any(r["event"] == "1" for r in survival if r["arm"] == arm)
 
-    assert all(int(row["count"]) >= 0 for row in read(files, "R17"))
-
-    blots = read(files, "R19")
-    assert Counter(row["blot"] for row in blots) == Counter({f"b{n}": 2 for n in range(1, 5)})
-    assert all(float(row["target_signal"]) > 0 < float(row["loading_signal"]) for row in blots)
+    table = read(files, "R17")
+    outcomes = {row["outcome"] for row in table}
+    assert Counter(row["condition"] for row in table) == Counter(
+        {condition: len(outcomes) for condition in {row["condition"] for row in table}}
+    )

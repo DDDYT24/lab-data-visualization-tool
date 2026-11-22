@@ -4,7 +4,11 @@ Every number is invented: each entry copies only the design of a published figur
 pairing, factors, time points, censoring), never its values. Each entry draws from NumPy's
 ``default_rng`` with its own fixed seed, but uses only the uniform stream and turns it into
 normal, log-normal and exponential draws here (Box-Muller, inverse CDF), then rounds. The files
-therefore depend on the seed and this code, not on NumPy's distribution algorithms.
+therefore depend on the seed, this code and the uniform stream, not on NumPy's distribution
+algorithms. Two residual dependencies remain, both caught by the byte test: ``math`` functions
+may differ by one ulp between platforms (rounding to at most four decimals makes a changed digit
+very unlikely), and NumPy promises stream stability for its bit generators, not for
+``Generator.random``.
 
 Rewrite the files from ``V2.0/api`` with ``python -m scripts.build_v25_reference_fixtures``;
 ``tests/test_v25_reference_fixtures.py`` checks the committed bytes against ``build()``.
@@ -81,7 +85,7 @@ def r03(d: Draws) -> Rows:
     rows: Rows = []
     for i in range(1, 7):
         before = d.normal(45.0, 8.0)
-        after = before - 9.0 + d.normal(0.0, 4.0)
+        after = before - 9.0 + d.normal(0.0, 2.5)
         rows += [[f"s{i:02d}", "Before", num(before, 2)], [f"s{i:02d}", "After", num(after, 2)]]
     return rows
 
@@ -132,7 +136,7 @@ def r06(d: Draws) -> Rows:
 
 
 def r07(d: Draws) -> Rows:
-    spec = (("Wild type", 18.0, 3.0), ("Variant A", 26.0, 6.0), ("Variant B", 13.0, 2.5))
+    spec = (("Wild type", 18.0, 1.5), ("Variant A", 26.0, 7.0), ("Variant B", 13.0, 2.0))
     return groups(d, "a", spec, 6, 2)
 
 
@@ -169,8 +173,8 @@ def r10(d: Draws) -> Rows:
         for animal in range(1, 6):
             animal_mean = mean + d.normal(0.0, 0.25)
             rows += [
-                [f"{prefix}{animal}", group, str(repeat), num(animal_mean + d.normal(0.0, 0.1), 3)]
-                for repeat in range(1, 5)
+                [f"{prefix}{animal}", group, str(rep), num(animal_mean + d.normal(0.0, 0.1), 3)]
+                for rep in range(1, 5)
             ]
     return rows
 
@@ -210,11 +214,17 @@ R13_CONCENTRATIONS = (0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0)
 
 def r13(d: Draws) -> Rows:
     rows: Rows = []
-    for compound, ec50 in (("Compound A", 0.08), ("Compound B", 0.6)):
+    # Inhibition curves, as in the reference figure: viability falls from 100% as dose rises.
+    for compound, ic50 in (("Compound A", 0.08), ("Compound B", 0.6)):
         for concentration in R13_CONCENTRATIONS:
-            mean = 1.0 + 4.0 / (1.0 + (ec50 / concentration) ** 1.2)
+            mean = 3.0 + 97.0 / (1.0 + (concentration / ic50) ** 1.2)
             rows += [
-                [f"r{rep}", compound, f"{concentration:g}", num(mean + d.normal(0.0, 0.18), 3)]
+                [
+                    f"{compound[-1]}{rep}",
+                    compound,
+                    f"{concentration:g}",
+                    num(mean + d.normal(0.0, 6.0), 2),
+                ]
                 for rep in range(1, 4)
             ]
     return rows
@@ -248,7 +258,7 @@ R16_FOLLOW_UP = 80
 def r16(d: Draws) -> Rows:
     rows: Rows = []
     for index, (arm, mean) in enumerate(
-        (("Control", 55.0), ("Treatment A", 50.0), ("Treatment B", 120.0))
+        (("Control", 35.0), ("Treatment A", 45.0), ("Treatment B", 200.0))
     ):
         for mouse in range(1, 11):
             event_time = d.exponential(mean)
@@ -279,16 +289,14 @@ def r18(d: Draws) -> Rows:
 
 
 def r19(d: Draws) -> Rows:
+    # One target/loading ratio per lane, as densitometry software exports it; LabViz normalises
+    # each blot to its own control, so every control becomes exactly 1.
     rows: Rows = []
     for blot in range(1, 5):
         control_target = d.normal(1000.0, 80.0)
-        rows.append(
-            [f"b{blot}", "Control", num(control_target, 1), num(d.normal(2000.0, 100.0), 1)]
-        )
-        treated_target = control_target * 2.6 * d.lognormal(1.0, 0.12)
-        rows.append(
-            [f"b{blot}", "Treated", num(treated_target, 1), num(d.normal(2000.0, 100.0), 1)]
-        )
+        control = control_target / d.normal(2000.0, 100.0)
+        treated = control_target * 2.6 * d.lognormal(1.0, 0.12) / d.normal(2000.0, 100.0)
+        rows += [[f"b{blot}", "Control", num(control, 4)], [f"b{blot}", "Treated", num(treated, 4)]]
     return rows
 
 
@@ -337,7 +345,7 @@ ENTRIES = (
         "paired lines",
         ("M4",),
         ("slice", "condition", "value"),
-        "6 slices; before normal 45 (SD 8); after = before - 9 + normal (SD 4)",
+        "6 slices; before normal 45 (SD 8); after = before - 9 + normal (SD 2.5)",
         r03,
     ),
     Entry(
@@ -353,7 +361,7 @@ ENTRIES = (
     ),
     Entry(
         "R05",
-        "doses_vs_control",
+        "treatments_vs_control",
         "treatments against control",
         "one-way ANOVA, Dunnett",
         "bar with points",
@@ -381,7 +389,7 @@ ENTRIES = (
         "box with points",
         ("M4", "M5"),
         ("animal", "group", "value"),
-        "6 per group; normal, means 18, 26, 13, SD 3, 6, 2.5",
+        "6 per group; normal, means 18, 26, 13, SD 1.5, 7, 2",
         r07,
     ),
     Entry(
@@ -413,7 +421,7 @@ ENTRIES = (
         "t on unit means, repeat warning",
         "dots, units as n",
         ("M4",),
-        ("animal", "group", "repeat", "value"),
+        ("animal", "group", "technical_repeat", "value"),
         "5 animals per group, 4 repeats each; animal SD 0.25, repeat SD 0.1, means 1.4 and 0.9",
         r10,
     ),
@@ -446,12 +454,12 @@ ENTRIES = (
         "R13",
         "dose_response",
         "dose-response, two compounds",
-        "4PL, EC50 with interval, comparison",
+        "4PL, IC50 with interval, comparison",
         "log-x curve",
         ("M6",),
-        ("replicate", "compound", "concentration_uM", "response"),
-        "3 replicates at 9 concentrations; 4PL bottom 1, top 5, Hill 1.2, EC50 0.08 and 0.6; "
-        "noise SD 0.18",
+        ("replicate", "compound", "concentration_uM", "viability_pct"),
+        "3 replicates per compound at 9 concentrations; falling 4PL, top 100, bottom 3, Hill 1.2, "
+        "IC50 0.08 and 0.6; noise SD 6",
         r13,
     ),
     Entry(
@@ -484,7 +492,7 @@ ENTRIES = (
         "step curves, numbers at risk",
         ("M7",),
         ("mouse", "arm", "time_days", "event"),
-        "10 per arm; exponential event times, means 55, 50, 120 days; 10% lost early; "
+        "10 per arm; exponential event times, means 35, 45, 200 days; 10% lost early; "
         "censored at 80 days",
         r16,
     ),
@@ -517,9 +525,9 @@ ENTRIES = (
         "one-sample t against 1",
         "dots, mean ± SEM",
         ("M4",),
-        ("blot", "condition", "target_signal", "loading_signal"),
-        "4 blots; control target normal 1000 (SD 80), loading normal 2000 (SD 100); treated "
-        "target = control × 2.6 × log-normal (sigma 0.12)",
+        ("blot", "condition", "ratio"),
+        "4 blots, one target/loading ratio per lane; target normal 1000 (SD 80), treated target = "
+        "control target × 2.6 × log-normal (sigma 0.12), loading normal 2000 (SD 100)",
         r19,
     ),
     Entry(

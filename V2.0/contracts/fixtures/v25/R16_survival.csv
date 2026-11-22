@@ -1,31 +1,31 @@
 mouse,arm,time_days,event
 k1-01,Control,80,0
-k1-02,Control,13,1
+k1-02,Control,9,1
 k1-03,Control,80,0
-k1-04,Control,23,1
-k1-05,Control,80,0
-k1-06,Control,22,1
-k1-07,Control,20,0
-k1-08,Control,7,1
-k1-09,Control,80,0
-k1-10,Control,15,0
-k2-01,Treatment A,80,0
-k2-02,Treatment A,37,1
-k2-03,Treatment A,42,1
-k2-04,Treatment A,72,1
-k2-05,Treatment A,10,1
-k2-06,Treatment A,70,1
+k1-04,Control,15,1
+k1-05,Control,80,1
+k1-06,Control,14,1
+k1-07,Control,13,0
+k1-08,Control,4,1
+k1-09,Control,61,1
+k1-10,Control,10,0
+k2-01,Treatment A,75,1
+k2-02,Treatment A,34,1
+k2-03,Treatment A,38,1
+k2-04,Treatment A,65,1
+k2-05,Treatment A,9,1
+k2-06,Treatment A,63,1
 k2-07,Treatment A,80,0
 k2-08,Treatment A,80,0
-k2-09,Treatment A,29,1
+k2-09,Treatment A,26,1
 k2-10,Treatment A,1,1
-k3-01,Treatment B,68,1
+k3-01,Treatment B,80,0
 k3-02,Treatment B,80,0
 k3-03,Treatment B,80,0
-k3-04,Treatment B,2,1
-k3-05,Treatment B,21,1
-k3-06,Treatment B,31,1
-k3-07,Treatment B,79,0
-k3-08,Treatment B,52,1
-k3-09,Treatment B,21,1
-k3-10,Treatment B,5,0
+k3-04,Treatment B,3,1
+k3-05,Treatment B,35,1
+k3-06,Treatment B,51,1
+k3-07,Treatment B,80,0
+k3-08,Treatment B,80,0
+k3-09,Treatment B,35,1
+k3-10,Treatment B,8,0

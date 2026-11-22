@@ -57,7 +57,7 @@
       "milestones": [
         "M4"
       ],
-      "model": "6 slices; before normal 45 (SD 8); after = before - 9 + normal (SD 4)",
+      "model": "6 slices; before normal 45 (SD 8); after = before - 9 + normal (SD 2.5)",
       "file": "R03_paired.csv",
       "seed": [
         2025,
@@ -69,7 +69,7 @@
         "value"
       ],
       "rows": 12,
-      "sha256": "7548b929878baa3ba66c5a7bd8c8223f7a7f3262c997364d2db5bcb64bf1e8ca"
+      "sha256": "2b2523ac9673be4c0bc7d751b3653b38844d34e711118822d6c5c37d77451bdc"
     },
     {
       "id": "R04",
@@ -103,7 +103,7 @@
         "M5"
       ],
       "model": "6 per group; normal, SD 0.4, means 1.0, 1.3, 4.4, 5.9",
-      "file": "R05_doses_vs_control.csv",
+      "file": "R05_treatments_vs_control.csv",
       "seed": [
         2025,
         5
@@ -148,7 +148,7 @@
         "M4",
         "M5"
       ],
-      "model": "6 per group; normal, means 18, 26, 13, SD 3, 6, 2.5",
+      "model": "6 per group; normal, means 18, 26, 13, SD 1.5, 7, 2",
       "file": "R07_unequal_variances.csv",
       "seed": [
         2025,
@@ -160,7 +160,7 @@
         "value"
       ],
       "rows": 18,
-      "sha256": "343c69e8337c83cadcec8d407dfae9c7ff26aee76d0e7850a116457356187bfa"
+      "sha256": "bf2f45a5d35ae7c8f1aea4dbfb3e3e70e76c113ee5a6b80448dcfc46481fe933"
     },
     {
       "id": "R08",
@@ -227,11 +227,11 @@
       "columns": [
         "animal",
         "group",
-        "repeat",
+        "technical_repeat",
         "value"
       ],
       "rows": 40,
-      "sha256": "3ab502bb19320defa3c9db96d4b4c06c585881bdb693e36acfea1fc175d9c797"
+      "sha256": "42826c43113a7b62952b77e4acfa191c730049ed883cfdd05fcd60120ab08153"
     },
     {
       "id": "R11",
@@ -283,12 +283,12 @@
     {
       "id": "R13",
       "design": "dose-response, two compounds",
-      "analysis": "4PL, EC50 with interval, comparison",
+      "analysis": "4PL, IC50 with interval, comparison",
       "chart": "log-x curve",
       "milestones": [
         "M6"
       ],
-      "model": "3 replicates at 9 concentrations; 4PL bottom 1, top 5, Hill 1.2, EC50 0.08 and 0.6; noise SD 0.18",
+      "model": "3 replicates per compound at 9 concentrations; falling 4PL, top 100, bottom 3, Hill 1.2, IC50 0.08 and 0.6; noise SD 6",
       "file": "R13_dose_response.csv",
       "seed": [
         2025,
@@ -298,10 +298,10 @@
         "replicate",
         "compound",
         "concentration_uM",
-        "response"
+        "viability_pct"
       ],
       "rows": 54,
-      "sha256": "6c671906e55ca591c4a89e56f1a60b540b724f06513b5b2e882aa6d7fad9a559"
+      "sha256": "c9a6236bdfdee3ddcb1745a3bfa076d4f6205b424feef01bcc5e03905385bdd2"
     },
     {
       "id": "R14",
@@ -355,7 +355,7 @@
       "milestones": [
         "M7"
       ],
-      "model": "10 per arm; exponential event times, means 55, 50, 120 days; 10% lost early; censored at 80 days",
+      "model": "10 per arm; exponential event times, means 35, 45, 200 days; 10% lost early; censored at 80 days",
       "file": "R16_survival.csv",
       "seed": [
         2025,
@@ -368,7 +368,7 @@
         "event"
       ],
       "rows": 30,
-      "sha256": "1ea36f68480940bb2bba5595848465bb860fc4483a162d7157e8b70498b06172"
+      "sha256": "d38b11da254703553fa68529b86c7256b5fc34c8203b9ff5d0b5588b7b39adc7"
     },
     {
       "id": "R17",
@@ -422,7 +422,7 @@
       "milestones": [
         "M4"
       ],
-      "model": "4 blots; control target normal 1000 (SD 80), loading normal 2000 (SD 100); treated target = control × 2.6 × log-normal (sigma 0.12)",
+      "model": "4 blots, one target/loading ratio per lane; target normal 1000 (SD 80), treated target = control target × 2.6 × log-normal (sigma 0.12), loading normal 2000 (SD 100)",
       "file": "R19_normalised.csv",
       "seed": [
         2025,
@@ -431,11 +431,10 @@
       "columns": [
         "blot",
         "condition",
-        "target_signal",
-        "loading_signal"
+        "ratio"
       ],
       "rows": 8,
-      "sha256": "1217273cc55aea7aade47d0f19626d4359ce399eacf5c3898f9e0cd1baca179e"
+      "sha256": "7bc6fcbad0a547484ba22111ab4b92dfb26a3dd580bcf622f80fb02c8e655ccd"
     },
     {
       "id": "R20",
