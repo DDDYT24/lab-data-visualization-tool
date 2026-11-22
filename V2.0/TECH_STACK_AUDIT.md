@@ -28,6 +28,9 @@ library is present.
   validated email models, and multipart upload/form parsing.
 - pandas, NumPy, SciPy, Matplotlib, openpyxl, and PyArrow implement parsing, scientific analysis,
   publication export, XLSX support, and immutable Parquet datasets.
+- Pillow (MIT-CMU licence) reads and writes images for stored previews (`persistence/sqlite.py`,
+  `research_preview.py`). It shipped before as a Matplotlib dependency and is declared directly
+  since V2.5 M1; the locks keep 12.3.0, only their comments changed.
 - SQLAlchemy, Alembic, psycopg, and boto3 implement the selectable persistence boundary,
   migrations, PostgreSQL, and S3-compatible storage.
 - pytest, Ruff, and MyPy are verification-only tools. `httpx2` remains intentional because the
