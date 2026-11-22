@@ -1,0 +1,25 @@
+mouse,condition,value
+m01,Cue absent,200.4
+m01,Cue present,209.6
+m02,Cue absent,209.6
+m02,Cue present,221.1
+m03,Cue absent,201.8
+m03,Cue present,207.1
+m04,Cue absent,209.2
+m04,Cue present,211.3
+m05,Cue absent,203.4
+m05,Cue present,245.8
+m06,Cue absent,201.4
+m06,Cue present,242.2
+m07,Cue absent,212.6
+m07,Cue present,228.1
+m08,Cue absent,207.6
+m08,Cue present,220.6
+m09,Cue absent,211.0
+m09,Cue present,229.9
+m10,Cue absent,209.1
+m10,Cue present,207.8
+m11,Cue absent,204.9
+m11,Cue present,213.5
+m12,Cue absent,201.1
+m12,Cue present,205.2

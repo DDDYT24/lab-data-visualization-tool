@@ -1,0 +1,9 @@
+blot,condition,target_signal,loading_signal
+b1,Control,1053.8,1941.5
+b1,Treated,2335.2,2091.8
+b2,Control,906.3,1911.3
+b2,Treated,2079.9,2081.1
+b3,Control,915.8,1831.9
+b3,Treated,2445.7,2060.1
+b4,Control,904.9,2167.8
+b4,Treated,2320.4,1961.0
