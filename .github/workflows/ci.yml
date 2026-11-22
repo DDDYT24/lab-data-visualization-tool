@@ -47,6 +47,10 @@ jobs:
           cache-dependency-path: V2.0/web/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Test the npm audit gate
+        run: python3 -m unittest discover -s ../../.github/scripts -p "test_*.py"
+      - name: Audit dependencies (only owner-reviewed findings pass)
+        run: python3 ../../.github/scripts/npm_audit_gate.py
       - name: Verify frontend
         run: npm run verify
       - name: Install browser test engines
