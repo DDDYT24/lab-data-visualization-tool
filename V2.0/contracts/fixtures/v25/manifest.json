@@ -1,0 +1,457 @@
+{
+  "schemaVersion": 1,
+  "synthetic": true,
+  "generator": "build_v25_reference_fixtures.py",
+  "entries": [
+    {
+      "id": "R01",
+      "design": "two groups, unpaired",
+      "analysis": "Welch t",
+      "chart": "dots, mean ± SD",
+      "milestones": [
+        "M4",
+        "M5"
+      ],
+      "model": "8 per group; normal, means 1.0 and 1.45, SD 0.25 and 0.45",
+      "file": "R01_two_groups_unpaired.csv",
+      "seed": [
+        2025,
+        1
+      ],
+      "columns": [
+        "animal",
+        "group",
+        "value"
+      ],
+      "rows": 16,
+      "sha256": "3d5c00288ee13dc51213f381d3684c54e9cbcf27c114a14aed463efe23b0e651"
+    },
+    {
+      "id": "R02",
+      "design": "two groups, small n, skewed",
+      "analysis": "Mann-Whitney",
+      "chart": "dots, median with IQR",
+      "milestones": [
+        "M4",
+        "M5"
+      ],
+      "model": "7 and 6 per group; rounded log-normal counts, medians 12 and 4",
+      "file": "R02_two_groups_skewed.csv",
+      "seed": [
+        2025,
+        2
+      ],
+      "columns": [
+        "embryo",
+        "group",
+        "count"
+      ],
+      "rows": 13,
+      "sha256": "e04278a090e97838a66831671972fd72c36741df504c094cd5633612506831d2"
+    },
+    {
+      "id": "R03",
+      "design": "before / after, paired",
+      "analysis": "paired t",
+      "chart": "paired lines",
+      "milestones": [
+        "M4"
+      ],
+      "model": "6 slices; before normal 45 (SD 8); after = before - 9 + normal (SD 2.5)",
+      "file": "R03_paired.csv",
+      "seed": [
+        2025,
+        3
+      ],
+      "columns": [
+        "slice",
+        "condition",
+        "value"
+      ],
+      "rows": 12,
+      "sha256": "2b2523ac9673be4c0bc7d751b3653b38844d34e711118822d6c5c37d77451bdc"
+    },
+    {
+      "id": "R04",
+      "design": "paired, non-normal",
+      "analysis": "Wilcoxon signed-rank",
+      "chart": "paired lines with box",
+      "milestones": [
+        "M4"
+      ],
+      "model": "12 mice; shift = log-normal (median 10, sigma 0.8) - 3",
+      "file": "R04_paired_nonnormal.csv",
+      "seed": [
+        2025,
+        4
+      ],
+      "columns": [
+        "mouse",
+        "condition",
+        "value"
+      ],
+      "rows": 24,
+      "sha256": "5f1bbda8b6b6fba02223dde1b17bf7d3030f7ff7b0b481f6c97bf81c9ebc8b27"
+    },
+    {
+      "id": "R05",
+      "design": "treatments against control",
+      "analysis": "one-way ANOVA, Dunnett",
+      "chart": "bar with points",
+      "milestones": [
+        "M4",
+        "M5"
+      ],
+      "model": "6 per group; normal, SD 0.4, means 1.0, 1.3, 4.4, 5.9",
+      "file": "R05_treatments_vs_control.csv",
+      "seed": [
+        2025,
+        5
+      ],
+      "columns": [
+        "well",
+        "treatment",
+        "value"
+      ],
+      "rows": 24,
+      "sha256": "8430a0bd3dff44d6d4ac0663ff73702d794c61e3b0d0725d58eecd3de6e2fa85"
+    },
+    {
+      "id": "R06",
+      "design": "several treatments, all pairs",
+      "analysis": "one-way ANOVA, Tukey",
+      "chart": "bar with points",
+      "milestones": [
+        "M4",
+        "M5"
+      ],
+      "model": "6 per group; normal, SD 0.3, means 5.8, 5.7, 5.3, 4.7, 3.3",
+      "file": "R06_all_pairs.csv",
+      "seed": [
+        2025,
+        6
+      ],
+      "columns": [
+        "sample",
+        "treatment",
+        "value"
+      ],
+      "rows": 30,
+      "sha256": "42024628b17707eb86cd3a630292c55fa78513238a494c1d442b4daeaa28f6b9"
+    },
+    {
+      "id": "R07",
+      "design": "unequal variances",
+      "analysis": "Welch ANOVA, Games-Howell",
+      "chart": "box with points",
+      "milestones": [
+        "M4",
+        "M5"
+      ],
+      "model": "6 per group; normal, means 18, 26, 13, SD 1.5, 7, 2",
+      "file": "R07_unequal_variances.csv",
+      "seed": [
+        2025,
+        7
+      ],
+      "columns": [
+        "animal",
+        "group",
+        "value"
+      ],
+      "rows": 18,
+      "sha256": "bf2f45a5d35ae7c8f1aea4dbfb3e3e70e76c113ee5a6b80448dcfc46481fe933"
+    },
+    {
+      "id": "R08",
+      "design": "several groups, non-normal",
+      "analysis": "Kruskal-Wallis, Dunn (Holm)",
+      "chart": "points with mean ± SD",
+      "milestones": [
+        "M4",
+        "M5"
+      ],
+      "model": "4 per group; log-normal, sigma 0.35, medians 60, 110, 165, 300",
+      "file": "R08_groups_nonnormal.csv",
+      "seed": [
+        2025,
+        8
+      ],
+      "columns": [
+        "well",
+        "group",
+        "value"
+      ],
+      "rows": 16,
+      "sha256": "0ac9cf45ff11604ff4dbe860814a7e465259168bd1d9e3cb3394a19c9da089c1"
+    },
+    {
+      "id": "R09",
+      "design": "genotype × treatment",
+      "analysis": "two-way ANOVA, post-hoc (Holm)",
+      "chart": "grouped bar with points",
+      "milestones": [
+        "M3",
+        "M4",
+        "M5"
+      ],
+      "model": "cells of 6, 6, 6 and 5; normal, SD 5, means 30, 25, 55, 38 (interaction)",
+      "file": "R09_two_factor.csv",
+      "seed": [
+        2025,
+        9
+      ],
+      "columns": [
+        "animal",
+        "genotype",
+        "treatment",
+        "value"
+      ],
+      "rows": 23,
+      "sha256": "a156dd17a995da4485cba4484cb27b2250edd3d74db7a86393aac9780c9d6709"
+    },
+    {
+      "id": "R10",
+      "design": "technical repeats within animals",
+      "analysis": "t on unit means, repeat warning",
+      "chart": "dots, units as n",
+      "milestones": [
+        "M4"
+      ],
+      "model": "5 animals per group, 4 repeats each; animal SD 0.25, repeat SD 0.1, means 1.4 and 0.9",
+      "file": "R10_technical_repeats.csv",
+      "seed": [
+        2025,
+        10
+      ],
+      "columns": [
+        "animal",
+        "group",
+        "technical_repeat",
+        "value"
+      ],
+      "rows": 40,
+      "sha256": "42826c43113a7b62952b77e4acfa191c730049ed883cfdd05fcd60120ab08153"
+    },
+    {
+      "id": "R11",
+      "design": "distribution comparison",
+      "analysis": "test of choice",
+      "chart": "violin with points",
+      "milestones": [
+        "M5"
+      ],
+      "model": "60 cells per group; normal 2.0 (0.55), normal 1.8 (0.6), and a 0.6/0.4 mixture of normal 1.1 (0.3) and 2.2 (0.35)",
+      "file": "R11_distributions.csv",
+      "seed": [
+        2025,
+        11
+      ],
+      "columns": [
+        "cell",
+        "group",
+        "value"
+      ],
+      "rows": 180,
+      "sha256": "fc1eac3d755c0fb7389949bbb350b602a2581092f7202bc512d691471d18a016"
+    },
+    {
+      "id": "R12",
+      "design": "time course, several groups",
+      "analysis": "two-way repeated-measures ANOVA (Geisser-Greenhouse), Šidák per time point; area under the curve per animal",
+      "chart": "XY mean ± SEM per time",
+      "milestones": [
+        "M3",
+        "M4",
+        "M6"
+      ],
+      "model": "8 animals per group at 0-120 min; baseline 120 (SD 10) + amplitude 180, 260 or 210 × animal scale (SD 0.12) × (t/30)·exp(1 - t/30) + noise (SD 12)",
+      "file": "R12_time_course.csv",
+      "seed": [
+        2025,
+        12
+      ],
+      "columns": [
+        "animal",
+        "group",
+        "time_min",
+        "glucose"
+      ],
+      "rows": 144,
+      "sha256": "524d0c848fc64d65344c7d7e798d415d0c6ed1402502723066640f782d09f195"
+    },
+    {
+      "id": "R13",
+      "design": "dose-response, two compounds",
+      "analysis": "4PL, IC50 with interval, comparison",
+      "chart": "log-x curve",
+      "milestones": [
+        "M6"
+      ],
+      "model": "3 replicates per compound at 9 concentrations; falling 4PL, top 100, bottom 3, Hill 1.2, IC50 0.08 and 0.6; noise SD 6",
+      "file": "R13_dose_response.csv",
+      "seed": [
+        2025,
+        13
+      ],
+      "columns": [
+        "replicate",
+        "compound",
+        "concentration_uM",
+        "viability_pct"
+      ],
+      "rows": 54,
+      "sha256": "c9a6236bdfdee3ddcb1745a3bfa076d4f6205b424feef01bcc5e03905385bdd2"
+    },
+    {
+      "id": "R14",
+      "design": "enzyme kinetics",
+      "analysis": "Michaelis-Menten (Vmax, Km)",
+      "chart": "XY with curve",
+      "milestones": [
+        "M6"
+      ],
+      "model": "3 replicates at 8 concentrations; Vmax 1500, Km 2; noise SD 4% + 15",
+      "file": "R14_enzyme_kinetics.csv",
+      "seed": [
+        2025,
+        14
+      ],
+      "columns": [
+        "replicate",
+        "substrate_uM",
+        "rate"
+      ],
+      "rows": 24,
+      "sha256": "72e865c5a3ea044ca1b9e93be841718281e308b8487f78a7f2dd838ae1729216"
+    },
+    {
+      "id": "R15",
+      "design": "protein decay",
+      "analysis": "one-phase decay, half-life",
+      "chart": "XY with curve",
+      "milestones": [
+        "M6"
+      ],
+      "model": "3 replicates at 7 times; plateau 0.38, span 0.62, half-life 0.25 h; noise SD 0.03",
+      "file": "R15_decay.csv",
+      "seed": [
+        2025,
+        15
+      ],
+      "columns": [
+        "replicate",
+        "time_h",
+        "abundance"
+      ],
+      "rows": 21,
+      "sha256": "091c9f0339488e6815be855e217273e92acebf2959e7228657a3e61c01356a36"
+    },
+    {
+      "id": "R16",
+      "design": "survival, three arms",
+      "analysis": "Kaplan-Meier, log-rank",
+      "chart": "step curves, numbers at risk",
+      "milestones": [
+        "M7"
+      ],
+      "model": "10 per arm; exponential event times, means 35, 45, 200 days; 10% lost early; censored at 80 days",
+      "file": "R16_survival.csv",
+      "seed": [
+        2025,
+        16
+      ],
+      "columns": [
+        "mouse",
+        "arm",
+        "time_days",
+        "event"
+      ],
+      "rows": 30,
+      "sha256": "d38b11da254703553fa68529b86c7256b5fc34c8203b9ff5d0b5588b7b39adc7"
+    },
+    {
+      "id": "R17",
+      "design": "proportions",
+      "analysis": "chi-square or Fisher",
+      "chart": "stacked percentage bars",
+      "milestones": [
+        "M7"
+      ],
+      "model": "fixed counts 26/7, 20/28, 14/43",
+      "file": "R17_proportions.csv",
+      "seed": [
+        2025,
+        17
+      ],
+      "columns": [
+        "condition",
+        "outcome",
+        "count"
+      ],
+      "rows": 6,
+      "sha256": "0ecc9044436dd1cb88056cac946cc0df8ec517f9d033312540f4f855b6a95ba5"
+    },
+    {
+      "id": "R18",
+      "design": "association",
+      "analysis": "Pearson r with interval, regression line",
+      "chart": "research scatter",
+      "milestones": [
+        "M6"
+      ],
+      "model": "12 samples; predictor uniform 0.6-1.25; response = -9 + 10 × predictor + noise (SD 0.35)",
+      "file": "R18_association.csv",
+      "seed": [
+        2025,
+        18
+      ],
+      "columns": [
+        "sample",
+        "predictor",
+        "response"
+      ],
+      "rows": 12,
+      "sha256": "b7091ce4b56611636bd966115d3b37150c07f70d1cb33468373df5c05a6f9b29"
+    },
+    {
+      "id": "R19",
+      "design": "values normalised to control",
+      "analysis": "one-sample t against 1",
+      "chart": "dots, mean ± SEM",
+      "milestones": [
+        "M4"
+      ],
+      "model": "4 blots, one target/loading ratio per lane; target normal 1000 (SD 80), treated target = control target × 2.6 × log-normal (sigma 0.12), loading normal 2000 (SD 100)",
+      "file": "R19_normalised.csv",
+      "seed": [
+        2025,
+        19
+      ],
+      "columns": [
+        "blot",
+        "condition",
+        "ratio"
+      ],
+      "rows": 8,
+      "sha256": "7bc6fcbad0a547484ba22111ab4b92dfb26a3dd580bcf622f80fb02c8e655ccd"
+    },
+    {
+      "id": "R20",
+      "design": "composed figure",
+      "analysis": "panels from the rows above",
+      "chart": "4 to 6 panels, journal width",
+      "milestones": [
+        "M8"
+      ],
+      "model": "no data of its own",
+      "file": null,
+      "panels": [
+        "R01",
+        "R05",
+        "R09",
+        "R12"
+      ]
+    }
+  ]
+}

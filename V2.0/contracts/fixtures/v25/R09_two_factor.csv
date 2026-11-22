@@ -1,0 +1,24 @@
+animal,genotype,treatment,value
+a1-01,Wild type,Vehicle,30.42
+a1-02,Wild type,Vehicle,31.64
+a1-03,Wild type,Vehicle,27.41
+a1-04,Wild type,Vehicle,27.38
+a1-05,Wild type,Vehicle,29.47
+a1-06,Wild type,Vehicle,38.58
+a2-01,Wild type,Drug,28.87
+a2-02,Wild type,Drug,18.51
+a2-03,Wild type,Drug,25.42
+a2-04,Wild type,Drug,24.64
+a2-05,Wild type,Drug,19.35
+a2-06,Wild type,Drug,24.77
+a3-01,Knockout,Vehicle,54.46
+a3-02,Knockout,Vehicle,54.89
+a3-03,Knockout,Vehicle,52.95
+a3-04,Knockout,Vehicle,51.82
+a3-05,Knockout,Vehicle,54.37
+a3-06,Knockout,Vehicle,55.32
+a4-01,Knockout,Drug,32.72
+a4-02,Knockout,Drug,36.99
+a4-03,Knockout,Drug,40.19
+a4-04,Knockout,Drug,41.04
+a4-05,Knockout,Drug,36.02

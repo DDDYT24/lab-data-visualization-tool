@@ -1,0 +1,17 @@
+animal,group,value
+C01,Control,0.758
+C02,Control,1.045
+C03,Control,0.971
+C04,Control,1.259
+C05,Control,1.028
+C06,Control,0.650
+C07,Control,0.987
+C08,Control,1.003
+T01,Treated,0.958
+T02,Treated,0.876
+T03,Treated,1.261
+T04,Treated,1.631
+T05,Treated,1.502
+T06,Treated,2.201
+T07,Treated,1.359
+T08,Treated,0.809

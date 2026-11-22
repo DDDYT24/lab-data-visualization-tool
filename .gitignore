@@ -45,6 +45,7 @@ htmlcov/
 !V2.0/api/tests/fixtures/historical-v21/**/*.xlsx
 !V2.0/contracts/fixtures/v23/batch-1.csv
 !V2.0/contracts/fixtures/v23/batch-2.csv
+!V2.0/contracts/fixtures/v25/*.csv
 outputs/
 # Planning files stay with the maintainer.
 V2.0/TODO.md

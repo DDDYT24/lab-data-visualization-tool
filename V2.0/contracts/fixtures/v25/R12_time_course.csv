@@ -1,0 +1,145 @@
+animal,group,time_min,glucose
+g1-1,Control,0,87.9
+g1-1,Control,15,266.1
+g1-1,Control,30,316.6
+g1-1,Control,60,244.3
+g1-1,Control,90,195.3
+g1-1,Control,120,161.0
+g1-2,Control,0,123.3
+g1-2,Control,15,254.9
+g1-2,Control,30,290.1
+g1-2,Control,60,199.8
+g1-2,Control,90,195.9
+g1-2,Control,120,157.7
+g1-3,Control,0,123.9
+g1-3,Control,15,252.3
+g1-3,Control,30,282.5
+g1-3,Control,60,241.1
+g1-3,Control,90,176.4
+g1-3,Control,120,149.3
+g1-4,Control,0,138.1
+g1-4,Control,15,287.7
+g1-4,Control,30,296.9
+g1-4,Control,60,248.6
+g1-4,Control,90,219.9
+g1-4,Control,120,149.0
+g1-5,Control,0,129.1
+g1-5,Control,15,249.9
+g1-5,Control,30,292.6
+g1-5,Control,60,248.3
+g1-5,Control,90,197.6
+g1-5,Control,120,166.5
+g1-6,Control,0,130.0
+g1-6,Control,15,279.2
+g1-6,Control,30,287.2
+g1-6,Control,60,229.3
+g1-6,Control,90,184.7
+g1-6,Control,120,138.4
+g1-7,Control,0,123.9
+g1-7,Control,15,282.6
+g1-7,Control,30,303.2
+g1-7,Control,60,265.7
+g1-7,Control,90,195.9
+g1-7,Control,120,153.1
+g1-8,Control,0,89.5
+g1-8,Control,15,267.5
+g1-8,Control,30,315.4
+g1-8,Control,60,267.7
+g1-8,Control,90,215.4
+g1-8,Control,120,180.2
+g2-1,Diet,0,104.9
+g2-1,Diet,15,356.0
+g2-1,Diet,30,391.6
+g2-1,Diet,60,320.3
+g2-1,Diet,90,206.6
+g2-1,Diet,120,172.3
+g2-2,Diet,0,131.6
+g2-2,Diet,15,354.8
+g2-2,Diet,30,401.9
+g2-2,Diet,60,340.5
+g2-2,Diet,90,229.9
+g2-2,Diet,120,198.7
+g2-3,Diet,0,111.1
+g2-3,Diet,15,314.7
+g2-3,Diet,30,375.4
+g2-3,Diet,60,289.3
+g2-3,Diet,90,210.9
+g2-3,Diet,120,168.7
+g2-4,Diet,0,137.4
+g2-4,Diet,15,393.3
+g2-4,Diet,30,407.5
+g2-4,Diet,60,365.4
+g2-4,Diet,90,258.2
+g2-4,Diet,120,204.3
+g2-5,Diet,0,110.6
+g2-5,Diet,15,343.1
+g2-5,Diet,30,378.0
+g2-5,Diet,60,284.1
+g2-5,Diet,90,222.9
+g2-5,Diet,120,202.7
+g2-6,Diet,0,105.3
+g2-6,Diet,15,345.2
+g2-6,Diet,30,366.5
+g2-6,Diet,60,330.8
+g2-6,Diet,90,203.0
+g2-6,Diet,120,187.8
+g2-7,Diet,0,98.0
+g2-7,Diet,15,309.7
+g2-7,Diet,30,352.5
+g2-7,Diet,60,287.1
+g2-7,Diet,90,217.5
+g2-7,Diet,120,163.9
+g2-8,Diet,0,131.5
+g2-8,Diet,15,323.8
+g2-8,Diet,30,337.6
+g2-8,Diet,60,309.8
+g2-8,Diet,90,217.4
+g2-8,Diet,120,149.1
+g3-1,Diet + drug,0,111.6
+g3-1,Diet + drug,15,288.1
+g3-1,Diet + drug,30,356.8
+g3-1,Diet + drug,60,266.5
+g3-1,Diet + drug,90,192.6
+g3-1,Diet + drug,120,160.8
+g3-2,Diet + drug,0,111.0
+g3-2,Diet + drug,15,301.7
+g3-2,Diet + drug,30,350.6
+g3-2,Diet + drug,60,308.1
+g3-2,Diet + drug,90,235.3
+g3-2,Diet + drug,120,163.9
+g3-3,Diet + drug,0,99.9
+g3-3,Diet + drug,15,231.0
+g3-3,Diet + drug,30,273.8
+g3-3,Diet + drug,60,232.0
+g3-3,Diet + drug,90,196.0
+g3-3,Diet + drug,120,140.7
+g3-4,Diet + drug,0,135.4
+g3-4,Diet + drug,15,290.1
+g3-4,Diet + drug,30,332.0
+g3-4,Diet + drug,60,304.4
+g3-4,Diet + drug,90,218.4
+g3-4,Diet + drug,120,173.7
+g3-5,Diet + drug,0,124.3
+g3-5,Diet + drug,15,296.7
+g3-5,Diet + drug,30,343.0
+g3-5,Diet + drug,60,284.0
+g3-5,Diet + drug,90,212.6
+g3-5,Diet + drug,120,169.1
+g3-6,Diet + drug,0,135.6
+g3-6,Diet + drug,15,319.5
+g3-6,Diet + drug,30,358.7
+g3-6,Diet + drug,60,293.3
+g3-6,Diet + drug,90,238.6
+g3-6,Diet + drug,120,168.2
+g3-7,Diet + drug,0,123.3
+g3-7,Diet + drug,15,280.7
+g3-7,Diet + drug,30,308.8
+g3-7,Diet + drug,60,250.5
+g3-7,Diet + drug,90,189.7
+g3-7,Diet + drug,120,141.1
+g3-8,Diet + drug,0,123.6
+g3-8,Diet + drug,15,288.5
+g3-8,Diet + drug,30,296.9
+g3-8,Diet + drug,60,230.6
+g3-8,Diet + drug,90,201.2
+g3-8,Diet + drug,120,155.9

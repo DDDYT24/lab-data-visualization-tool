@@ -1,0 +1,25 @@
+well,treatment,value
+w1-01,Untreated,1.423
+w1-02,Untreated,0.811
+w1-03,Untreated,1.034
+w1-04,Untreated,0.931
+w1-05,Untreated,0.764
+w1-06,Untreated,0.616
+w2-01,Treatment A,1.327
+w2-02,Treatment A,1.194
+w2-03,Treatment A,1.591
+w2-04,Treatment A,1.235
+w2-05,Treatment A,1.591
+w2-06,Treatment A,1.443
+w3-01,Treatment B,4.551
+w3-02,Treatment B,4.666
+w3-03,Treatment B,3.579
+w3-04,Treatment B,3.690
+w3-05,Treatment B,4.607
+w3-06,Treatment B,5.106
+w4-01,Treatment C,5.671
+w4-02,Treatment C,6.167
+w4-03,Treatment C,6.700
+w4-04,Treatment C,6.101
+w4-05,Treatment C,6.806
+w4-06,Treatment C,5.828

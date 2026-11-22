@@ -1,0 +1,9 @@
+blot,condition,ratio
+b1,Control,0.5428
+b1,Treated,1.1163
+b2,Control,0.4742
+b2,Treated,0.9994
+b3,Control,0.4999
+b3,Treated,1.1872
+b4,Control,0.4174
+b4,Treated,1.1833
