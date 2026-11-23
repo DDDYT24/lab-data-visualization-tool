@@ -35,7 +35,14 @@ def watcher_picomatch(nodes: list[str] | None = None) -> dict:
     }
 
 
-class ProductionTree(unittest.TestCase):
+class GateCase(unittest.TestCase):
+    def assert_fails_on(self, tree: str, found: dict, name: str) -> None:
+        (line,) = gate.problems(tree, 1, found)
+        self.assertTrue(line.startswith(f"{tree}: unreviewed "), line)
+        self.assertIn(f" finding on {name} (", line)
+
+
+class ProductionTree(GateCase):
     def test_a_clean_audit_passes(self) -> None:
         self.assertEqual(gate.problems("production", 0, audit()), [])
 
@@ -46,10 +53,7 @@ class ProductionTree(unittest.TestCase):
 
     def test_the_same_advisory_elsewhere_fails(self) -> None:
         found = audit(picomatch=watcher_picomatch(["node_modules/picomatch"]))
-        self.assertEqual(
-            gate.problems("production", 1, found),
-            ["production: unreviewed finding on picomatch"],
-        )
+        self.assert_fails_on("production", found, "picomatch")
 
     def test_a_seeded_unreviewed_finding_fails(self) -> None:
         found = audit(
@@ -59,13 +63,10 @@ class ProductionTree(unittest.TestCase):
                 "nodes": ["node_modules/lodash"],
             }
         )
-        self.assertEqual(
-            gate.problems("production", 1, found),
-            ["production: unreviewed finding on lodash"],
-        )
+        self.assert_fails_on("production", found, "lodash")
 
 
-class DevelopmentTree(unittest.TestCase):
+class DevelopmentTree(GateCase):
     def test_moderate_minimatch_on_a_reviewed_package_passes(self) -> None:
         found = audit(
             eslint={
@@ -84,10 +85,7 @@ class DevelopmentTree(unittest.TestCase):
                 "nodes": ["node_modules/eslint"],
             }
         )
-        self.assertEqual(
-            gate.problems("development", 1, found),
-            ["development: unreviewed finding on eslint"],
-        )
+        self.assert_fails_on("development", found, "eslint")
 
     def test_minimatch_on_an_unreviewed_package_fails(self) -> None:
         found = audit(
@@ -97,10 +95,7 @@ class DevelopmentTree(unittest.TestCase):
                 "nodes": ["node_modules/glob"],
             }
         )
-        self.assertEqual(
-            gate.problems("development", 1, found),
-            ["development: unreviewed finding on glob"],
-        )
+        self.assert_fails_on("development", found, "glob")
 
     def test_a_tool_chain_that_ends_in_picomatch_passes(self) -> None:
         found = audit(
@@ -135,10 +130,7 @@ class DevelopmentTree(unittest.TestCase):
                 "nodes": ["node_modules/vite"],
             },
         )
-        self.assertEqual(
-            gate.problems("development", 1, found),
-            ["development: unreviewed finding on vite"],
-        )
+        self.assert_fails_on("development", found, "vite")
 
     def test_a_chain_that_cannot_be_traced_fails(self) -> None:
         found = audit(
@@ -153,10 +145,7 @@ class DevelopmentTree(unittest.TestCase):
                 "nodes": ["node_modules/vite"],
             },
         )
-        self.assertEqual(
-            gate.problems("development", 1, found),
-            ["development: unreviewed finding on vite"],
-        )
+        self.assert_fails_on("development", found, "vite")
 
     def test_a_cycle_in_the_chain_ends(self) -> None:
         found = audit(

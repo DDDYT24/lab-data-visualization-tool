@@ -52,8 +52,10 @@ python .github/scripts/npm_audit_gate.py
 
 ## 桌面候选包验收
 
-先按 `desktop/README.md` 构建并冻结候选包，再从仓库根目录运行下面的驱动。`<候选>` 是含
-`bundle/` 和 `build/` 的文件夹，`<标签>` 每次用新名字。运行驱动的 Python 需要装有 `psutil`。
+先按 `desktop/README.md` 构建并冻结候选包，再从同一检出的根目录运行下面的驱动。`<候选>` 是含
+`bundle/` 和 `build/` 的文件夹，必须在该检出的 `outputs/desktop-d06` 下，名字要短。`<标签>` 每次用新
+名字，只有 `installer` 沿用已通过的 `session` 的标签。运行驱动的 Python 需要装有 `psutil`；
+`V2.0/web` 需要装好依赖和 Playwright 的 Chromium。失败后换一个新标签重跑。
 全程不打开原生窗口，也不能代替原生窗口验收。
 
 ```powershell

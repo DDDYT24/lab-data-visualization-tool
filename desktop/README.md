@@ -36,7 +36,14 @@ Build current components through `desktop/scripts/build_verified.py`, using a pr
 python desktop/scripts/build_verified.py host --output outputs/desktop-d06/my-build/provenance --cargo-home $env:CARGO_HOME
 python desktop/scripts/build_verified.py web --output outputs/desktop-d06/my-build/provenance --node outputs/desktop-d01/payload/runtime/node/node.exe
 python desktop/scripts/stage_d6.py --prepare --output outputs/desktop-d06/my-build/bundle --provenance outputs/desktop-d06/my-build/provenance
+$hostOut = Get-ChildItem desktop/prototypes/tauri/target/release/build -Directory -Filter labviz-desktop-* | ForEach-Object { Join-Path $_.FullName 'out' } | Where-Object { Test-Path (Join-Path $_ 'acl-manifests.json') } | Sort-Object { (Get-Item (Join-Path $_ 'acl-manifests.json')).LastWriteTime } | Select-Object -Last 1
+Copy-Item (Join-Path $hostOut 'acl-manifests.json') outputs/desktop-d06/my-build/bundle/provenance/host-acl-manifests.json
+Copy-Item (Join-Path $hostOut 'capabilities.json') outputs/desktop-d06/my-build/bundle/provenance/host-capabilities.json
+Copy-Item desktop/host/permissions/acceptance-ready.toml outputs/desktop-d06/my-build/bundle/provenance/host-permissions.toml
+python desktop/packaging/build_candidate.py --bundle outputs/desktop-d06/my-build/bundle --output outputs/desktop-d06/my-build/build --cargo-home $env:CARGO_HOME
 ```
+
+No script copies the three host ACL proofs; freezing checks them against the host receipt. The release drivers and the compile step that follow are in `CONTRIBUTING.md`.
 
 Set `CARGO_HOME` to the private cache before running the commands. Choose a fresh build directory; receipts and frozen candidates are preserved. Stop every process using an unfrozen preview before restaging it. Freezing and installer compilation use `desktop/packaging/build_candidate.py`; matching background evidence is required for compilation. Desktop tests run with `python -m unittest discover -s desktop/tests -v`. WebView2 branch tests require a fresh explicit output: `powershell -NoProfile -File desktop/tests/test_webview2.ps1 -OutputRoot outputs/desktop-d06/my-component-tests`. They reject existing or escaping outputs and never overwrite historical component receipts. The D1 measurement policy remains [resource-budget-v1.json](contracts/resource-budget-v1.json).
 

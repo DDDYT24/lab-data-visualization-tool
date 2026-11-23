@@ -3,11 +3,11 @@
 Usage, from the repository root:
     python -B -X utf8 desktop/scripts/release_upgrade.py --old-build <old candidate>/build
         --new-build <new candidate>/build --old-package <package id> --old-setup-sha <sha256>
-        --output <new folder> [--label <label>] [--trial-root <folder>]
+        --output <new folder> [--label <label>]
 
 The old Setup is named by its package id and Setup SHA-256, so a wrong file is refused. Each
 build's data epoch is read from its own package manifest. Everything runs silently in a fresh
-synthetic installation under <trial root>/<label>, and the checks go to <output>/verification.json.
+synthetic installation under ~/LabVizD2/<label>, and the checks go to <output>/verification.json.
 This does not open a native window or sign off any native interaction. The newer installed helper
 performs the rollback; the older Setup is used unchanged.
 """
@@ -88,25 +88,27 @@ def artifact(build):
 
 
 def main():
+    if sys.flags.optimize:
+        raise SystemExit('run without -O or PYTHONOPTIMIZE: the checks use assert')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--old-build', type=Path, required=True)
     parser.add_argument('--new-build', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--label', default='p2upgrade-'+uuid.uuid4().hex[:8])
-    parser.add_argument('--trial-root', type=Path, default=Path.home()/'LabVizD2')
     parser.add_argument('--old-package', required=True, help='package id of the old candidate')
     parser.add_argument('--old-setup-sha', required=True, help='SHA-256 of the old Setup')
     args = parser.parse_args()
-    assert args.label.replace('-', '').isalnum()
+    assert args.label.replace('-', '').isalnum(), 'the label may hold only letters, digits and hyphens'
     assert not registrations(), 'A real desktop installation is present; do not adopt it.'
     old_id = args.old_package
     old, new = artifact(args.old_build), artifact(args.new_build)
     old_epoch, new_epoch = old['epoch'], new['epoch']
-    assert old['record']['packageId'] == old_id and old['sha256'] == args.old_setup_sha
+    assert old['record']['packageId'] == old_id and old['sha256'] == args.old_setup_sha, (
+        'the old build is not the named Setup', old['record']['packageId'], old['sha256'])
     assert new['record']['packageId'] != old_id and new_epoch >= old_epoch
     output = unlinked(args.output)
     output.mkdir(parents=True, exist_ok=False)
-    trial = unlinked(args.trial_root/args.label)
+    trial = unlinked(Path.home()/'LabVizD2'/args.label)
     trial.mkdir(parents=True, exist_ok=False)
     program, profile = trial/'installed', trial/'profile'
     write(trial/'acceptance.json', {'format': 'labviz-desktop-installer-acceptance-v1', 'appId': APP_ID, 'root': str(trial)})
@@ -123,7 +125,7 @@ def main():
         print(name, flush=True)
     save()
     environment = {**os.environ, 'PATH': os.pathsep.join((os.environ['SystemRoot']+'\\System32', os.environ['SystemRoot'], os.environ['SystemRoot']+'\\System32\\WindowsPowerShell\\v1.0'))}
-    for name in ('PYTHONPATH', 'PYTHONHOME', 'PYTHONPYCACHEPREFIX', 'NODE_PATH'):
+    for name in ('PYTHONPATH', 'PYTHONHOME', 'PYTHONPYCACHEPREFIX', 'PYTHONOPTIMIZE', 'NODE_PATH'):
         environment.pop(name, None)
     def execute(command, label, timeout=600):
         with (output/(label+'.stdout.log')).open('xb') as stream:

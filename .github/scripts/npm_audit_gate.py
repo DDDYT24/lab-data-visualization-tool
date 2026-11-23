@@ -158,7 +158,15 @@ def problems(tree: str, exit_code: int, audit: object) -> list[str]:
         if tree == "production"
         else unreviewed_development_findings
     )
-    return [f"{tree}: unreviewed finding on {name}" for name in check(audit)]
+    lines = []
+    for name in check(audit):
+        finding = audit["vulnerabilities"][name]
+        advisories = ", ".join(sorted(root_advisories(audit, name)))
+        paths = ", ".join(finding.get("nodes", []))
+        lines.append(
+            f"{tree}: unreviewed {finding.get('severity')} finding on {name} ({advisories}) at {paths}"
+        )
+    return lines
 
 
 def run_audit(web: Path, *extra: str) -> tuple[int, object]:
@@ -170,11 +178,13 @@ def run_audit(web: Path, *extra: str) -> tuple[int, object]:
         cwd=web,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     try:
         return result.returncode, json.loads(result.stdout)
     except json.JSONDecodeError:
+        print(result.stderr, file=sys.stderr)
         return result.returncode, None
 
 

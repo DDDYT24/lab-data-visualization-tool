@@ -10,12 +10,12 @@ The desktop build still reads these files, so they stay:
 
 | File | Read by |
 | --- | --- |
-| `stage_candidate.py` | `desktop/scripts/stage_d34.py` and `desktop/scripts/stage_comparison.py` (payload staging); its hash is part of the stage provenance |
-| `bin/` | copied into the payload by the same scripts; hashed by `desktop/packaging/provenance.py` |
+| `stage_candidate.py` | `desktop/scripts/stage_d34.py` and `desktop/scripts/stage_comparison.py` (payload staging); its hash is part of the stage provenance; the epoch test below |
+| `bin/` | copied into the payload by the same scripts; hashed by `desktop/packaging/provenance.py`; `bin/common.ps1` by the epoch test below |
 | `runtimes.json` | `desktop/packaging/build_candidate.py` (pinned Python and Node.js runtimes) |
 | `identity.json` | copied by `stage_candidate.py`; its data epoch is checked by `V2.0/api/tests/test_installed_v23_lifecycle.py` |
 
-The other files (`LabVizV23.iss`, `compile_candidate.py`, `release_assets.py`,
-`verify_components.py`, `stage-candidate.ps1`, `collect-web-licenses.mjs` and `tests/`) belonged
-to the RC build. Moving the shared files under `desktop/packaging` and removing the rest is a
+`collect-web-licenses.mjs` is also the command `THIRD_PARTY_NOTICES.md` names for regenerating the
+web notices. The other files (`LabVizV23.iss`, `compile_candidate.py`, `release_assets.py`,
+`verify_components.py`, `stage-candidate.ps1` and `tests/`) belonged to the RC build. Moving the shared files under `desktop/packaging` and removing the rest is a
 later clean-up.
