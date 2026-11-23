@@ -28,11 +28,13 @@ import type { ChartSpec } from "@/domain/chart-spec";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
 import { StepLayout } from "./step-layout";
+import { useRefusalText } from "./use-refusal-text";
 import { CloudProjectActions } from "./cloud-project-actions";
 import { useWorkspaceStore } from "./workspace-store";
 
 export function ExportStep({ onBack, active = true }: { onBack: () => void; active?: boolean }) {
   const t = useTranslations("export");
+  const refusalText = useRefusalText();
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
   const projectId = useWorkspaceStore((state) => state.projectId);
   const preview = useWorkspaceStore((state) => state.preview);
@@ -95,7 +97,7 @@ export function ExportStep({ onBack, active = true }: { onBack: () => void; acti
             compact
             description={
               analysisQuery.error instanceof LabVizApiError
-                ? analysisQuery.error.message
+                ? refusalText(analysisQuery.error)
                 : t("previewFailed")
             }
             kind="error"
@@ -130,7 +132,7 @@ export function ExportStep({ onBack, active = true }: { onBack: () => void; acti
       {currentExportError ? (
         <Alert severity="error">
           {currentExportError instanceof LabVizApiError
-            ? currentExportError.message
+            ? refusalText(currentExportError)
             : t("requestFailed")}
         </Alert>
       ) : null}

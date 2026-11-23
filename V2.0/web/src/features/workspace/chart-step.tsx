@@ -30,6 +30,7 @@ import { ChartAppearancePanel } from "./chart-appearance-panel";
 import { ChartDataPanel, seriesColors, surfaceSetup } from "./chart-data-panel";
 import { ChartMethodPanel } from "./chart-method-panel";
 import { StepLayout } from "./step-layout";
+import { useRefusalText } from "./use-refusal-text";
 import { useWorkspaceStore } from "./workspace-store";
 
 // Data and method edits change what is computed; appearance edits only redraw the plan.
@@ -46,6 +47,7 @@ export function ChartStep({
   onContinue: () => void;
 }) {
   const t = useTranslations("chart");
+  const refusalText = useRefusalText();
   const projectId = useWorkspaceStore((state) => state.projectId);
   const chartSpec = useWorkspaceStore((state) => state.chartSpec);
   const issueActions = useWorkspaceStore((state) => state.issueActions);
@@ -355,7 +357,7 @@ export function ChartStep({
             compact
             description={
               analysisQuery.error instanceof LabVizApiError
-                ? analysisQuery.error.message
+                ? refusalText(analysisQuery.error)
                 : t("analysisFailed")
             }
             kind="error"
@@ -521,7 +523,7 @@ export function ChartStep({
           {saveChart.error ? (
             <Alert severity="error">
               {saveChart.error instanceof LabVizApiError
-                ? saveChart.error.message
+                ? refusalText(saveChart.error)
                 : t("saveFailed")}
             </Alert>
           ) : null}

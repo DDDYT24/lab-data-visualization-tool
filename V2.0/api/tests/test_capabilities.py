@@ -12,6 +12,7 @@ import pytest
 
 from labviz_api.engine.layers import LAYERS, violin
 from labviz_api.engine.stats import SUMMARIES
+from labviz_api.persistence import exceptions
 from labviz_api.refusals import PARAMS, STATUS, PreparationError, RefusalCode
 from labviz_api.render_plan import RenderPlan
 from labviz_api.research_charts import MAX_GROUPS, ScientificChartSpec
@@ -69,6 +70,61 @@ def test_every_refusal_has_a_text_that_uses_only_its_values(locale: str) -> None
         assert text.strip()
         used = set(re.findall(r"{(\w+)}", text))
         assert used == set(PARAMS.get(code, ())), code  # type: ignore[call-overload]
+
+
+# Errors of the classic import, quality and chart steps, whose English message is shown.
+CLASSIC = {
+    "duplicate-quality-rule",
+    "experiment-title-required",
+    "invalid-chart-fields",
+    "invalid-experiment-metadata",
+    "unknown-quality-finding",
+    "validation-error",
+}
+# Errors no local screen meets: accounts, shares, the readiness probe, the sample catalogue.
+NOT_LOCAL = {
+    "authentication-required",
+    "database-unavailable",
+    "email-delivery-failed",
+    "email-rate-limited",
+    "feature-not-migrated",
+    "idempotency-key-reused",
+    "invalid-client-identity",
+    "object-storage-unavailable",
+    "sample-catalog-unavailable",
+    "sample-invalid",
+    "sample-not-found",
+    "share-download-disabled",
+    "share-not-found",
+}
+
+
+def test_every_service_error_is_worded_or_listed_as_not_worded() -> None:
+    stated = set()
+    for path in API.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "ApiProblem":
+                stated |= {
+                    value.value
+                    for value in ast.walk(node.args[1])
+                    if isinstance(value, ast.Constant) and "-" in str(value.value)
+                }
+            if isinstance(node, ast.Dict):
+                stated |= {
+                    value.value
+                    for key, value in zip(node.keys, node.values, strict=True)
+                    if getattr(key, "value", "") == "code" and isinstance(value, ast.Constant)
+                }
+    stated |= {
+        kind.code
+        for kind in vars(exceptions).values()
+        if isinstance(kind, type) and issubclass(kind, exceptions.PersistenceError)
+    }
+    texts = json.loads((WEB / "messages/zh.json").read_text(encoding="utf-8"))["serviceErrors"]
+    client = {"api-error", "invalid-contract-response", "network-unavailable"}
+    assert texts.keys() >= client
+    assert stated - CODES == (texts.keys() - client) | CLASSIC | NOT_LOCAL
 
 
 def test_a_refusal_states_its_status_and_values() -> None:

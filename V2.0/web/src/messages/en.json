@@ -763,7 +763,7 @@
     "figure-layer-unplanned": "A captured chart is drawn on its own and takes no layers.",
     "figure-layer-unsupported": "Each layer must be a saved chart.",
     "figure-mark": "This mark is not part of the saved figure.",
-    "figure-not-found": "This figure is not available in this project.",
+    "figure-not-found": "This figure does not exist.",
     "figure-not-ready": "The files of this figure are not ready yet.",
     "figure-palette-unknown": "Choose a listed figure palette.",
     "figure-panel": "The selected panel has no series.",
@@ -829,5 +829,28 @@
     "unknown-measurement-state": "Choose one of the eight documented measurement states.",
     "unsupported-research-format": "Research data are read from CSV or TSV files.",
     "unsupported-unit": "Choose a listed target unit."
+  },
+  "serviceErrors": {
+    "api-error": "The LabViz API could not complete this request.",
+    "desktop-draining": "The local workspace is pausing. Reopen LabViz to continue.",
+    "export-not-found": "This export does not exist or has expired.",
+    "figure-preview-unavailable": "PDF figures are available to download.",
+    "invalid-contract-response": "The API returned data that does not match the LabViz v1 contract.",
+    "job-not-found": "This processing job does not exist or expired.",
+    "local-access-denied": "The local launcher could not unlock this session.",
+    "local-gallery-unavailable": "Local figure history is unavailable.",
+    "local-session-required": "Open LabViz from the launcher for this Windows account.",
+    "network-unavailable": "The LabViz processing API could not be reached. Your source file was not changed.",
+    "object-confirmation-pending": "The stored file is not confirmed yet. Try again shortly.",
+    "persistence-conflict": "This change conflicts with what is already saved. Reload and try again.",
+    "persistence-error": "The saved data could not be read or written.",
+    "persistence-not-found": "The saved item does not exist.",
+    "persistence-unavailable": "The storage is unavailable. Try again shortly.",
+    "processing-failed": "LabViz could not process this file safely.",
+    "processing-not-ready": "The uploaded file is still being processed.",
+    "project-access-denied": "This project is not available to this profile.",
+    "project-must-be-saved": "Save this project before editing its description.",
+    "project-not-found": "This project does not exist or has expired.",
+    "project-revision-conflict": "The project description changed in another session."
   }
 }

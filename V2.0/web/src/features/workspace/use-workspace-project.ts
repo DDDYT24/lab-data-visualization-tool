@@ -1,10 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
+import { useCallback, useEffect, useRef } from "react";
 
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
+import { useRefusalText } from "./use-refusal-text";
 import { useWorkspaceStore } from "./workspace-store";
 import {
   getUploadIdempotencyState,
@@ -12,14 +14,14 @@ import {
   type UploadIdempotencyState,
 } from "./upload-idempotency";
 
-function errorMessage(error: unknown) {
-  return error instanceof LabVizApiError
-    ? error.message
-    : "The project could not be loaded. Your source file was not changed.";
-}
-
 export function useWorkspaceProject(initialProjectId?: string) {
   const queryClient = useQueryClient();
+  const t = useTranslations("workspace");
+  const refusalText = useRefusalText();
+  const errorMessage = useCallback(
+    (error: unknown) => (error instanceof LabVizApiError ? refusalText(error) : t("loadFailed")),
+    [refusalText, t],
+  );
   const startedRef = useRef(false);
   const createUploadStateRef = useRef<UploadIdempotencyState | null>(null);
   const reimportUploadStateRef = useRef<UploadIdempotencyState | null>(null);
@@ -165,6 +167,7 @@ export function useWorkspaceProject(initialProjectId?: string) {
       workspaceDataQuery.error;
     if (error) setLoadError(errorMessage(error));
   }, [
+    errorMessage,
     jobQuery.error,
     projectQuery.error,
     setLoadError,

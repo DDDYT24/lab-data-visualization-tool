@@ -40,10 +40,12 @@ import { DataPreviewTable } from "@/components/common/data-preview-table";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
 import { StepLayout } from "./step-layout";
+import { useRefusalText } from "./use-refusal-text";
 import { useWorkspaceStore, type IssueAction } from "./workspace-store";
 
 export function InspectStep({ onBack, onContinue, active = true }: { onBack: () => void; onContinue: () => void; active?: boolean }) {
   const t = useTranslations("inspect");
+  const refusalText = useRefusalText();
   const projectId = useWorkspaceStore((state) => state.projectId);
   const preview = useWorkspaceStore((state) => state.preview);
   const quality = useWorkspaceStore((state) => state.quality);
@@ -312,7 +314,7 @@ export function InspectStep({ onBack, onContinue, active = true }: { onBack: () 
               {rangeMutation.error ? (
                 <Alert severity="error">
                   {rangeMutation.error instanceof LabVizApiError
-                    ? rangeMutation.error.message
+                    ? refusalText(rangeMutation.error)
                     : t("rangeFailed")}
                 </Alert>
               ) : null}
@@ -506,7 +508,7 @@ export function InspectStep({ onBack, onContinue, active = true }: { onBack: () 
           {decisionMutation.error ? (
             <Alert severity="error">
               {decisionMutation.error instanceof LabVizApiError
-                ? decisionMutation.error.message
+                ? refusalText(decisionMutation.error)
                 : t("decisionSaveFailed")}
             </Alert>
           ) : null}

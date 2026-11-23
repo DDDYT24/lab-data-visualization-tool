@@ -73,6 +73,9 @@ describe("runtime local API proxy", () => {
     );
 
     expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ detail: "The local API is unavailable." });
+    expect(await response.json()).toEqual({
+      code: "network-unavailable",
+      message: "The local API is unavailable.",
+    });
   });
 });

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { request } from "@/lib/api/labviz-api";
 import { useDesktopDraft } from "./desktop-session";
 import { DesktopDataTools } from "./desktop-data-tools";
+import { useRefusalText } from "./use-refusal-text";
 
 const schema = z.discriminatedUnion("available", [
   z.object({ available: z.literal(false), reason: z.string() }),
@@ -19,6 +20,7 @@ const quote = (value: string) => "'" + value.replaceAll("'", "''") + "'";
 export function SourceDataTools() {
   const zh = useLocale().startsWith("zh");
   const text = (en: string, cn: string) => zh ? cn : en;
+  const refusalText = useRefusalText();
   const [info, setInfo] = useState<z.infer<typeof schema> | null>(null);
   const [backup, setBackup] = useState("");
   const [selectedCommand, setSelectedCommand] = useState("");
@@ -32,9 +34,9 @@ export function SourceDataTools() {
   useEffect(() => {
     let active = true;
     request("/local/source-data", schema).then((value) => { if (active) { setInfo(value); setError(""); } })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
+      .catch((reason: unknown) => { if (active) setError(refusalText(reason)); });
     return () => { active = false; };
-  }, [retry]);
+  }, [refusalText, retry]);
   async function copy(command: string) {
     setSelectedCommand(command);
     try { await navigator.clipboard.writeText(command); setMessage(text("Command copied", "命令已复制")); }

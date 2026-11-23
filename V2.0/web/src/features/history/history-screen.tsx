@@ -47,6 +47,7 @@ import { useInterfaceMode } from "@/components/layout/interface-mode";
 import { ApiStatePanel } from "@/components/common/api-state-panel";
 import { DataPreviewTable } from "@/components/common/data-preview-table";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
+import { useRefusalText } from "../workspace/use-refusal-text";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -60,6 +61,7 @@ export function HistoryScreen() {
   const [listView, setListView] = useState(true);
   const asRows = overview && listView;
   const t = useTranslations("history");
+  const refusalText = useRefusalText();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -269,7 +271,7 @@ export function HistoryScreen() {
       {duplicateMutation.error ? (
         <Alert severity="error" onClose={() => duplicateMutation.reset()}>
           {duplicateMutation.error instanceof LabVizApiError
-            ? duplicateMutation.error.message
+            ? refusalText(duplicateMutation.error)
             : t("duplicateFailed")}
         </Alert>
       ) : null}
@@ -285,7 +287,7 @@ export function HistoryScreen() {
           actionLabel={t("retry")}
           description={
             projectsQuery.error instanceof LabVizApiError
-              ? projectsQuery.error.message
+              ? refusalText(projectsQuery.error)
               : t("loadFailed")
           }
           kind="error"
@@ -530,7 +532,7 @@ export function HistoryScreen() {
               ) : historyPreviewQuery.error ? (
                 <Alert severity="error">
                   {historyPreviewQuery.error instanceof LabVizApiError
-                    ? historyPreviewQuery.error.message
+                    ? refusalText(historyPreviewQuery.error)
                     : t("dataLoadFailed")}
                 </Alert>
               ) : historyPreviewQuery.data ? (
@@ -557,7 +559,7 @@ export function HistoryScreen() {
               ) : figuresQuery.error ? (
                 <Alert severity="error">
                   {figuresQuery.error instanceof LabVizApiError
-                    ? figuresQuery.error.message
+                    ? refusalText(figuresQuery.error)
                     : t("figuresLoadFailed")}
                 </Alert>
               ) : figuresQuery.data?.snapshots.length ? (
@@ -640,7 +642,7 @@ export function HistoryScreen() {
           {deleteFigureMutation.error ? (
             <Alert severity="error" sx={{ mt: 2 }}>
               {deleteFigureMutation.error instanceof LabVizApiError
-                ? deleteFigureMutation.error.message
+                ? refusalText(deleteFigureMutation.error)
                 : t("deleteFigureFailed")}
             </Alert>
           ) : null}
@@ -669,7 +671,7 @@ export function HistoryScreen() {
               compact
               description={
                 deleteMutation.error instanceof LabVizApiError
-                  ? deleteMutation.error.message
+                  ? refusalText(deleteMutation.error)
                   : t("deleteFailedDescription")
               }
               kind="error"
