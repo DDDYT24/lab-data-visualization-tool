@@ -21,6 +21,7 @@ from uuid import uuid4
 
 from pydantic_core import from_json, to_json
 
+from .engine.layers import LAYERS
 from .models import ChartSpec
 from .plan_classic import envelope_positions
 from .processing import _json_value, analyze_chart, serialize_dataframe
@@ -257,9 +258,7 @@ def scientific_source(result: dict[str, Any], revision: str) -> dict[str, Any]:
         "marks": marks,
         "resultSha256": result["resultSha256"],
         "sampled": len(targets) < len(rows) and result["spec"]["showPoints"],
-        "xSignature": ["paired", result["spec"]["pairTimes"]]
-        if kind == "paired"
-        else ["group", [g["label"] for g in result["groups"]]],
+        "xSignature": LAYERS[kind].x_signature(result),
         "ySignature": ["numeric", rows[0]["measurementType"], result["unit"]],
     }
 

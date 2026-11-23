@@ -16,8 +16,9 @@ else:
 import io
 import json
 from time import perf_counter
-from typing import Any, cast, get_args
+from typing import Any, cast
 
+from .engine.layers import LAYERS
 from .figure_spec import (
     DEFAULT_FONT,
     FigureBoardSpec,
@@ -35,7 +36,6 @@ from .processing import RENDER_LOCK, _cjk_font_info, _contains_cjk, embed_svg_fo
 from .processing import render_chart as legacy_render
 from .render_plan import build_research_plan, merge_axis, merge_layers, plan_bytes, plan_hash
 from .research_chart_render import COLORS, VECTOR_TEXT, draw_plan, rasterize_points
-from .research_charts import ScientificChartSpec
 from .research_preparation import PreparationError
 
 
@@ -144,9 +144,6 @@ def check_figure(spec: FigureSpec) -> None:
             )
 
 
-RESEARCH_KINDS = frozenset(get_args(ScientificChartSpec.model_fields["kind"].annotation))
-
-
 def check_layers(panels: list[list[dict[str, Any]]]) -> None:
     """Layers of one panel are research charts of one revision with the same axes.
 
@@ -157,7 +154,7 @@ def check_layers(panels: list[list[dict[str, Any]]]) -> None:
             continue
         first = layers[0]
         for layer in layers:
-            if layer["kind"] not in RESEARCH_KINDS:
+            if layer["kind"] not in LAYERS:
                 raise PreparationError(
                     "figure-layer-unplanned",
                     "A captured chart is drawn on its own; it cannot share a panel with layers.",
@@ -320,8 +317,9 @@ def render_board(
                 methods: list[str] = []
                 for layer in [panel, *layered[i]]:
                     chart = layer["scientific"]["spec"]
-                    if chart["kind"] == "violin":
-                        methods.append("Gaussian KDE of observations; density is not extra data.")
+                    note = LAYERS[chart["kind"]].footer_note
+                    if note:
+                        methods.append(note)
                     if chart["summary"] != "none":
                         methods.append(
                             f"{chart['summary']} of {chart['summaryUnit']}; declared repeat means."
@@ -437,7 +435,7 @@ def render_board(
                     for i, panel in enumerate(sources)
                     if rasterize_points(spec.point_rendering, len(panel["rows"]))
                     and any(
-                        layer["kind"] in {"line", "scatter", "paired"}
+                        layer["kind"] in {"line", "scatter"}
                         or ("scientific" in layer and layer["scientific"]["spec"]["showPoints"])
                         for layer in layered[i]
                     )

@@ -14,6 +14,7 @@ from uuid import uuid4
 from pydantic import Field
 
 from .artifacts import MEDIA_TYPES, remember
+from .engine.layers import LAYERS
 from .figure_spec import as_figure, layer_ids, parse_figure, styled_label
 from .research_contract import ResearchModel
 from .research_dataset import version_sources
@@ -296,9 +297,12 @@ def materialize(
             detail = method_detail(layer["method"]["chart"])
             methods_en.append(f"{en}, layer {layer['kind']}: {detail}.")
             methods_zh.append(f"{zh}，图层 {layer['kind']}：{detail}。")
-        if "violin" in {p["kind"], *(layer["kind"] for layer in p.get("layers", []))}:
-            methods_en.append(f"{en}: Gaussian KDE; density is not additional observations.")
-            methods_zh.append(f"{zh}：高斯核密度不是额外观测。")
+        # A captured classic chart has no entry.
+        kinds = dict.fromkeys([p["kind"], *(layer["kind"] for layer in p.get("layers", []))])
+        for entry in (LAYERS[kind] for kind in kinds if kind in LAYERS):
+            if entry.output_note:
+                methods_en.append(f"{en}: {entry.output_note.en}")
+                methods_zh.append(f"{zh}：{entry.output_note.zh}")
     notes = OutputNotes(
         legend_en="\n".join(legends_en),
         legend_zh="\n".join(legends_zh),
