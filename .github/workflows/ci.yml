@@ -114,6 +114,35 @@ jobs:
         if: always()
         run: docker compose down -v --remove-orphans
 
+  # The system and Python the Setup ships (packaging/windows-v23/runtimes.json).
+  v2-windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            V2.0/api/requirements.lock.txt
+            V2.0/api/requirements-dev.lock.txt
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r V2.0/api/requirements-dev.lock.txt
+      # What needs PostgreSQL or MinIO runs in v2-api.
+      - name: API tests
+        working-directory: V2.0/api
+        run: >-
+          python -m pytest -k "not minio"
+          --ignore=tests/test_phase5b3_object_storage.py
+          --ignore=tests/test_phase6b_auth_rate_limits.py
+          --ignore=tests/test_phase6b_project_descriptions.py
+      - name: Desktop tests
+        if: ${{ !cancelled() }}
+        run: python -m unittest discover -s desktop/tests -p "test_*.py"
+
   plan-parity:
     runs-on: ubuntu-latest
     env:

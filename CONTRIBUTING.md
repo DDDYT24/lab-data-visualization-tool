@@ -43,6 +43,13 @@ python -m pytest
 需要 PostgreSQL/MinIO 的测试必须按 `V2.0/api/README.md` 启动测试服务，并在结束后清理
 临时卷。不要把 `.labviz/`、`outputs/`、测试结果、真实实验数据或密钥加入提交。
 
+安装包使用 Python 3.13，CI 的 `v2-windows` 任务在 Windows 上用 3.13 运行 API 测试和桌面测试。桌面测试在仓库根目录运行
+（需要 Python 3.12 或 3.13）：
+
+```powershell
+python -m unittest discover -s desktop/tests -p "test_*.py"
+```
+
 依赖审计（CI 的 `frontend` 任务也会运行，需要联网；只放行已审查的问题）：
 
 ```powershell
