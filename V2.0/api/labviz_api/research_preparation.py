@@ -272,7 +272,7 @@ def transform(
                     fail(
                         "incompatible-unit",
                         f"Cannot convert {source_unit} to {step.to_unit}.",
-                        found=source_unit,
+                        found=source_unit or "—",
                         target=step.to_unit,
                     )
                 scale = Decimal(UNITS[source_unit][1]) / Decimal(target_scale)

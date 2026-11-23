@@ -15,7 +15,7 @@ from pydantic.alias_generators import to_camel
 
 from labviz_api.engine.layers import LAYERS
 from labviz_api.engine.stats import SUMMARIES
-from labviz_api.refusals import DEFAULT_STATUS, PARAMS, STATUS, RefusalCode
+from labviz_api.refusals import PARAMS, RefusalCode
 from labviz_api.render_contract import GEOMETRY
 from labviz_api.render_plan import CONTRACT
 from labviz_api.research_charts import MAX_GROUPS, ScientificChartSpec
@@ -43,13 +43,7 @@ def capabilities() -> dict[str, Any]:
         "summaries": {
             key: {"label": summary.label._asdict()} for key, summary in SUMMARIES.items()
         },
-        "refusals": {
-            code: {
-                "status": STATUS.get(code, DEFAULT_STATUS),
-                "params": list(PARAMS.get(code, ())),
-            }
-            for code in sorted(get_args(RefusalCode))
-        },
+        "refusals": {code: list(PARAMS.get(code, ())) for code in sorted(get_args(RefusalCode))},
     }
 
 

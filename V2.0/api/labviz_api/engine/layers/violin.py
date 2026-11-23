@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from ...refusals import PreparationError
 from ...render_contract import GEOMETRY
 from ...scientific_imports import scientific_module
-from ..precision import canonical
+from ..precision import DIGITS, canonical
 from ..text import Text
 from .base import Groups, Layer, LayerPlan, PlanContext, Result
 from .grouping import grouped
@@ -87,6 +87,7 @@ def compute(result: Result, groups: Groups, spec: ScientificChartSpec) -> None:
                 "support": [low, high],
                 "grid": grid.tolist(),
                 "density": [canonical(value) for value in density.tolist()],
+                "significantDigits": DIGITS,
                 "inputUnit": "observation",
                 "boundaryCorrection": "none",
                 "gridSize": grid_size,

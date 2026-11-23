@@ -179,6 +179,26 @@ def test_chart_keeps_its_plan_through_copy_and_cleanup_and_older_charts_stay_fro
         assert unknown.status_code == 404 and unknown.json()["code"] == "chart-not-found"
 
 
+@pytest.mark.parametrize("labels", [["a", "a"], ["", ""], ["before"], []])
+def test_time_labels_a_paired_chart_cannot_use_are_refused_by_code(
+    tmp_path: Path, labels: list[str]
+) -> None:
+    with TestClient(create_app(settings(tmp_path))) as client:
+        unlock(client)
+        identifier = project(client)
+        revision = applied(client, identifier)
+        refused = client.post(
+            f"/api/v1/projects/{identifier}/research/charts",
+            json={"revisionId": revision, "spec": {"kind": "paired", "pairTimes": labels}},
+        )
+        assert refused.status_code == 422
+        assert refused.json() == {
+            "code": "chart-pair-times",
+            "message": "Paired plots require two distinct ordered time labels.",
+            "params": {},
+        }
+
+
 def test_paired_api_and_invalid_data_do_not_save_chart(tmp_path: Path) -> None:
     with TestClient(create_app(settings(tmp_path))) as client:
         unlock(client)

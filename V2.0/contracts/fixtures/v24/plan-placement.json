@@ -547,7 +547,7 @@
       "contract": "render-plan-v1",
       "source": {
         "kind": "violin",
-        "resultSha256": "f33a4f6f0d6cb29515a84dd66b50fd2bf19c7218ed54a926b162cc2dcadfa36d",
+        "resultSha256": "bb6b486a51964943ccbfe966981d32af3807c1a8e76eebcc518dbda26efcc8b7",
         "algorithmVersion": "scientific-charts-v1"
       },
       "geometry": {
@@ -1314,7 +1314,7 @@
         "Observations=8; independent units=8; excluded=0",
         "Gaussian KDE of observations; density is not additional data."
       ],
-      "planHash": "58684c6bfa9d87002ba9072105f71145d8f59f14c55e0ed584f94106e7b2ad89"
+      "planHash": "48ec02577b9575cc3547179e82ba7932a6786b62865ff9a17ff9ac40868c1c2c"
     },
     "drawOrder": [
       "density:0",

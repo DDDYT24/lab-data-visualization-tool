@@ -18,13 +18,13 @@ function shown(cause: unknown, locale: "en" | "zh" = "en") {
 }
 
 describe("refusal text", () => {
-  it.each(Object.entries(refusals))("%s is worded in both languages with its values", (code, refusal) => {
-    const params = Object.fromEntries(refusal!.params.map((name) => [name, `<${name}>`]));
+  it.each(Object.entries(refusals))("%s is worded in both languages with its values", (code, needed) => {
+    const params = Object.fromEntries(needed!.map((name) => [name, `<${name}>`]));
     for (const locale of ["en", "zh"] as const) {
       const text = shown(new LabVizApiError("API message", 422, code, params), locale);
       expect(text).not.toContain("API message");
       expect(text).not.toContain("refusals.");
-      for (const name of refusal!.params) expect(text).toContain(`&lt;${name}&gt;`);
+      for (const name of needed!) expect(text).toContain(`&lt;${name}&gt;`);
     }
   });
 

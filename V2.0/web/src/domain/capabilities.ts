@@ -15,4 +15,5 @@ export const layers: Record<LayerKind, LayerCapability> & Record<string, LayerCa
 export const layerKinds = Object.keys(capabilities.layers) as [LayerKind, ...LayerKind[]];
 export const summaries: Record<SummaryKey, { label: Words }> = capabilities.summaries;
 export const summaryKeys = Object.keys(capabilities.summaries) as SummaryKey[];
-export const refusals: Record<string, { status: number; params: string[] } | undefined> = capabilities.refusals;
+// The values each refusal's text needs.
+export const refusals: Record<RefusalCode, string[]> & Record<string, string[] | undefined> = capabilities.refusals;

@@ -258,6 +258,7 @@ def test_a_deferred_build_the_plan_refuses_keeps_its_reason_and_is_not_retried(s
             break
     assert view["artifactState"] == "failed", view
     assert view["artifactRefusal"] == "annotation-outside"
+    assert view["artifactRefusalParams"] == {}
     assert "Retry" not in view["artifactError"]
     retried = client.post(url + "/retry")
     assert retried.status_code == 422, retried.text

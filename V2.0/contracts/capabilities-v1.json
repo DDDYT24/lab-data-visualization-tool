@@ -80,494 +80,151 @@
     }
   },
   "refusals": {
-    "absent-state-has-value": {
-      "status": 422,
-      "params": []
-    },
-    "aggregate-byte-limit": {
-      "status": 422,
-      "params": []
-    },
-    "annotation-3d": {
-      "status": 422,
-      "params": []
-    },
-    "annotation-outside": {
-      "status": 422,
-      "params": []
-    },
-    "axis-control-3d": {
-      "status": 422,
-      "params": []
-    },
-    "axis-control-category": {
-      "status": 422,
-      "params": []
-    },
-    "axis-control-invalid": {
-      "status": 422,
-      "params": []
-    },
-    "axis-log-bars": {
-      "status": 422,
-      "params": []
-    },
-    "axis-log-nonpositive": {
-      "status": 422,
-      "params": []
-    },
-    "axis-ticks-outside": {
-      "status": 422,
-      "params": []
-    },
-    "chart-ambiguous-repeat": {
-      "status": 422,
-      "params": []
-    },
-    "chart-axis-range": {
-      "status": 422,
-      "params": []
-    },
-    "chart-cjk-font": {
-      "status": 422,
-      "params": []
-    },
-    "chart-density-degenerate": {
-      "status": 422,
-      "params": []
-    },
-    "chart-density-numeric": {
-      "status": 422,
-      "params": []
-    },
-    "chart-density-range": {
-      "status": 422,
-      "params": []
-    },
-    "chart-density-resolution": {
-      "status": 422,
-      "params": []
-    },
-    "chart-density-small": {
-      "status": 422,
-      "params": []
-    },
-    "chart-many-groups": {
-      "status": 422,
-      "params": []
-    },
-    "chart-mixed-measurements": {
-      "status": 422,
-      "params": []
-    },
-    "chart-not-found": {
-      "status": 404,
-      "params": []
-    },
-    "chart-numeric-range": {
-      "status": 422,
-      "params": []
-    },
-    "chart-pair-identity": {
-      "status": 422,
-      "params": []
-    },
-    "chart-pair-incompatible": {
-      "status": 422,
-      "params": []
-    },
-    "chart-pair-key-reused": {
-      "status": 422,
-      "params": []
-    },
-    "chart-pair-partner": {
-      "status": 422,
-      "params": []
-    },
-    "chart-pair-time": {
-      "status": 422,
-      "params": []
-    },
-    "chart-plan-missing": {
-      "status": 404,
-      "params": []
-    },
-    "chart-unknown-summary-unit": {
-      "status": 422,
-      "params": []
-    },
-    "column-limit": {
-      "status": 422,
-      "params": []
-    },
-    "conflicting-sample": {
-      "status": 422,
-      "params": [
-        "sample"
-      ]
-    },
-    "duplicate-field": {
-      "status": 422,
-      "params": []
-    },
-    "duplicate-or-missing-pair": {
-      "status": 422,
-      "params": []
-    },
-    "duplicate-pivot-key": {
-      "status": 422,
-      "params": []
-    },
-    "duplicate-source": {
-      "status": 422,
-      "params": []
-    },
-    "empty-input": {
-      "status": 422,
-      "params": []
-    },
-    "empty-selection": {
-      "status": 422,
-      "params": []
-    },
-    "figure-build-refused": {
-      "status": 422,
-      "params": []
-    },
-    "figure-build-state": {
-      "status": 409,
-      "params": []
-    },
-    "figure-canvas-too-large": {
-      "status": 422,
-      "params": []
-    },
-    "figure-capture-failed": {
-      "status": 422,
-      "params": [
-        "detail"
-      ]
-    },
-    "figure-chart-unavailable": {
-      "status": 422,
-      "params": []
-    },
-    "figure-incompatible-axis": {
-      "status": 422,
-      "params": [
-        "axis"
-      ]
-    },
-    "figure-layer-axis": {
-      "status": 422,
-      "params": []
-    },
-    "figure-layer-repeated": {
-      "status": 422,
-      "params": []
-    },
-    "figure-layer-revision": {
-      "status": 422,
-      "params": []
-    },
-    "figure-layer-unplanned": {
-      "status": 422,
-      "params": []
-    },
-    "figure-layer-unsupported": {
-      "status": 422,
-      "params": []
-    },
-    "figure-mark": {
-      "status": 422,
-      "params": []
-    },
-    "figure-not-found": {
-      "status": 404,
-      "params": []
-    },
-    "figure-not-ready": {
-      "status": 409,
-      "params": []
-    },
-    "figure-palette-unknown": {
-      "status": 422,
-      "params": []
-    },
-    "figure-panel": {
-      "status": 422,
-      "params": []
-    },
-    "figure-panel-unplanned": {
-      "status": 422,
-      "params": []
-    },
-    "figure-plan-missing": {
-      "status": 404,
-      "params": []
-    },
-    "figure-row": {
-      "status": 422,
-      "params": []
-    },
-    "figure-sample-mapping": {
-      "status": 422,
-      "params": []
-    },
-    "figure-secondary-axis": {
-      "status": 422,
-      "params": []
-    },
-    "figure-shared-axis-control": {
-      "status": 422,
-      "params": [
-        "axis"
-      ]
-    },
-    "figure-size": {
-      "status": 422,
-      "params": []
-    },
-    "figure-source-changed": {
-      "status": 422,
-      "params": []
-    },
-    "figure-type": {
-      "status": 422,
-      "params": []
-    },
-    "file-count-limit": {
-      "status": 422,
-      "params": []
-    },
-    "incompatible-pair": {
-      "status": 422,
-      "params": []
-    },
-    "incompatible-unit": {
-      "status": 422,
-      "params": [
-        "found",
-        "target"
-      ]
-    },
-    "invalid-columns": {
-      "status": 422,
-      "params": []
-    },
-    "invalid-csv": {
-      "status": 422,
-      "params": [
-        "file"
-      ]
-    },
-    "invalid-exclusion": {
-      "status": 422,
-      "params": []
-    },
-    "invalid-number": {
-      "status": 422,
-      "params": [
-        "field"
-      ]
-    },
-    "invalid-parent": {
-      "status": 422,
-      "params": []
-    },
-    "invalid-repeat": {
-      "status": 422,
-      "params": []
-    },
-    "invalid-research-plan": {
-      "status": 422,
-      "params": [
-        "detail"
-      ]
-    },
-    "invalid-role": {
-      "status": 422,
-      "params": []
-    },
-    "limit-required": {
-      "status": 422,
-      "params": []
-    },
-    "missing-field": {
-      "status": 422,
-      "params": [
-        "fields"
-      ]
-    },
-    "missing-pivot-key": {
-      "status": 422,
-      "params": []
-    },
-    "no-redo": {
-      "status": 422,
-      "params": []
-    },
-    "no-undo": {
-      "status": 422,
-      "params": []
-    },
-    "observed-requires-value": {
-      "status": 422,
-      "params": []
-    },
-    "output-not-found": {
-      "status": 404,
-      "params": []
-    },
-    "output-review": {
-      "status": 422,
-      "params": []
-    },
-    "pair-key-required": {
-      "status": 422,
-      "params": []
-    },
-    "pair-times": {
-      "status": 422,
-      "params": []
-    },
-    "plan-invalid": {
-      "status": 422,
-      "params": []
-    },
-    "preview-expired": {
-      "status": 409,
-      "params": []
-    },
-    "research-busy": {
-      "status": 429,
-      "params": []
-    },
-    "research-conflict": {
-      "status": 409,
-      "params": []
-    },
-    "research-input-required": {
-      "status": 422,
-      "params": []
-    },
-    "research-local-only": {
-      "status": 501,
-      "params": []
-    },
-    "reserved-value-field": {
-      "status": 422,
-      "params": []
-    },
-    "reshape-collision": {
-      "status": 422,
-      "params": []
-    },
-    "reuse-figure-unsupported": {
-      "status": 422,
-      "params": []
-    },
-    "row-limit": {
-      "status": 422,
-      "params": []
-    },
-    "row-width": {
-      "status": 422,
-      "params": [
-        "file",
-        "row"
-      ]
-    },
-    "schema-mismatch": {
-      "status": 422,
-      "params": []
-    },
-    "single-file-limit": {
-      "status": 422,
-      "params": [
-        "file"
-      ]
-    },
-    "source-encoding": {
-      "status": 422,
-      "params": []
-    },
-    "strip-duplicate-id": {
-      "status": 422,
-      "params": []
-    },
-    "strip-empty": {
-      "status": 422,
-      "params": []
-    },
-    "strip-incomplete-input": {
-      "status": 422,
-      "params": []
-    },
-    "strip-invalid-value": {
-      "status": 422,
-      "params": []
-    },
-    "strip-mixed-units": {
-      "status": 422,
-      "params": []
-    },
-    "strip-non-observed": {
-      "status": 422,
-      "params": []
-    },
-    "template-blocked": {
-      "status": 422,
-      "params": []
-    },
-    "template-field": {
-      "status": 422,
-      "params": [
-        "field"
-      ]
-    },
-    "template-mapping": {
-      "status": 422,
-      "params": []
-    },
-    "template-not-found": {
-      "status": 404,
-      "params": []
-    },
-    "template-unit": {
-      "status": 422,
-      "params": [
-        "expected",
-        "found"
-      ]
-    },
-    "unconverted-limit": {
-      "status": 422,
-      "params": []
-    },
-    "unit-mapping-mismatch": {
-      "status": 422,
-      "params": []
-    },
-    "unit-without-sample": {
-      "status": 422,
-      "params": []
-    },
-    "unknown-exclusion": {
-      "status": 422,
-      "params": []
-    },
-    "unknown-measurement-state": {
-      "status": 422,
-      "params": []
-    },
-    "unsupported-research-format": {
-      "status": 422,
-      "params": []
-    },
-    "unsupported-unit": {
-      "status": 422,
-      "params": []
-    }
+    "absent-state-has-value": [],
+    "aggregate-byte-limit": [],
+    "annotation-3d": [],
+    "annotation-outside": [],
+    "axis-control-3d": [],
+    "axis-control-category": [],
+    "axis-control-invalid": [],
+    "axis-log-bars": [],
+    "axis-log-nonpositive": [],
+    "axis-ticks-outside": [],
+    "chart-ambiguous-repeat": [],
+    "chart-axis-range": [],
+    "chart-cjk-font": [],
+    "chart-density-degenerate": [],
+    "chart-density-numeric": [],
+    "chart-density-range": [],
+    "chart-density-resolution": [],
+    "chart-density-small": [],
+    "chart-many-groups": [],
+    "chart-mixed-measurements": [],
+    "chart-not-found": [],
+    "chart-numeric-range": [],
+    "chart-pair-identity": [],
+    "chart-pair-incompatible": [],
+    "chart-pair-key-reused": [],
+    "chart-pair-partner": [],
+    "chart-pair-time": [],
+    "chart-pair-times": [],
+    "chart-plan-missing": [],
+    "chart-unknown-summary-unit": [],
+    "column-limit": [],
+    "conflicting-sample": [
+      "sample"
+    ],
+    "duplicate-field": [],
+    "duplicate-or-missing-pair": [],
+    "duplicate-pivot-key": [],
+    "duplicate-source": [],
+    "empty-input": [],
+    "empty-selection": [],
+    "figure-build-refused": [],
+    "figure-build-state": [],
+    "figure-canvas-too-large": [],
+    "figure-capture-failed": [
+      "detail"
+    ],
+    "figure-chart-unavailable": [],
+    "figure-files-missing": [],
+    "figure-incompatible-axis": [
+      "axis"
+    ],
+    "figure-layer-axis": [],
+    "figure-layer-repeated": [],
+    "figure-layer-revision": [],
+    "figure-layer-unplanned": [],
+    "figure-layer-unsupported": [],
+    "figure-mark": [],
+    "figure-not-found": [],
+    "figure-not-ready": [],
+    "figure-palette-unknown": [],
+    "figure-panel": [],
+    "figure-panel-unplanned": [],
+    "figure-plan-missing": [],
+    "figure-row": [],
+    "figure-sample-mapping": [],
+    "figure-secondary-axis": [],
+    "figure-shared-axis-control": [
+      "axis"
+    ],
+    "figure-size": [],
+    "figure-source-changed": [],
+    "figure-type": [],
+    "file-count-limit": [],
+    "incompatible-pair": [],
+    "incompatible-unit": [
+      "found",
+      "target"
+    ],
+    "invalid-columns": [],
+    "invalid-csv": [
+      "file"
+    ],
+    "invalid-exclusion": [],
+    "invalid-number": [
+      "field"
+    ],
+    "invalid-parent": [],
+    "invalid-repeat": [],
+    "invalid-research-plan": [
+      "detail"
+    ],
+    "invalid-role": [],
+    "limit-required": [],
+    "missing-field": [
+      "fields"
+    ],
+    "missing-pivot-key": [],
+    "no-redo": [],
+    "no-undo": [],
+    "observed-requires-value": [],
+    "output-not-found": [],
+    "output-review": [],
+    "pair-key-required": [],
+    "pair-times": [],
+    "plan-invalid": [],
+    "preview-expired": [],
+    "research-busy": [],
+    "research-conflict": [],
+    "research-input-required": [],
+    "research-local-only": [],
+    "reserved-value-field": [],
+    "reshape-collision": [],
+    "reuse-figure-unsupported": [],
+    "row-limit": [],
+    "row-width": [
+      "file",
+      "row"
+    ],
+    "schema-mismatch": [],
+    "single-file-limit": [
+      "file"
+    ],
+    "source-encoding": [],
+    "strip-duplicate-id": [],
+    "strip-empty": [],
+    "strip-incomplete-input": [],
+    "strip-invalid-value": [],
+    "strip-mixed-units": [],
+    "strip-non-observed": [],
+    "template-blocked": [],
+    "template-field": [
+      "field"
+    ],
+    "template-mapping": [],
+    "template-not-found": [],
+    "template-unit": [
+      "expected",
+      "found"
+    ],
+    "unconverted-limit": [],
+    "unit-mapping-mismatch": [],
+    "unit-without-sample": [],
+    "unknown-exclusion": [],
+    "unknown-measurement-state": [],
+    "unsupported-research-format": [],
+    "unsupported-unit": []
   }
 }

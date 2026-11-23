@@ -108,8 +108,8 @@ def refusal(error: str | None) -> dict[str, Any] | None:
     """The refusal a failed build stored, or None for a failure worth retrying."""
     if not error or not error.startswith('{"refusal"'):
         return None
-    stored: dict[str, Any] = json.loads(error)
-    return stored
+    # A refusal that 2.4 stored has no params.
+    return {"params": {}, **json.loads(error)}
 
 
 def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
@@ -129,8 +129,7 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
             "artifactState": job["state"],
             "artifactError": refused["message"] if refused else job["error"],
             "artifactRefusal": refused["refusal"] if refused else None,
-            # A refusal 2.4 stored has no params.
-            "artifactRefusalParams": refused.get("params", {}) if refused else {},
+            "artifactRefusalParams": refused["params"] if refused else {},
             "artifactTimings": json.loads(job["timings_json"]),
         }
     artifact = connection.execute(
@@ -335,7 +334,7 @@ def artifact_row(
         if pending:
             raise PreparationError("figure-not-ready", "The saved figure artifacts are not ready.")
         raise PreparationError(
-            "figure-not-found", "Save a new layout revision to create composed artifacts."
+            "figure-files-missing", "Save a new layout revision to create composed artifacts."
         )
     artifact = dict(row)
     if field is None:

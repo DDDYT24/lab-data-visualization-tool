@@ -10,11 +10,13 @@ from typing import Any, get_args
 
 import pytest
 
-from labviz_api.engine.layers import LAYERS
+from labviz_api.engine.layers import LAYERS, violin
 from labviz_api.engine.stats import SUMMARIES
 from labviz_api.refusals import PARAMS, STATUS, PreparationError, RefusalCode
 from labviz_api.render_plan import RenderPlan
-from labviz_api.research_charts import ScientificChartSpec
+from labviz_api.research_charts import MAX_GROUPS, ScientificChartSpec
+from labviz_api.research_figure_board import refusal, refusal_text
+from labviz_api.research_preparation import LIMITS
 from scripts.export_capabilities import CONTRACTS, build
 
 API = Path(__file__).resolve().parents[1] / "labviz_api"
@@ -75,6 +77,21 @@ def test_a_refusal_states_its_status_and_values() -> None:
     assert PreparationError("research-busy", "Busy.").status == 429
 
 
+def test_a_refusal_stored_in_a_job_keeps_its_values_and_2_4_rows_still_read() -> None:
+    error = PreparationError("figure-shared-axis-control", "A shared x axis …", axis="x")
+    assert refusal(refusal_text(error)) == {
+        "refusal": "figure-shared-axis-control",
+        "message": "A shared x axis …",
+        "params": {"axis": "x"},
+    }
+    written_by_2_4 = '{"refusal": "axis-log-bars", "message": "Bars start at zero."}'
+    assert refusal(written_by_2_4) == {
+        "refusal": "axis-log-bars",
+        "message": "Bars start at zero.",
+        "params": {},
+    }
+
+
 def literal(schema: dict[str, Any], *path: str) -> list[str]:
     for key in path:
         schema = schema[key]
@@ -90,32 +107,51 @@ def test_the_contracts_take_their_kinds_and_summaries_from_the_registries() -> N
     assert literal(plan, "SummaryMark", "properties", "statistic") == list(SUMMARIES)
 
 
-# Files that name one of these words for something other than a research chart kind.
+# Where one of these words means something other than a research chart kind, and how often.
 OTHER_MEANINGS = {
-    "render_plan.py": "the violin mark",
-    "render_plan_draw.py": "the violin mark",
-    "plan_axes.py": "the violin mark",
-    "figure_spec.py": "the layer kinds of FigureSpec v2, a contract of its own",
-    "research_contract.py": "the prospective research-v1 contract",
-    "base.py": "the first word of a stored axis signature",
-    "render-plan.ts": "the violin mark",
-    "render-plan-option.ts": "the violin mark",
-    "figure-spec.ts": "the layer kinds of FigureSpec v2",
+    "api/labviz_api/render_plan.py": 1,  # the violin mark
+    "api/labviz_api/render_plan_draw.py": 1,
+    "api/labviz_api/plan_axes.py": 2,
+    "api/labviz_api/figure_spec.py": 2,  # the layer kinds of FigureSpec v2, a contract of its own
+    "web/src/domain/figure-spec.ts": 2,
+    "api/labviz_api/research_contract.py": 2,  # the prospective research-v1 contract
+    "api/labviz_api/engine/layers/base.py": 1,  # the first word of a stored axis signature
+    "web/src/domain/render-plan.ts": 1,  # the violin mark
+    "web/src/components/common/render-plan-option.ts": 2,
+    "api/labviz_api/research_charts.py": 1,  # the default kind of a spec
+    "api/labviz_api/research_strip.py": 2,  # the spec of the point geometry, not of a chart
 }
 
 
 def test_no_other_file_names_a_chart_kind() -> None:
-    named = re.compile("|".join(f"[\"'`]{kind}[\"'`]" for kind in LAYERS))
-    entries = {f"{kind}.py" for kind in LAYERS}
-    sources = [*API.rglob("*.py"), *WEB.rglob("*.ts"), *WEB.rglob("*.tsx")]
-    naming = {
-        path.name
-        for path in sources
-        if ".test." not in path.name
-        and path.name not in entries
-        and named.search(path.read_text(encoding="utf-8"))
+    root = API.parents[1]
+    quoted = "|".join(f"[\"'`]{kind}[\"'`]" for kind in LAYERS)
+    keys = "|".join(rf"(?m:^|[{{,])\s*{kind}\s*:" for kind in LAYERS)
+    entries = {f"api/labviz_api/engine/layers/{kind}.py" for kind in LAYERS}
+    naming: dict[str, int] = {}
+    for path in [*API.rglob("*.py"), *WEB.rglob("*.ts"), *WEB.rglob("*.tsx")]:
+        name = path.relative_to(root).as_posix()
+        if ".test." in name or name in entries:
+            continue
+        pattern = quoted if path.suffix == ".py" else f"{quoted}|{keys}"
+        found = len(re.findall(pattern, path.read_text(encoding="utf-8")))
+        if found:
+            naming[name] = found
+    assert naming == OTHER_MEANINGS
+
+
+def test_the_texts_state_the_limits_the_code_applies() -> None:
+    limits = {
+        "aggregate-byte-limit": LIMITS["aggregateBytes"] // 2**20,
+        "chart-density-small": violin.MIN_OBSERVATIONS,
+        "chart-many-groups": MAX_GROUPS,
+        "file-count-limit": LIMITS["filesPerImport"],
+        "row-limit": LIMITS["aggregateRows"],
+        "single-file-limit": LIMITS["singleFileBytes"] // 2**20,
     }
-    # The spec's default kind is the one word outside the registry.
-    assert naming - OTHER_MEANINGS.keys() == {"research_charts.py", "research_strip.py"}
-    charts = (API / "research_charts.py").read_text(encoding="utf-8")
-    assert named.findall(charts) == ['"grouped_strip"']
+    words = {3: "three", 5: "five"}
+    for locale in ("zh", "en"):
+        texts = json.loads((WEB / f"messages/{locale}.json").read_text(encoding="utf-8"))
+        for code, limit in limits.items():
+            text = texts["refusals"][code]
+            assert f"{limit:,}" in text or words.get(limit, "") in text.split(), (locale, code)

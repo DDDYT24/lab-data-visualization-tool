@@ -52,10 +52,7 @@ def register_research_routes(
 
     @app.exception_handler(PreparationError)
     async def research_error(_request: Any, error: PreparationError) -> JSONResponse:
-        return JSONResponse(
-            status_code=error.status,
-            content={"code": error.code, "message": str(error), "params": error.params},
-        )
+        return JSONResponse(status_code=error.status, content=error.body())
 
     def available() -> ResearchStore:
         if store is None:
@@ -189,7 +186,11 @@ def register_research_routes(
         try:
             plan = PreparationPlan.model_validate_json(plan_json)
         except ValidationError as exc:
-            raise PreparationError("invalid-research-plan", str(exc), detail=str(exc)) from exc
+            first = exc.errors()[0]
+            where = ".".join(str(part) for part in first["loc"])
+            raise PreparationError(
+                "invalid-research-plan", str(exc), detail=f"{where}: {first['msg']}"
+            ) from exc
         if not slots.acquire(blocking=False):
             raise PreparationError(
                 "research-busy", "One research job is running and one is pending. Retry shortly."

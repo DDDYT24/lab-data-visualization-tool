@@ -19,7 +19,9 @@ def check(spec: ScientificChartSpec) -> None:
         or len(set(spec.pair_times)) != 2
         or any(not item.strip() for item in spec.pair_times)
     ):
-        raise ValueError("Paired plots require two distinct ordered time labels.")
+        raise PreparationError(
+            "chart-pair-times", "Paired plots require two distinct ordered time labels."
+        )
 
 
 def compute(result: Result, _groups: Groups, spec: ScientificChartSpec) -> None:

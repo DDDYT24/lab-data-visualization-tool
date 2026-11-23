@@ -94,6 +94,27 @@ def legacy(client: TestClient, kind: str) -> tuple[str, dict[str, Any], str]:
     return identifier, chart, response.json()["id"]
 
 
+def test_a_chart_that_cannot_be_captured_is_refused_with_the_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from labviz_api import research_figure_routes
+    from labviz_api.processing import ProcessingError
+
+    def unsuitable(*_: Any) -> None:
+        raise ProcessingError("The selected points cannot support a stable fitted curve.")
+
+    with TestClient(create_app(settings(tmp_path))) as client:
+        unlock(client)
+        identifier, _, _ = legacy(client, "line")
+        monkeypatch.setattr(research_figure_routes, "legacy_snapshot", unsuitable)
+        refused = client.post(f"/api/v1/projects/{identifier}/research/figure-sources?panel=1")
+    assert refused.status_code == 422
+    assert refused.json()["code"] == "figure-capture-failed"
+    assert refused.json()["params"] == {
+        "detail": "The selected points cannot support a stable fitted curve."
+    }
+
+
 @pytest.mark.parametrize("kind", ["line", "scatter", "box", "heatmap"])
 def test_legacy_mixed_export_frozen_copy_and_access(tmp_path: Path, kind: str) -> None:
     config = settings(tmp_path)

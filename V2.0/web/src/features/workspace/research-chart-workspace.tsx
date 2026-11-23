@@ -77,7 +77,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
   useDesktopDraft(`chart:${projectId}`, projectId, { research: revisionId }, {
     pointRendering, kind, title, seed, summary, summaryUnit, first, second, bandwidth, scale, points, selectedChartId: chart?.id ?? recoveredSelection ?? null, selectedChartOffset: chart?.offset ?? recoveredDraft?.selectedChartOffset ?? 0,
   }, draft => {
-    setPointRendering(draft.pointRendering); setKind(draft.kind); setTitle(draft.title); setSeed(draft.seed);
+    setPointRendering(draft.pointRendering); setKind(layers[draft.kind as string] ? draft.kind : layerKinds[0]); setTitle(draft.title); setSeed(draft.seed);
     setSummary(draft.summary); setSummaryUnit(draft.summaryUnit); setFirst(draft.first); setSecond(draft.second);
     setBandwidth(draft.bandwidth); setScale(draft.scale); setPoints(draft.points);
   }, !active || !busy, active && busy);
@@ -101,6 +101,10 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
   }
   const layer = layers[kind];
   const takes = (option: string) => layer.options.includes(option);
+  // A chart saved by a later version can be of a kind this one does not know.
+  const nameOf = (spec: ScientificChartSpec) => spec.title || layers[spec.kind as string]?.title[language] || spec.kind;
+  const badBandwidth = takes("bandwidth") && bandwidth !== "" && !(Number(bandwidth) > 0);
+  const badSeed = !takes("pairTimes") && !seed;
   const savedSpec = chart?.spec as ScientificChartSpec | undefined;
   const selected = selection && selection.chartId === chart?.id ? selection.ids : [];
   const selectedRow = chart?.rows.find((row) => row.id === selected[0]);
@@ -155,7 +159,8 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
             <TextField label={t("First time label", "第一个时间点")} value={first} onChange={(e) => setFirst(e.target.value)} />
             <TextField label={t("Second time label", "第二个时间点")} value={second} onChange={(e) => setSecond(e.target.value)} />
           </Stack> : <>
-            <TextField label={t("Jitter seed", "抖动种子")} value={seed} onChange={(e) => setSeed(e.target.value)} />
+            <TextField label={t("Jitter seed", "抖动种子")} value={seed} error={badSeed}
+              onChange={(e) => setSeed(e.target.value)} slotProps={{ htmlInput: { maxLength: 128 } }} />
             <TextField select label={t("Summary mark", "汇总标记")} value={summary}
               onChange={(e) => setSummary(e.target.value as ScientificChartSpec["summary"])}>
               <MenuItem value="none">{t("None", "无")}</MenuItem>{summaryKeys.map((key) =>
@@ -168,7 +173,8 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
             </TextField>}
           </>}
           {takes("bandwidth") && <>
-            <TextField label={t("Bandwidth (blank = Scott)", "带宽（留空使用 Scott）")} type="number" value={bandwidth}
+            <TextField label={t("Bandwidth (blank = Scott)", "带宽（留空使用 Scott）")} type="number" value={bandwidth} error={badBandwidth}
+              helperText={badBandwidth ? t("Greater than zero", "必须大于零") : undefined}
               onChange={(e) => setBandwidth(e.target.value)} slotProps={{ htmlInput: { min: 0, step: "any" } }} />
             <TextField select label={t("Density scale", "密度缩放")} value={scale}
               onChange={(e) => setScale(e.target.value as ScientificChartSpec["densityScale"])}>
@@ -188,7 +194,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
             <MenuItem value="vector">{t("Force vector (slower for large data)", "强制全矢量（大数据较慢）")}</MenuItem>
             <MenuItem value="raster">{t("300 dpi point layer", "300 dpi 点层")}</MenuItem>
           </TextField>
-          <Button variant="contained" disabled={busy || pending || !revisionId || missingRoles}
+          <Button variant="contained" disabled={busy || pending || !revisionId || missingRoles || badBandwidth || badSeed}
             onClick={() => void run(async () => {
               const created = await researchChartApi.create(projectId, revisionId!, {
                 schemaVersion: 1, kind, title, locale: zh ? "zh" : "en", jitterSeed: seed, jitterWidth: geometryContract.jitter.defaultWidth,
@@ -221,7 +227,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
         {!history.charts.length && <MenuItem value="">{t("No saved charts", "暂无图表")}</MenuItem>}
         {history.charts.map((item) => {
           const spec = item.spec as ScientificChartSpec;
-          return <MenuItem key={item.id} value={item.id}>{spec.title || layers[spec.kind].title[language]} · {item.id.slice(0, 8)}</MenuItem>;
+          return <MenuItem key={item.id} value={item.id}>{nameOf(spec)} · {item.id.slice(0, 8)}</MenuItem>;
         })}
       </TextField>
       {chart && savedSpec && <>
@@ -233,7 +239,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
           {t("Observations", "观测")}: {chart.observations} · {t("Excluded", "已排除")}: {chart.excluded} ·
           {t("Research revision", "研究版本")}: {chart.revisionId.slice(0, 8)}
         </Typography>
-        {active && <ChartPreview alt={savedSpec.title || layers[savedSpec.kind].title[language]} chart={chart} onSelect={selectObservations}
+        {active && <ChartPreview alt={nameOf(savedSpec)} chart={chart} onSelect={selectObservations}
           projectId={projectId} selected={selected} />}
         {selectedRow && <Typography role="status" variant="body2" data-testid="chart-selection">
           {selectedRow.sampleLabel ?? "?"} · {selectedRow.group ?? t("Undeclared group", "未声明分组")} · {selectedRow.value ?? "—"} {selectedRow.unit} ·{" "}

@@ -170,7 +170,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const chartName = (id: string) => `${chartTitle(id)} · ${id.slice(0, 8)}`;
   // A panel's layers are research charts of its own chart's research revision on the same x axis:
   // the API compares the same things (paired charts by their two times, others by the revision's groups).
-  const xAxisOf = (chart: FigureSources["charts"][number]) => layers[chart.spec.kind]?.xAxis === "pairTimes" ? `paired:${chart.spec.pairTimes?.join("\n")}` : "groups";
+  const xAxisOf = (chart: FigureSources["charts"][number]) => layers[chart.spec.kind]?.xAxis === "pairTimes" ? `times:${chart.spec.pairTimes?.join("\n")}` : "groups";
   const fitsWith = (own: string) => (id: string) => {
     const chart = chartOf(id), base = chartOf(own);
     return !!chart && !!base && !chart.legacy && !base.legacy && chart.revisionId === base.revisionId && xAxisOf(chart) === xAxisOf(base);

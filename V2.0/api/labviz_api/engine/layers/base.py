@@ -54,7 +54,8 @@ class Layer:
     title: Text
     # The name of an untitled chart in a figure's lists.
     short: Text
-    # ScientificChartSpec fields this kind takes; one that only other kinds take keeps its default.
+    # ScientificChartSpec fields that are refused on the kinds that do not list them. A field every
+    # kind accepts and only some use (the jitter, the density scale) is not listed.
     options: tuple[str, ...]
     plan: Callable[[PlanContext], LayerPlan]
     # Column roles the data must map.
@@ -63,7 +64,7 @@ class Layer:
     # Geometry rules of chart-render-v2 that the plan names.
     geometry: tuple[str, ...] = ("jitter",)
     limits: Mapping[str, int] = field(default_factory=dict)
-    # Further rules of the spec; raises ValueError.
+    # Further rules of the spec; raises PreparationError.
     check: Callable[[ScientificChartSpec], None] = nothing
     # Adds the kind's own numbers to the shared result.
     compute: Callable[[Result, Groups, ScientificChartSpec], None] = nothing

@@ -2,7 +2,8 @@
 
 exp, log, pow and everything built on them can differ in the last bits between processors and
 math libraries. Such a number is rounded here where it is computed; what follows from it by plain
-arithmetic then agrees everywhere. Data values are never rounded.
+arithmetic then agrees everywhere. Data values are never rounded. Neither is where a log axis
+begins or an annotation stands: those are positions on paper, kept as 2.4 drew them.
 """
 
 from __future__ import annotations

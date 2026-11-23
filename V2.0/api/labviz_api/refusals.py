@@ -6,7 +6,7 @@ carries the codes to it, and a test fails while a code has no text in zh.json or
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 RefusalCode = Literal[
     "absent-state-has-value",
@@ -36,6 +36,7 @@ RefusalCode = Literal[
     "chart-pair-key-reused",
     "chart-pair-partner",
     "chart-pair-time",
+    "chart-pair-times",
     "chart-plan-missing",
     "chart-unknown-summary-unit",
     "column-limit",
@@ -51,6 +52,7 @@ RefusalCode = Literal[
     "figure-canvas-too-large",
     "figure-capture-failed",
     "figure-chart-unavailable",
+    "figure-files-missing",
     "figure-incompatible-axis",
     "figure-layer-axis",
     "figure-layer-repeated",
@@ -147,6 +149,7 @@ DEFAULT_STATUS = 422
 STATUS: dict[RefusalCode, int] = {
     "chart-not-found": 404,
     "chart-plan-missing": 404,
+    "figure-files-missing": 404,
     "figure-not-found": 404,
     "figure-plan-missing": 404,
     "output-not-found": 404,
@@ -171,3 +174,6 @@ class PreparationError(ValueError):
     @property
     def status(self) -> int:
         return STATUS.get(self.code, DEFAULT_STATUS)
+
+    def body(self) -> dict[str, Any]:
+        return {"code": self.code, "message": str(self), "params": self.params}

@@ -116,13 +116,25 @@ test("three scientific charts persist and export the same saved data", async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await charts.screenshot({ path: testInfo.outputPath("chart-mobile-zh.png") });
   await page.setViewportSize({ width: 1280, height: 720 });
-  // A refusal is worded in the reader's language.
+  // A bandwidth the API cannot use is marked and not sent.
+  await charts.getByRole("combobox", { name: "图表类型", exact: true }).click();
+  await page.getByRole("option", { name: "小提琴分布图", exact: true }).click();
+  await charts.getByRole("spinbutton", { name: "带宽（留空使用 Scott）", exact: true }).fill("-1");
+  await expect(charts.getByText("必须大于零", { exact: true })).toBeVisible();
+  await expect(charts.getByRole("button", { name: "生成并保存图表", exact: true })).toBeDisabled();
+  await charts.getByRole("spinbutton", { name: "带宽（留空使用 Scott）", exact: true }).fill("");
+  // A refusal is worded in the reader's language, also when the settings are refused before any data.
   expectConsoleError(/422/);
   await charts.getByRole("combobox", { name: "图表类型", exact: true }).click();
   await page.getByRole("option", { name: "配对变化图", exact: true }).click();
   await charts.getByRole("textbox", { name: "第一个时间点", exact: true }).fill("第一周");
+  await charts.getByRole("textbox", { name: "第二个时间点", exact: true }).fill("第一周");
   await charts.getByRole("button", { name: "生成并保存图表", exact: true }).click();
   const refused = charts.getByRole("alert").filter({ hasText: "图表暂不可用" });
+  await expect(refused).toHaveText("图表暂不可用：请填写两个不同的时间点。");
+  expectConsoleError(/422/);
+  await charts.getByRole("textbox", { name: "第二个时间点", exact: true }).fill("第二周");
+  await charts.getByRole("button", { name: "生成并保存图表", exact: true }).click();
   await expect(refused).toHaveText("图表暂不可用：请筛选到所选的两个时间点。");
   await refused.screenshot({ path: testInfo.outputPath("chart-refused-zh.png") });
   // A saved chart whose plan the API refuses shows its saved image and says so.

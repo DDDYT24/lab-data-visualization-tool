@@ -10,7 +10,7 @@ export function useRefusalText() {
   return (cause: unknown) => {
     const { code = "", params = {}, message = String(cause) } = (cause ?? {}) as Partial<Refusal>;
     // A figure refusal that 2.4 stored has no params: its message still says what is wrong.
-    const worded = refusals[code]?.params.every((name) => name in params);
+    const worded = refusals[code]?.every((name) => name in params);
     return worded ? t(code, params) : message;
   };
 }
