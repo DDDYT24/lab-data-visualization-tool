@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from ...render_contract import GEOMETRY
 from ...research_preparation import PreparationError
 from ...scientific_imports import scientific_module
+from ..precision import canonical
 from ..text import Text
 from .base import Groups, Layer, LayerPlan, PlanContext, Result
 from .grouping import grouped
@@ -39,7 +40,7 @@ def compute(result: Result, groups: Groups, spec: ScientificChartSpec) -> None:
                 "chart-density-degenerate",
                 "Constant data have no violin density; use raw points.",
             )
-        bandwidth = spec.bandwidth or sigma * len(values) ** DENSITY["scottExponent"]
+        bandwidth = spec.bandwidth or canonical(sigma * len(values) ** DENSITY["scottExponent"])
         tail = DENSITY["tailBandwidths"] * bandwidth
         low, high = min(values) - tail, max(values) + tail
         if not all(math.isfinite(x) for x in (bandwidth, low, high)) or low >= high:
@@ -85,7 +86,7 @@ def compute(result: Result, groups: Groups, spec: ScientificChartSpec) -> None:
                 "kernel": DENSITY["kernel"],
                 "support": [low, high],
                 "grid": grid.tolist(),
-                "density": density.tolist(),
+                "density": [canonical(value) for value in density.tolist()],
                 "inputUnit": "observation",
                 "boundaryCorrection": "none",
                 "gridSize": grid_size,

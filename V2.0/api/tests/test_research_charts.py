@@ -3,12 +3,17 @@ from __future__ import annotations
 import copy
 import json
 import math
+import statistics
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 from pydantic import ValidationError
 
+from labviz_api.engine.layers import violin
+from labviz_api.engine.precision import canonical
+from labviz_api.render_plan import build_research_plan
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
 from labviz_api.research_preparation import (
     PreparationError,
@@ -110,6 +115,41 @@ def test_scott_and_common_density_scale() -> None:
     assert b["bandwidth"] == pytest.approx(10 * 3**-0.2)
     assert max(a["halfWidths"]) == pytest.approx(0.4)
     assert max(b["halfWidths"]) == pytest.approx(0.04)
+
+
+def test_the_last_bits_of_exp_and_pow_do_not_reach_the_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = [math.sin(i) * 7 + i / 3 for i in range(40)]
+    prepared = prepared_csv("v\n" + "\n".join(map(str, values)) + "\n")
+    spec = ScientificChartSpec(kind="violin")
+    result = compute_chart(prepared, spec)
+    exact = np.exp
+    noise = np.random.default_rng(1)
+
+    def other_processor(x: Any) -> Any:
+        y = exact(x)
+        return np.nextafter(y, np.where(noise.random(y.shape) < 0.5, np.inf, 0))
+
+    monkeypatch.setattr(np, "exp", other_processor)
+    monkeypatch.setattr(
+        violin, "stdev", lambda data: math.nextafter(statistics.stdev(data), math.inf)
+    )
+    again = compute_chart(prepared, spec)
+    assert again["resultSha256"] == result["resultSha256"]
+    assert build_research_plan(again)["planHash"] == build_research_plan(result)["planHash"]
+
+
+def test_only_computed_numbers_are_rounded() -> None:
+    prepared = prepared_csv("v\n0.123456789012345\n1\n2\n")
+    result = compute_chart(
+        prepared, ScientificChartSpec(kind="violin", bandwidth=0.987654321098765)
+    )
+    (density,) = result["densities"]
+    assert density["bandwidth"] == 0.987654321098765
+    assert 0.123456789012345 in [point["y"] for point in result["points"]]
+    assert all(value == canonical(value) for value in density["density"])
+    assert canonical(1.23456789012345e-7) == 1.23456789e-7
 
 
 def test_pairs_use_sample_identity_and_explicit_time_order() -> None:
