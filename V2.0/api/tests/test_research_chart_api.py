@@ -179,6 +179,26 @@ def test_chart_keeps_its_plan_through_copy_and_cleanup_and_older_charts_stay_fro
         assert unknown.status_code == 404 and unknown.json()["code"] == "chart-not-found"
 
 
+@pytest.mark.parametrize("labels", [["a", "a"], ["", ""], ["before"], []])
+def test_time_labels_a_paired_chart_cannot_use_are_refused_by_code(
+    tmp_path: Path, labels: list[str]
+) -> None:
+    with TestClient(create_app(settings(tmp_path))) as client:
+        unlock(client)
+        identifier = project(client)
+        revision = applied(client, identifier)
+        refused = client.post(
+            f"/api/v1/projects/{identifier}/research/charts",
+            json={"revisionId": revision, "spec": {"kind": "paired", "pairTimes": labels}},
+        )
+        assert refused.status_code == 422
+        assert refused.json() == {
+            "code": "chart-pair-times",
+            "message": "Paired plots require two distinct ordered time labels.",
+            "params": {},
+        }
+
+
 def test_paired_api_and_invalid_data_do_not_save_chart(tmp_path: Path) -> None:
     with TestClient(create_app(settings(tmp_path))) as client:
         unlock(client)
@@ -348,7 +368,7 @@ def test_computation_batch_restores_gc_state_on_success_and_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, enabled: bool, fail: bool
 ) -> None:
     from labviz_api import research_chart_routes
-    from labviz_api.research_preparation import PreparationError
+    from labviz_api.refusals import PreparationError
 
     original_compute = compute_chart
     original_render = draw_plan
@@ -357,7 +377,7 @@ def test_computation_batch_restores_gc_state_on_success_and_failure(
     def checked(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[str, Any]:
         observed.append(gc.isenabled())
         if fail:
-            raise PreparationError("chart-test-failure", "Injected batch failure")
+            raise PreparationError("chart-numeric-range", "Injected batch failure")
         return original_compute(prepared, spec)
 
     def checked_render(plan: dict[str, Any]) -> dict[str, bytes]:

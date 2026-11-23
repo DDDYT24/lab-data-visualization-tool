@@ -2,31 +2,25 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from labviz_api.scientific_imports import scientific_module
-
-if TYPE_CHECKING:
-    import numpy as np
-else:
-    np = scientific_module("numpy")
-
 import hashlib
 import math
 from collections import defaultdict
-from statistics import mean, median, stdev
+from statistics import mean
 from typing import Any, Literal
 
 from pydantic import Field, model_validator
 from pydantic_core import to_json
 
-from .render_contract import GEOMETRY
+from .engine.layers import LAYERS, LayerKind
+from .engine.stats import SUMMARIES, SummaryChoice
+from .refusals import PreparationError, RefusalCode
 from .research_contract import ResearchModel
-from .research_preparation import PreparationError
 from .research_strip import JITTER, StripSpec, build_strip
 from .research_styles import category_style
 
-DENSITY = GEOMETRY["density"]
+MAX_GROUPS = 100
+# The spec fields that only some kinds take.
+KIND_OPTIONS = sorted({option for layer in LAYERS.values() for option in layer.options})
 
 
 class CategoryStyle(ResearchModel):
@@ -38,13 +32,13 @@ class CategoryStyle(ResearchModel):
 class ScientificChartSpec(ResearchModel):
     schema_version: Literal[1] = 1
     point_rendering: Literal["auto", "vector", "raster"] = "auto"
-    kind: Literal["grouped_strip", "paired", "violin"] = "grouped_strip"
+    kind: LayerKind = "grouped_strip"
     title: str = Field(default="", max_length=160)
     locale: Literal["en", "zh"] = "en"
     jitter_seed: str = Field(default=JITTER["defaultSeed"], min_length=1, max_length=128)
     jitter_width: float = Field(default=JITTER["defaultWidth"], ge=0, le=JITTER["maxWidth"])
     show_points: bool = True
-    summary: Literal["none", "mean", "median"] = "none"
+    summary: SummaryChoice = "none"
     summary_unit: Literal["observation", "sample", "experimental_unit"] = "experimental_unit"
     pair_times: list[str] = Field(default_factory=list, max_length=2)
     bandwidth: float | None = Field(default=None, gt=0)
@@ -55,23 +49,17 @@ class ScientificChartSpec(ResearchModel):
     def check_options(self) -> ScientificChartSpec:
         if len({item.group for item in self.category_styles}) != len(self.category_styles):
             raise ValueError("Category style keys must be unique.")
-        if self.kind == "paired":
-            if (
-                len(self.pair_times) != 2
-                or len(set(self.pair_times)) != 2
-                or any(not item.strip() for item in self.pair_times)
-            ):
-                raise ValueError("Paired plots require two distinct ordered time labels.")
-            if self.summary != "none":
-                raise ValueError("Paired plots expose individual deltas, not a pooled summary.")
-        elif self.pair_times:
-            raise ValueError("Time labels apply only to paired plots.")
-        if self.kind != "violin" and (self.bandwidth is not None or not self.show_points):
-            raise ValueError("Bandwidth and optional points apply only to violin plots.")
+        layer = LAYERS[self.kind]
+        layer.check(self)
+        for name in KIND_OPTIONS:
+            field = type(self).model_fields[name]
+            unused = field.get_default(call_default_factory=True)
+            if name not in layer.options and getattr(self, name) != unused:
+                raise ValueError(f"{field.alias} does not apply to this chart kind.")
         return self
 
 
-def reject(code: str, message: str) -> None:
+def reject(code: RefusalCode, message: str) -> None:
     raise PreparationError(code, message)
 
 
@@ -107,7 +95,7 @@ def _compute_chart(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[
         prepared, StripSpec(jitter_seed=spec.jitter_seed, jitter_width=spec.jitter_width)
     )
     result["spec"] = spec.model_dump()
-    if len(result["groups"]) > 100:
+    if len(result["groups"]) > MAX_GROUPS:
         reject(
             "chart-many-groups", "Filter to at most 100 groups before creating a readable chart."
         )
@@ -130,123 +118,9 @@ def _compute_chart(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[
         group["summaryN"] = None
         if spec.summary != "none":
             values = summary_values(groups[group["label"]], spec.summary_unit)
-            group["summary"] = (mean if spec.summary == "mean" else median)(values)
+            group["summary"] = SUMMARIES[spec.summary].compute(values)
             group["summaryN"] = len(values)
-
-    if spec.kind == "paired":
-        pairs: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        key_samples: dict[str, str] = {}
-        for item in observations:
-            if not item["sampleId"] or not item["pairKey"] or not item["time"]:
-                reject(
-                    "chart-pair-identity", "Pairing requires explicit sample, pair and time fields."
-                )
-            if item["time"] not in spec.pair_times:
-                reject("chart-pair-time", "Filter to the two selected time labels.")
-            if item["pairKey"] in key_samples and key_samples[item["pairKey"]] != item["sampleId"]:
-                reject("chart-pair-key-reused", "A pair key cannot identify different samples.")
-            key_samples[item["pairKey"]] = item["sampleId"]
-            pairs[item["sampleId"]].append(item)
-        for sample_id, members in sorted(pairs.items()):
-            if len(members) != 2 or {item["time"] for item in members} != set(spec.pair_times):
-                reject(
-                    "chart-pair-partner", "Each sample requires exactly one reading at each time."
-                )
-            for key in ("pairKey", "experimentalUnit", "group"):
-                if len({item[key] for item in members}) != 1:
-                    reject("chart-pair-incompatible", "Pair metadata must agree within a sample.")
-            first, second = sorted(members, key=lambda item: spec.pair_times.index(item["time"]))
-            result["pairs"].append(
-                {
-                    "sampleId": sample_id,
-                    "sampleLabel": first["sampleLabel"],
-                    "pairKey": first["pairKey"],
-                    "group": first["group"],
-                    "firstId": first["id"],
-                    "secondId": second["id"],
-                    "first": first["value"],
-                    "second": second["value"],
-                    "delta": second["value"] - first["value"],
-                }
-            )
-        for point in result["points"]:
-            point["x"] = spec.pair_times.index(point["observation"]["time"])
-            point["jitterOffset"] = 0.0
-
-    if spec.kind == "violin":
-        for group in result["groups"]:
-            items = groups[group["label"]]
-            values = [float(item["value"]) for item in items]
-            if len(values) < 3:
-                reject(
-                    "chart-density-small",
-                    "Violin density needs at least three observations per group.",
-                )
-            sigma = stdev(values)
-            if sigma == 0:
-                reject(
-                    "chart-density-degenerate",
-                    "Constant data have no violin density; use raw points.",
-                )
-            bandwidth = spec.bandwidth or sigma * len(values) ** DENSITY["scottExponent"]
-            tail = DENSITY["tailBandwidths"] * bandwidth
-            low, high = min(values) - tail, max(values) + tail
-            if not all(math.isfinite(x) for x in (bandwidth, low, high)) or low >= high:
-                reject("chart-density-range", "Rescale these values before density estimation.")
-            span_in_bandwidths = (high - low) / bandwidth
-            if (
-                not math.isfinite(span_in_bandwidths)
-                or span_in_bandwidths > DENSITY["maxSpanBandwidths"]
-            ):
-                reject(
-                    "chart-density-resolution",
-                    "Increase bandwidth to resolve this density reliably.",
-                )
-            grid_size = max(
-                DENSITY["minGridPoints"],
-                math.ceil(span_in_bandwidths * DENSITY["gridPointsPerBandwidth"]) + 1,
-            )
-            grid = np.linspace(low, high, grid_size)
-            density = np.zeros(grid_size)
-            # Exact Gaussian sum in bounded chunks; no resampling or hidden data reduction.
-            for start in range(0, len(values), 2048):
-                with np.errstate(over="ignore", under="ignore"):
-                    z = (
-                        grid[:, None] - np.asarray(values[start : start + 2048])[None, :]
-                    ) / bandwidth
-                    density += np.exp(-0.5 * z * z).sum(axis=1)
-            density /= len(values) * bandwidth * math.sqrt(2 * math.pi)
-            if not np.isfinite(density).all() or float(density.max()) <= 0:
-                reject(
-                    "chart-density-numeric",
-                    "Bandwidth is numerically unsuitable; rescale or change it.",
-                )
-            result["densities"].append(
-                {
-                    "group": group["label"],
-                    "position": group["position"],
-                    "observationIds": [item["id"] for item in items],
-                    "nObservations": len(values),
-                    "bandwidth": bandwidth,
-                    "bandwidthRule": "explicit"
-                    if spec.bandwidth is not None
-                    else DENSITY["bandwidthRule"],
-                    "kernel": DENSITY["kernel"],
-                    "support": [low, high],
-                    "grid": grid.tolist(),
-                    "density": density.tolist(),
-                    "inputUnit": "observation",
-                    "boundaryCorrection": "none",
-                    "gridSize": grid_size,
-                }
-            )
-        peak = max(max(item["density"]) for item in result["densities"])
-        for item in result["densities"]:
-            denominator = max(item["density"]) if spec.density_scale == "equal_width" else peak
-            item["halfWidths"] = [
-                DENSITY["maxHalfWidth"] * value / denominator for value in item["density"]
-            ]
-            item["scale"] = spec.density_scale
+    LAYERS[spec.kind].compute(result, groups, spec)
     # A versioned compact encoding still binds the entire result, including all observations.
     # Old frozen chart hashes/artifacts are never rewritten.
     result["resultFingerprintVersion"] = "canonical-utf8-json-v2"

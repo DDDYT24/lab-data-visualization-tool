@@ -7,6 +7,7 @@ import type { FigureBoardHistory, FigureBoardSpec } from "@/domain/research-figu
 import { researchApi } from "@/lib/api/research-api";
 import { researchFigureApi } from "@/lib/api/research-figure-api";
 import { useDesktopDraft } from "./desktop-session";
+import { useRefusalText } from "./use-refusal-text";
 import { researchReuseApi as api, type TemplateRecord, type ReplacementPreview, type OutputPreview, type OutputNotes, type SavedOutput } from "@/lib/api/research-reuse-api";
 
 export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKey, onApplied }: {
@@ -28,7 +29,8 @@ export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKe
   const [notes, setNotes] = useState<OutputNotes | null>(null);
   const [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
+  const refusalText = useRefusalText();
   const [message, setMessage] = useState("");
   useDesktopDraft(`reuse:${projectId}`, projectId, { research: revision }, {
     board, template, name, file, columns, mapping, notes,
@@ -42,12 +44,12 @@ export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKe
     Promise.all([researchFigureApi.list(projectId), api.templates(projectId), api.outputs(projectId)]).then(([b, tp, o]) => {
       if (!active) return;
       setBoards(b.boards); setTemplates(tp.templates); setOutputs(o.outputs);
-    }).catch((e: unknown) => { if (active) setError(e instanceof Error ? e.message : "Load failed"); });
+    }).catch((e: unknown) => { if (active) setError(e); });
     return () => { active = false; };
   }, [projectId, refreshKey]);
   async function run(action: () => Promise<void>) {
-    setBusy(true); setError(""); setMessage("");
-    try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Request failed"); }
+    setBusy(true); setError(null); setMessage("");
+    try { await action(); } catch (e) { setError(e); }
     finally { setBusy(false); }
   }
   const selected = templates.find((item) => item.id === template);
@@ -60,7 +62,7 @@ export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKe
     <Typography component="h2" variant="h5">{t("Templates and research outputs", "模板与研究输出")}</Typography>
     <Typography>{t("Use saved figures. Templates retain settings and category labels, but exclude measurements and old row exclusions.", "基于已保存组合图操作。模板保留设置和类别标签，不包含测量数据或此前逐行排除决定。")}</Typography>
     {pending && <Alert severity="info">{t("Apply or discard the data preparation draft before replacing data.", "替换数据前，请先应用或放弃数据准备草稿。")}</Alert>}
-    {error && <Alert severity="error">{error}</Alert>}
+    {!!error && <Alert severity="error">{refusalText(error)}</Alert>}
     <Typography role="status">{busy ? t("Working…", "处理中…") : message}</Typography>
     <TextField select label={t("Saved figure for template / output", "用于模板／输出的已保存组合图")} value={board} disabled={busy}
       onChange={(e) => { setBoard(e.target.value); setOutputCheck(null); setNotes(null); setReviewed(false); }}>
@@ -98,10 +100,10 @@ export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKe
     {check && <Stack spacing={1} data-testid="replacement-preview">
       <Typography>{t("Old row exclusions are not copied. Review QC and source identity again.", "不会复制旧的逐行排除决定，请重新核对 QC 和样本身份。")}</Typography>
       {check.panels.map((p) => <Alert key={p.panel} severity={p.status === "ready" ? "success" : "warning"}>
-        {p.panel}: {p.status} · {p.observations} · {p.unit}. {p.message}
+        {p.panel}: {p.status} · {p.observations} · {p.unit}. {refusalText({ ...p.refusal, message: p.message })}
         <Box component="pre" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12 }}>{JSON.stringify(p.styles, null, 2)}</Box>
       </Alert>)}
-      {!check.figureReady && <Alert severity="warning">{check.figureError || t("Only ready panels will be saved; no incomplete figure will be created.", "只保存已就绪面板，不生成不完整组合图。")}</Alert>}
+      {!check.figureReady && <Alert severity="warning">{check.figureError ? refusalText({ ...check.figureRefusal, message: check.figureError }) : t("Only ready panels will be saved; no incomplete figure will be created.", "只保存已就绪面板，不生成不完整组合图。")}</Alert>}
       <Button variant="contained" disabled={blocked || check.readyCount === 0 || check.expectedRevision !== revision} onClick={() => void run(async () => {
         await api.apply(projectId, check.token, check.expectedRevision); setCheck(null); await onApplied();
         setBoards((await researchFigureApi.list(projectId)).boards); setMessage(t("Replacement saved as new revisions.", "替换结果已保存为新版本。"));

@@ -10,8 +10,8 @@ from test_plan_axes import plan
 
 from labviz_api.plan_axes import apply_axis_controls, axis_position
 from labviz_api.plan_notes import BRACKET_DROP, apply_notes
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import RenderPlan, plan_hash
-from labviz_api.research_preparation import PreparationError
 
 VALUES = [1.0, 10.0, 100.0, 1000.0]
 NOTES: list[dict[str, Any]] = [

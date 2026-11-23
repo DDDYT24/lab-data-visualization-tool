@@ -16,6 +16,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from pydantic import Field
 
+from .refusals import PreparationError, RefusalCode
 from .research_contract import ResearchModel
 
 LIMITS = json.loads(
@@ -48,12 +49,6 @@ UNITS = {
     "mmol/L": ("concentration", "0.001"),
     "umol/L": ("concentration", "0.000001"),
 }
-
-
-class PreparationError(ValueError):
-    def __init__(self, code: str, message: str) -> None:
-        self.code = code
-        super().__init__(message)
 
 
 class RoleMapping(ResearchModel):
@@ -128,8 +123,8 @@ def stable_id(namespace: str, *parts: str) -> str:
     return uuid5(NAMESPACE_URL, json.dumps([namespace, *parts], ensure_ascii=False)).hex
 
 
-def fail(code: str, message: str) -> None:
-    raise PreparationError(code, message)
+def fail(code: RefusalCode, message: str, **params: str | int) -> None:
+    raise PreparationError(code, message, **params)
 
 
 def parse_sources(namespace: str, files: list[tuple[str, bytes]]) -> dict[str, Any]:
@@ -143,7 +138,7 @@ def parse_sources(namespace: str, files: list[tuple[str, bytes]]) -> dict[str, A
     hashes: set[str] = set()
     for name, payload in files:
         if len(payload) > LIMITS["singleFileBytes"]:
-            fail("single-file-limit", f"{name}: the file exceeds 50 MiB.")
+            fail("single-file-limit", f"{name}: the file exceeds 50 MiB.", file=name)
         extension = Path(name).suffix.lower()
         if extension not in {".csv", ".tsv"}:
             fail("unsupported-research-format", "Research stacking accepts CSV or TSV.")
@@ -184,7 +179,12 @@ def parse_sources(namespace: str, files: list[tuple[str, bytes]]) -> dict[str, A
                 if not values:
                     continue
                 if len(values) != len(columns):
-                    fail("row-width", f"{name}, row {physical_row}: column count differs.")
+                    fail(
+                        "row-width",
+                        f"{name}, row {physical_row}: column count differs.",
+                        file=name,
+                        row=physical_row,
+                    )
                 cells = dict(zip(columns, values, strict=True))
                 cells["__labviz_source"] = name
                 cells["__labviz_batch"] = name
@@ -208,7 +208,9 @@ def parse_sources(namespace: str, files: list[tuple[str, bytes]]) -> dict[str, A
                 if len(rows) > LIMITS["aggregateRows"]:
                     fail("row-limit", "The combined input exceeds 100,000 rows.")
         except (csv.Error, StopIteration) as exc:
-            raise PreparationError("invalid-csv", f"{name}: invalid or empty CSV/TSV.") from exc
+            raise PreparationError(
+                "invalid-csv", f"{name}: invalid or empty CSV/TSV.", file=name
+            ) from exc
     if not rows:
         fail("empty-input", "No measurement rows were found.")
     return {
@@ -226,9 +228,11 @@ def number(value: str, field: str) -> float | None:
     try:
         parsed = float(value)
     except ValueError as exc:
-        raise PreparationError("invalid-number", f"{field}: expected a finite number.") from exc
+        raise PreparationError(
+            "invalid-number", f"{field}: expected a finite number.", field=field
+        ) from exc
     if not math.isfinite(parsed):
-        fail("invalid-number", f"{field}: expected a finite number.")
+        fail("invalid-number", f"{field}: expected a finite number.", field=field)
     return parsed
 
 
@@ -237,7 +241,8 @@ def require_fields(columns: list[str], fields: list[str]) -> None:
         fail("duplicate-field", "A field is selected more than once.")
     missing = sorted(set(fields) - set(columns))
     if missing:
-        fail("missing-field", "Missing fields: " + ", ".join(missing))
+        fields_text = ", ".join(missing)
+        fail("missing-field", "Missing fields: " + fields_text, fields=fields_text)
 
 
 def transform(
@@ -264,7 +269,12 @@ def transform(
                 cells = row["cells"]
                 source_unit = cells[step.unit_field]
                 if source_unit not in UNITS or UNITS[source_unit][0] != target_dimension:
-                    fail("incompatible-unit", f"Cannot convert {source_unit} to {step.to_unit}.")
+                    fail(
+                        "incompatible-unit",
+                        f"Cannot convert {source_unit} to {step.to_unit}.",
+                        found=source_unit or "—",
+                        target=step.to_unit,
+                    )
                 scale = Decimal(UNITS[source_unit][1]) / Decimal(target_scale)
                 for field in [step.value_field] + ([step.limit_field] if step.limit_field else []):
                     value = cells[field]
@@ -276,7 +286,7 @@ def transform(
                             cells[field] = format(converted, "f")
                         except InvalidOperation as exc:
                             raise PreparationError(
-                                "invalid-number", f"{field}: conversion failed."
+                                "invalid-number", f"{field}: conversion failed.", field=field
                             ) from exc
                 cells[step.unit_field] = step.to_unit
         elif isinstance(step, WideStep):
@@ -382,8 +392,9 @@ def prepare(raw: dict[str, Any], plan: PreparationPlan) -> dict[str, Any]:
     required = [
         value for key, value in mapped.items() if key != "default_unit" and value is not None
     ]
-    if set(required) - set(columns):
-        fail("missing-field", "A mapped field is absent from the prepared table.")
+    absent = ", ".join(sorted(set(required) - set(columns)))
+    if absent:
+        fail("missing-field", "A mapped field is absent from the prepared table.", fields=absent)
     # Convert limits whenever the mapped measurement values are converted.
     for step in plan.steps:
         if isinstance(step, ConvertStep) and (
@@ -472,6 +483,7 @@ def prepare(raw: dict[str, Any], plan: PreparationPlan) -> dict[str, Any]:
                 fail(
                     "conflicting-sample",
                     f"Sample {sample_label} has conflicting identity or group metadata.",
+                    sample=str(sample_label),
                 )
             samples[sample_id] = sample
         repeat_text = get("technical_repeat")

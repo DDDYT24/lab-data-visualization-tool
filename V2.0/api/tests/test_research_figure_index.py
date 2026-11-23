@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
+from labviz_api.refusals import PreparationError
 from labviz_api.research_figure_board import SceneIndex, interaction, scene_row_references
-from labviz_api.research_preparation import PreparationError
 
 
 def scene_fixture(pooled: bool) -> dict[str, Any]:

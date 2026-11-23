@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "contracts": {
+    "renderPlan": "render-plan-v1",
+    "chartRender": "chart-render-v2"
+  },
+  "limits": {
+    "groupsPerChart": 100
+  },
+  "layers": {
+    "grouped_strip": {
+      "title": {
+        "en": "Grouped raw points",
+        "zh": "分组原始点图"
+      },
+      "short": {
+        "en": "Raw points",
+        "zh": "原始点图"
+      },
+      "options": [
+        "summary"
+      ],
+      "roles": [],
+      "xAxis": "group",
+      "limits": {}
+    },
+    "paired": {
+      "title": {
+        "en": "Paired change",
+        "zh": "配对变化图"
+      },
+      "short": {
+        "en": "Paired change",
+        "zh": "配对变化图"
+      },
+      "options": [
+        "pairTimes"
+      ],
+      "roles": [
+        "sample",
+        "pair",
+        "time"
+      ],
+      "xAxis": "pairTimes",
+      "limits": {}
+    },
+    "violin": {
+      "title": {
+        "en": "Violin distribution",
+        "zh": "小提琴分布图"
+      },
+      "short": {
+        "en": "Violin",
+        "zh": "小提琴图"
+      },
+      "options": [
+        "summary",
+        "bandwidth",
+        "showPoints"
+      ],
+      "roles": [],
+      "xAxis": "group",
+      "limits": {
+        "observationsPerGroup": 3
+      }
+    }
+  },
+  "summaries": {
+    "mean": {
+      "label": {
+        "en": "Mean",
+        "zh": "均值"
+      }
+    },
+    "median": {
+      "label": {
+        "en": "Median",
+        "zh": "中位数"
+      }
+    }
+  },
+  "refusals": {
+    "absent-state-has-value": [],
+    "aggregate-byte-limit": [],
+    "annotation-3d": [],
+    "annotation-outside": [],
+    "axis-control-3d": [],
+    "axis-control-category": [],
+    "axis-control-invalid": [],
+    "axis-log-bars": [],
+    "axis-log-nonpositive": [],
+    "axis-ticks-outside": [],
+    "chart-ambiguous-repeat": [],
+    "chart-axis-range": [],
+    "chart-cjk-font": [],
+    "chart-density-degenerate": [],
+    "chart-density-numeric": [],
+    "chart-density-range": [],
+    "chart-density-resolution": [],
+    "chart-density-small": [],
+    "chart-many-groups": [],
+    "chart-mixed-measurements": [],
+    "chart-not-found": [],
+    "chart-numeric-range": [],
+    "chart-pair-identity": [],
+    "chart-pair-incompatible": [],
+    "chart-pair-key-reused": [],
+    "chart-pair-partner": [],
+    "chart-pair-time": [],
+    "chart-pair-times": [],
+    "chart-plan-missing": [],
+    "chart-unknown-summary-unit": [],
+    "column-limit": [],
+    "conflicting-sample": [
+      "sample"
+    ],
+    "duplicate-field": [],
+    "duplicate-or-missing-pair": [],
+    "duplicate-pivot-key": [],
+    "duplicate-source": [],
+    "empty-input": [],
+    "empty-selection": [],
+    "figure-build-refused": [],
+    "figure-build-state": [],
+    "figure-canvas-too-large": [],
+    "figure-capture-failed": [
+      "detail"
+    ],
+    "figure-chart-unavailable": [],
+    "figure-files-missing": [],
+    "figure-incompatible-axis": [
+      "axis"
+    ],
+    "figure-layer-axis": [],
+    "figure-layer-repeated": [],
+    "figure-layer-revision": [],
+    "figure-layer-unplanned": [],
+    "figure-layer-unsupported": [],
+    "figure-mark": [],
+    "figure-not-found": [],
+    "figure-not-ready": [],
+    "figure-palette-unknown": [],
+    "figure-panel": [],
+    "figure-panel-unplanned": [],
+    "figure-plan-missing": [],
+    "figure-row": [],
+    "figure-sample-mapping": [],
+    "figure-secondary-axis": [],
+    "figure-shared-axis-control": [
+      "axis"
+    ],
+    "figure-size": [],
+    "figure-source-changed": [],
+    "figure-type": [],
+    "file-count-limit": [],
+    "incompatible-pair": [],
+    "incompatible-unit": [
+      "found",
+      "target"
+    ],
+    "invalid-columns": [],
+    "invalid-csv": [
+      "file"
+    ],
+    "invalid-exclusion": [],
+    "invalid-number": [
+      "field"
+    ],
+    "invalid-parent": [],
+    "invalid-repeat": [],
+    "invalid-research-plan": [
+      "detail"
+    ],
+    "invalid-role": [],
+    "limit-required": [],
+    "missing-field": [
+      "fields"
+    ],
+    "missing-pivot-key": [],
+    "no-redo": [],
+    "no-undo": [],
+    "observed-requires-value": [],
+    "output-not-found": [],
+    "output-review": [],
+    "pair-key-required": [],
+    "pair-times": [],
+    "plan-invalid": [],
+    "preview-expired": [],
+    "research-busy": [],
+    "research-conflict": [],
+    "research-input-required": [],
+    "research-local-only": [],
+    "reserved-value-field": [],
+    "reshape-collision": [],
+    "reuse-figure-unsupported": [],
+    "row-limit": [],
+    "row-width": [
+      "file",
+      "row"
+    ],
+    "schema-mismatch": [],
+    "single-file-limit": [
+      "file"
+    ],
+    "source-encoding": [],
+    "strip-duplicate-id": [],
+    "strip-empty": [],
+    "strip-incomplete-input": [],
+    "strip-invalid-value": [],
+    "strip-mixed-units": [],
+    "strip-non-observed": [],
+    "template-blocked": [],
+    "template-field": [
+      "field"
+    ],
+    "template-mapping": [],
+    "template-not-found": [],
+    "template-unit": [
+      "expected",
+      "found"
+    ],
+    "unconverted-limit": [],
+    "unit-mapping-mismatch": [],
+    "unit-without-sample": [],
+    "unknown-exclusion": [],
+    "unknown-measurement-state": [],
+    "unsupported-research-format": [],
+    "unsupported-unit": []
+  }
+}

@@ -20,8 +20,8 @@ from labviz_api.plan_axes import (
     scale_label,
 )
 from labviz_api.processing import analyze_chart, classic_plan
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import RenderPlan, plan_hash
-from labviz_api.research_preparation import PreparationError
 
 
 def chart(kind: str = "scatter") -> ChartSpec:

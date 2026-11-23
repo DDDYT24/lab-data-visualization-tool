@@ -18,9 +18,9 @@ from test_research_figure_board import charts
 
 import labviz_api.research_figure_jobs as jobs
 from labviz_api.main import create_app
+from labviz_api.refusals import PreparationError
 from labviz_api.research_figure_board import artifact_row, read_board
 from labviz_api.research_figure_render import render_board
-from labviz_api.research_preparation import PreparationError
 from labviz_api.research_store import ResearchStore
 
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .engine.layers import LAYERS
+
 
 def install_headers(connection: Any) -> None:
     connection.execute("""
@@ -29,9 +31,7 @@ def scientific_header(result: dict[str, Any], revision: str) -> dict[str, Any]:
         "observations": len(observations),
         "independentUnits": None if None in units else len(units),
         "resultSha256": result["resultSha256"],
-        "xSignature": ["paired", result["spec"]["pairTimes"]]
-        if kind == "paired"
-        else ["group", [group["label"] for group in result["groups"]]],
+        "xSignature": LAYERS[kind].x_signature(result),
         "ySignature": ["numeric", observations[0]["measurementType"], result["unit"]],
     }
 

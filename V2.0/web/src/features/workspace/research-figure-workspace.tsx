@@ -15,6 +15,7 @@ import {
   chartIdsOf, draftFromSpec, draftProblems, duplicatePanel, emptyDraft, figureOf, MAX_PANELS, movePanel, PANEL_LABELS, panelLayers, shares, specFromDraft, storedDraft, withChart, withCount,
   type DraftProblem, type FigureDraft, type PanelDraft,
 } from "@/domain/figure-draft";
+import { layerKinds, layers } from "@/domain/capabilities";
 import { FIGURE_FONTS, type FigureFont } from "@/domain/figure-spec";
 import type { RenderPlan } from "@/domain/render-plan";
 import type { FigureBoard, FigureBoardHistory, FigureSources } from "@/domain/research-figure-board";
@@ -22,6 +23,7 @@ import { researchChartApi } from "@/lib/api/research-chart-api";
 import { researchFigureApi } from "@/lib/api/research-figure-api";
 import { useInterfaceMode } from "@/components/layout/interface-mode";
 import { useDesktopDraft, desktopDraftBase } from "./desktop-session";
+import { useRefusalText } from "./use-refusal-text";
 
 export function ResearchFigureWorkspace({ projectId, active = true, currentRevision, refreshKey, onSaved, onStateChange, onSelectAnalysis }: {
   active?: boolean; projectId: string; currentRevision: string | null; refreshKey: number; onSaved?: () => void; onStateChange?: (state: FigureWorkspaceState) => void; onSelectAnalysis?: () => void;
@@ -30,6 +32,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const overview = useInterfaceMode().mode === "overview";
   const zh = useLocale().startsWith("zh");
   const t = (en: string, cn: string) => zh ? cn : en;
+  const language = zh ? "zh" : "en";
   const [catalog, setCatalog] = useState<FigureSources>({ charts: [] });
   const [history, setHistory] = useState<FigureBoardHistory>({ boards: [] });
   const historyRefresh = useRef({ projectId, refreshKey });
@@ -52,7 +55,8 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<"load" | "save" | "capture" | "retry">("load");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const refusalText = useRefusalText();
   // Source chart plans by chart id: their axes frame the panel editor's limits and categories.
   const [sourcePlans, setSourcePlans] = useState<Record<string, RenderPlan | null>>({});
   const { title, axisMode, palette, fontSize, grid, pointRendering, labelStyle, fontFamily, categoryCounts, provenanceOnFigure, count, panels } = draft;
@@ -70,7 +74,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
     researchFigureApi.sources(projectId).then((result) => {
       if (active) setCatalog(result);
     }).catch((cause: unknown) => {
-      if (active) setError(cause instanceof Error ? cause.message : "Chart list unavailable");
+      if (active) setError(cause);
     });
     return () => { active = false; };
   }, [projectId, refreshKey, loadAttempt]);
@@ -86,7 +90,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
         setSaved(board); setDraft(draftFromSpec(board.spec));
       }
     }).catch((cause: unknown) => {
-      if (active) setError(cause instanceof Error ? cause.message : "Layout load failed");
+      if (active) setError(cause);
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [projectId, loadAttempt]);
@@ -98,7 +102,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
     if (previous.projectId !== projectId || previous.refreshKey === refreshKey) return;
     let active = true;
     researchFigureApi.list(projectId).then((result) => { if (active) setHistory(result); })
-      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "Layout load failed"); });
+      .catch((cause: unknown) => { if (active) setError(cause); });
     return () => { active = false; };
   }, [projectId, refreshKey]);
   const savedIdentifier = saved?.id;
@@ -141,7 +145,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   async function run(action: () => Promise<void>, phase: "load" | "save" | "capture" | "retry" = "load") {
     setOperation(phase); setBusy(true); setError(null);
     try { await action(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Layout request failed"); }
+    catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
   const blocked = loading || busy;
@@ -157,7 +161,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   };
   const names: Record<string, string> = {
     line: t("Line", "折线"), scatter: t("Scatter", "散点"), box: t("Box", "箱线"), heatmap: t("Correlation", "相关图"),
-    grouped_strip: t("Raw points", "原始点图"), paired: t("Paired change", "配对变化图"), violin: t("Violin", "小提琴图"),
+    ...Object.fromEntries(layerKinds.map((kind) => [kind, layers[kind].short[language]])),
   };
   const chartTitle = (id: string) => {
     const chart = chartOf(id);
@@ -166,7 +170,7 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
   const chartName = (id: string) => `${chartTitle(id)} · ${id.slice(0, 8)}`;
   // A panel's layers are research charts of its own chart's research revision on the same x axis:
   // the API compares the same things (paired charts by their two times, others by the revision's groups).
-  const xAxisOf = (chart: FigureSources["charts"][number]) => chart.spec.kind === "paired" ? `paired:${chart.spec.pairTimes?.join("\n")}` : "groups";
+  const xAxisOf = (chart: FigureSources["charts"][number]) => layers[chart.spec.kind]?.xAxis === "pairTimes" ? `times:${chart.spec.pairTimes?.join("\n")}` : "groups";
   const fitsWith = (own: string) => (id: string) => {
     const chart = chartOf(id), base = chartOf(own);
     return !!chart && !!base && !chart.legacy && !base.legacy && chart.revisionId === base.revisionId && xAxisOf(chart) === xAxisOf(base);
@@ -236,13 +240,13 @@ export function ResearchFigureWorkspace({ projectId, active = true, currentRevis
       <Typography role="status" data-testid="figure-save-state" sx={overview ? { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)" } : undefined}>
         {loading ? t("Loading layout…", "正在加载布局…") : busy ? operation === "save" ? t("Saving layout…", "正在保存布局…") : operation === "capture" ? t("Capturing and validating chart…", "正在捕获并验证图表…") : t("Loading saved layout…", "正在加载已保存布局…") : error ? operation === "save" ? t("Save failed — draft retained", "保存失败：已保留草稿") : t("Request failed — draft retained", "请求失败：已保留草稿") : dirty || !saved ? t("Unsaved layout", "布局尚未保存") : t("Saved locally", "已保存到本地")}
       </Typography>
-      {error && <Alert severity="error">{operation === "save" ? t("Save failed; layout draft retained. ", "保存失败，已保留布局草稿。") : t("Request failed; layout draft retained. ", "请求失败，已保留布局草稿。")}{error}{operation === "load" && !dirty && <Button onClick={() => { setError(null); setLoading(true); setLoadAttempt((n) => n + 1); }}>{t("Retry loading layout", "重新加载布局")}</Button>}</Alert>}
+      {!!error && <Alert severity="error">{operation === "save" ? t("Save failed; layout draft retained. ", "保存失败，已保留布局草稿。") : t("Request failed; layout draft retained. ", "请求失败，已保留布局草稿。")}{refusalText(error)}{operation === "load" && !dirty && <Button onClick={() => { setError(null); setLoading(true); setLoadAttempt((n) => n + 1); }}>{t("Retry loading layout", "重新加载布局")}</Button>}</Alert>}
       <Button sx={{ "@media (min-width:1400px)": { display: "none" } }} aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(!inspectorOpen)}>{t("Selected panel settings", "选中面板设置")}</Button>
       <Stack spacing={overview ? 1 : 2} sx={{ order: 1, minWidth: 0 }} data-testid="saved-figure-region">
       {saved?.artifactState === "queued" && <Alert severity="info" role="status">{t("Layout saved locally. Figure generation is queued.", "布局已保存到本地，组合图等待生成。")}</Alert>}
       {saved?.artifactState === "running" && <Alert severity="info" role="status">{t("Layout saved locally. Generating preview and export files…", "布局已保存到本地，正在生成预览和导出文件…")}</Alert>}
       {saved?.artifactRefusal && <Alert severity="error" data-testid="figure-refused">
-        {t("This revision cannot be drawn: ", "此修订无法绘制：")}{saved.artifactError} {t("Change the draft and save a new revision.", "请修改草稿后保存新的修订。")}
+        {t("This revision cannot be drawn: ", "此修订无法绘制：")}{refusalText({ code: saved.artifactRefusal, params: saved.artifactRefusalParams, message: saved.artifactError })} {t("Change the draft and save a new revision.", "请修改草稿后保存新的修订。")}
       </Alert>}
       {(saved?.artifactState === "failed" || saved?.artifactState === "unavailable") && !saved.artifactRefusal && <Alert severity="error">{t("Layout saved locally; figure generation failed. Retry uses the same saved inputs.", "布局已保存到本地，但组合图生成失败。重试将使用同一份已保存输入。")}
         <Button disabled={blocked} onClick={() => void run(async () => {

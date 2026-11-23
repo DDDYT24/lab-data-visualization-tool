@@ -15,9 +15,9 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from .refusals import PreparationError
 from .render_contract import GEOMETRY
 from .research_contract import ResearchModel
-from .research_preparation import PreparationError
 
 JITTER = GEOMETRY["jitter"]
 

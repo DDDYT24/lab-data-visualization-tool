@@ -12,13 +12,16 @@ import hashlib
 import json
 import math
 import sys
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import Field
 
+from .engine.layers import LAYERS
+from .engine.layers.base import PlanContext
+from .engine.stats import SummaryKey
+from .refusals import PreparationError
 from .render_contract import GEOMETRY
 from .research_contract import Digest, ResearchModel
-from .research_preparation import PreparationError
 from .research_styles import COLORS
 
 CONTRACT = "render-plan-v1"
@@ -43,6 +46,13 @@ LAYER_STEP = GEOMETRY["layers"]["step"]
 Color = Annotated[str, Field(pattern=r"^#[0-9a-f]{6}$")]
 Marker = Literal["o", "s", "^", "D", "v"]
 YAxisName = Literal["y", "y2"]
+# The research kinds of the registry, then the classic charts.
+if TYPE_CHECKING:
+    SourceKind = str
+else:
+    SourceKind = Literal[
+        (*LAYERS, "histogram", "box", "bar", "line", "scatter", "heatmap", "surface3d")
+    ]
 
 
 class Tick(ResearchModel):
@@ -183,7 +193,7 @@ class SummaryMark(LayeredMark):
     x0: float
     x1: float
     y: float
-    statistic: Literal["mean", "median"]
+    statistic: SummaryKey
     summary_unit: Literal["observation", "sample", "experimental_unit"]
     n: int
 
@@ -305,18 +315,7 @@ class Panel(ResearchModel):
 
 
 class PlanSource(ResearchModel):
-    kind: Literal[
-        "grouped_strip",
-        "paired",
-        "violin",
-        "histogram",
-        "box",
-        "bar",
-        "line",
-        "scatter",
-        "heatmap",
-        "surface3d",
-    ]
+    kind: SourceKind
     result_sha256: Digest
     algorithm_version: str
 
@@ -479,6 +478,17 @@ def plan_hash(plan: dict[str, Any]) -> str:
     return hashlib.sha256(plan_bytes(payload)).hexdigest()
 
 
+def check_stored_plan(payload: bytes) -> None:
+    """Refuse a saved plan that breaks the contract or no longer matches its own hash."""
+    try:
+        stated = RenderPlan.model_validate_json(payload).plan_hash
+        intact = plan_hash(json.loads(payload)) == stated
+    except ValueError:
+        intact = False
+    if not intact:
+        raise PreparationError("plan-invalid", "The saved drawing data cannot be read.")
+
+
 def build_research_plan(
     result: dict[str, Any],
     *,
@@ -492,13 +502,7 @@ def build_research_plan(
     `category_counts` False leaves the "obs=, units=" line out of each category name.
     """
     spec = result["spec"]
-    zh = spec["locale"] == "zh"
-    undeclared = "未声明分组" if zh else "Undeclared"
-    names = {
-        "grouped_strip": ("Grouped raw points", "分组原始点图"),
-        "paired": ("Paired change", "配对变化图"),
-        "violin": ("Violin distribution", "小提琴分布图"),
-    }
+    layer = LAYERS[spec["kind"]]
     groups = result["groups"]
     colors = (
         dict(group_colors)
@@ -510,96 +514,10 @@ def build_research_plan(
     colors = {key: (grayscale(c) if use_grayscale else c).lower() for key, c in colors.items()}
     mode = point_rendering or spec.get("pointRendering", "auto")
 
-    def name(group: str | None) -> str:
-        return group if group is not None else undeclared
-
+    context = PlanContext(result, colors, use_grayscale, category_counts)
     # Draw order is list order: areas and lines, then points, then summaries on top.
-    marks: list[dict[str, Any]] = []
-    summaries: list[dict[str, Any]] = []
-    legend: list[dict[str, Any]] = []
-    y_values: list[float] = []
-    if spec["kind"] == "paired":
-        for group in groups:
-            pairs = [p for p in result["pairs"] if p["group"] == group["label"]]
-            marks.append(
-                {
-                    "kind": "segments",
-                    "id": f"pairs:{group['position']}",
-                    "group": name(group["label"]),
-                    "color": colors[group["label"]],
-                    "width": 1.2,
-                    "opacity": 0.65,
-                    "x0": [0.0] * len(pairs),
-                    "y0": [float(p["first"]) for p in pairs],
-                    "x1": [1.0] * len(pairs),
-                    "y1": [float(p["second"]) for p in pairs],
-                    "sourceRefs": [[p["firstId"], p["secondId"]] for p in pairs],
-                }
-            )
-            y_values += [float(p[k]) for p in pairs for k in ("first", "second")]
-            legend.append(
-                {"label": name(group["label"]), "color": colors[group["label"]], "symbol": "line"}
-            )
-        x_axis = {
-            "scale": "category",
-            "domain": (-0.35, 1.35),
-            "ticks": [{"value": float(i), "label": t} for i, t in enumerate(spec["pairTimes"])],
-            "title": "",
-            "niceRule": None,
-            "grid": False,
-        }
-    else:
-        for density in result["densities"]:
-            marks.append(
-                {
-                    "kind": "violin",
-                    "id": f"density:{density['position']}",
-                    "group": name(density["group"]),
-                    "color": colors[density["group"]],
-                    "opacity": 0.3,
-                    "position": float(density["position"]),
-                    "grid": density["grid"],
-                    "halfWidths": density["halfWidths"],
-                    "bandwidth": density["bandwidth"],
-                    "bandwidthRule": density["bandwidthRule"],
-                    "scale": density["scale"],
-                    "n": density["nObservations"],
-                    "sourceRefs": density["observationIds"],
-                }
-            )
-            y_values += density["support"]
-        ticks = []
-        for group in groups:
-            count = "?" if group["independentUnits"] is None else str(group["independentUnits"])
-            label = name(group["label"])[:36]
-            if category_counts:
-                label += f"\nobs={group['observations']}, units={count}"
-            ticks.append({"value": float(group["position"]), "label": label})
-            if group["summary"] is not None:
-                summaries.append(
-                    {
-                        "kind": "summary",
-                        "id": f"summary:{group['position']}",
-                        "group": name(group["label"]),
-                        "color": "#303030" if use_grayscale else "#192d40",
-                        "width": 2.4,
-                        "x0": group["position"] - 0.25,
-                        "x1": group["position"] + 0.25,
-                        "y": float(group["summary"]),
-                        "statistic": spec["summary"],
-                        "summaryUnit": spec["summaryUnit"],
-                        "n": group["summaryN"],
-                    }
-                )
-                y_values.append(float(group["summary"]))
-        x_axis = {
-            "scale": "category",
-            "domain": (-0.65, max(len(groups) - 0.35, 0.65)),
-            "ticks": ticks,
-            "title": "",
-            "niceRule": None,
-            "grid": False,
-        }
+    drawn = layer.plan(context)
+    marks, y_values = drawn.below, drawn.y_values
     if spec["showPoints"]:
         for group in groups:
             points = [p for p in result["points"] if p["observation"]["group"] == group["label"]]
@@ -607,7 +525,7 @@ def build_research_plan(
                 {
                     "kind": "points",
                     "id": f"points:{group['position']}",
-                    "group": name(group["label"]),
+                    "group": context.name(group["label"]),
                     "color": colors[group["label"]],
                     "marker": styles.get(group["label"], {}).get("marker", "o"),
                     "size": 4.0,
@@ -620,7 +538,7 @@ def build_research_plan(
                 }
             )
             y_values += [float(p["y"]) for p in points]
-    marks += summaries
+    marks += drawn.above
     domain, y_ticks = nice_axis(min(y_values), max(y_values))
     units = {p["observation"]["experimentalUnit"] for p in result["points"]}
     unit_text = "?" if None in units else str(len(units))
@@ -628,8 +546,8 @@ def build_research_plan(
         f"Observations={len(result['points'])}; independent units={unit_text}; "
         f"excluded={len(result['excluded'])}"
     ]
-    if spec["kind"] == "violin":
-        disclosures.append("Gaussian KDE of observations; density is not additional data.")
+    if layer.plan_note:
+        disclosures.append(layer.plan_note)
     if spec["summary"] != "none":
         disclosures.append(
             f"{spec['summary']} of {spec['summaryUnit']}; declared repeat means when grouping."
@@ -645,11 +563,10 @@ def build_research_plan(
         "geometry": {
             "contract": GEOMETRY["contractVersion"],
             "axis": AXIS_NICE_RULE,
-            "jitter": None if spec["kind"] == "paired" else GEOMETRY["jitter"]["rule"],
-            "density": GEOMETRY["density"]["rule"] if spec["kind"] == "violin" else None,
-            "histogram": None,
-            "quantile": None,
-            "decimation": None,
+            **{
+                rule: GEOMETRY[rule]["rule"] if rule in layer.geometry else None
+                for rule in ("jitter", "density", "histogram", "quantile", "decimation")
+            },
         },
         "rendering": {
             "pointRendering": mode,
@@ -658,9 +575,9 @@ def build_research_plan(
         "panels": [
             {
                 "id": "A",
-                "title": spec["title"] or names[spec["kind"]][int(zh)],
+                "title": spec["title"] or getattr(layer.title, spec["locale"]),
                 "axes": {
-                    "x": x_axis,
+                    "x": drawn.x_axis,
                     "y": {
                         "scale": "linear",
                         "domain": domain,
@@ -673,7 +590,7 @@ def build_research_plan(
                     "z": None,
                 },
                 "marks": marks,
-                "legend": legend,
+                "legend": drawn.legend,
             }
         ],
         "disclosures": disclosures,

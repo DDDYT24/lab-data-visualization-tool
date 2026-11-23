@@ -11,6 +11,7 @@ import math
 import sys
 from typing import Any
 
+from .refusals import PreparationError
 from .render_contract import GEOMETRY
 from .render_plan import (
     AXIS_MARGIN,
@@ -21,7 +22,6 @@ from .render_plan import (
     plan_hash,
     tick_labels,
 )
-from .research_preparation import PreparationError
 
 # Symlog is linear near zero: position = sign(v) * log10(1 + |v| / threshold).
 SYMLOG_THRESHOLD: float = GEOMETRY["axis"]["symlogThreshold"]

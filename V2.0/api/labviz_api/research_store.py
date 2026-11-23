@@ -11,8 +11,9 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from .artifacts import local_artifact_store
+from .refusals import PreparationError
 from .research_dataset import encode_raw, freeze_raw, load_raw
-from .research_preparation import PreparationError, PreparationPlan, prepare
+from .research_preparation import PreparationPlan, prepare
 from .research_rows import write_rows
 
 if TYPE_CHECKING:

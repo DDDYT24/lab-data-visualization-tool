@@ -24,6 +24,7 @@ from .artifacts import MEDIA_TYPES, remember
 from .figure_spec import FigureBoardSpec, parse_figure, project_board
 from .models import ChartSpec
 from .processing import ProcessingError
+from .refusals import PreparationError
 from .render_plan import build_research_plan, plan_bytes
 from .research_chart_render import COLORS, draw_plan
 from .research_charts import ScientificChartSpec, compute_chart
@@ -32,7 +33,7 @@ from .research_dataset import encode_raw
 from .research_figure_board import insert_artifacts
 from .research_figure_render import render_board
 from .research_figure_sources import digest, legacy_snapshot, scientific_source, source
-from .research_preparation import PreparationError, PreparationPlan, prepare
+from .research_preparation import PreparationPlan, prepare
 from .research_store import ResearchStore
 
 
@@ -274,7 +275,7 @@ def legacy_replacement(
         numeric.append(chart["uncertainty"]["errorField"])
     for field in numeric:
         if field not in frame:
-            raise PreparationError("template-field", f"Map the missing field: {field}")
+            raise PreparationError("template-field", f"Map the missing field: {field}", field=field)
         frame[field] = pd.to_numeric(frame[field], errors="raise")
     x = chart["xAxis"]["field"]
     if x in frame and pd.to_numeric(frame[x], errors="coerce").notna().all():
@@ -306,6 +307,13 @@ def legacy_replacement(
         )
     result["resultSha256"] = digest({k: v for k, v in result.items() if k != "resultSha256"})
     return result
+
+
+def refusal_view(error: Exception) -> dict[str, Any] | None:
+    """The code and values the browser words; other errors carry only their message."""
+    if not isinstance(error, PreparationError):
+        return None
+    return {"code": error.code, "params": error.params}
 
 
 def preview_template(
@@ -349,6 +357,8 @@ def preview_template(
                         "template-unit",
                         f"Expected {recipe.expected_unit}; got {result['unit']}. "
                         "Add an explicit conversion to the recipe.",
+                        expected=recipe.expected_unit,
+                        found=result["unit"],
                     )
                 ready.append(
                     {"index": i, "kind": "scientific", "prepared": prepared, "result": result}
@@ -370,6 +380,7 @@ def preview_template(
                     "message": (
                         "Ready. Review source identity, QC and declared units before applying."
                     ),
+                    "refusal": None,
                 }
             )
         except (PreparationError, ProcessingError, ValueError, KeyError) as error:
@@ -381,9 +392,10 @@ def preview_template(
                     "unit": recipe.expected_unit,
                     "styles": [],
                     "message": str(error),
+                    "refusal": refusal_view(error),
                 }
             )
-    figure_error = None
+    figure_error, figure_refusal = None, None
     if len(ready) == len(spec.panels):
         try:
             panels = [
@@ -394,7 +406,7 @@ def preview_template(
             ]
             render_board(panels, spec.figure)
         except (PreparationError, ValueError) as error:
-            figure_error = str(error)
+            figure_error, figure_refusal = str(error), refusal_view(error)
     token = uuid4().hex
     payload = {
         "raw": raw,
@@ -424,6 +436,7 @@ def preview_template(
         "readyCount": len(ready),
         "figureReady": len(ready) == len(spec.panels) and figure_error is None,
         "figureError": figure_error,
+        "figureRefusal": figure_refusal,
         "source": raw["sources"],
         "notice": (
             "No old row exclusions are copied. Legacy units use declared axes. "

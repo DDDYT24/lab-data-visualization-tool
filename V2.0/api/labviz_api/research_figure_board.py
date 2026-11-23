@@ -17,10 +17,11 @@ from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
 from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, layer_ids, parse_figure
+from .refusals import PreparationError
+from .research_chart_store import read_stored_plan
 from .research_figure_render import render_board
 from .research_figure_sources import source
 from .research_panel_headers import install_headers
-from .research_preparation import PreparationError
 from .research_store import ResearchStore
 
 ARTIFACT_KINDS = ("svg", "png", "pdf")
@@ -100,15 +101,15 @@ def panel_metadata(
 
 def refusal_text(error: PreparationError) -> str:
     """A refused build, stored in the job's error column so it reads back as a refusal."""
-    return json.dumps({"refusal": error.code, "message": str(error)})
+    return json.dumps({"refusal": error.code, "message": str(error), "params": error.params})
 
 
-def refusal(error: str | None) -> dict[str, str] | None:
+def refusal(error: str | None) -> dict[str, Any] | None:
     """The refusal a failed build stored, or None for a failure worth retrying."""
     if not error or not error.startswith('{"refusal"'):
         return None
-    stored: dict[str, str] = json.loads(error)
-    return stored
+    # A refusal that 2.4 stored has no params.
+    return {"params": {}, **json.loads(error)}
 
 
 def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
@@ -128,6 +129,7 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
             "artifactState": job["state"],
             "artifactError": refused["message"] if refused else job["error"],
             "artifactRefusal": refused["refusal"] if refused else None,
+            "artifactRefusalParams": refused["params"] if refused else {},
             "artifactTimings": json.loads(job["timings_json"]),
         }
     artifact = connection.execute(
@@ -155,6 +157,7 @@ def board_view(connection: sqlite3.Connection, row: Any) -> dict[str, Any]:
         "artifactState": "ready" if artifact else "unavailable",
         "artifactError": None,
         "artifactRefusal": None,
+        "artifactRefusalParams": {},
     }
 
 
@@ -227,6 +230,7 @@ def save_board(
         view["artifactState"] = "ready"
         view["artifactError"] = None
         view["artifactRefusal"] = None
+        view["artifactRefusalParams"] = {}
     persisted_end = perf_counter()
     if on_scene is not None:
         on_scene(row["id"], scene)
@@ -330,7 +334,7 @@ def artifact_row(
         if pending:
             raise PreparationError("figure-not-ready", "The saved figure artifacts are not ready.")
         raise PreparationError(
-            "figure-not-found", "Save a new layout revision to create composed artifacts."
+            "figure-files-missing", "Save a new layout revision to create composed artifacts."
         )
     artifact = dict(row)
     if field is None:
@@ -351,7 +355,7 @@ def read_panel_plan(store: ResearchStore, project_id: str, board_id: str, panel:
         ).fetchone()
     if row is None:
         raise PreparationError("figure-plan-missing", "This panel has no render plan.")
-    return store.artifacts.read(row["plan_sha256"])
+    return read_stored_plan(store, row["plan_sha256"])
 
 
 def scene_row_references(scene: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:

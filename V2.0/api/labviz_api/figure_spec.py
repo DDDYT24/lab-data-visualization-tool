@@ -11,9 +11,9 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import Discriminator, Field, Tag, model_validator
 
+from .refusals import PreparationError
 from .render_contract import GEOMETRY
 from .research_contract import Identifier, ResearchModel
-from .research_preparation import PreparationError
 
 MAX_PANELS = 6
 #: What every figure text used before there was a font choice.

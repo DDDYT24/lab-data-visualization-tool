@@ -50,6 +50,28 @@ python -m unittest discover -s .github/scripts -p "test_*.py"
 python .github/scripts/npm_audit_gate.py
 ```
 
+## 新增图表类型、汇总方法或拒绝代码
+
+引擎在 `V2.0/api/labviz_api/engine/`：只做计算和登记，不导入路由、存储或绘图代码
+（`tests/test_architecture_boundaries.py` 会检查）。
+
+- **研究图表类型**：在 `engine/layers/` 新建一个条目模块，并列入该目录的 `__init__.py`。条目包含名称（中英文）、
+  适用的规格字段、计算函数和绘图计划函数。计划只能使用 RenderPlan 已有的标记；新增标记是契约变更，需单独评审。
+  其他文件不得写出类型名（`tests/test_capabilities.py` 会检查）。同时补上一致性样本和答案键测试；如需新的规格字段，
+  还要改 `ScientificChartSpec` 和图表工作区的控件。
+- **汇总方法**：在 `engine/stats/` 新增条目，并列入该目录的 `__init__.py`。
+- **拒绝代码**：列入 `labviz_api/refusals.py`，需要带入文案的值写进 `PARAMS`；同时在
+  `V2.0/web/src/messages/zh.json` 和 `en.json` 的 `refusals` 中各写一条，缺一条测试就会失败。
+- **用到 exp、log、pow 或 SciPy 的数值**：在算出的地方用 `engine/precision.py` 的 `canonical` 取整，
+  这样不同处理器得到的哈希才一致。数据本身不取整，对数轴起点和标注位置等绘图位置也不取整。
+
+改完后在 `V2.0/api` 中重新生成契约，再运行上面的验证；加 `--check` 只检查、不写入：
+
+```powershell
+python -m scripts.export_capabilities
+python -m scripts.export_render_plan_schema
+```
+
 ## 桌面候选包验收
 
 先按 `desktop/README.md` 构建并冻结候选包，再从同一检出的根目录运行下面的驱动。`<候选>` 是含

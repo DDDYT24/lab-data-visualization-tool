@@ -7,12 +7,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from labviz_api.research_preparation import (
-    PreparationError,
-    PreparationPlan,
-    parse_sources,
-    prepare,
-)
+from labviz_api.refusals import PreparationError
+from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
 from labviz_api.research_strip import StripSpec, build_strip
 
 

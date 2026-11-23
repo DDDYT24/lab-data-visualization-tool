@@ -11,9 +11,9 @@ import copy
 from typing import Any
 
 from .plan_axes import axis_position, axis_value
+from .refusals import PreparationError
 from .render_contract import GEOMETRY
 from .render_plan import plan_hash
-from .research_preparation import PreparationError
 
 # A bracket's feet drop by this share of the y axis length.
 BRACKET_DROP: float = GEOMETRY["annotation"]["bracketDrop"]

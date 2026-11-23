@@ -10,6 +10,7 @@ import { researchFigureApi } from "@/lib/api/research-figure-api";
 import { useDesktopDraft } from "./desktop-session";
 import { DesktopPdfPreview } from "./desktop-pdf-preview";
 import { interactivePanels, ResearchFigurePanels } from "./research-figure-panels";
+import { useRefusalText } from "./use-refusal-text";
 
 const SourceRows = memo(function SourceRows({ rows, selected, choose }: {
   rows: FigureInteraction["rows"]; selected: boolean; choose: (next: { row?: string; mark?: string }) => void;
@@ -36,7 +37,8 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
   const [query, setQuery] = useState("");
   const [descending, setDescending] = useState(false);
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const refusalText = useRefusalText();
   const [retryKey, setRetryKey] = useState(0);
   const [loading, setLoading] = useState(true);
   useDesktopDraft(`inspector:${projectId}:${boardId}`, projectId, {}, {detailsOpen,enlarged,selection,queryInput,query,descending,offset}, draft => {
@@ -57,7 +59,7 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
         if (fullGeometry) { setGeometry(result.marks); geometryKey.current = key; }
         setError(null);
       }
-    }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "Figure unavailable"); })
+    }).catch((cause: unknown) => { if (active) setError(cause); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
   }, [projectId, boardId, selection, query, descending, offset, visible, retryKey]);
@@ -76,7 +78,7 @@ export function ResearchFigureInspector({ projectId, boardId, active: visible = 
   if (!visible) return null;
   return <Stack spacing={overview ? 1 : 2} data-testid="figure-inspector">
     <Typography component="h3" variant="h6" sx={overview ? { position: "absolute", width: "1px", height: "1px", clipPath: "inset(50%)", overflow: "hidden" } : undefined}>{t("Saved figure and linked observations", "已保存组合图与观测联动")}</Typography>
-    {error && <Alert severity="error" action={<Button onClick={() => { setLoading(true); setRetryKey((value) => value + 1); }}>{t("Retry source lookup", "重试来源查询")}</Button>}>{error}</Alert>}
+    {!!error && <Alert severity="error" action={<Button onClick={() => { setLoading(true); setRetryKey((value) => value + 1); }}>{t("Retry source lookup", "重试来源查询")}</Button>}>{refusalText(error)}</Alert>}
     <Button title={t("Screen preview; downloads retain the complete 300 dpi figure.", "屏幕预览；下载保留完整 300 dpi 组合图。")} sx={overview ? { alignSelf: "flex-start" } : undefined} onClick={() => setEnlarged(!enlarged)}>{enlarged ? t("Fit figure to screen", "组合图适应屏幕") : t("Enlarge figure for reading", "放大组合图阅读")}</Button>
     {!!planned.length && <Button sx={{ alignSelf: "flex-start" }} onClick={() => setPanelView(!panelView)}>{panelView ? t("Composed figure", "组合图") : t("Interactive panels", "交互面板")}</Button>}
     {panelView && !!planned.length && <ResearchFigurePanels boardId={boardId} labels={planned} onSelect={selectPanelRow}

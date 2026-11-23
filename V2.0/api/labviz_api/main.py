@@ -100,6 +100,7 @@ from .processing import (
     validate_upload,
 )
 from .rate_limits import AuthRateLimitUnavailable
+from .refusals import PreparationError
 from .repository import ProjectRepository
 from .research_routes import register_research_routes
 from .sample_catalog import SampleCatalogError, catalog_response, sample_payload
@@ -639,6 +640,9 @@ def create_app(
         _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         first = exc.errors()[0] if exc.errors() else None
+        refused = first.get("ctx", {}).get("error") if first else None
+        if isinstance(refused, PreparationError):
+            return JSONResponse(status_code=refused.status, content=refused.body())
         message = (
             first.get("msg", "The request is invalid.") if first else "The request is invalid."
         )

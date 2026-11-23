@@ -1,11 +1,12 @@
 import { z } from "zod";
 import specJson from "../../../contracts/scientific-chart-v1.schema.json";
+import type { LayerKind, SummaryKey } from "./capabilities";
 import { researchDataSchema } from "./research-preparation";
 
 export const scientificChartSpecSchema = z.fromJSONSchema(specJson as Parameters<typeof z.fromJSONSchema>[0]);
 export type ScientificChartSpec = {
-  schemaVersion: 1; kind: "grouped_strip" | "paired" | "violin"; title: string; locale: "en" | "zh";
-  jitterSeed: string; jitterWidth: number; showPoints: boolean; summary: "none" | "mean" | "median";
+  schemaVersion: 1; kind: LayerKind; title: string; locale: "en" | "zh";
+  jitterSeed: string; jitterWidth: number; showPoints: boolean; summary: "none" | SummaryKey;
   summaryUnit: "observation" | "sample" | "experimental_unit"; pairTimes: string[];
   categoryStyles?: { group: string | null; color: string; marker: "o" | "s" | "^" | "D" | "v" }[];
   pointRendering?: "auto" | "vector" | "raster";

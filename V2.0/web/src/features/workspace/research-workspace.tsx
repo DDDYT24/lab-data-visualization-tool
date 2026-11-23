@@ -19,6 +19,7 @@ import { OverviewProjectContents } from "./overview-project-contents";
 import { useInterfaceMode } from "@/components/layout/interface-mode";
 import { useWorkspaceStore } from "./workspace-store";
 import { useDesktopDraft } from "./desktop-session";
+import { useRefusalText } from "./use-refusal-text";
 
 const SourceDataTools = dynamic(() => import("./source-data-tools").then((module) => module.SourceDataTools));
 
@@ -78,7 +79,8 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
   const [columns, setColumns] = useState<string[]>([]);
   const [sourceRows, setSourceRows] = useState<number | null>(null);
   const [busy, setBusy] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const refusalText = useRefusalText();
   const [dirty, setDirty] = useState(false);
   const [kind, setKind] = useState("filter");
   const [field, setField] = useState("");
@@ -111,7 +113,7 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
       setBusy(true);
       void Promise.all(kinds.map(async kind => [kind, { ...await researchApi.page(projectId, kind, offsets[kind]!, revision), key: revision }] as const))
         .then(entries => setPages(Object.fromEntries(entries)))
-        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Saved table page could not be loaded"))
+        .catch((cause: unknown) => setError(cause))
         .finally(() => setBusy(false));
     }
   }, !busy, busy || previewRunning);
@@ -127,7 +129,7 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
         setColumns(result.data.columns);
       }
     }).catch((cause: unknown) => {
-      if (active) setError(cause instanceof Error ? cause.message : "Research load failed.");
+      if (active) setError(cause);
     }).finally(() => { if (active) setBusy(false); });
     return () => { active = false; previewAbort.current?.abort(); };
   }, [projectId]);
@@ -153,7 +155,7 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
     setOperation(phase);
     setBusy(true); setError(null);
     try { await action(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Research request failed."); }
+    catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
   function edit(next: PreparationPlan) {
@@ -238,11 +240,11 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
           {!projectsCollapsed && (overview ? <OverviewProjectContents data={data ?? null} revisionId={view?.revisionId ?? null} preview={Boolean(preview)} figureState={figureState} onSelectTask={selectTask} /> : <ResearchProjectList projectId={projectId} />)}
         </Paper>
         <Stack spacing={2} sx={{ minWidth: 0 }}>
-      {error && <Alert severity="error" action={
+      {!!error && <Alert severity="error" action={
         <Button onClick={() => void run(async () => { const latest = await researchApi.get(projectId); setView(latest); if (!dirty && !preview) accept(latest); })}>
           {text("Reload saved status", "刷新已保存状态")}
         </Button>
-      }>{error}</Alert>}
+      }>{refusalText(error)}</Alert>}
       {view && !view.supported ? <Alert severity="info">
         {text("Research preparation currently requires the local SQLite profile.", "研究数据准备目前适用于本地 SQLite 版本。")}
       </Alert> : <>
@@ -268,7 +270,7 @@ export function ResearchWorkspace({ projectId, active = true, initialTask = "dat
           <Typography>{text("Applied revision", "已应用版本")}: {view?.revisionId ?? text("None", "暂无")}</Typography>
           <Typography>{text("Draft", "草稿")}: {preview ? text("Preview only; apply to save", "仅预览，应用后保存") : dirty ? text("Needs preview", "需要重新预览") : text("No pending preparation changes", "没有待应用的数据准备修改")}</Typography>
           <Typography>{text("Preview cancellation prevents applying its result. Server work may finish. Saved charts, figures and outputs retain their own revisions.", "取消预览会阻止应用其结果，服务端可能继续计算。已保存图表、组合图和输出保留各自的版本。")}</Typography>
-          {error && <Alert severity="error">{error}</Alert>}
+          {!!error && <Alert severity="error">{refusalText(error)}</Alert>}
           {detailsOpen && <SourceDataTools />}
         </Stack>
       </Drawer>

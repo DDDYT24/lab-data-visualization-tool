@@ -6,10 +6,10 @@ import io
 from typing import TYPE_CHECKING, Any
 
 from .processing import RENDER_LOCK, _cjk_font_info, _contains_cjk, embed_svg_font
+from .refusals import PreparationError
 from .render_plan import build_research_plan
 from .render_plan import rasterize_points as rasterize_points
 from .render_plan_draw import draw_mark, draw_notes, layer_lift, set_scale
-from .research_preparation import PreparationError
 from .research_styles import COLORS as COLORS
 
 if TYPE_CHECKING:

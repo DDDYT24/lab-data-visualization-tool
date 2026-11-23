@@ -92,7 +92,14 @@ def test_partial_panel_unit_block_and_stale_preview(tmp_path: Path) -> None:
         assert imported.status_code == 200, imported.text
         check = preview(client, base, imported.json()["id"], revision)
         assert [p["status"] for p in check["panels"]] == ["ready", "blocked"]
-        assert not check["figureReady"]
+        assert [p["refusal"] for p in check["panels"]] == [
+            None,
+            {
+                "code": "template-unit",
+                "params": {"expected": "V", "found": check["panels"][0]["unit"]},
+            },
+        ]
+        assert not check["figureReady"] and check["figureRefusal"] is None
         result = client.post(
             base + "/template-apply", json={"token": check["token"], "expectedRevision": revision}
         )

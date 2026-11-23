@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ast
 import json
 import re
+import sys
 from pathlib import Path
 
 from labviz_api.config import Settings
@@ -724,4 +726,41 @@ def test_every_sqlite_insert_names_its_columns() -> None:
             for table in positional.findall(joined)
         )
 
+    assert offenders == []
+
+
+def test_the_engine_imports_no_route_store_or_renderer() -> None:
+    """Methods and chart kinds compute; what serves, saves or draws them stays outside."""
+    outside = {"refusals", "render_contract", "scientific_imports"}
+    libraries = {"numpy", "scipy"}
+    engine = V2_ROOT / "api" / "labviz_api" / "engine"
+    offenders: list[str] = []
+    for path in sorted(engine.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        typing_only = {
+            id(node)
+            for block in ast.walk(tree)
+            if isinstance(block, ast.If) and ast.unparse(block.test) == "TYPE_CHECKING"
+            for statement in block.body
+            for node in ast.walk(statement)
+        }
+        package = path.relative_to(engine.parents[1]).parts[:-1]
+        for node in ast.walk(tree):
+            if id(node) in typing_only:
+                continue
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                base = package[: len(package) - node.level + 1] if node.level else ()
+                names = [".".join([*base, *(node.module or "").split(".")])]
+            else:
+                continue
+            for name in names:
+                parts = name.split(".")
+                if parts[0] != "labviz_api":
+                    allowed = parts[0] in libraries | sys.stdlib_module_names
+                else:
+                    allowed = len(parts) > 1 and parts[1] in outside | {"engine"}
+                if not allowed:
+                    offenders.append(f"{path.name}: {name}")
     assert offenders == []

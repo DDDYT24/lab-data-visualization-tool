@@ -11,9 +11,10 @@ from fastapi import APIRouter, Cookie, Depends, FastAPI, File, Form, UploadFile
 from fastapi.responses import Response
 from pydantic import Field, ValidationError
 
+from .refusals import PreparationError
 from .research_contract import ResearchModel
 from .research_outputs import OutputNotes, freeze_output, preview_output
-from .research_preparation import LIMITS, PreparationError, parse_sources
+from .research_preparation import LIMITS, parse_sources
 from .research_reuse import (
     WorkflowTemplate,
     apply_template,

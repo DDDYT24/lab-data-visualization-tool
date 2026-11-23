@@ -9,7 +9,8 @@ import pandas as pd
 import pytest
 from matplotlib.figure import Figure
 
-from labviz_api import render_plan, research_charts, research_strip
+from labviz_api import render_plan, research_strip
+from labviz_api.engine.layers import violin
 from labviz_api.models import ChartSpec
 from labviz_api.processing import MAX_ANALYSIS_POINTS, analyze_chart, render_chart
 from labviz_api.render_contract import (
@@ -41,7 +42,7 @@ def test_python_geometry_reads_the_shared_file() -> None:
     assert contract["axis"]["maxTicks"] == render_plan.AXIS_MAX_TICKS
     assert contract["axis"]["maxTicks3d"] == render_plan.AXIS_MAX_TICKS_3D
     assert contract["points"]["denseThreshold"] == render_plan.DENSE_POINT_THRESHOLD
-    assert contract["density"] == research_charts.DENSITY
+    assert contract["density"] == violin.DENSITY
     assert research_strip.StripSpec().jitter_seed == contract["jitter"]["defaultSeed"]
     assert research_strip.StripSpec().jitter_width == contract["jitter"]["defaultWidth"]
     assert contract["decimation"]["maxPoints"] == MAX_ANALYSIS_POINTS

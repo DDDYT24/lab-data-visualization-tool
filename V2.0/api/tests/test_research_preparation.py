@@ -6,12 +6,8 @@ from typing import Any
 
 import pytest
 
-from labviz_api.research_preparation import (
-    PreparationError,
-    PreparationPlan,
-    parse_sources,
-    prepare,
-)
+from labviz_api.refusals import PreparationError
+from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts/fixtures/v23"
 
