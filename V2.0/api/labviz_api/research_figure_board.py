@@ -17,6 +17,7 @@ from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
 from .figure_spec import FigureBoardSpec, FigureSpec, as_figure, chart_ids, layer_ids, parse_figure
+from .research_chart_store import read_stored_plan
 from .research_figure_render import render_board
 from .research_figure_sources import source
 from .research_panel_headers import install_headers
@@ -351,7 +352,7 @@ def read_panel_plan(store: ResearchStore, project_id: str, board_id: str, panel:
         ).fetchone()
     if row is None:
         raise PreparationError("figure-plan-missing", "This panel has no render plan.")
-    return store.artifacts.read(row["plan_sha256"])
+    return read_stored_plan(store, row["plan_sha256"])
 
 
 def scene_row_references(scene: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:

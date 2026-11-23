@@ -478,6 +478,17 @@ def plan_hash(plan: dict[str, Any]) -> str:
     return hashlib.sha256(plan_bytes(payload)).hexdigest()
 
 
+def check_stored_plan(payload: bytes) -> None:
+    """Refuse a saved plan that breaks the contract or no longer matches its own hash."""
+    try:
+        stated = RenderPlan.model_validate_json(payload).plan_hash
+        intact = plan_hash(json.loads(payload)) == stated
+    except ValueError:
+        intact = False
+    if not intact:
+        raise PreparationError("plan-invalid", "The saved drawing data cannot be read.")
+
+
 def build_research_plan(
     result: dict[str, Any],
     *,

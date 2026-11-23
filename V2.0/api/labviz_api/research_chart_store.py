@@ -10,10 +10,11 @@ from uuid import uuid4
 from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
-from .render_plan import plan_bytes
+from .render_plan import check_stored_plan, plan_bytes
 from .research_panel_headers import install_headers, remember_header, scientific_header
 from .research_preparation import PreparationError
 from .research_store import ResearchStore
+from .storage.base import ObjectIntegrityError
 
 
 def install_charts(store: ResearchStore) -> None:
@@ -121,6 +122,15 @@ def chart_row(
     return chart
 
 
+def read_stored_plan(store: ResearchStore, digest: str) -> bytes:
+    try:
+        payload = store.artifacts.read(digest)
+    except (FileNotFoundError, ObjectIntegrityError) as error:
+        raise PreparationError("plan-invalid", "The saved drawing data cannot be read.") from error
+    check_stored_plan(payload)
+    return payload
+
+
 def read_chart_plan(store: ResearchStore, project_id: str, chart_id: str) -> bytes:
     with store.connect() as connection:
         row = connection.execute(
@@ -131,7 +141,7 @@ def read_chart_plan(store: ResearchStore, project_id: str, chart_id: str) -> byt
         raise PreparationError("chart-not-found", "This chart is not available in this project.")
     if row["plan_sha256"] is None:
         raise PreparationError("chart-plan-missing", "This chart was saved without a render plan.")
-    return store.artifacts.read(row["plan_sha256"])
+    return read_stored_plan(store, row["plan_sha256"])
 
 
 def read_chart_page(
