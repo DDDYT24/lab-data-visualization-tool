@@ -43,6 +43,29 @@ python -m pytest
 需要 PostgreSQL/MinIO 的测试必须按 `V2.0/api/README.md` 启动测试服务，并在结束后清理
 临时卷。不要把 `.labviz/`、`outputs/`、测试结果、真实实验数据或密钥加入提交。
 
+依赖审计（CI 的 `frontend` 任务也会运行，需要联网；只放行已审查的问题）：
+
+```powershell
+python -m unittest discover -s .github/scripts -p "test_*.py"
+python .github/scripts/npm_audit_gate.py
+```
+
+## 桌面候选包验收
+
+先按 `desktop/README.md` 构建并冻结候选包，再从同一检出的根目录运行下面的驱动。`<候选>` 是含
+`bundle/` 和 `build/` 的文件夹，必须在该检出的 `outputs/desktop-d06` 下，名字要短。`<标签>` 每次用新
+名字，只有 `installer` 沿用已通过的 `session` 的标签。运行驱动的 Python 需要装有 `psutil`；
+`V2.0/web` 需要装好依赖和 Playwright 的 Chromium。失败后换一个新标签重跑。
+全程不打开原生窗口，也不能代替原生窗口验收。
+
+```powershell
+python -B -X utf8 desktop/scripts/release_acceptance.py session --candidate <候选> --label <标签>
+# session 通过后写出 <候选>/background-evidence.json，编译安装包时用 --evidence 传入
+python -B -X utf8 desktop/scripts/release_acceptance.py installer --candidate <候选> --label <标签>
+python -B -X utf8 desktop/scripts/release_acceptance.py large --candidate <候选> --label <另一标签>
+python -B -X utf8 desktop/scripts/release_upgrade.py --old-build <旧候选>/build --new-build <候选>/build --old-package <旧包编号> --old-setup-sha <旧安装包 SHA-256> --output <新文件夹>
+```
+
 ## 代码和文档约定
 
 - 面向用户的文档使用产品名称、功能名称和公开的部署说明。

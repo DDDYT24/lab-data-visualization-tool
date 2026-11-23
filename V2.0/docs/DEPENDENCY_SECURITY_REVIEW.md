@@ -1,13 +1,17 @@
 # V2.4 web dependency review: picomatch — 2026-11-17 and 2026-11-18
 
+Both gates were in the V2.3 RC build (`packaging/windows-v23/build_rc.py`). Since V2.5 M1 they
+run unchanged in CI's `frontend` job as `.github/scripts/npm_audit_gate.py`, with a test of each
+exception's boundary (`.github/scripts/test_npm_audit_gate.py`); the RC build is retired.
+
 picomatch is affected by a ReDoS through single-branch repeated extglobs
 ([GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), high) in every
 release up to 4.0.7. No fixed release exists on 2026-11-18, so no update can clear it.
 
 - **Production tree (2026-11-17):** it appears only as `@parcel/watcher`'s own picomatch.
   next-intl loads `@parcel/watcher` only in its message extractor, which LabViz does not use, so
-  no glob reaches it. The production-audit gate in `packaging/windows-v23/build_rc.py` passes
-  that advisory inside `node_modules/@parcel/watcher` only.
+  no glob reaches it. The production-audit gate passes that advisory inside
+  `node_modules/@parcel/watcher` only.
 - **Development tree (2026-11-18):** the same advisory reaches the test and lint tools: vitest,
   vite, tinyglobby, fdir, micromatch, fast-glob and the ESLint plugins. They run only in
   development and CI, are not shipped in the installer, and match only globs from the project's
@@ -58,7 +62,7 @@ plugin chain. No compatible fix is published: ESLint 10.14.0 still depends on
 The earlier `braces`, `micromatch` and `fast-glob` findings no longer appear.
 
 Disposition, accepted by the owner: the `minimatch` chain runs only while linting, so the
-development-audit gate in `packaging/windows-v23/build_rc.py` now allows these 16 packages and
+development-audit gate now allows these 16 packages and
 drops the `braces` chain it no longer needs. The gate is narrower than the name list it replaces:
 a package passes only while every finding on it stays at moderate or below and traces to the
 `minimatch` advisory alone, so a new or more severe advisory on the same package still stops
