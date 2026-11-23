@@ -52,10 +52,14 @@ for (const filename of ["04_group_comparison.txt", "05_distribution.json"]) {
       }).filter((box) => box.height > 20 && box.width > 1).sort((a, b) => a.x - b.x),
     );
     const nonempty = bins.filter((bin) => bin.count > 0);
-    // The export step replaces the chart preview while it loads; measure once its bars are drawn.
-    await expect.poll(async () => (await measureBars()).length, { timeout: 60_000 }).toBe(nonempty.length);
-    const rectangles = await measureBars();
-    expect(rectangles).toHaveLength(nonempty.length);
+    // The export step can replace the preview again after its bars are drawn. The bars are checked as
+    // they were measured once every bar was there and had stopped moving.
+    let rectangles: Awaited<ReturnType<typeof measureBars>> = [];
+    await expect.poll(async () => {
+      const before = JSON.stringify(rectangles);
+      rectangles = await measureBars();
+      return rectangles.length === nonempty.length && JSON.stringify(rectangles) === before;
+    }, { timeout: 60_000 }).toBe(true);
     const left = rectangles[0].x;
     const right = rectangles.at(-1)!.x + rectangles.at(-1)!.width;
     const span = bins.at(-1)!.end - bins[0].start;
