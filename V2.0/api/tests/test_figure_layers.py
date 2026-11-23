@@ -18,11 +18,11 @@ from test_research_figure_composition import legacy
 
 from labviz_api.figure_spec import FigureSpec, layer_ids
 from labviz_api.main import create_app
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import RenderPlan, merge_layers
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
 from labviz_api.research_figure_render import check_layers, render_board
 from labviz_api.research_figure_sources import scientific_source
-from labviz_api.research_preparation import PreparationError
 
 
 def same_revision_points(client: Any, base: str, chart_id: str) -> str:

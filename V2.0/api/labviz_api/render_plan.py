@@ -19,9 +19,9 @@ from pydantic import Field
 from .engine.layers import LAYERS
 from .engine.layers.base import PlanContext
 from .engine.stats import SummaryKey
+from .refusals import PreparationError
 from .render_contract import GEOMETRY
 from .research_contract import Digest, ResearchModel
-from .research_preparation import PreparationError
 from .research_styles import COLORS
 
 CONTRACT = "render-plan-v1"

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from ...research_preparation import PreparationError
+from ...refusals import PreparationError
 from ..text import Text
 from .base import Groups, Layer, LayerPlan, PlanContext, Result
 

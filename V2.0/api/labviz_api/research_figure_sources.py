@@ -25,8 +25,9 @@ from .engine.layers import LAYERS
 from .models import ChartSpec
 from .plan_classic import envelope_positions
 from .processing import _json_value, analyze_chart, serialize_dataframe
+from .refusals import PreparationError
 from .research_panel_headers import remember_header, source_header
-from .research_preparation import PreparationError, stable_id
+from .research_preparation import stable_id
 
 
 def digest(value: Any) -> str:

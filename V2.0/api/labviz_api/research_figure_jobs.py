@@ -22,6 +22,7 @@ from .figure_spec import (
     layer_ids,
     parse_figure,
 )
+from .refusals import PreparationError
 from .research_figure_board import (
     SceneIndex,
     insert_artifacts,
@@ -32,7 +33,6 @@ from .research_figure_board import (
 from .research_figure_render import check_figure, check_layers, render_board
 from .research_figure_sources import source
 from .research_panel_headers import remember_header, source_header
-from .research_preparation import PreparationError
 from .research_store import ResearchStore
 
 LOGGER = logging.getLogger(__name__)
@@ -164,6 +164,7 @@ class FigureJobs:
                                 "figure-incompatible-axis",
                                 f"Shared {dimension} axes need matching meanings, "
                                 "units and categories.",
+                                axis=dimension,
                             )
                 if (
                     connection.execute(

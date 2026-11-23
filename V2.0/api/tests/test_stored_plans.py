@@ -15,8 +15,8 @@ from test_research_chart_api import applied
 
 from labviz_api.artifacts import local_artifact_store, remember
 from labviz_api.main import create_app
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import RenderPlan, check_stored_plan, plan_bytes, plan_hash
-from labviz_api.research_preparation import PreparationError
 
 # Plans LabViz 2.4.0 built and stored, three of charts and four of figure panels (a layered one
 # with a log axis and annotations, two captured charts). Never regenerate this file.

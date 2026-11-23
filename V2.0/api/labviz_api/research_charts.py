@@ -13,8 +13,8 @@ from pydantic_core import to_json
 
 from .engine.layers import LAYERS, LayerKind
 from .engine.stats import SUMMARIES, SummaryChoice
+from .refusals import PreparationError, RefusalCode
 from .research_contract import ResearchModel
-from .research_preparation import PreparationError
 from .research_strip import JITTER, StripSpec, build_strip
 from .research_styles import category_style
 
@@ -59,7 +59,7 @@ class ScientificChartSpec(ResearchModel):
         return self
 
 
-def reject(code: str, message: str) -> None:
+def reject(code: RefusalCode, message: str) -> None:
     raise PreparationError(code, message)
 
 

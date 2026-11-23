@@ -8,15 +8,11 @@ from typing import Any
 import pytest
 from matplotlib.figure import Figure
 
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import RenderPlan, build_research_plan, grayscale, nice_axis
 from labviz_api.research_chart_render import draw_plan
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
-from labviz_api.research_preparation import (
-    PreparationError,
-    PreparationPlan,
-    parse_sources,
-    prepare,
-)
+from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
 
 CONTRACT = Path(__file__).resolve().parents[2] / "contracts/render-plan-v1.schema.json"
 

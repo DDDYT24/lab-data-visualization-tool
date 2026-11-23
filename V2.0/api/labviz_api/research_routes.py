@@ -12,10 +12,11 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .config import Settings
+from .refusals import PreparationError
 from .research_chart_routes import register_chart_routes
 from .research_contract import ResearchModel
 from .research_figure_routes import register_figure_routes
-from .research_preparation import LIMITS, PreparationError, PreparationPlan, parse_sources, prepare
+from .research_preparation import LIMITS, PreparationPlan, parse_sources, prepare
 from .research_reuse_routes import register_reuse_routes
 from .research_rows import count, observation_page, sample_page
 from .research_store import ResearchStore, current_view, present
@@ -51,26 +52,10 @@ def register_research_routes(
 
     @app.exception_handler(PreparationError)
     async def research_error(_request: Any, error: PreparationError) -> JSONResponse:
-        status = (
-            409
-            if error.code
-            in {"research-conflict", "preview-expired", "figure-not-ready", "figure-build-state"}
-            else 422
+        return JSONResponse(
+            status_code=error.status,
+            content={"code": error.code, "message": str(error), "params": error.params},
         )
-        if error.code in {
-            "chart-not-found",
-            "chart-plan-missing",
-            "figure-not-found",
-            "figure-plan-missing",
-            "template-not-found",
-            "output-not-found",
-        }:
-            status = 404
-        if error.code == "research-busy":
-            status = 429
-        if error.code == "research-local-only":
-            status = 501
-        return JSONResponse(status_code=status, content={"code": error.code, "message": str(error)})
 
     def available() -> ResearchStore:
         if store is None:
@@ -204,7 +189,7 @@ def register_research_routes(
         try:
             plan = PreparationPlan.model_validate_json(plan_json)
         except ValidationError as exc:
-            raise PreparationError("invalid-research-plan", str(exc)) from exc
+            raise PreparationError("invalid-research-plan", str(exc), detail=str(exc)) from exc
         if not slots.acquire(blocking=False):
             raise PreparationError(
                 "research-busy", "One research job is running and one is pending. Retry shortly."

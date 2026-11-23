@@ -12,6 +12,7 @@ from fastapi import Cookie, FastAPI, Query
 from fastapi.responses import Response
 from pydantic_core import from_json
 
+from .refusals import PreparationError
 from .render_plan import build_research_plan
 from .research_chart_render import draw_plan
 from .research_chart_store import (
@@ -24,7 +25,6 @@ from .research_chart_store import (
 )
 from .research_charts import ScientificChartSpec, compute_chart
 from .research_contract import ResearchModel
-from .research_preparation import PreparationError
 from .research_preview import preview_png
 from .research_store import ResearchStore
 

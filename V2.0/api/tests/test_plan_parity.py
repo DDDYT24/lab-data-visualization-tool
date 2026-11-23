@@ -14,8 +14,8 @@ import pytest
 
 from labviz_api.models import ChartSpec
 from labviz_api.processing import analyze_chart, classic_plan
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import AXIS_MAX_TICKS, AXIS_MAX_TICKS_3D, axis_ticks, nice_axis
-from labviz_api.research_preparation import PreparationError
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_v22_matrix.py"
 _spec = importlib.util.spec_from_file_location("run_v22_matrix", SCRIPT)

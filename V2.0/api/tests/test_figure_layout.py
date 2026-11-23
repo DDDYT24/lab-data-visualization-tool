@@ -16,6 +16,7 @@ from test_research_figure_board import charts
 from labviz_api.figure_spec import FigureSpec, panel_cells
 from labviz_api.main import create_app
 from labviz_api.plan_axes import axis_position
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import RenderPlan
 from labviz_api.research_figure_render import (
     BOTTOM,
@@ -24,7 +25,6 @@ from labviz_api.research_figure_render import (
     TEXT_PAD_POINTS,
     check_figure,
 )
-from labviz_api.research_preparation import PreparationError
 
 MOSAIC = ["AAB", "CDE", "CDF"]
 

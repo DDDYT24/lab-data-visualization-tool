@@ -6,8 +6,8 @@ import math
 from statistics import stdev
 from typing import TYPE_CHECKING
 
+from ...refusals import PreparationError
 from ...render_contract import GEOMETRY
-from ...research_preparation import PreparationError
 from ...scientific_imports import scientific_module
 from ..precision import canonical
 from ..text import Text

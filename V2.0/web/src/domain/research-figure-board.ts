@@ -1,5 +1,6 @@
 import { z } from "zod";
 import generatedSpec from "../../../contracts/figure-board-v1.schema.json";
+import { layerKinds } from "./capabilities";
 import { figureSpecSchema, type FigureSpec } from "./figure-spec";
 
 export type FigureBoardSpec = {
@@ -26,9 +27,10 @@ export const figureBoardSchema = boardHeader.extend({
   artifactError: z.string().nullable().optional(),
   // Set when the build refused the figure as saved; retrying it would fail the same way.
   artifactRefusal: z.string().nullable().optional(),
+  artifactRefusalParams: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   panels: z.array(z.object({
     label: z.string().regex(/^[A-Za-z]$/), chartId: z.string(), revisionId: z.string(),
-    kind: z.enum(["grouped_strip", "paired", "violin", "line", "scatter", "box", "heatmap"]), title: z.string(), unit: z.string(),
+    kind: z.enum([...layerKinds, "line", "scatter", "box", "heatmap"]), title: z.string(), unit: z.string(),
     observations: z.number(), independentUnits: z.number().nullable(), resultSha256: z.string(),
   })),
 });

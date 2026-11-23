@@ -13,14 +13,10 @@ from pydantic import ValidationError
 
 from labviz_api.engine.layers import violin
 from labviz_api.engine.precision import canonical
+from labviz_api.refusals import PreparationError
 from labviz_api.render_plan import build_research_plan
 from labviz_api.research_charts import ScientificChartSpec, compute_chart
-from labviz_api.research_preparation import (
-    PreparationError,
-    PreparationPlan,
-    parse_sources,
-    prepare,
-)
+from labviz_api.research_preparation import PreparationPlan, parse_sources, prepare
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts/fixtures/v23"
 

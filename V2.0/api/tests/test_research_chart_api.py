@@ -348,7 +348,7 @@ def test_computation_batch_restores_gc_state_on_success_and_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, enabled: bool, fail: bool
 ) -> None:
     from labviz_api import research_chart_routes
-    from labviz_api.research_preparation import PreparationError
+    from labviz_api.refusals import PreparationError
 
     original_compute = compute_chart
     original_render = draw_plan
@@ -357,7 +357,7 @@ def test_computation_batch_restores_gc_state_on_success_and_failure(
     def checked(prepared: dict[str, Any], spec: ScientificChartSpec) -> dict[str, Any]:
         observed.append(gc.isenabled())
         if fail:
-            raise PreparationError("chart-test-failure", "Injected batch failure")
+            raise PreparationError("chart-numeric-range", "Injected batch failure")
         return original_compute(prepared, spec)
 
     def checked_render(plan: dict[str, Any]) -> dict[str, bytes]:

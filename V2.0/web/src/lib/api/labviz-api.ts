@@ -61,6 +61,7 @@ export class LabVizApiError extends Error {
     message: string,
     readonly status: number,
     readonly code = "api-error",
+    readonly params: Record<string, string | number> = {},
   ) {
     super(message);
     this.name = "LabVizApiError";
@@ -104,7 +105,7 @@ export async function request<T>(
         ? body.message
         : "The LabViz API could not complete this request.";
     const code = typeof body?.code === "string" ? body.code : "api-error";
-    throw new LabVizApiError(message, response.status, code);
+    throw new LabVizApiError(message, response.status, code, body?.params ?? {});
   }
 
   const parsed = schema.safeParse(body);

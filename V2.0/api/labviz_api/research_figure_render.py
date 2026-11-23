@@ -34,9 +34,9 @@ from .plan_classic import SERIES_KINDS, build_classic_plan
 from .plan_notes import apply_notes
 from .processing import RENDER_LOCK, _cjk_font_info, _contains_cjk, embed_svg_font, series_rows
 from .processing import render_chart as legacy_render
+from .refusals import PreparationError
 from .render_plan import build_research_plan, merge_axis, merge_layers, plan_bytes, plan_hash
 from .research_chart_render import COLORS, VECTOR_TEXT, draw_plan, rasterize_points
-from .research_preparation import PreparationError
 
 
 def frame_rows(panel: dict[str, Any], chart: ChartSpec, frame: Any) -> Any:
@@ -141,6 +141,7 @@ def check_figure(spec: FigureSpec) -> None:
             raise PreparationError(
                 "figure-shared-axis-control",
                 f"A shared {dimension} axis cannot also take a scale, limits or ticks.",
+                axis=dimension,
             )
 
 
@@ -365,6 +366,7 @@ def render_board(
                 raise PreparationError(
                     "figure-incompatible-axis",
                     f"Shared {dimension} axes require identical meanings, units and categories.",
+                    axis=dimension,
                 )
             getter = "get_" + dimension + "lim"
             setter = "set_" + dimension + "lim"

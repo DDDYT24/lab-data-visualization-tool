@@ -15,6 +15,7 @@ from pydantic_core import from_json, to_json
 
 from .figure_spec import AnyFigure, FigureBoardSpec
 from .processing import ProcessingError
+from .refusals import PreparationError
 from .research_figure_board import (
     SceneIndex,
     artifact_row,
@@ -28,7 +29,6 @@ from .research_figure_board import (
 from .research_figure_jobs import FigureJobs
 from .research_figure_render import render_board
 from .research_figure_sources import legacy_snapshot, save_legacy
-from .research_preparation import PreparationError
 from .research_preview import clear_previews, preview_png
 from .research_store import ResearchStore
 
@@ -274,7 +274,9 @@ def register_figure_routes(
                     # Validate renderability before retaining the immutable source.
                     render_board([result], FigureBoardSpec(panel_chart_ids=["validation"]))
                 except ProcessingError as error:
-                    raise PreparationError(error.code, str(error)) from error
+                    raise PreparationError(
+                        "figure-capture-failed", str(error), detail=str(error)
+                    ) from error
                 identifier = save_legacy(active, project_id, result)
                 large = len(result["rows"]) > 20_000
                 del result

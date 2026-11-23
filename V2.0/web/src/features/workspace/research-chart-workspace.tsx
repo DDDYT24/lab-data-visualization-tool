@@ -8,12 +8,14 @@ import {
   TextField, Typography,
 } from "@mui/material";
 import { RenderPlanChart } from "@/components/common/render-plan-chart";
+import { layerKinds, layers, summaries, summaryKeys } from "@/domain/capabilities";
 import type { ChartHistory, ScientificChart, ScientificChartSpec } from "@/domain/research-charts";
 import { densePointThreshold, geometryContract } from "@/domain/chart-render-contract";
 import type { RenderPlan } from "@/domain/render-plan";
 import { researchChartApi } from "@/lib/api/research-chart-api";
 import { useDesktopDraft, desktopDraftValue } from "./desktop-session";
 import { DesktopPdfPreview } from "./desktop-pdf-preview";
+import { useRefusalText } from "./use-refusal-text";
 
 /** Interactive when the chart has a plan a browser can hold; otherwise the frozen PNG. */
 function ChartPreview({ alt, chart, onSelect, projectId, selected }: {
@@ -49,8 +51,9 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
 }) {
   const zh = useLocale().startsWith("zh");
   const t = (en: string, cn: string) => zh ? cn : en;
+  const language = zh ? "zh" : "en";
   const [pointRendering, setPointRendering] = useState<"auto" | "vector" | "raster">("auto");
-  const [kind, setKind] = useState<ScientificChartSpec["kind"]>("grouped_strip");
+  const [kind, setKind] = useState<ScientificChartSpec["kind"]>(layerKinds[0]);
   const [title, setTitle] = useState("");
   const [seed, setSeed] = useState(geometryContract.jitter.defaultSeed);
   const [summary, setSummary] = useState<ScientificChartSpec["summary"]>("none");
@@ -64,7 +67,8 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
   const [chart, setChart] = useState<ScientificChart | null>(null);
   const [selection, setSelection] = useState<{ chartId: string; ids: string[] } | null>(null);
   const [busy, setBusy] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const refusalText = useRefusalText();
   const [recoveredDraft] = useState(() => desktopDraftValue(`chart:${projectId}`) as { selectedChartId?: string | null; selectedChartOffset?: number } | undefined);
   const recoveredSelection = recoveredDraft?.selectedChartId;
   const initialOffset = useRef(recoveredDraft?.selectedChartOffset ?? 0);
@@ -86,20 +90,17 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
       const saved = selected ? await researchChartApi.get(projectId, selected, initialOffset.current) : null;
       if (mounted) { initialSelection.current = saved?.id; setHistory(list); setChart(saved); }
     }).catch((cause: unknown) => {
-      if (mounted) setError(cause instanceof Error ? cause.message : "Chart load failed");
+      if (mounted) setError(cause);
     }).finally(() => { if (mounted) setBusy(false); });
     return () => { mounted = false; };
   }, [projectId, refreshKey, active]);
   async function run(action: () => Promise<void>) {
     setBusy(true); setError(null);
-    try { await action(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Chart failed"); }
+    try { await action(); } catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
-  const names = {
-    grouped_strip: t("Grouped raw points", "分组原始点图"),
-    paired: t("Paired change", "配对变化图"),
-    violin: t("Violin distribution", "小提琴分布图"),
-  };
+  const layer = layers[kind];
+  const takes = (option: string) => layer.options.includes(option);
   const savedSpec = chart?.spec as ScientificChartSpec | undefined;
   const selected = selection && selection.chartId === chart?.id ? selection.ids : [];
   const selectedRow = chart?.rows.find((row) => row.id === selected[0]);
@@ -111,14 +112,14 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
     researchChartApi.getWithObservation(projectId, chartId, ids[0]!).then((next) => {
       setChart((current) => (current?.id === chartId ? next : current));
     }, (cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : "Chart failed");
+      setError(cause);
     });
   }
-  const missingPairRoles = kind === "paired" && ["sample", "pair", "time"].some((key) => !mapping?.[key]);
+  const missingRoles = layer.roles.some((key) => !mapping?.[key]);
   function downloadExample(example: ScientificChartSpec["kind"]) {
     const rows = ["sample,group,repeat,value,unit,time,pair"];
     for (let s = 1; s <= 6; s++) {
-      if (example === "paired") {
+      if (layers[example].options.includes("pairTimes")) {
         rows.push(`s${s},A,1,${s},mV,before,p${s}`, `s${s},A,1,${s + 2},mV,after,p${s}`);
       } else {
         for (let r = 1; r <= 3; r++) rows.push(`s${s},A,${r},${s + r - 2},mV,baseline,`);
@@ -137,28 +138,28 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
       {(pending || !revisionId) && <Alert severity="info">{t(
         "Apply your research preparation before creating a chart. Existing charts keep their original revision.",
         "请先应用研究数据准备，再创建图表。历史图表仍绑定原版本。")}</Alert>}
-      {error && <Alert severity="error">{t("Chart unavailable: ", "图表暂不可用：")}{error}</Alert>}
+      {!!error && <Alert severity="error">{t("Chart unavailable: ", "图表暂不可用：")}{refusalText(error)}</Alert>}
       <Box component="fieldset" disabled={busy} sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}>
         <Stack spacing={2}>
           <TextField select label={t("Chart family", "图表类型")} value={kind}
             onChange={(event) => setKind(event.target.value as ScientificChartSpec["kind"])}>
-            {Object.entries(names).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}
+            {layerKinds.map((key) => <MenuItem key={key} value={key}>{layers[key].title[language]}</MenuItem>)}
           </TextField>
-          {kind === "paired" && <Alert severity={missingPairRoles ? "warning" : "info"}>
+          {takes("pairTimes") && <Alert severity={missingRoles ? "warning" : "info"}>
             {t("Paired charts require mapped sample, pair and time fields. Review Data before generating. Summary and density settings are retained for other chart families; they do not apply to paired charts.", "配对图需要映射样本、配对键和时间字段，请先在数据任务中检查。汇总与密度设置会保留供其他图表类型使用，不应用于配对图。")}
-            <br />{["sample", "pair", "time"].map((key) => `${key}: ${mapping?.[key] || t("unmapped", "未映射")}`).join(" · ")}
+            <br />{layer.roles.map((key) => `${key}: ${mapping?.[key] || t("unmapped", "未映射")}`).join(" · ")}
           </Alert>}
           <TextField label={t("Chart title", "图表标题")} value={title} slotProps={{ htmlInput: { maxLength: 160 } }}
             onChange={(event) => setTitle(event.target.value)} />
-          {kind === "paired" ? <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          {takes("pairTimes") ? <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
             <TextField label={t("First time label", "第一个时间点")} value={first} onChange={(e) => setFirst(e.target.value)} />
             <TextField label={t("Second time label", "第二个时间点")} value={second} onChange={(e) => setSecond(e.target.value)} />
           </Stack> : <>
             <TextField label={t("Jitter seed", "抖动种子")} value={seed} onChange={(e) => setSeed(e.target.value)} />
             <TextField select label={t("Summary mark", "汇总标记")} value={summary}
               onChange={(e) => setSummary(e.target.value as ScientificChartSpec["summary"])}>
-              <MenuItem value="none">{t("None", "无")}</MenuItem><MenuItem value="mean">{t("Mean", "均值")}</MenuItem>
-              <MenuItem value="median">{t("Median", "中位数")}</MenuItem>
+              <MenuItem value="none">{t("None", "无")}</MenuItem>{summaryKeys.map((key) =>
+                <MenuItem key={key} value={key}>{summaries[key].label[language]}</MenuItem>)}
             </TextField>
             {summary !== "none" && <TextField select label={t("Summary unit", "汇总单位")} value={summaryUnit}
               onChange={(e) => setSummaryUnit(e.target.value as ScientificChartSpec["summaryUnit"])}>
@@ -166,7 +167,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
               <MenuItem value="sample">{t("Sample", "样本")}</MenuItem><MenuItem value="observation">{t("Observation", "观测")}</MenuItem>
             </TextField>}
           </>}
-          {kind === "violin" && <>
+          {takes("bandwidth") && <>
             <TextField label={t("Bandwidth (blank = Scott)", "带宽（留空使用 Scott）")} type="number" value={bandwidth}
               onChange={(e) => setBandwidth(e.target.value)} slotProps={{ htmlInput: { min: 0, step: "any" } }} />
             <TextField select label={t("Density scale", "密度缩放")} value={scale}
@@ -177,8 +178,8 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
             <FormControlLabel control={<Checkbox checked={points} onChange={(e) => setPoints(e.target.checked)} />}
               label={t("Show observed points", "显示原始观测点")} />
             <Alert severity="info">{t(
-              "Density describes observations, including technical repeats. It does not increase independent n. At least 3 non-constant readings per group are required.",
-              "密度描述观测值（包括技术重复），不增加独立样本数。每组至少需要 3 个非恒定读数。")}</Alert>
+              `Density describes observations, including technical repeats. It does not increase independent n. At least ${layer.limits.observationsPerGroup} non-constant readings per group are required.`,
+              `密度描述观测值（包括技术重复），不增加独立样本数。每组至少需要 ${layer.limits.observationsPerGroup} 个非恒定读数。`)}</Alert>
           </>}
           <TextField select label={t("Point layer export", "点层导出")} value={pointRendering}
             onChange={(e) => setPointRendering(e.target.value as typeof pointRendering)}
@@ -187,14 +188,14 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
             <MenuItem value="vector">{t("Force vector (slower for large data)", "强制全矢量（大数据较慢）")}</MenuItem>
             <MenuItem value="raster">{t("300 dpi point layer", "300 dpi 点层")}</MenuItem>
           </TextField>
-          <Button variant="contained" disabled={busy || pending || !revisionId || missingPairRoles}
+          <Button variant="contained" disabled={busy || pending || !revisionId || missingRoles}
             onClick={() => void run(async () => {
               const created = await researchChartApi.create(projectId, revisionId!, {
                 schemaVersion: 1, kind, title, locale: zh ? "zh" : "en", jitterSeed: seed, jitterWidth: geometryContract.jitter.defaultWidth,
-                showPoints: kind === "violin" ? points : true,
-                summary: kind === "paired" ? "none" : summary, summaryUnit,
-                pairTimes: kind === "paired" ? [first, second] : [],
-                bandwidth: kind === "violin" && bandwidth !== "" ? Number(bandwidth) : null,
+                showPoints: takes("showPoints") ? points : true,
+                summary: takes("summary") ? summary : "none", summaryUnit,
+                pairTimes: takes("pairTimes") ? [first, second] : [],
+                bandwidth: takes("bandwidth") && bandwidth !== "" ? Number(bandwidth) : null,
                 densityScale: scale, pointRendering,
               });
               initialSelection.current = created.id; setChart(created); onSaved?.(); setHistory(await researchChartApi.list(projectId));
@@ -207,8 +208,8 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
           <Typography variant="body2">{t(
             "Download a synthetic example, choose it in Sources, map value → value, sample and independent unit → sample, group → group, repeat → repeat, unit → unit, time → time, pair → pair, then preview and apply. Raw/violin: 6 units, 18 readings, unit mean 3.5. Paired: 6 pairs, every after − before = 2.",
             "下载合成示例，在来源中选择文件；测量值映射 value，样本和独立单位均映射 sample，分组 group，技术重复 repeat，单位 unit，时间 time，配对键 pair，随后预览并应用。原始点／小提琴：6 个独立单位、18 次读数，单位均值 3.5。配对：6 对，after − before 均为 2。")}</Typography>
-          {Object.entries(names).map(([key, label]) => <Button key={key}
-            onClick={() => downloadExample(key as ScientificChartSpec["kind"])}>{label} CSV</Button>)}
+          {layerKinds.map((key) => <Button key={key}
+            onClick={() => downloadExample(key)}>{layers[key].title[language]} CSV</Button>)}
         </AccordionDetails>
       </Accordion>
       <TextField select label={t("Saved charts", "已保存图表")} value={chart?.id ?? ""}
@@ -220,7 +221,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
         {!history.charts.length && <MenuItem value="">{t("No saved charts", "暂无图表")}</MenuItem>}
         {history.charts.map((item) => {
           const spec = item.spec as ScientificChartSpec;
-          return <MenuItem key={item.id} value={item.id}>{spec.title || names[spec.kind]} · {item.id.slice(0, 8)}</MenuItem>;
+          return <MenuItem key={item.id} value={item.id}>{spec.title || layers[spec.kind].title[language]} · {item.id.slice(0, 8)}</MenuItem>;
         })}
       </TextField>
       {chart && savedSpec && <>
@@ -232,7 +233,7 @@ export function ResearchChartWorkspace({ projectId, revisionId, active = true, p
           {t("Observations", "观测")}: {chart.observations} · {t("Excluded", "已排除")}: {chart.excluded} ·
           {t("Research revision", "研究版本")}: {chart.revisionId.slice(0, 8)}
         </Typography>
-        {active && <ChartPreview alt={savedSpec.title || names[savedSpec.kind]} chart={chart} onSelect={selectObservations}
+        {active && <ChartPreview alt={savedSpec.title || layers[savedSpec.kind].title[language]} chart={chart} onSelect={selectObservations}
           projectId={projectId} selected={selected} />}
         {selectedRow && <Typography role="status" variant="body2" data-testid="chart-selection">
           {selectedRow.sampleLabel ?? "?"} · {selectedRow.group ?? t("Undeclared group", "未声明分组")} · {selectedRow.value ?? "—"} {selectedRow.unit} ·{" "}

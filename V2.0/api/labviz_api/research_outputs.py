@@ -16,11 +16,11 @@ from pydantic import Field
 from .artifacts import MEDIA_TYPES, remember
 from .engine.layers import LAYERS
 from .figure_spec import as_figure, layer_ids, parse_figure, styled_label
+from .refusals import PreparationError
 from .research_contract import ResearchModel
 from .research_dataset import version_sources
 from .research_figure_board import artifact_row, read_board
 from .research_figure_sources import source
-from .research_preparation import PreparationError
 from .research_reuse import now
 from .research_store import ResearchStore
 

@@ -196,8 +196,8 @@ def test_source_batch_restores_gc_and_rolls_back_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, enabled: bool, fail: bool
 ) -> None:
     from labviz_api import research_figure_board
+    from labviz_api.refusals import PreparationError
     from labviz_api.research_figure_sources import source
-    from labviz_api.research_preparation import PreparationError
 
     original_source = source
     observed = []
@@ -205,7 +205,7 @@ def test_source_batch_restores_gc_and_rolls_back_failure(
     def checked(connection: Any, project_id: str, chart_id: str) -> dict[str, Any]:
         observed.append(gc.isenabled())
         if fail:
-            raise PreparationError("figure-test-failure", "Injected source-load failure")
+            raise PreparationError("figure-source-changed", "Injected source-load failure")
         return original_source(connection, project_id, chart_id)
 
     with TestClient(create_app(settings(tmp_path))) as client:

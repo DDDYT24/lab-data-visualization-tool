@@ -10,9 +10,9 @@ from uuid import uuid4
 from pydantic_core import to_json
 
 from .artifacts import MEDIA_TYPES, remember
+from .refusals import PreparationError
 from .render_plan import check_stored_plan, plan_bytes
 from .research_panel_headers import install_headers, remember_header, scientific_header
-from .research_preparation import PreparationError
 from .research_store import ResearchStore
 from .storage.base import ObjectIntegrityError
 
