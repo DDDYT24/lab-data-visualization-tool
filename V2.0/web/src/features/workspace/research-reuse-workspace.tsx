@@ -100,7 +100,9 @@ export function ResearchReuseWorkspace({ projectId, revision, pending, refreshKe
     {check && <Stack spacing={1} data-testid="replacement-preview">
       <Typography>{t("Old row exclusions are not copied. Review QC and source identity again.", "不会复制旧的逐行排除决定，请重新核对 QC 和样本身份。")}</Typography>
       {check.panels.map((p) => <Alert key={p.panel} severity={p.status === "ready" ? "success" : "warning"}>
-        {p.panel}: {p.status === "ready" ? t("ready", "已就绪") : t("blocked", "不可替换")} · {p.observations} · {p.unit}. {refusalText({ ...p.refusal, message: p.message })}
+        {p.panel}: {p.status === "ready" ? t("ready", "已就绪") : t("blocked", "不可替换")} · {p.observations} · {p.unit}. {p.status === "ready"
+          ? t("Review source identity, QC and declared units before applying.", "应用前请核对样本身份、QC 和声明的单位。")
+          : refusalText({ ...p.refusal, message: p.message })}
         <Box component="pre" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12 }}>{JSON.stringify(p.styles, null, 2)}</Box>
       </Alert>)}
       {!check.figureReady && <Alert severity="warning">{check.figureError ? refusalText({ ...check.figureRefusal, message: check.figureError }) : t("Only ready panels will be saved; no incomplete figure will be created.", "只保存已就绪面板，不生成不完整组合图。")}</Alert>}

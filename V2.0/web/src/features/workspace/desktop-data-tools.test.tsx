@@ -50,3 +50,11 @@ it("reports a rejected selection without claiming success or changing the next p
   expect(container.textContent).toContain("has not completed verification");
   expect(container.textContent).not.toContain("Exit LabViz and reopen it");expect(next).toBe(second);
 });
+it("says in the interface language that the desktop host did not answer",async()=>{
+  Object.defineProperty(window, "labvizDesktopTransport", {configurable:true, value:{url:"http://127.0.0.1:51234/preferences",token:"test-only"}});
+  vi.stubGlobal("fetch", vi.fn(async()=>{throw new TypeError("Failed to fetch");}));
+  container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+  await act(async()=>root!.render(<NextIntlClientProvider locale="zh" messages={{}} timeZone="UTC"><DesktopDataTools/></NextIntlClientProvider>));
+  expect(container.textContent).toContain("LabViz 没有响应数据工具，请重试。");
+  expect(container.textContent).not.toContain("Failed to fetch");
+});

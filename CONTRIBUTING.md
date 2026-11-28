@@ -40,6 +40,9 @@ mypy labviz_api tests migrations scripts
 python -m pytest
 ```
 
+在 Windows 上，源数据恢复测试（`tests/test_v23_phase6_recovery.py`）调用
+`V2.0/api/.venv/Scripts/python.exe`，所以依赖要装进这个虚拟环境（`python -m venv .venv` 后用它安装和运行）。
+
 需要 PostgreSQL/MinIO 的测试必须按 `V2.0/api/README.md` 启动测试服务，并在结束后清理
 临时卷。不要把 `.labviz/`、`outputs/`、测试结果、真实实验数据或密钥加入提交。
 
