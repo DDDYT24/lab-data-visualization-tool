@@ -12,7 +12,6 @@ import pytest
 
 from labviz_api.engine.layers import LAYERS, violin
 from labviz_api.engine.stats import SUMMARIES
-from labviz_api.persistence import exceptions
 from labviz_api.refusals import PARAMS, STATUS, PreparationError, RefusalCode
 from labviz_api.render_plan import RenderPlan
 from labviz_api.research_charts import MAX_GROUPS, ScientificChartSpec
@@ -72,59 +71,99 @@ def test_every_refusal_has_a_text_that_uses_only_its_values(locale: str) -> None
         assert used == set(PARAMS.get(code, ())), code  # type: ignore[call-overload]
 
 
-# Errors of the classic import, quality and chart steps, whose English message is shown.
+# Errors whose English message is shown as it is: the classic steps (with every ProcessingError,
+# found below) and the request validation, whose message is the model's own.
 CLASSIC = {
     "duplicate-quality-rule",
     "experiment-title-required",
-    "invalid-chart-fields",
+    "invalid-chart",
     "invalid-experiment-metadata",
     "unknown-quality-finding",
     "validation-error",
 }
-# Errors no local screen meets: accounts, shares, the readiness probe, the sample catalogue.
-NOT_LOCAL = {
+# Errors of the cloud deployment, which no screen of the desktop package meets: accounts, e-mail
+# codes, shares, the readiness probe of the hosted service.
+CLOUD = {
+    "auth-rate-limit-unavailable",
     "authentication-required",
+    "challenge-locked",
     "database-unavailable",
     "email-delivery-failed",
     "email-rate-limited",
     "feature-not-migrated",
-    "idempotency-key-reused",
+    "incorrect-code",
+    "invalid-challenge",
     "invalid-client-identity",
     "object-storage-unavailable",
-    "sample-catalog-unavailable",
-    "sample-invalid",
-    "sample-not-found",
+    "resend-too-soon",
     "share-download-disabled",
     "share-not-found",
 }
+CODE = re.compile(r"[a-z]+(?:-[a-z][a-z0-9]*)+")  # not "utf-8"
+ERROR = re.compile(r"(?:Error|Problem|Conflict|NotFound|Unavailable|Pending|Migrated)$")
+
+
+def stated_codes() -> tuple[set[str], set[str]]:
+    """Every error code the API states, and those of ProcessingError among them."""
+
+    def codes(node: ast.AST | None) -> set[str]:
+        values = ast.walk(node) if node else []
+        return {
+            str(v.value)
+            for v in values
+            if isinstance(v, ast.Constant) and CODE.fullmatch(str(v.value))
+        }
+
+    stated: set[str] = set()
+    classic: set[str] = set()
+    for path in API.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call):
+                name = getattr(node.func, "id", getattr(node.func, "attr", ""))
+                if ERROR.search(name):
+                    found = set().union(*map(codes, node.args)) if node.args else set()
+                    stated |= found
+                    classic |= found if name == "ProcessingError" else set()
+                stated |= codes(
+                    next((k.value for k in node.keywords if k.arg in {"code", "error_code"}), None)
+                )
+            elif isinstance(node, ast.Assign | ast.AnnAssign):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if any(
+                    getattr(t, "id", getattr(t, "attr", "")) in {"code", "error_code"}
+                    for t in targets
+                ):
+                    stated |= codes(node.value)
+            elif isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values, strict=True):
+                    if getattr(key, "value", "") in {"code", "error_code"}:
+                        stated |= codes(value)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                stated |= set(re.findall(r"error_code\s*=\s*'([a-z0-9-]+)'", node.value))
+    return stated, classic
 
 
 def test_every_service_error_is_worded_or_listed_as_not_worded() -> None:
-    stated = set()
-    for path in API.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "ApiProblem":
-                stated |= {
-                    value.value
-                    for value in ast.walk(node.args[1])
-                    if isinstance(value, ast.Constant) and "-" in str(value.value)
-                }
-            if isinstance(node, ast.Dict):
-                stated |= {
-                    value.value
-                    for key, value in zip(node.keys, node.values, strict=True)
-                    if getattr(key, "value", "") == "code" and isinstance(value, ast.Constant)
-                }
-    stated |= {
-        kind.code
-        for kind in vars(exceptions).values()
-        if isinstance(kind, type) and issubclass(kind, exceptions.PersistenceError)
-    }
+    stated, processing = stated_codes()
     texts = json.loads((WEB / "messages/zh.json").read_text(encoding="utf-8"))["serviceErrors"]
     client = {"api-error", "invalid-contract-response", "network-unavailable"}
     assert texts.keys() >= client
-    assert stated - CODES == (texts.keys() - client) | CLASSIC | NOT_LOCAL
+    # A worded code must not also be a ProcessingError, whose own message is shown.
+    assert not texts.keys() & processing
+    assert stated - CODES - processing == (texts.keys() - client) | CLASSIC | CLOUD
+
+
+def test_the_collector_finds_each_way_a_code_is_stated() -> None:
+    stated, processing = stated_codes()
+    assert {
+        "invalid-chart",  # held in a variable first
+        "processing-interrupted",  # in SQL
+        "incorrect-code",  # AuthError(message, code)
+        "auth-rate-limit-unavailable",  # a class attribute
+        "desktop-draining",  # a response body
+        "project-revision-conflict",  # a persistence exception
+    } <= stated
+    assert {"fit-not-suitable", "unreadable-file"} <= processing
 
 
 def test_a_refusal_states_its_status_and_values() -> None:

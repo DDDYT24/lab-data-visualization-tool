@@ -114,7 +114,7 @@ jobs:
         if: always()
         run: docker compose down -v --remove-orphans
 
-  # The system and Python the Setup ships (packaging/windows-v23/runtimes.json).
+  # The system and Python minor version the Setup ships (packaging/windows-v23/runtimes.json).
   v2-windows:
     runs-on: windows-2022
     timeout-minutes: 45
@@ -129,19 +129,22 @@ jobs:
           cache-dependency-path: |
             V2.0/api/requirements.lock.txt
             V2.0/api/requirements-dev.lock.txt
+      # In V2.0/api/.venv, where source-data-v23.ps1 (and so test_v23_phase6_recovery) looks for it.
       - name: Install dependencies
-        run: python -m pip install --require-hashes -r V2.0/api/requirements-dev.lock.txt
+        run: |
+          python -m venv V2.0/api/.venv
+          V2.0/api/.venv/Scripts/python -m pip install --require-hashes -r V2.0/api/requirements-dev.lock.txt
       # What needs PostgreSQL or MinIO runs in v2-api.
       - name: API tests
         working-directory: V2.0/api
         run: >-
-          python -m pytest -k "not minio"
+          .venv/Scripts/python -m pytest -k "not minio"
           --ignore=tests/test_phase5b3_object_storage.py
           --ignore=tests/test_phase6b_auth_rate_limits.py
           --ignore=tests/test_phase6b_project_descriptions.py
       - name: Desktop tests
         if: ${{ !cancelled() }}
-        run: python -m unittest discover -s desktop/tests -p "test_*.py"
+        run: V2.0/api/.venv/Scripts/python -m unittest discover -s desktop/tests -p "test_*.py"
 
   plan-parity:
     runs-on: ubuntu-latest

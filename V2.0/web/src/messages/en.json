@@ -835,8 +835,9 @@
     "desktop-draining": "The local workspace is pausing. Reopen LabViz to continue.",
     "export-not-found": "This export does not exist or has expired.",
     "figure-preview-unavailable": "PDF figures are available to download.",
-    "invalid-contract-response": "The API returned data that does not match the LabViz v1 contract.",
-    "job-not-found": "This processing job does not exist or expired.",
+    "idempotency-key-reused": "This upload was already sent with other content. Choose the file again.",
+    "invalid-contract-response": "The API returned data in a form this version does not read.",
+    "job-not-found": "This processing job does not exist or has expired.",
     "local-access-denied": "The local launcher could not unlock this session.",
     "local-gallery-unavailable": "Local figure history is unavailable.",
     "local-session-required": "Open LabViz from the launcher for this Windows account.",
@@ -847,10 +848,14 @@
     "persistence-not-found": "The saved item does not exist.",
     "persistence-unavailable": "The storage is unavailable. Try again shortly.",
     "processing-failed": "LabViz could not process this file safely.",
+    "processing-interrupted": "Processing was interrupted. Upload the file again.",
     "processing-not-ready": "The uploaded file is still being processed.",
-    "project-access-denied": "This project is not available to this profile.",
+    "project-access-denied": "This project is not available to this user.",
     "project-must-be-saved": "Save this project before editing its description.",
     "project-not-found": "This project does not exist or has expired.",
-    "project-revision-conflict": "The project description changed in another session."
+    "project-revision-conflict": "The project description changed in another session.",
+    "sample-catalog-unavailable": "The bundled examples are unavailable.",
+    "sample-invalid": "This example could not be loaded.",
+    "sample-not-found": "This example does not exist."
   }
 }
