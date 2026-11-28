@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import { PROJECT_DESCRIPTION_MAX_UTF8_BYTES } from "@/domain/api-contract";
 import { LabVizApiError, labvizApi } from "@/lib/api/labviz-api";
 
+import { useRefusalText } from "./use-refusal-text";
 import { useWorkspaceStore } from "./workspace-store";
 import { useDesktopDraft } from "./desktop-session";
 
@@ -19,6 +20,7 @@ function utf8Length(value: string) {
 
 export function ProjectDescriptionEditor() {
   const t = useTranslations("projectDescription");
+  const refusalText = useRefusalText();
   const projectId = useWorkspaceStore((state) => state.projectId);
   const storageMode = useWorkspaceStore((state) => state.storageMode);
   const description = useWorkspaceStore((state) => state.description);
@@ -141,7 +143,7 @@ export function ProjectDescriptionEditor() {
         <Alert severity="error">{t("deleted")}</Alert>
       ) : error ? (
         <Alert severity="error">
-          {apiError?.message ?? t("failed")}
+          {apiError ? refusalText(apiError) : t("failed")}
         </Alert>
       ) : null}
       <Button

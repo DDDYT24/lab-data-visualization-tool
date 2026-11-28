@@ -66,7 +66,11 @@ export async function proxyLocalApiRequest(
   try {
     upstream = await fetcher(target, init);
   } catch {
-    return Response.json({ detail: "The local API is unavailable." }, { status: 502 });
+    // The browser reached this proxy, so it cannot see for itself that the API is down.
+    return Response.json(
+      { code: "network-unavailable", message: "The local API is unavailable." },
+      { status: 502 },
+    );
   }
 
   const responseHeaders = new Headers(upstream.headers);

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { request } from "@/lib/api/labviz-api";
 import { useDesktopDraft } from "./desktop-session";
 import { DesktopDataTools } from "./desktop-data-tools";
+import { useRefusalText } from "./use-refusal-text";
 
 const schema = z.discriminatedUnion("available", [
   z.object({ available: z.literal(false), reason: z.string() }),
@@ -19,11 +20,12 @@ const quote = (value: string) => "'" + value.replaceAll("'", "''") + "'";
 export function SourceDataTools() {
   const zh = useLocale().startsWith("zh");
   const text = (en: string, cn: string) => zh ? cn : en;
+  const refusalText = useRefusalText();
   const [info, setInfo] = useState<z.infer<typeof schema> | null>(null);
   const [backup, setBackup] = useState("");
   const [selectedCommand, setSelectedCommand] = useState("");
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [retry, setRetry] = useState(0);
   const desktop = useSyncExternalStore(() => () => {}, () => !!window.labvizDesktopTransport, () => false);
   useDesktopDraft("source-tools", null, {}, { backup, selectedCommand }, draft => { setBackup(draft.backup); setSelectedCommand(draft.selectedCommand); });
@@ -31,8 +33,8 @@ export function SourceDataTools() {
   const profileArgument = info?.available && info.profileRoot ? ` -ProfileRoot ${quote(info.profileRoot)}` : "";
   useEffect(() => {
     let active = true;
-    request("/local/source-data", schema).then((value) => { if (active) { setInfo(value); setError(""); } })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
+    request("/local/source-data", schema).then((value) => { if (active) { setInfo(value); setError(null); } })
+      .catch((reason: unknown) => { if (active) setError(reason); });
     return () => { active = false; };
   }, [retry]);
   async function copy(command: string) {
@@ -44,8 +46,8 @@ export function SourceDataTools() {
   return <Stack spacing={2} data-testid="source-data-tools" sx={{ "& .MuiInputLabel-root:not(.Mui-focused)": { color: "text.primary" } }}>
     <Divider />
     <Typography component="h3" variant="subtitle1">{installed ? text("Installed application data", "安装版应用数据") : text("Source workspace data", "源码工作区数据")}</Typography>
-    {error && <Alert severity="error" action={<Button onClick={() => setRetry((n) => n + 1)}>{text("Retry", "重试")}</Button>}>{error}</Alert>}
-    {!info && !error && <Typography role="status">{text("Loading data location…", "正在读取数据位置…")}</Typography>}
+    {error != null && <Alert severity="error" action={<Button onClick={() => setRetry((n) => n + 1)}>{text("Retry", "重试")}</Button>}>{refusalText(error)}</Alert>}
+    {!info && error == null && <Typography role="status">{text("Loading data location…", "正在读取数据位置…")}</Typography>}
     {info && !info.available && <Alert severity="info">{text("These tools require the private V2.3 local source launcher.", "这些工具仅适用于 V2.3 本地源码启动器。")}</Alert>}
     {info?.available && <>
       <TextField label={text("SQLite database", "SQLite 数据库")} value={info.database} slotProps={{ input: { readOnly: true } }} />

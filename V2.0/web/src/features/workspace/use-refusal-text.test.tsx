@@ -34,10 +34,21 @@ describe("refusal text", () => {
     expect(shown(error, "zh")).toBe("a.csv 第 1234 行的单元格数与表头不一致。");
   });
 
+  it("has the same service errors in both languages", () => {
+    expect(Object.keys(zh.serviceErrors)).toEqual(Object.keys(en.serviceErrors));
+    expect(Object.keys(en.serviceErrors).filter((code) => code in refusals)).toEqual([]);
+  });
+
+  it.each(Object.entries(zh.serviceErrors))("words the service error %s by its code", (code, text) => {
+    expect(shown(new LabVizApiError("API message", 503, code), "zh")).toBe(text);
+    expect(shown(new LabVizApiError("API message", 503, code))).toBe(en.serviceErrors[code as keyof typeof en.serviceErrors]);
+  });
+
   it("keeps the message of a stored refusal without its values, and of any other error", () => {
     const stored = { code: "figure-shared-axis-control", params: undefined, message: "A shared x axis…" };
     expect(shown(stored, "zh")).toBe("A shared x axis…");
-    expect(shown(new LabVizApiError("Unreachable.", 0, "network-unavailable"), "zh")).toBe("Unreachable.");
+    expect(shown(new LabVizApiError("Too few points.", 422, "fit-not-suitable"), "zh")).toBe("Too few points.");
     expect(shown(new Error("Broken."))).toBe("Broken.");
+    expect(shown(new DOMException("Stopped.", "AbortError"), "zh")).toBe("Stopped.");
   });
 });

@@ -23,6 +23,7 @@ import { WorkflowStepper } from "@/components/common/workflow-stepper";
 import { FigureStatus } from "./figure-status";
 import type { FigureWorkspaceState } from "./figure-workspace-state";
 import { rememberResearchNavigation, workspaceModeEvent, type ResearchTask } from "./research-navigation";
+import { useRefusalText } from "./use-refusal-text";
 import { useWorkspaceProject } from "./use-workspace-project";
 import { getWorkspaceLoadingCopy } from "./workspace-loading-state";
 import { type WorkflowStep, useWorkspaceStore } from "./workspace-store";
@@ -46,6 +47,7 @@ export function WorkspaceScreen({
   initialResearchTask?: ResearchTask;
 }) {
   const t = useTranslations("workspace");
+  const refusalText = useRefusalText();
   const locale = useLocale();
   const overview = useInterfaceMode().mode === "overview";
   const [figureState, setFigureState] = useState<FigureWorkspaceState | null>(null);
@@ -153,8 +155,9 @@ export function WorkspaceScreen({
       <ApiStatePanel
         actionLabel={t("retry")}
         description={
-          loadError ??
-          t("loadFailed")
+          job?.stage === "failed"
+            ? refusalText({ code: job.errorCode ?? "", message: job.message })
+            : loadError ?? t("loadFailed")
         }
         kind="error"
         onAction={retry}

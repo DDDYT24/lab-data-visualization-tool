@@ -5,8 +5,9 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {WorkspaceScreen} from './workspace-screen';
 import {useWorkspaceStore} from './workspace-store';
 
-const state=vi.hoisted(()=>({research:true,mounts:[] as string[],job:null as {stage:string}|null}));
-vi.mock('next-intl',()=>({useLocale:()=> 'en',useTranslations:()=> (key:string)=>key}));
+const state=vi.hoisted(()=>({research:true,mounts:[] as string[],job:null as {stage:string;errorCode?:string;message?:string}|null,loadStatus:'ready'}));
+// Texts are their keys; of the service errors only processing-interrupted has one here.
+vi.mock('next-intl',()=>({useLocale:()=> 'en',useTranslations:()=>Object.assign((key:string)=>key,{has:(key:string)=>key==='processing-interrupted'})}));
 vi.mock('next/dynamic',async()=>{
   const React=await import('react');
   return {default:(load:()=>Promise<React.ComponentType>)=>{
@@ -14,7 +15,7 @@ vi.mock('next/dynamic',async()=>{
     return function Dynamic(props:object){return <React.Suspense><Component {...props}/></React.Suspense>;};
   }};
 });
-vi.mock('./use-workspace-project',()=>({useWorkspaceProject:()=>({job:state.job,loadStatus:'ready',preview:{},quality:{},uploading:false})}));
+vi.mock('./use-workspace-project',()=>({useWorkspaceProject:()=>({job:state.job,loadStatus:state.loadStatus,preview:{},quality:{},uploading:false})}));
 vi.mock('@/components/common/workflow-stepper',()=>({WorkflowStepper:()=>null}));
 vi.mock('./desktop-session',async()=>{
   const React=await import('react');
@@ -38,7 +39,7 @@ vi.mock('./research-workspace',async()=>{
 });
 let root:Root|undefined,container:HTMLDivElement;
 (globalThis as typeof globalThis & {IS_REACT_ACT_ENVIRONMENT:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
-beforeEach(()=>{state.mounts=[];state.job=null;useWorkspaceStore.setState({projectId:'p1',currentRevisionId:'r1',currentStep:'chart'});});
+beforeEach(()=>{state.mounts=[];state.job=null;state.loadStatus='ready';useWorkspaceStore.setState({projectId:'p1',currentRevisionId:'r1',currentStep:'chart'});});
 afterEach(async()=>{if(root)await act(async()=>root!.unmount());root=undefined;container?.remove();});
 async function render(research:boolean){
   state.research=research;container=document.createElement('div');document.body.append(container);root=createRoot(container);
@@ -59,4 +60,11 @@ it('mounts research only after the upload job has ended',async()=>{
   state.job={stage:'parsing'};await render(true);expect(state.mounts).toEqual([]);
   state.job={stage:'ready'};await act(async()=>{root!.render(<WorkspaceScreen initialProjectId="p1" initialResearchMode/>);});
   expect(state.mounts).toEqual(['research']);
+});
+it('words a failed upload job by its code and keeps the API message of a classic code',async()=>{
+  state.loadStatus='error';state.job={stage:'failed',errorCode:'processing-interrupted',message:'Processing was interrupted.'};await render(false);
+  expect(container.textContent).toContain('processing-interrupted');expect(container.textContent).not.toContain('Processing was interrupted.');
+  state.job={stage:'failed',errorCode:'unreadable-file',message:'The file could not be read.'};
+  await act(async()=>{root!.render(<WorkspaceScreen initialProjectId="p1" initialResearchMode={false}/>);});
+  expect(container.textContent).toContain('The file could not be read.');
 });

@@ -17,33 +17,37 @@ async function call(route: string, value?: object) {
 export function DesktopDataTools() {
   const zh = useLocale().startsWith("zh");
   const t = (en: string, cn: string) => zh ? cn : en;
+  // fetch rejects with a TypeError, and the 30 s timeout with a TimeoutError, when the host does not answer.
+  const failure = (reason: unknown) => reason instanceof TypeError || (reason instanceof DOMException && reason.name === "TimeoutError")
+    ? t("LabViz did not answer the data tools. Try again.", "LabViz 没有响应数据工具，请重试。")
+    : reason instanceof Error ? reason.message : String(reason);
   const [status, setStatus] = useState<Status>({ operation: null, backups: [] });
   const [backupId, setBackupId] = useState("");
   const [copyId, setCopyId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   useEffect(() => {
     let mounted = true;
     const refresh = async () => {
-      try { const value = await call("/maintenance/status") as Status; if (mounted) { setStatus(value); setError(""); } }
-      catch (reason) { if (mounted) setError(String(reason)); }
+      try { const value = await call("/maintenance/status") as Status; if (mounted) { setStatus(value); setError(null); } }
+      catch (reason) { if (mounted) setError(reason); }
     };
     void refresh(); const timer = setInterval(() => void refresh(), 1500);
     return () => { mounted = false; clearInterval(timer); };
   }, []);
   async function submit(action: string) {
-    setBusy(true); setError(""); setMessage("");
+    setBusy(true); setError(null); setMessage("");
     try { const operation = await call("/maintenance/submit", { action, ...(backupId ? { backupId } : {}) }); setStatus(previous => ({ ...previous, operation })); }
-    catch (reason) { setError(String(reason)); } finally { setBusy(false); }
+    catch (reason) { setError(reason); } finally { setBusy(false); }
   }
   async function selectCopy(value: string | null) {
-    setBusy(true); setError(""); setMessage("");
+    setBusy(true); setError(null); setMessage("");
     try {
       await call("/maintenance/select-copy", { copyId: value });
       setStatus(await call("/maintenance/status") as Status);
       setMessage(t("Exit LabViz and reopen it to use the selected profile. Your current profile is retained.", "退出并重新打开 LabViz 后将使用所选资料，当前资料会保留。"));
-    } catch (reason) { setError(String(reason)); }
+    } catch (reason) { setError(reason); }
     finally { setBusy(false); }
   }
   const waiting = status.operation?.state === "waiting";
@@ -78,6 +82,6 @@ export function DesktopDataTools() {
     </>}
     {status.operation?.copyId && <Button disabled={disabled} onClick={() => void selectCopy(status.operation!.copyId!)}>{t("Use restored copy on next launch", "下次启动使用恢复副本")}</Button>}
     <Button disabled={disabled} onClick={() => void selectCopy(null)}>{t("Use original profile on next launch", "下次启动使用原资料")}</Button>
-    {error && <Alert severity="error">{error}</Alert>}{message && <Typography role="status">{message}</Typography>}
+    {error != null && <Alert severity="error">{failure(error)}</Alert>}{message && <Typography role="status">{message}</Typography>}
   </Stack>;
 }
